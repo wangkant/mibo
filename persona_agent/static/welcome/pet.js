@@ -9,12 +9,18 @@ const DRAG_PX = 4;
 const STEP_PX = 2;
 const STEP_MS = 30;
 
+const POSE_MS = 150;
+const PULL_MS = 550;
+
 const between = (low, high) => low + Math.random() * (high - low);
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const resting = () => ["asleep", "out"].includes(pet.dataset.state);
+// standing on the ground, jumping, or lying on the window's edge: the window says which.
+let pose = "standing";
+const resting = () => pose !== "standing" || ["asleep", "out"].includes(pet.dataset.state);
 // The press in progress, or null.
 let press = null;
 let busy = false;
+let opening = false;
 
 pet.style.setProperty("--blink", `${between(4.2, 5.4).toFixed(2)}s`);
 
@@ -64,8 +70,18 @@ async function live() {
   }
 }
 
+async function watchPose() {
+  for (;;) {
+    pose = await window.pywebview.api.pose();
+    pet.classList.toggle("lying", pose === "lying");
+    pet.classList.toggle("jump", pose === "jumping");
+    await wait(POSE_MS);
+  }
+}
+
 // ---- what a person does to it
 async function pat() {
+  if (pose !== "standing") return act("glad", 900);
   pet.classList.remove("hop");
   void pet.offsetWidth;
   pet.classList.add("hop", "glad");
@@ -89,7 +105,15 @@ window.addEventListener("mouseup", (event) => {
   pet.classList.remove("held");
   if (!moved) pat();
 });
-window.addEventListener("dblclick", () => window.pywebview.api.open());
+// It takes the window out, and the window says when the pet goes to lie on it.
+window.addEventListener("dblclick", async () => {
+  if (opening) return;
+  opening = true;
+  pet.classList.remove("hop", "glad");
+  if (pose === "standing") await act("pull", PULL_MS);
+  await window.pywebview.api.open();
+  opening = false;
+});
 window.addEventListener("contextmenu", (event) => {
   event.preventDefault();
   window.pywebview.api.menu();
@@ -97,4 +121,7 @@ window.addEventListener("contextmenu", (event) => {
 
 loadHome();
 setInterval(loadHome, HOME_MS);
-window.addEventListener("pywebviewready", live);
+window.addEventListener("pywebviewready", () => {
+  watchPose();
+  live();
+});

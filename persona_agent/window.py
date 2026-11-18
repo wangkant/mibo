@@ -9,11 +9,13 @@ from __future__ import annotations
 import contextlib
 import hmac
 import importlib.util
+import math
 import secrets
 import signal
 import socket
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Callable, Iterator
 from urllib.parse import urlsplit, urlunsplit
@@ -37,8 +39,22 @@ PET_MARGIN = 80
 # The colour the pet's window treats as not there. One step from the figure's
 # outline (#3d4f8a in pet.css), so an edge blended with it still reads as outline.
 PET_KEY = (0x3D, 0x4F, 0x8B)
+# How much of the pet's window hangs below the top edge it rests on (the same in pet.css).
+PET_OVERLAP = 22
+# How far from the window's right corner it rests.
+PET_INSET = 96
+# The window comes out of the pet over this many steps, having started this
+# share of the way towards the pet.
+SLIDE_STEPS, SLIDE_STEP_S, SLIDE_FROM = 14, 0.016, 0.3
+# A jump: how long the page has to take the pose, the steps, and how high.
+JUMP_WAIT_S, JUMP_STEPS, JUMP_STEP_S, JUMP_HEIGHT = 0.2, 26, 0.016, 70
+# How often the pet looks where the window is.
+KEEP_S = 0.1
 # winuser.h: the extended styles of a window that takes no focus and has no taskbar button.
 _GWL_EXSTYLE, _WS_EX_NOACTIVATE, _WS_EX_TOOLWINDOW = -20, 0x08000000, 0x00000080
+# SetWindowPos: move only, keeping size, order and focus.
+_MOVE_ONLY = 0x0001 | 0x0004 | 0x0010
+_SM_YVIRTUALSCREEN = 77
 
 
 def available() -> bool:
@@ -253,6 +269,10 @@ class _PetApi:
     def walk(self, dx: float) -> bool:
         return self._owner._pet_walk(dx)
 
+    def pose(self) -> str:
+        """standing, jumping or lying."""
+        return self._owner._pose
+
 
 class AppWindow:
     """One window on `url`. `confirm` returns the question to ask before the
@@ -262,7 +282,8 @@ class AppWindow:
 
     With `pet` (Windows), personagent starts as the character alone on the
     desktop: the window stays hidden until the pet is double-clicked, and
-    closing it hides it again. The pet's menu quits."""
+    closing it hides it again. The pet's menu quits. While the window shows,
+    the pet is a small icon of itself on the window's top edge."""
 
     def __init__(self, url: str, *, storage: Path, confirm: Callable[[], str] = lambda: "",
                  background: Callable[[], bool] = lambda: False,
@@ -277,6 +298,11 @@ class AppWindow:
         self.pet = pet and sys.platform == "win32"
         self._pet = None
         self._pet_strip = None
+        self._pet_hwnd = self._main_hwnd = 0
+        self._pet_scale = 1.0
+        self._pose = "standing"
+        # The window is on its way out of the pet: the pet waits for it to arrive.
+        self._sliding = False
         # Menu handlers stay referenced here, or .NET would lose them.
         self._open_click = lambda sender, event: self.show()
         self._quit_click = lambda sender, event: self.close()
@@ -313,7 +339,10 @@ class AppWindow:
             # Only out of the taskbar: restoring a maximized window would shrink it.
             if self._minimized:
                 self._window.restore()
-            self._window.show()
+            if self._pet is not None and self.hidden and not self.maximized:
+                self._pull_out()
+            else:
+                self._window.show()
             if self.hidden:
                 self.hidden = False
                 if self._tray is not None:
@@ -354,6 +383,94 @@ class AppWindow:
         address = urlsplit(self.url)
         return urlunsplit((address.scheme, address.netloc, "/pet", "", address.fragment))
 
+    def _pull_out(self) -> None:
+        """The window comes out of the pet: from the pet's side to its own place, fading in."""
+        from System.Drawing import Point
+
+        form, pet = self._window.native, self._pet.native
+        path = {}
+
+        def begin() -> None:
+            to = (form.Left, form.Top)
+            lean = (pet.Left + pet.Width // 2 - form.Left - form.Width // 2,
+                    pet.Top + pet.Height // 2 - form.Top - form.Height // 2)
+            path["to"] = to
+            path["from"] = (to[0] + lean[0] * SLIDE_FROM, to[1] + lean[1] * SLIDE_FROM)
+            form.Opacity = 0
+            form.Location = Point(int(path["from"][0]), int(path["from"][1]))
+
+        def step(share: float) -> None:
+            (x0, y0), (x1, y1) = path["from"], path["to"]
+            form.Location = Point(round(x0 + (x1 - x0) * share), round(y0 + (y1 - y0) * share))
+            form.Opacity = share
+
+        self._sliding = True
+        try:
+            self._on_ui(begin)
+            self._window.show()
+            for i in range(1, SLIDE_STEPS + 1):
+                share = 1 - (1 - i / SLIDE_STEPS) ** 3
+                self._on_ui(lambda share=share: step(share))
+                time.sleep(SLIDE_STEP_S)
+        finally:
+            self._sliding = False
+
+    def _keep_pet(self) -> None:
+        """The pet rests on the window's top edge while the window shows, follows
+        it there, and jumps back to where it stood once the window is gone."""
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.WinDLL("user32")
+        user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        user32.IsWindowVisible.argtypes = user32.IsIconic.argtypes = [wintypes.HWND]
+        user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                                        ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        pet, main, scale = self._pet_hwnd, self._main_hwnd, self._pet_scale
+
+        def rect(hwnd) -> tuple[int, int, int, int]:
+            found = wintypes.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(found))
+            return found.left, found.top, found.right, found.bottom
+
+        def move(x: float, y: float) -> None:
+            user32.SetWindowPos(pet, None, round(x), round(y), 0, 0, _MOVE_ONLY)
+
+        def edge(of: tuple[int, int, int, int]) -> tuple[int, int]:
+            left, top, right, bottom = rect(pet)
+            # A window at the top of the screen has the pet lie just inside it.
+            return (max(of[2] - (right - left) - int(PET_INSET * scale), of[0]),
+                    max(of[1] - (bottom - top) + int(PET_OVERLAP * scale),
+                        user32.GetSystemMetrics(_SM_YVIRTUALSCREEN)))
+
+        def jump(to: tuple[int, int], pose: str) -> None:
+            self._pose = "jumping"
+            time.sleep(JUMP_WAIT_S)
+            x0, y0 = rect(pet)[:2]
+            for i in range(1, JUMP_STEPS + 1):
+                share = i / JUMP_STEPS
+                move(x0 + (to[0] - x0) * share,
+                     y0 + (to[1] - y0) * share - math.sin(math.pi * share) * JUMP_HEIGHT * scale)
+                time.sleep(JUMP_STEP_S)
+            self._pose = pose
+
+        on = ground = None
+        while not self._leaving:
+            time.sleep(KEEP_S)
+            if self._sliding:
+                continue
+            shown = rect(main) if user32.IsWindowVisible(main) and not user32.IsIconic(main) else None
+            if shown and on is None:
+                ground = rect(pet)[:2]
+                jump(edge(shown), "lying")
+                on = shown
+            elif shown and shown != on:
+                move(*edge(shown))
+                on = shown
+            elif not shown and on is not None:
+                jump(ground, "standing")
+                on = None
+
     def _on_pet(self, action: Callable[[], None]) -> None:
         from System import Func, Type
 
@@ -385,6 +502,7 @@ class AppWindow:
             hwnd = form.Handle.ToInt64()
             user32.SetWindowLongW(hwnd, _GWL_EXSTYLE, user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
                                   | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW)
+            self._pet_hwnd, self._pet_scale = hwnd, scale
             area = Screen.FromControl(form).WorkingArea
             form.Left = area.Right - form.Width - int(PET_MARGIN * scale)
             form.Top = area.Bottom - form.Height
@@ -581,6 +699,8 @@ class AppWindow:
                     self.hidden = True
                     self._pet.events.shown.wait(SHOWN_WITHIN)
                     self._place_pet()
+                    self._on_ui(lambda: setattr(self, "_main_hwnd", self._window.native.Handle.ToInt64()))
+                    threading.Thread(target=self._keep_pet, name="personagent-pet", daemon=True).start()
                 elif self.start_hidden:
                     self.hide()
 

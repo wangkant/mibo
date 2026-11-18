@@ -227,11 +227,13 @@ svg * {
   animation: wave 0.4s ease-in-out 4;
 }
 .pet.wave .eyes.open,
-.pet.glad .eyes.open {
+.pet.glad .eyes.open,
+.pet.jump .eyes.open {
   display: none;
 }
 .pet.wave .eyes.glad,
-.pet.glad .eyes.glad {
+.pet.glad .eyes.glad,
+.pet.jump .eyes.glad {
   display: inline;
 }
 @keyframes wave {
@@ -275,10 +277,12 @@ svg * {
 .pet.held .leg.right {
   animation-delay: -0.25s;
 }
-.pet.held .arm.left {
+.pet.held .arm.left,
+.pet.jump .arm.left {
   transform: translate(-4px, -24px) rotate(150deg);
 }
-.pet.held .arm.right {
+.pet.held .arm.right,
+.pet.jump .arm.right {
   transform: translate(4px, -24px) rotate(-150deg);
 }
 .pet.held .mouth.smile {
@@ -303,6 +307,70 @@ svg * {
   }
   50% {
     transform: rotate(12deg);
+  }
+}
+
+/* ---- taking the window out: it crouches, reaches, and lifts */
+.pet.pull .figure {
+  animation: pull 0.55s ease-in-out;
+}
+.pet.pull .arm.right {
+  animation: reach 0.55s ease-in-out;
+}
+@keyframes pull {
+  35% {
+    transform: scale(1.08, 0.88) rotate(-6deg);
+  }
+  75% {
+    transform: translateY(-6px) scale(0.95, 1.07) rotate(4deg);
+  }
+}
+@keyframes reach {
+  0% {
+    transform: rotate(-14deg);
+  }
+  35% {
+    transform: rotate(45deg);
+  }
+  75%,
+  100% {
+    transform: translate(4px, -24px) rotate(-150deg);
+  }
+}
+
+/* ---- in the air, on its way to the window's edge or back */
+.pet.jump .figure {
+  animation: none;
+  transform: scale(0.94, 1.06);
+}
+.pet.jump .leg {
+  transform: translateY(-9px);
+}
+
+/* ---- on the window's top edge it is an icon of itself: small, still, and
+   landing with a bounce. The edge crosses this window PET_OVERLAP (window.py)
+   above its bottom, and the icon stands on it. */
+.pet.lying .figure {
+  transform: translateY(-12px) scale(0.42);
+  animation: settle 0.4s ease-out;
+}
+.pet.lying .torso,
+.pet.lying .sprout,
+.pet.lying .eye {
+  animation: none;
+}
+@keyframes settle {
+  0% {
+    transform: translateY(-12px) scale(1);
+  }
+  55% {
+    transform: translateY(-12px) scale(0.34, 0.46);
+  }
+  80% {
+    transform: translateY(-12px) scale(0.46, 0.39);
+  }
+  100% {
+    transform: translateY(-12px) scale(0.42);
   }
 }
 
