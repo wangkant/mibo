@@ -1,0 +1,364 @@
+/* The pet: the character alone in a small window with nothing behind it.
+   The window leaves out one colour, a step from the outline (PET_KEY in
+   window.py), so every shape that meets the outside carries the outline
+   colour and nothing here is half transparent. */
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  cursor: grab;
+}
+.pet {
+  width: 160px;
+  height: 190px;
+}
+.pet.held {
+  cursor: grabbing;
+}
+svg {
+  display: block;
+}
+svg * {
+  transform-box: fill-box;
+}
+
+/* ---- how it is drawn */
+.body {
+  fill: #a9c4ff;
+  stroke: #3d4f8a;
+  stroke-width: 2.5;
+}
+.belly {
+  fill: #f4f7ff;
+}
+.arm,
+.leg rect {
+  fill: #8eaef5;
+  stroke: #3d4f8a;
+  stroke-width: 2.5;
+}
+.stem {
+  fill: none;
+  stroke: #3d4f8a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.leaf {
+  fill: #6cc48a;
+  stroke: #3d4f8a;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.blush {
+  fill: #ff9bb0;
+  opacity: 0.55;
+}
+.eye ellipse {
+  fill: #26304f;
+}
+.glint {
+  fill: #fff;
+}
+.eyes.glad path,
+.eyes.shut path,
+.mouth.smile {
+  fill: none;
+  stroke: #26304f;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+}
+.mouth.oh {
+  fill: #26304f;
+}
+.dots circle {
+  fill: #3d4f8a;
+}
+.zz text {
+  fill: #3d4f8a;
+  font: 700 15px system-ui, sans-serif;
+}
+.eyes.glad,
+.eyes.shut,
+.mouth.oh,
+.dots,
+.zz {
+  display: none;
+}
+
+/* ---- at rest: it breathes, blinks, and its leaves sway */
+.figure {
+  transform-origin: 50% 100%;
+  animation: bob 2.6s ease-in-out infinite;
+}
+.torso {
+  transform-origin: 50% 100%;
+  animation: breathe 2.6s ease-in-out infinite;
+}
+.sprout {
+  transform-origin: 50% 100%;
+  animation: sway 3.4s ease-in-out infinite;
+}
+.eye {
+  transform-origin: center;
+  animation: blink var(--blink, 4.6s) infinite;
+}
+.arm {
+  transform-origin: 50% 10%;
+}
+.arm.left {
+  transform: rotate(14deg);
+}
+.arm.right {
+  transform: rotate(-14deg);
+}
+.leg {
+  transform-origin: 50% 0;
+}
+.face {
+  transition: transform 0.25s ease;
+}
+@keyframes bob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes breathe {
+  50% {
+    transform: scale(1.02, 0.975);
+  }
+}
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.08);
+  }
+}
+
+/* ---- walking: the legs take turns and the face leads the way */
+.pet.walk .figure {
+  animation: waddle 0.44s ease-in-out infinite;
+}
+.pet.walk .leg.left {
+  animation: step 0.44s ease-in-out infinite;
+}
+.pet.walk .leg.right {
+  animation: step 0.44s ease-in-out -0.22s infinite;
+}
+.pet.walk .arm.left {
+  animation: swing-left 0.44s ease-in-out infinite;
+}
+.pet.walk .arm.right {
+  animation: swing-right 0.44s ease-in-out -0.22s infinite;
+}
+.pet.walk .face {
+  transform: translateX(7px);
+}
+.pet.walk.left .face {
+  transform: translateX(-7px);
+}
+@keyframes waddle {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+@keyframes step {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@keyframes swing-left {
+  0%,
+  100% {
+    transform: rotate(30deg);
+  }
+  50% {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes swing-right {
+  0%,
+  100% {
+    transform: rotate(-30deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+/* ---- looking about */
+.pet.look .face {
+  animation: look 1.8s ease-in-out;
+}
+@keyframes look {
+  20%,
+  45% {
+    transform: translateX(-8px);
+  }
+  60%,
+  85% {
+    transform: translateX(8px);
+  }
+}
+
+/* ---- a wave */
+.pet.wave .arm.right {
+  transform-origin: 50% 90%;
+  animation: wave 0.4s ease-in-out 4;
+}
+.pet.wave .eyes.open,
+.pet.glad .eyes.open {
+  display: none;
+}
+.pet.wave .eyes.glad,
+.pet.glad .eyes.glad {
+  display: inline;
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: translate(6px, -26px) rotate(-150deg);
+  }
+  50% {
+    transform: translate(6px, -26px) rotate(-190deg);
+  }
+}
+
+/* ---- a hop, on its own or when patted */
+.pet.hop .figure {
+  animation: hop 0.6s cubic-bezier(0.3, 0, 0.4, 1);
+}
+@keyframes hop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  15% {
+    transform: translateY(0) scale(1.08, 0.9);
+  }
+  50% {
+    transform: translateY(-24px) scale(0.96, 1.05);
+  }
+  85% {
+    transform: translateY(0) scale(1.06, 0.93);
+  }
+}
+
+/* ---- picked up: it dangles */
+.pet.held .figure {
+  animation: dangle 0.5s ease-in-out infinite;
+  transform-origin: 50% 0;
+}
+.pet.held .leg {
+  animation: kick 0.5s ease-in-out infinite;
+}
+.pet.held .leg.right {
+  animation-delay: -0.25s;
+}
+.pet.held .arm.left {
+  transform: translate(-4px, -24px) rotate(150deg);
+}
+.pet.held .arm.right {
+  transform: translate(4px, -24px) rotate(-150deg);
+}
+.pet.held .mouth.smile {
+  display: none;
+}
+.pet.held .mouth.oh {
+  display: inline;
+}
+@keyframes dangle {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes kick {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
+/* ---- what the character is doing */
+.pet[data-state="asleep"] .figure,
+.pet[data-state="asleep"] .torso {
+  animation-duration: 4.4s;
+}
+.pet[data-state="asleep"] .eyes.open,
+.pet[data-state="asleep"] .eyes.glad {
+  display: none;
+}
+.pet[data-state="asleep"] .eyes.shut {
+  display: inline;
+}
+.pet[data-state="asleep"] .zz {
+  display: inline;
+}
+.pet[data-state="asleep"] .zz text {
+  animation: doze 3s step-end infinite;
+  visibility: hidden;
+}
+.pet[data-state="asleep"] .zz text:nth-child(2) {
+  animation-delay: 0.6s;
+}
+.pet[data-state="asleep"] .zz text:nth-child(3) {
+  animation-delay: 1.2s;
+}
+@keyframes doze {
+  20% {
+    visibility: visible;
+  }
+  70% {
+    visibility: hidden;
+  }
+}
+.pet[data-state="answering"] .dots {
+  display: inline;
+}
+.pet[data-state="answering"] .dots circle {
+  animation: think 1.2s ease-in-out infinite;
+}
+.pet[data-state="answering"] .dots circle:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.pet[data-state="answering"] .dots circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes think {
+  30% {
+    transform: translateY(-5px);
+  }
+  60% {
+    transform: translateY(0);
+  }
+}
+.pet[data-state="out"] .figure {
+  visibility: hidden;
+}

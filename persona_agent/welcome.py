@@ -1771,6 +1771,11 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
             return FileResponse(ASSETS / "signin.html")
         return FileResponse(ASSETS / "index.html")
 
+    @app.get("/pet")
+    async def pet():
+        # The character alone, for the small window personagent starts as.
+        return FileResponse(ASSETS / "pet.html")
+
     @app.get("/health")
     async def health():
         # For a container's health check: that the page answers, nothing more.
@@ -1823,7 +1828,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
 
     @app.get("/assets/{name}")
     async def asset(name: str):
-        if name not in ("welcome.js", "welcome.css", *SIGNIN_ASSETS):
+        if name not in ("welcome.js", "welcome.css", "pet.js", "pet.css", *SIGNIN_ASSETS):
             raise HTTPException(404)
         return FileResponse(ASSETS / name)
 
@@ -2161,7 +2166,8 @@ def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Pat
         url, storage=desktop / "webview", confirm=confirm, words=words,
         background=lambda: bool(app_settings(desktop).get("background")),
         # Hidden only makes sense where closing can hide too.
-        start_hidden=hidden and bool(app_settings(desktop).get("background")))
+        start_hidden=hidden and bool(app_settings(desktop).get("background")),
+        pet=True)
     app.state.window = window
 
     def stop() -> None:

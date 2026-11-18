@@ -16,6 +16,7 @@ import sys
 import threading
 from pathlib import Path
 from typing import Callable, Iterator
+from urllib.parse import urlsplit, urlunsplit
 
 TITLE = "personagent"
 ICON = Path(__file__).with_name("static") / "app"
@@ -29,6 +30,15 @@ SHOWN_WITHIN = 30
 PAGE_WITHIN = 25
 # What the page's own title bar may ask of a frameless window.
 ACTIONS = ("minimize", "maximize", "restore", "close")
+# The pet: a small window with nothing in it but the character.
+PET_SIZE = (160, 190)
+# How far from the right edge of the screen it first stands.
+PET_MARGIN = 80
+# The colour the pet's window treats as not there. One step from the figure's
+# outline (#3d4f8a in pet.css), so an edge blended with it still reads as outline.
+PET_KEY = (0x3D, 0x4F, 0x8B)
+# winuser.h: the extended styles of a window that takes no focus and has no taskbar button.
+_GWL_EXSTYLE, _WS_EX_NOACTIVATE, _WS_EX_TOOLWINDOW = -20, 0x08000000, 0x00000080
 
 
 def available() -> bool:
@@ -228,21 +238,48 @@ def _interrupt(stop: Callable[[], None]) -> Iterator[None]:
         reader.close()
 
 
+class _PetApi:
+    """What the pet's page may ask of its window."""
+
+    def __init__(self, owner: "AppWindow"):
+        self._owner = owner
+
+    def open(self) -> None:
+        self._owner.show()
+
+    def menu(self) -> None:
+        self._owner._pet_menu()
+
+    def walk(self, dx: float) -> bool:
+        return self._owner._pet_walk(dx)
+
+
 class AppWindow:
     """One window on `url`. `confirm` returns the question to ask before the
     window closes, or "" to close without asking. While `background` says so,
     closing hides the window behind a notification-area icon instead, where
-    the system has one for us (Windows); `words` names that icon's menu."""
+    the system has one for us (Windows); `words` names that icon's menu.
+
+    With `pet` (Windows), personagent starts as the character alone on the
+    desktop: the window stays hidden until the pet is double-clicked, and
+    closing it hides it again. The pet's menu quits."""
 
     def __init__(self, url: str, *, storage: Path, confirm: Callable[[], str] = lambda: "",
                  background: Callable[[], bool] = lambda: False,
-                 words: Callable[[], dict] = lambda: {}, start_hidden: bool = False):
+                 words: Callable[[], dict] = lambda: {}, start_hidden: bool = False,
+                 pet: bool = False):
         self.url = url
         self.storage = storage
         self.confirm = confirm
         self.background = background
         self.words = words
         self.start_hidden = start_hidden
+        self.pet = pet and sys.platform == "win32"
+        self._pet = None
+        self._pet_strip = None
+        # Menu handlers stay referenced here, or .NET would lose them.
+        self._open_click = lambda sender, event: self.show()
+        self._quit_click = lambda sender, event: self.close()
         self.opened = False
         # Why no window opened, for the log.
         self.error = ""
@@ -279,7 +316,8 @@ class AppWindow:
             self._window.show()
             if self.hidden:
                 self.hidden = False
-                self._on_ui(lambda: setattr(self._tray, "Visible", False))
+                if self._tray is not None:
+                    self._on_ui(lambda: setattr(self._tray, "Visible", False))
         except Exception:
             return False
         return True
@@ -306,9 +344,91 @@ class AppWindow:
 
     def close(self) -> None:
         self._leaving = True
-        if self._window is not None:
-            with contextlib.suppress(Exception):
-                self._window.destroy()
+        for window in (self._pet, self._window):
+            if window is not None:
+                with contextlib.suppress(Exception):
+                    window.destroy()
+
+    @property
+    def pet_url(self) -> str:
+        address = urlsplit(self.url)
+        return urlunsplit((address.scheme, address.netloc, "/pet", "", address.fragment))
+
+    def _on_pet(self, action: Callable[[], None]) -> None:
+        from System import Func, Type
+
+        def run() -> None:
+            action()
+
+        self._pet.native.Invoke(Func[Type](run))
+
+    def _place_pet(self) -> None:
+        """Cut the pet's window down to the figure and stand it on the taskbar,
+        near the right edge."""
+        import ctypes
+
+        from System.Drawing import Color, Size
+        from System.Windows.Forms import Screen
+
+        form = self._pet.native
+        user32 = ctypes.windll.user32
+
+        def place() -> None:
+            scale = form._scale
+            form.Hide()
+            form.MinimumSize = Size(1, 1)
+            form.Size = Size(int(PET_SIZE[0] * scale), int(PET_SIZE[1] * scale))
+            # pywebview leaves the form's own grey behind a transparent page.
+            # Everything in the key colour is left out of the window, clicks included.
+            form.BackColor = form.TransparencyKey = Color.FromArgb(*PET_KEY)
+            # After the key, which gives the window its styles anew.
+            hwnd = form.Handle.ToInt64()
+            user32.SetWindowLongW(hwnd, _GWL_EXSTYLE, user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
+                                  | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW)
+            area = Screen.FromControl(form).WorkingArea
+            form.Left = area.Right - form.Width - int(PET_MARGIN * scale)
+            form.Top = area.Bottom - form.Height
+            form.Show()
+
+        self._on_pet(place)
+
+    def _pet_walk(self, dx: float) -> bool:
+        """Move the pet sideways by `dx`; False where the screen ends."""
+        from System.Windows.Forms import Screen
+
+        form = self._pet.native
+        moved = {"ok": False}
+
+        def step() -> None:
+            area = Screen.FromControl(form).WorkingArea
+            left = min(max(form.Left + round(dx * form._scale), area.Left), area.Right - form.Width)
+            moved["ok"] = left != form.Left
+            form.Left = left
+
+        self._on_pet(step)
+        return moved["ok"]
+
+    def _pet_menu(self) -> None:
+        import ctypes
+
+        from System.Windows.Forms import ContextMenuStrip, Cursor, ToolStripMenuItem
+
+        words = {"open": "Open personagent", "quit": "Quit", **self.words()}
+        form = self._pet.native
+
+        def show() -> None:
+            if self._pet_strip is None:
+                menu = ContextMenuStrip()
+                for label, handler in ((words["open"], self._open_click), (words["quit"], self._quit_click)):
+                    item = ToolStripMenuItem(label)
+                    item.Click += handler
+                    menu.Items.Add(item)
+                self._pet_strip = menu
+            # A menu with no foreground window behind it stays open when clicked away from.
+            ctypes.windll.user32.SetForegroundWindow(form.Handle.ToInt64())
+            self._pet_strip.Show(Cursor.Position)
+
+        self._on_pet(show)
 
     def _on_ui(self, action: Callable[[], None]) -> None:
         from System import Func, Type
@@ -326,20 +446,18 @@ class AppWindow:
 
         words = {"open": "Open personagent", "quit": "Quit", **self.words()}
         self._tray_info = ToolTipIcon.Info
-        self._tray_open = lambda sender, event: self.show()
-        self._tray_quit = lambda sender, event: self.close()
 
         def make() -> None:
             tray = NotifyIcon()
             tray.Icon = Icon(str(icon()))
             tray.Text = TITLE
             menu = ContextMenuStrip()
-            for label, handler in ((words["open"], self._tray_open), (words["quit"], self._tray_quit)):
+            for label, handler in ((words["open"], self._open_click), (words["quit"], self._quit_click)):
                 item = ToolStripMenuItem(label)
                 item.Click += handler
                 menu.Items.Add(item)
             tray.ContextMenuStrip = menu
-            tray.DoubleClick += self._tray_open
+            tray.DoubleClick += self._open_click
             tray.Visible = False
             self._tray = tray
 
@@ -348,6 +466,11 @@ class AppWindow:
     def _closing(self):
         if self._leaving:
             return None
+        if self._pet is not None:
+            # The pet is still there: the window only goes away until asked for again.
+            self._window.hide()
+            self.hidden = True
+            return False
         if self._tray is not None and self.background():
             self.hide()
             return False
@@ -454,7 +577,11 @@ class AppWindow:
                         threading.Thread(target=self._unless_seen, name="personagent-frame",
                                          daemon=True).start()
                 self.opened = True
-                if self.start_hidden:
+                if self._pet is not None:
+                    self.hidden = True
+                    self._pet.events.shown.wait(SHOWN_WITHIN)
+                    self._place_pet()
+                elif self.start_hidden:
                     self.hide()
 
         try:
@@ -464,7 +591,19 @@ class AppWindow:
                 TITLE, None if windows else self.page_url, width=SIZE[0], height=SIZE[1],
                 min_size=MIN_SIZE, text_select=True, zoomable=True,
                 # Started for the background: no window flashes up before it hides.
-                minimized=self.start_hidden and windows)
+                minimized=self.start_hidden and windows, hidden=self.pet)
+            if self.pet:
+                import ctypes
+                screen = ctypes.windll.user32.GetSystemMetrics
+                self._pet = webview.create_window(
+                    TITLE, self.pet_url, js_api=_PetApi(self), width=PET_SIZE[0], height=PET_SIZE[1],
+                    x=screen(0) - PET_SIZE[0] - PET_MARGIN, y=screen(1) - PET_SIZE[1] - 60,
+                    resizable=False, frameless=True, shadow=False, on_top=True, transparent=True,
+                    # The page turns selection off itself: pywebview would do it with a
+                    # style element, which the page's content policy refuses.
+                    text_select=True)
+                # Closed on its own (Alt+F4): personagent goes with it.
+                self._pet.events.closed += lambda: None if self._leaving else self.close()
             events = self._window.events
             events.closing += self._closing
             events.minimized += self._sized(True)
