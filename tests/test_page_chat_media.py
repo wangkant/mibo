@@ -170,10 +170,15 @@ def test_a_failed_message_is_kept_unanswered_and_can_be_sent_again(monkeypatch, 
     with pytest.raises(ConnectionError):
         asyncio.run(workspace.chat("hi"))
     expected = [{"role": "user", "text": "hi", "seq": 1, "failed": "chat_failed"}]
-    assert workspace.history()["messages"] == expected
+
+    def kept(ws):
+        # Each message also carries when it was sent.
+        return [{k: v for k, v in m.items() if k != "at"} for m in ws.history()["messages"]]
+
+    assert kept(workspace) == expected
     again = welcome.Workspace(workspace.home)
     try:
-        assert again.history()["messages"] == expected, "a restart keeps it"
+        assert kept(again) == expected, "a restart keeps it"
     finally:
         again.close()
     # The character never had that turn.

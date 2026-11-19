@@ -137,7 +137,7 @@ def test_signing_in_gives_a_strict_http_only_session(phone):
     check("plain HTTP gets no Secure flag it could not keep", "secure" not in cookie.lower())
     check("the password is never in the answer", PASSWORD not in answer.text and PASSWORD not in cookie)
     page = phone.get("/")
-    check("the page itself now", 'id="signin-form"' not in page.text and "/assets/welcome.js" in page.text)
+    check("the page itself now", 'id="signin-form"' not in page.text and "/assets/app.js" in page.text)
     state = phone.get("/api/state", headers=SESSION)
     check("the API answers", state.status_code == 200 and state.json()["remote"] is True)
     check("only with the page's own header", phone.get("/api/state").status_code == 401)
