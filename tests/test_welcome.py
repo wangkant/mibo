@@ -780,7 +780,9 @@ def test_chat_posts_to_the_real_character_connector_and_is_serialised(workspace,
     assert events[0]["capabilities"] == ["outbox"] and events[0]["reply_handle"] == workspace._conversation
     from persona_agent.server import _validate_event_payload
     assert _validate_event_payload(events[0], connector=True)
-    assert workspace.history()["messages"][-1] == {"role": "assistant", "text": "hello", "seq": 2}
+    # Each message carries when it was said, for the page's day lines and times.
+    last = dict(workspace.history()["messages"][-1])
+    assert isinstance(last.pop("at"), str) and last == {"role": "assistant", "text": "hello", "seq": 2}
     restored = welcome.Workspace(workspace.home)
     try:
         assert restored._conversation == workspace._conversation
@@ -1237,7 +1239,7 @@ def test_memory_forget_restore_and_forget_chat_go_to_the_service(client, workspa
     own = client.post("/api/activity/forget_chat", headers=HEADERS, json={"chat": before}).json()
     assert own == {"ok": True, "forgotten": 4} and workspace._page_key() != before
     # With the chats "New chat" left behind, which are still recalled here.
-    assert writes[-1] == ("/api/dashboard/memory/forget_chat", {"conv": before, "earlier_page": True})
+    assert writes[-1] == ("/api/dashboard/memory/forget_chat", {"conv": before, "earlier_page": True, "keep": []})
 
 
 def _table(js, code, name):
@@ -1257,7 +1259,7 @@ def _page_strings(code):
     from persona_agent.panels import signin
 
     scripts = [welcome.ASSETS / "welcome.js", welcome.ASSETS / "signin.js",
-               *(welcome.ASSETS / "panels" / f"{name}.js" for name in welcome.PANELS)]
+               *(welcome.ASSETS / "panels" / f"{name}.js" for name in welcome.PAGE_PANELS)]
     strings = {f"signin_page_{key}": pair[code == "zh"] for key, pair in signin.PAGE_TEXT.items()}
     for script in scripts:
         table = _table(script.read_text(encoding="utf-8"), code, script.name)
@@ -1274,9 +1276,11 @@ def test_every_panel_has_its_module_its_script_and_its_stylesheet(client):
         module = importlib.import_module(f"persona_agent.panels.{name}")
         assert callable(module.mount) and isinstance(module.ERRORS, frozenset), name
         for kind in ("js", "css"):
-            assert client.get(f"/assets/panels/{name}.{kind}").status_code == 200, (name, kind)
+            # The app page's own files draw the panels the earlier page does not have.
+            wanted = 200 if name in welcome.PAGE_PANELS else 404
+            assert client.get(f"/assets/panels/{name}.{kind}").status_code == wanted, (name, kind)
     html = (welcome.ASSETS / "index.html").read_text(encoding="utf-8")
-    assert re.findall(r'/assets/panels/(\w+)\.js', html) == list(welcome.PANELS)
+    assert re.findall(r'/assets/panels/(\w+)\.js', html) == list(welcome.PAGE_PANELS)
     for name in ("unknown.js", "health.py", "..%2Fwelcome.js", "health.js.bak"):
         assert client.get(f"/assets/panels/{name}").status_code == 404, name
 

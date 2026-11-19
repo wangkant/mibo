@@ -145,9 +145,11 @@ _YT_RESULTS = """() => {
 }"""
 
 
-async def youtube_search(page: Any, words: str, *, base: str = YOUTUBE) -> tuple[list[Found], str]:
-    """The videos YouTube's search page shows for `words`."""
-    await page.goto(f"{base}/results?search_query={quote(words)}", wait_until="domcontentloaded",
+async def youtube_search(page: Any, words: str, *, base: str = YOUTUBE, gl: str = "",
+                         hl: str = "") -> tuple[list[Found], str]:
+    """The videos YouTube's search page shows for `words`, as a visitor in country `gl` whose page is in `hl`."""
+    place = "".join(f"&{key}={quote(value)}" for key, value in (("gl", gl), ("hl", hl)) if value)
+    await page.goto(f"{base}/results?search_query={quote(words)}{place}", wait_until="domcontentloaded",
                     timeout=OPEN_MS)
     wall = wall_at(page.url)
     if wall:

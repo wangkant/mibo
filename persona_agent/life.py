@@ -187,9 +187,12 @@ def growth(src: Sources, now: Optional[float] = None) -> dict:
 
 def tell_queue(library: Library, now: Optional[float] = None) -> list[Item]:
     """What it kept for the owner and has not said, oldest first; older than a
-    week it stays in the days only."""
+    week it stays in the days only. A thing whose page or player cannot be reached now waits."""
+    from . import situation
     now = clock() if now is None else now
-    return [item for item in library.to_tell() if item.seen_at >= now - TELL_DAYS * 86400]
+    runtime = library.root.parent
+    return [item for item in library.to_tell() if item.seen_at >= now - TELL_DAYS * 86400
+            and all(situation.gate(runtime, host=address) for address in (item.url, item.embed) if address)]
 
 
 # ---------------------------------------------------------------------- now --
@@ -377,6 +380,11 @@ def clean_card(card) -> Optional[dict]:
 
 
 def said(item: Item) -> dict:
-    """The page chat message that brings one thing it saw to the owner."""
+    """The page chat message that brings one thing it saw to the owner: its own
+    sentence, else the title, and the card with what the chat reacts to it by."""
     card = clean_card(item.card())
-    return {"role": "assistant", "text": item.why or item.title or item.url, **({"card": card} if card else {})}
+    if card:
+        card.update(id=item.id, source=item.source, liked=item.state == KEPT,
+                    at=datetime.fromtimestamp(item.seen_at).astimezone().isoformat(timespec="seconds"))
+    text = " ".join(item.why.split()) or _clip(item.title, 80) or item.url
+    return {"role": "assistant", "text": text, **({"card": card} if card else {})}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="722" height="476" viewBox="0 0 722 476">
+<defs>
+  <linearGradient id="eyeFill" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#6DD8FD"/><stop offset="0.5" stop-color="#60CCFD"/><stop offset="1" stop-color="#86F0FE"/>
+  </linearGradient>
+  <radialGradient id="cheekFill"><stop offset="0" stop-color="#FDB6B8"/><stop offset="0.8" stop-color="#FDB9BA" stop-opacity="0.95"/><stop offset="1" stop-color="#FDBBBB" stop-opacity="0"/></radialGradient>
+  <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+    <feColorMatrix in="b" type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.72  0 0 0 0 1  0 0 0 0.75 0"/>
+    <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+<g id="look_right"><g filter="url(#glow)"><g><ellipse cx="220" cy="284" rx="59" ry="62" fill="url(#eyeFill)"/><circle cx="233" cy="249" r="13" fill="#FFFFFF"/></g><g><ellipse cx="580" cy="284" rx="59" ry="62" fill="url(#eyeFill)"/><circle cx="593" cy="249" r="13" fill="#FFFFFF"/></g><path d="M330.0,325.0 C334.0,343.0 374.0,345.0 381.0,327.0 C388.0,345.0 428.0,343.0 432.0,325.0" fill="none" stroke="#6EE0FC" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></g><g class="cheeks"><ellipse cx="82" cy="437" rx="53" ry="33" transform="rotate(20 82 437)" fill="url(#cheekFill)"/><ellipse cx="643" cy="437" rx="53" ry="33" transform="rotate(-20 643 437)" fill="url(#cheekFill)"/></g></g>
+</svg>

@@ -11,6 +11,7 @@ from typing import Optional
 from . import access
 from . import channels
 from . import decision_log
+from . import quiet
 from .decision import SEND
 from .textproc import (
     TextProcessing,
@@ -33,6 +34,7 @@ class Proactive:
         while True:
             try:
                 await asyncio.sleep(self.proactive_interval_s)
+                await quiet.wait()
                 if TextProcessing._is_sleep_hour():
                     continue
                 acted = await self._maybe_proactive_groups()

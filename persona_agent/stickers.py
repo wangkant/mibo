@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
+from . import quiet
 from .config_env import DEFAULT_LLM_MODEL
 from .storage import append_jsonl_rotating, atomic_write_text
 from .textproc import (_detect_image_mime, _example_field, _fence_user_data,
@@ -516,6 +517,7 @@ class StickerLibrary:
             return 0
         logger.info("[stickers] bootstrap: tagging %d pending entries", len(pending))
         for md5 in pending:
+            await quiet.wait()
             await self.maybe_tag(md5)
             await asyncio.sleep(0.4)
         return len(pending)

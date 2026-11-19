@@ -48,7 +48,10 @@ def _where(kinds: tuple[str, ...]) -> str:
 
 
 def target(home: Path) -> tuple[Path, str]:
-    """What the icon runs: this install's Python without a console, on `home`."""
+    """What the icon runs: this install's Python without a console, on `home`;
+    the installer's build is a program of its own, already without one."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable), f'start --home "{home}"'
     python = Path(sys.executable)
     quiet = python.with_name("pythonw.exe")
     return (quiet if quiet.is_file() else python), f'-m persona_agent start --home "{home}"'
@@ -57,6 +60,24 @@ def target(home: Path) -> tuple[Path, str]:
 def _arguments(base: str, kind: str) -> str:
     # At sign-in it stays behind its icon, when closing is set to keep it running.
     return base + " --background" if kind == "startup" else base
+
+
+# WScript.Shell saves and reads only a path the system code page can spell, so
+# a link under a profile outside it goes through Public (or Windows\Temp). A
+# file put there directly is open to every local account, and a link moved on
+# keeps that, so it goes in a new folder that only this user can open, with
+# that access set when the folder is created.
+_PRIVATE_FOLDER = "\n".join([
+    "function Private-Folder {",
+    "  $base = $env:PUBLIC; if (-not $base) { $base = Join-Path $env:SystemRoot 'Temp' }",
+    "  $acl = New-Object Security.AccessControl.DirectorySecurity",
+    "  $acl.SetAccessRuleProtection($true, $false)",
+    "  $me = [Security.Principal.WindowsIdentity]::GetCurrent().User",
+    "  $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule("
+    "$me, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))",
+    "  $path = Join-Path $base ('personagent-' + [Guid]::NewGuid().ToString('N'))",
+    "  [IO.Directory]::CreateDirectory($path, $acl).FullName",
+    "}"])
 
 
 def script(home: Path, *, remove: bool = False, folders: list[Path] | None = None,
@@ -83,14 +104,13 @@ def script(home: Path, *, remove: bool = False, folders: list[Path] | None = Non
         "  $link.Description = 'personagent'",
         "  $link.Save()",
         "}",
+        _PRIVATE_FOLDER,
         f"foreach ($folder in {where}) {{",
         f"  $final = Join-Path $folder {_quoted(LINK)}",
         "  try { Save-Link $final } catch {",
-        # WScript.Shell saves only to a path the system code page can spell.
-        "    $base = $env:PUBLIC; if (-not $base) { $base = Join-Path $env:SystemRoot 'Temp' }",
-        "    $staged = Join-Path $base ('personagent-' + [Guid]::NewGuid().ToString('N') + '.lnk')",
+        "    $staging = Private-Folder; $staged = Join-Path $staging 'personagent.lnk'",
         "    try { Save-Link $staged; Move-Item -LiteralPath $staged -Destination $final -Force }",
-        "    finally { if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Force } }",
+        "    finally { Remove-Item -LiteralPath $staging -Recurse -Force }",
         "  }",
         "}"])
 
@@ -130,21 +150,21 @@ def status(home: Path) -> dict[str, str]:
         "$ErrorActionPreference = 'Stop'",
         "$shell = New-Object -ComObject WScript.Shell",
         "$found = @()",
+        _PRIVATE_FOLDER,
         f"foreach ($pair in @({pairs})) {{",
         "  if (-not $pair[1]) { continue }",
         f"  $path = Join-Path $pair[1] {_quoted(LINK)}",
         "  if (Test-Path -LiteralPath $path) {",
-        # WScript.Shell reads only a path the system code page can spell: read a copy elsewhere.
-        "    $read = $path",
+        # Read a copy where the code page can spell the path.
+        "    $read = $path; $staging = $null",
         "    if ($path -match '[^ -~]') {",
-        "      $base = $env:PUBLIC; if (-not $base) { $base = Join-Path $env:SystemRoot 'Temp' }",
-        "      $read = Join-Path $base ('personagent-' + [Guid]::NewGuid().ToString('N') + '.lnk')",
+        "      $staging = Private-Folder; $read = Join-Path $staging 'personagent.lnk'",
         "      Copy-Item -LiteralPath $path -Destination $read -Force",
         "    }",
         "    try {",
         "      $link = $shell.CreateShortcut($read)",
         "      $found += [pscustomobject]@{kind = $pair[0]; target = $link.TargetPath; arguments = $link.Arguments}",
-        "    } finally { if ($read -ne $path) { Remove-Item -LiteralPath $read -Force } }",
+        "    } finally { if ($staging) { Remove-Item -LiteralPath $staging -Recurse -Force } }",
         "  }",
         "}",
         "ConvertTo-Json -InputObject @($found) -Compress"])

@@ -11,9 +11,16 @@ def endpoint_for(model: str, *, primary_model: str, fallback_model: str,
     Only the fallback model, when distinct from the primary, goes to the
     fallback endpoint (a blank URL or key means the primary's). Routing is by
     name, so a DM, judge or eval model named like the fallback goes there too.
+    The primary's key goes only to the primary's host: after the primary
+    changes provider, a fallback left without a key of its own gets none.
     """
     if fallback_model and model == fallback_model and model != primary_model:
-        return fallback_base_url or base_url, fallback_api_key or api_key
+        if fallback_api_key:
+            return fallback_base_url or base_url, fallback_api_key
+        # Same scheme, host and port: a plain-http or other-port fallback on that host gets no key.
+        fall, prim = urlsplit(fallback_base_url.strip()), urlsplit(base_url.strip())
+        same = not fallback_base_url or (fall.scheme, fall.hostname, fall.port) == (prim.scheme, prim.hostname, prim.port)
+        return fallback_base_url or base_url, api_key if same else ""
     return base_url, api_key
 
 

@@ -18,6 +18,7 @@ from . import chatlog
 from . import memstate
 from . import memstore
 from . import people
+from . import quiet
 from . import ranking
 from . import timewords
 from .llm import purpose
@@ -61,8 +62,9 @@ GROUND_EVENT = 0.3
 SAME_FACT = 0.5
 FIXED_AFTER_RESTORE_S = 30 * 86400.0
 OVER_MIN_AGE_S = 86400.0
-# loop_memory: a tick a minute, a scan for due chats every ten.
+# loop_memory: a tick a minute, a scan for due chats every ten; during a game a tick this often at most.
 TICK_S = 60.0
+QUIET_TICK_S = 600.0
 SCAN_EVERY = 10
 PRUNE_S = 86400.0
 
@@ -1330,12 +1332,19 @@ class Consolidation:
                         logger.info("[Agent] chat log: %d old line(s) removed", gone)
                 self._maybe_flush_recent()
                 self._flush_memory_counters()
-                if tick % SCAN_EVERY == 0 and self._fold_on():
+                # No idle folds (LLM calls) during a game; the flushes above go on.
+                if tick % SCAN_EVERY == 0 and self._fold_on() and not quiet.active():
                     self._scan_folds(now)
                 if self.memory_state._dirty:
                     self._save_memory_state(force=False)
                 tick += 1
                 await asyncio.sleep(TICK_S)
+                if quiet.active():
+                    # Little changes during a game: written when it ends, or now and then.
+                    try:
+                        await asyncio.wait_for(quiet.wait(), QUIET_TICK_S)
+                    except asyncio.TimeoutError:
+                        pass
             except asyncio.CancelledError:
                 return
             except Exception as e:

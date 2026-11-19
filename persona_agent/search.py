@@ -16,6 +16,7 @@ from .textproc import (
     _UNTRUSTED_INPUT_RULES,
     _fence_user_data,
     _prepend_search_results,
+    _strip_web_desc,
     _truncate_framed,
 )
 
@@ -180,7 +181,8 @@ class WebSearch:
                 chosen_from[function["function"]["name"]] = offer
         if not chosen_from and not self._might_need_search(latest):
             return ""
-        if context and any(o.who != ANYONE for o in chosen_from.values()):
+        admin_tools = any(o.who != ANYONE for o in chosen_from.values())
+        if context and admin_tools:
             # With the admin's own tools on offer, the decision reads only what an
             # admin wrote: another member's line could steer the call.
             admins = getattr(hint, "admins", ())
@@ -190,6 +192,10 @@ class WebSearch:
         decided_on = "\n".join(
             [_truncate_framed(line, 200) for line in context[:-1]]
             + [_truncate_framed(context[-1] if context else latest, 800)])
+        if admin_tools:
+            # Nor what an admin's message carries from elsewhere: a quoted card,
+            # a link's description or a forward is a third party's words.
+            decided_on = _strip_web_desc(decided_on)
         try:
             tool = {
                 "type": "function",

@@ -97,14 +97,15 @@ PAGE_PLATFORM = "browser"
 #: The platform of conversations held through the OpenAI-compatible API (chat_api).
 API_PLATFORM = "api"
 def page_owner(runtime: Path) -> frozenset[str]:
-    """The page chat's sender as an admin id, or nothing. Read each time: the file is
-    one short line, and its time cannot tell two writes inside one clock tick apart."""
+    """The senders of the page's chats as admin ids, one per line of the file, or
+    nothing. Read each time: the file is a few short lines, and its time cannot
+    tell two writes inside one clock tick apart."""
     try:
-        sender = (runtime / PAGE_OWNER_FILE).read_text(encoding="utf-8").strip()
+        senders = (runtime / PAGE_OWNER_FILE).read_text(encoding="utf-8").split()
     except (OSError, UnicodeDecodeError):
         return frozenset()
-    usable = 8 <= len(sender) <= 64 and all(c.isascii() and (c.isalnum() or c in "-_") for c in sender)
-    return frozenset({f"{PAGE_PLATFORM}:{sender}"}) if usable else frozenset()
+    return frozenset(f"{PAGE_PLATFORM}:{sender}" for sender in senders
+                     if 8 <= len(sender) <= 64 and all(c.isascii() and (c.isalnum() or c in "-_") for c in sender))
 
 
 def is_admin(user_id, admins: Iterable[str]) -> bool:

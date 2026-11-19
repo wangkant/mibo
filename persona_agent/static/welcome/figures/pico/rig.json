@@ -1,0 +1,194 @@
+{
+  "canvas": [
+    1024,
+    1536
+  ],
+  "source": "the layers of figure-art/pico, cut from the painted robot keyed off #00FF00",
+  "units": "canvas pixels, y down; angles in degrees, positive turns clockwise on screen",
+  "ground_y": 1467,
+  "figure_bbox": [
+    14,
+    85,
+    1006,
+    1467
+  ],
+  "desktop_height_px": 190,
+  "desktop_scale": 0.1375,
+  "layers": [
+    {
+      "name": "antenna",
+      "file": "antenna.webp",
+      "order": 0,
+      "pivot": [
+        512,
+        269.9
+      ],
+      "parent": "head"
+    },
+    {
+      "name": "foot_l",
+      "file": "foot_l.webp",
+      "order": 1,
+      "pivot": [
+        385,
+        1382
+      ],
+      "parent": null
+    },
+    {
+      "name": "foot_r",
+      "file": "foot_r.webp",
+      "order": 2,
+      "pivot": [
+        628,
+        1382
+      ],
+      "parent": null
+    },
+    {
+      "name": "body",
+      "file": "body.webp",
+      "order": 3,
+      "pivot": [
+        507,
+        1411
+      ],
+      "parent": null
+    },
+    {
+      "name": "arm_l",
+      "file": "arm_l.webp",
+      "order": 4,
+      "pivot": [
+        320,
+        1040
+      ],
+      "parent": "body"
+    },
+    {
+      "name": "arm_r",
+      "file": "arm_r.webp",
+      "order": 5,
+      "pivot": [
+        693,
+        1040
+      ],
+      "parent": "body"
+    },
+    {
+      "name": "head",
+      "file": "head.webp",
+      "order": 6,
+      "pivot": [
+        507,
+        1040
+      ],
+      "parent": "body"
+    }
+  ],
+  "pivot_notes": {
+    "antenna": "base of the stem on the head top; the stem runs on 40 px behind the head so a bend never shows a gap",
+    "head": "neck, centre of the head's bottom edge",
+    "body": "base, bottom centre of the body",
+    "arm_l": "left shoulder (viewer's left), hidden under the head",
+    "arm_r": "right shoulder (viewer's right), hidden under the head",
+    "foot_l": "hip, top of the foot under the body",
+    "foot_r": "hip, top of the foot under the body"
+  },
+  "face": {
+    "parent": "head",
+    "draw": "after the head layer, in the head's transform",
+    "screen_ellipse_bbox": [
+      147,
+      472,
+      868,
+      915
+    ],
+    "screen_note": "the dark glass is an ellipse inside this box; keep eye shapes inside eye_safe",
+    "face_box": [
+      147,
+      472,
+      722,
+      476
+    ],
+    "face_box_note": "face.svg is drawn in this box (x, y, w, h): the screen box carried 31 px lower so the cheeks, which sit on the shell under the glass, fit",
+    "eye_safe": [
+      205,
+      560,
+      820,
+      860
+    ],
+    "eyes": {
+      "left_center": [
+        329,
+        756
+      ],
+      "right_center": [
+        689,
+        756
+      ],
+      "rx": 59,
+      "ry": 62,
+      "highlight": {
+        "offset": [
+          13,
+          -35
+        ],
+        "r": 13,
+        "color": "#FFFFFF"
+      },
+      "fill_gradient_top_mid_bottom": [
+        "#6DD8FD",
+        "#60CCFD",
+        "#86F0FE"
+      ],
+      "glow": {
+        "color": "#4DB8FF",
+        "blur_px": 6,
+        "opacity": 0.75
+      }
+    },
+    "mouth": {
+      "color": "#6EE0FC",
+      "stroke_px": 10,
+      "center": [
+        512,
+        799
+      ],
+      "width": 102,
+      "open_fill": "#2B6E95"
+    },
+    "cheeks": {
+      "color": "#FDB9BA",
+      "left_center": [
+        229,
+        909
+      ],
+      "right_center": [
+        790,
+        909
+      ],
+      "rx": 53,
+      "ry": 33,
+      "tilt_deg": [
+        20,
+        -20
+      ]
+    },
+    "screen_color": "#1E2638",
+    "expressions": [
+      "neutral",
+      "blink",
+      "happy",
+      "talk_a",
+      "talk_b",
+      "look_left",
+      "look_right",
+      "surprised",
+      "sleepy",
+      "sleeping",
+      "look_down"
+    ],
+    "files": "face.svg holds every expression as a <g id> (neutral shown); faces/<name>.svg one each"
+  }
+}

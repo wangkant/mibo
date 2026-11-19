@@ -147,14 +147,20 @@ def test_internal_addresses_are_refused_by_rule():
     assert roam_mod.host_ok("example.com") and roam_mod.host_ok("93.184.216.34")
 
 
-def test_the_model_answer_is_parsed_strictly():
-    assert roam_mod.parse_choice('{"keep": [{"n": 2, "why": "Nice.", "fits": true}]}', 3) == [(1, "Nice.", True)]
+def test_the_model_answer_is_parsed_row_by_row():
+    assert roam_mod.parse_choice('{"keep": [{"n": 2, "why": "Nice.", "fits": true}]}', 3) == [(1, "Nice.", True, -1, ())]
+    assert roam_mod.parse_choice('{"items": [{"n": 1, "why": "Ok.", "fits": false, "love": 2, "tags": ["Boats"]}]}',
+                                 3) == [(0, "Ok.", False, 2, ("boats",))]
     assert roam_mod.parse_choice('```json\n{"keep": []}\n```', 3) == []
     for bad in ('{"keep": [{"n": 4, "why": "x", "fits": true}]}', '{"keep": [{"n": 1, "why": "x", "fits": "yes"}]}',
-                '{"keep": [{"n": 1, "why": "x", "fits": true}, {"n": 1, "why": "y", "fits": false}]}',
-                '{"keep": [{"n": true, "why": "x", "fits": true}]}', "sure, page 1", "",
-                json.dumps({"keep": [{"n": i, "why": "x", "fits": True} for i in (1, 2, 3, 4)]})):
-        assert roam_mod.parse_choice(bad, 4 if "4}" in bad else 3) is None, bad
+                '{"keep": [{"n": true, "why": "x", "fits": true}]}', '{"keep": [{"n": 1, "why": "x", "fits": true, "love": 7}]}'):
+        assert roam_mod.parse_choice(bad, 3) == [], bad
+    assert roam_mod.parse_choice('{"keep": [{"n": 1, "why": "x", "fits": true}, {"n": 1, "why": "y", "fits": false}]}',
+                                 3) == [(0, "x", True, -1, ())]
+    assert len(roam_mod.parse_choice(json.dumps({"keep": [{"n": i, "why": "x", "fits": True} for i in (1, 2, 3, 4)]}),
+                                     4)) == 3
+    for bad in ("sure, page 1", "", '{"keep": "all"}'):
+        assert roam_mod.parse_choice(bad, 3) is None, bad
 
 
 def test_a_small_cover_is_made_and_a_huge_one_skipped():

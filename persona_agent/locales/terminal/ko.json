@@ -680,5 +680,8 @@
 "forget an approval or a decline, so the chat asks again": "승인이나 거절을 취소하여 그 대화가 다시 요청하게 합니다",
 "the chat's id, as the list shows it": "목록에 표시된 대화의 ID",
 "The file mcp.json in the home folder cannot be read as JSON. Correct it or remove it.": "personagent 폴더의 mcp.json을 JSON으로 읽을 수 없습니다. 고치거나 삭제하십시오.",
-"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "이제 personagent가 서비스로 실행되며, 로그인해 있는 동안만 실행됩니다. 출력은 {0}에 기록됩니다."
+"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "이제 personagent가 서비스로 실행되며, 로그인해 있는 동안만 실행됩니다. 출력은 {0}에 기록됩니다.",
+"Show the pet": "펫 보이기",
+"--accept-risk applies only to connecting bilibili or youtube": "--accept-risk는 bilibili 또는 youtube 연결에만 적용됩니다",
+"bilibili, youtube: accept the risks of using a personal account, which connecting otherwise asks about": "bilibili, youtube: 개인 계정 사용의 위험을 받아들입니다(지정하지 않으면 연결할 때 묻습니다)"
 }

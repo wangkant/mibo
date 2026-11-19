@@ -195,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         if sys.stderr is not None:
             raise
         return _broken_without_a_terminal()
+    if args.command == "start" and not {"-h", "--help", "--no-browser", "--terminal"} & set(rest):
+        # The app opening: start at sign-in is on by default, the first time.
+        from persona_agent import autostart, home
+        autostart.first_run_soon(home.find_home())
     try:
         result = func(rest, f"personagent {args.command}")
     except SystemExit as stop:

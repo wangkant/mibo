@@ -191,11 +191,13 @@ def test_only_an_unedited_shipped_persona_is_offered_for_replacement(monkeypatch
 
 
 def test_the_fan_made_characters_come_last_with_their_own_names(portraits) -> None:
-    check("menu: the three after the original four, the template last",
-          sw.PERSONA_KEYS == ("dry-wit", "warm-listener", "gamer", "bookworm", *FAN_MADE, sw.TEMPLATE),
+    check("menu: Pico first, the three after the original four, the template last",
+          sw.PERSONA_KEYS == ("pico", "dry-wit", "warm-listener", "gamer", "bookworm", *FAN_MADE, sw.TEMPLATE),
           repr(sw.PERSONA_KEYS))
-    check("menu: only they have names of their own, the personification's",
-          [c.name_in("en") for c in sw.CHARACTERS if c.stem] == ["GPT-chan", "DeepSeek-chan", "Claude-chan"])
+    check("menu: only they and Pico have names of their own",
+          [c.name_in("en") for c in sw.CHARACTERS if c.stem] == ["Pico", "GPT-chan", "DeepSeek-chan", "Claude-chan"])
+    check("name: Pico's, given whole in each language",
+          [sw.character_for("pico").name_in(lang) for lang in ("zh", "ja", "ko", "ru")] == ["皮可", "ピコ", "피코", "Пико"])
     check("name: by language",
           [sw.character_for("chatgpt").name_in(lang) for lang in ("zh", "zh-TW", "ja", "ko", "de")]
           == ["GPT娘", "GPT娘", "GPTちゃん", "GPT쨩", "GPT-chan"])
@@ -324,7 +326,7 @@ def test_the_probe_calls_the_agents_url_and_explains_a_failure() -> None:
 def test_a_first_run_in_english(monkeypatch, tmp_path, capsys) -> None:
     script = Script([("Choose / 选择", "1"), ("Service", "1"),
                      ("API key", "sk-test-1234567890"), ("Bot name", "Mira"),
-                     ("Character", "3"), ("Connect to AstrBot", "n"),
+                     ("Character", "4"), ("Connect to AstrBot", "n"),
                      ("Chat with the bot", "y")])
     calls = _wire(monkeypatch, script)
     sw.run_wizard(tmp_path, _launcher(tmp_path))
@@ -363,9 +365,9 @@ def test_a_first_run_in_chinese_asks_in_chinese(monkeypatch, tmp_path, capsys) -
           all(re.search(r"[一-鿿]", p) for p in after_language), "\n".join(after_language))
     check("zh: Zhipu's documented base URL",
           sw.env_get(tmp_path / ".env", "LLM_BASE_URL") == "https://open.bigmodel.cn/api/paas/v4")
-    check("zh: the Chinese default name", sw.env_get(tmp_path / ".env", "PERSONA_NAME") == "小夏")
+    check("zh: the default character, Pico, by its Chinese name", sw.env_get(tmp_path / ".env", "PERSONA_NAME") == "皮可")
     check("zh: the Chinese character", (tmp_path / "persona.txt").read_text(
-        encoding="utf-8").startswith("你叫小夏。"))
+        encoding="utf-8").startswith("你叫皮可。"))
     check("zh: the output is Chinese too", "设置完成" in out and "首次设置" in out)
 
 

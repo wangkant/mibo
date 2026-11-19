@@ -135,6 +135,8 @@ def how_to_update() -> tuple[str, bool]:
 
     if in_container():
         return CONTAINER_UPDATE, False
+    if getattr(sys, "frozen", False):
+        return "", False  # the installer's build: replaced by the next installer
     if homes.is_checkout():
         if not (homes.CHECKOUT / ".git").exists():
             return "", False
@@ -199,6 +201,9 @@ def plan() -> tuple[str, list[list[str]]]:
     python = _python()
     if in_container():
         return "container", []
+    if getattr(sys, "frozen", False):
+        # The installer's build has no pip: a new installer replaces it.
+        return "installer", []
     if homes.is_checkout():
         if not (homes.CHECKOUT / ".git").exists():
             return "zip", []
@@ -278,6 +283,8 @@ def line(found: dict | None, sub: str = "") -> str:
         return (f"{head} This copy runs in a container: where it was started, pull the new image and "
                 f"start the container again:\n  {found['command']}")
     if not found["command"]:
+        if getattr(sys, "frozen", False):
+            return f"{head} Download and run the new installer from {found['url']}"
         return f"{head} Download the new source from {found['url']}"
     if found["opens"]:
         return f"{head} Quit personagent, then start the new version with:\n  {found['command']} {sub}".rstrip()

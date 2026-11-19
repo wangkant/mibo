@@ -1,0 +1,1082 @@
+/* The chats, calm: a 712px reading column on the warm canvas. The character's words
+   run without bubbles beside a small face, its name and time once per run; the
+   person's sit in soft bubbles on the right. Tokens are app.css's. */
+#chat-view {
+  overflow: hidden;
+  display: flex;
+  background: var(--pa-canvas);
+}
+.chat[hidden] {
+  display: none;
+}
+.chat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--pa-fs-lg);
+  line-height: 1.6;
+}
+.chat-col {
+  width: 100%;
+  max-width: var(--pa-col);
+  margin: 0 auto;
+  padding: 0 var(--pa-s6);
+}
+
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  /* Content slides softly under the bar. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+.chat-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.chat-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background: var(--pa-line-strong) padding-box;
+}
+.chat-thread {
+  padding-top: var(--pa-s2);
+  padding-bottom: var(--pa-s8);
+}
+.chat-messages {
+  display: flow-root;
+}
+.chat-trimmed {
+  margin: var(--pa-s4) 0 0;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  text-align: center;
+}
+
+/* ---- A day's line */
+.day {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s4);
+  margin: var(--pa-s10) 0 var(--pa-s8);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.day::before,
+.day::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--pa-line);
+}
+.chat-messages > .day:first-child,
+.chat-trimmed + .day {
+  margin-top: var(--pa-s4);
+}
+
+/* ---- The character: a run of its messages, its face beside the first line */
+.ai {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: var(--pa-s4);
+  margin-bottom: var(--pa-s8);
+}
+.ai-face {
+  width: 28px;
+  height: 28px;
+  margin-top: -2px;
+}
+.ai-body {
+  min-width: 0;
+}
+.ai-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  margin-bottom: 2px;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.ai-name {
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.ai-time {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.line + .line {
+  margin-top: var(--pa-s3);
+}
+.line.has-find + .line {
+  margin-top: var(--pa-s6);
+}
+.say {
+  margin: 0;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-lg);
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.say + .find {
+  margin-top: var(--pa-s2);
+}
+.line.arrived {
+  animation: chat-in var(--pa-t-slow) var(--pa-ease);
+}
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.pic {
+  display: inline-block;
+  max-width: min(100%, 360px);
+  overflow: hidden;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+}
+.pic img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+}
+.pic.loading {
+  width: 240px;
+  height: 160px;
+}
+.pic.gone {
+  padding: 8px 14px;
+  border-style: dashed;
+  background: transparent;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-sm);
+}
+/* The typing mark: three dots where the next words will be. */
+.line.typing {
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+.dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pa-faint);
+  animation: chat-dot 1.2s infinite ease-in-out;
+}
+.dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes chat-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* A passing remark: no face, quieter, on the text's edge. */
+.aside {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s3);
+  margin: 0 0 var(--pa-s8) 44px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-md);
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+}
+/* Right after the character's words it belongs to them: closer than a new block. */
+.ai + .aside {
+  margin-top: calc(-1 * var(--pa-s3));
+}
+.aside span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.aside time {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The person: soft bubbles on the right */
+.me {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 0 0 var(--pa-s8) var(--pa-s12);
+}
+.bubble {
+  max-width: min(100%, 520px);
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: var(--pa-bubble);
+  color: var(--pa-bubble-ink);
+  font-size: var(--pa-fs-lg);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.bubble-text {
+  white-space: pre-wrap;
+}
+.bubble.has-quote {
+  padding-top: 12px;
+}
+.bubble .pic {
+  display: block;
+  margin: -4px -10px;
+}
+/* A find answered: the first line inside the bubble. */
+.quote {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  min-width: 0;
+  margin-bottom: var(--pa-s2);
+  padding-left: 9px;
+  border-left: 3px solid var(--pa-accent);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 20px;
+}
+.quote-thumb {
+  flex: none;
+  width: 32px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--pa-sunken);
+}
+.quote-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--pa-cover-filter);
+}
+.quote-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.me.unanswered .bubble {
+  opacity: 0.55;
+}
+.msg-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--pa-error);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+}
+.msg-mark .i,
+.chat-banner .i {
+  width: 14px;
+  height: 14px;
+}
+/* Why it went unanswered, said quietly under it. */
+.notice {
+  margin: calc(-1 * var(--pa-s5)) 0 var(--pa-s8) 44px;
+  padding: 12px 14px;
+  border: 1px solid var(--pa-red200);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-error-soft);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+.notice p {
+  margin: 0;
+}
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+  margin-top: 10px;
+}
+.chat-error {
+  margin: var(--pa-s10) auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pa-s3);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-md);
+  text-align: center;
+}
+.chat-error p {
+  margin: 0;
+}
+
+/* ---- A find: 16:10 cover beside a body laid to its height, a fixed foot */
+/* Its line is what it measures itself by: a narrow one stacks it (the @container rule below). */
+.line.has-find {
+  container-type: inline-size;
+}
+.find {
+  position: relative;
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-1);
+  transition:
+    box-shadow var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    height var(--pa-t-slow) ease;
+}
+.find:hover {
+  border-color: var(--pa-line-strong);
+  box-shadow: var(--pa-shadow-2);
+}
+.cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--pa-sunken);
+}
+.cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--pa-cover-filter);
+}
+/* No picture: the sunken cover with where it is from, quietly. */
+.cover.blank {
+  display: grid;
+  place-items: center;
+}
+.cover-mark.i {
+  width: 36px;
+  height: 36px;
+  color: var(--pa-faint);
+  stroke-width: 1.25;
+  opacity: 0.7;
+}
+.play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1d1b18;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition:
+    transform var(--pa-t-fast),
+    background var(--pa-t-fast);
+}
+.play::before {
+  /* The whole cover is the play button's reach. */
+  content: "";
+  position: absolute;
+  inset: -200px;
+}
+.play-mark {
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  fill: currentColor;
+}
+.find:hover .play {
+  transform: scale(1.06);
+  background: #fff;
+}
+.dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(10, 10, 10, 0.66);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.find-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--pa-s3) var(--pa-s3) var(--pa-s3) var(--pa-s4);
+}
+.find-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 20px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  white-space: nowrap;
+}
+.site {
+  display: inline-grid;
+  flex: none;
+}
+.site .i {
+  width: 14px;
+  height: 14px;
+}
+.find-top .src {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.find-top .by {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.find-top .dot {
+  color: var(--pa-line-strong);
+}
+.find h3 {
+  display: -webkit-box;
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0.005em;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.find-title {
+  border-radius: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+.find-title:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.find-text {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.find-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  height: 32px;
+  margin-top: auto;
+  padding-top: 4px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.acts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: -6px;
+}
+.chat .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-muted);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.chat .icon-btn:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.chat .icon-btn .i {
+  width: 16px;
+  height: 16px;
+}
+.reply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  margin-right: 2px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.reply-btn .i {
+  width: 14px;
+  height: 14px;
+}
+.reply-btn:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.find:hover .reply-btn {
+  color: var(--pa-accent-ink);
+}
+.chat .icon-btn.loved,
+.chat .icon-btn.loved:hover {
+  color: var(--pa-love);
+}
+.icon-btn.loved .i {
+  fill: currentColor;
+}
+.icon-btn.pop .i {
+  animation: chat-pop 0.35s ease-out;
+}
+@keyframes chat-pop {
+  40% {
+    transform: scale(1.3);
+  }
+}
+/* ⋯: not interested, less from the source. */
+.find-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.find-menu {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: calc(100% + 4px);
+  display: none;
+  min-width: 156px;
+  padding: var(--pa-s1);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-pop);
+}
+.find-more-wrap.open .find-menu {
+  display: block;
+  animation: side-menu-in var(--pa-t-fast) var(--pa-ease);
+}
+.find-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--pa-s2);
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  text-align: left;
+  white-space: nowrap;
+}
+.find-menu button:hover,
+.find-menu button:focus-visible {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+  outline: none;
+}
+.find-menu .i {
+  width: 16px;
+  height: 16px;
+  color: var(--pa-muted);
+}
+/* The menu needs room above the foot; the card lets it out while open. */
+.find:has(.find-more-wrap.open) {
+  overflow: visible;
+}
+.find:has(.find-more-wrap.open) .cover {
+  border-radius: var(--pa-r-md) 0 0 var(--pa-r-md);
+}
+
+/* Playing in place: the card opens into a 16:9 player, its details under it. */
+.find.is-playing {
+  display: block;
+}
+.find.is-playing .cover {
+  display: none;
+}
+.player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #0b0b0c;
+}
+.player iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+/* 收起: at the right end of the card's top line, under the video, clear of the site's player. */
+.player-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 24px;
+  margin: 0 -4px 0 auto;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.player-close:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.player-close .i {
+  width: 14px;
+  height: 14px;
+}
+.find.is-playing .find-body {
+  padding: var(--pa-s3) var(--pa-s3) var(--pa-s2) var(--pa-s4);
+}
+.find.is-playing h3 {
+  -webkit-line-clamp: 1;
+}
+.find.is-playing .find-text {
+  display: none;
+}
+
+/* Asked for from the desktop: the thing is marked for a moment. */
+.msg-flash .find,
+.msg-flash > .say {
+  animation: chat-flash 2.4s ease-out;
+}
+@keyframes chat-flash {
+  0%,
+  70% {
+    border-color: var(--pa-a500);
+    box-shadow:
+      0 0 0 4px var(--pa-accent-ring),
+      0 0 0 1px var(--pa-a300),
+      var(--pa-shadow-2);
+  }
+}
+.msg-flash > .say {
+  border-radius: var(--pa-r-xs);
+  animation-name: chat-flash-text;
+}
+@keyframes chat-flash-text {
+  0%,
+  70% {
+    background: var(--pa-accent-soft);
+  }
+}
+
+/* Not for me: folded to one quiet line. */
+.find.folding {
+  overflow: hidden;
+}
+.find.folding > * {
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.find.folded {
+  display: block;
+  border-style: dashed;
+  border-color: var(--pa-line-strong);
+  background: transparent;
+  box-shadow: none;
+}
+.find-folded-line {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  min-height: 42px;
+  padding: 0 var(--pa-s4);
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-sm);
+  animation: chat-fade var(--pa-t-slow) ease-out;
+}
+.find-folded-line .i {
+  width: 15px;
+  height: 15px;
+}
+@keyframes chat-fade {
+  from {
+    opacity: 0;
+  }
+}
+/* A narrow column stacks the cover over the body. */
+@container (max-width: 520px) {
+  .find:not(.folded):not(.is-playing) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cover {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* ---- The composer: two rows at rest, growing with the text; + and send on a row below */
+/* The composer rests 28px off the window's bottom; the hint lives in that room. */
+.chat-dock {
+  flex: none;
+  position: relative;
+  padding-bottom: 28px;
+}
+.chat-dock::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 10px;
+  bottom: 100%;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--pa-canvas) 85%);
+  pointer-events: none;
+}
+.chat-composer {
+  position: relative;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-2xl);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-composer);
+  cursor: text;
+  transition:
+    border-color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.chat-composer:hover {
+  border-color: color-mix(in srgb, var(--pa-line-strong) 75%, var(--pa-muted));
+}
+/* Focus is said by the border alone; the shadow stays the resting one. */
+.chat-composer:focus-within {
+  border-color: var(--pa-n300);
+}
+.chat-composer-quote {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  padding: 12px 12px 0 20px;
+}
+.chat-composer-quote .quote {
+  flex: 1;
+  margin: 0;
+}
+.chat .chat-quote-x {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-faint);
+}
+.chat-quote-x:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.chat-quote-x .i {
+  width: 14px;
+  height: 14px;
+}
+.chat-input {
+  display: block;
+  width: 100%;
+  min-height: 62px;
+  max-height: 220px;
+  margin: 0;
+  padding: 14px 20px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow-y: hidden;
+  background: transparent;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  line-height: 24px;
+}
+.chat-composer.has-quote .chat-input {
+  padding-top: 10px;
+}
+/* Grown past its height: the lines scrolling up fade before the box's top edge. */
+.chat-input.scrolls {
+  overflow-y: auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 2px, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 2px, #000 16px);
+}
+.chat-input::placeholder {
+  color: var(--pa-faint);
+}
+.chat-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s1);
+  padding: 4px 10px 10px;
+}
+.chat-send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pa-send);
+  color: var(--pa-send-ink);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast),
+    transform var(--pa-t-fast);
+}
+.chat-send:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.chat-send:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.chat-send:disabled {
+  background: var(--pa-sunken);
+  color: var(--pa-faint);
+  cursor: default;
+}
+.chat-send .i {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.25;
+}
+/* The keys, said only while the box has the focus; a passing word takes the line for a moment. */
+.chat-hint {
+  height: 16px;
+  margin: var(--pa-s2) 0 0;
+  color: var(--pa-muted);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  user-select: none;
+  opacity: 0;
+  transition: opacity var(--pa-t-fast);
+}
+.chat-compose:focus-within .chat-hint,
+.chat-hint.flash {
+  opacity: 1;
+}
+.chat-hint.flash {
+  color: var(--pa-accent-ink);
+  font-weight: 500;
+}
+/* In the dock the hint sits in the bottom padding, so focus never moves the thread under the pointer. */
+.chat-dock .chat-compose {
+  position: relative;
+}
+.chat-dock .chat-hint {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+}
+.chat-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--pa-amber200);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-amber50);
+  color: var(--pa-amber700);
+  font-size: var(--pa-fs-sm);
+  line-height: 1.5;
+}
+.chat-banner-text {
+  flex: 1;
+  min-width: 200px;
+  color: var(--pa-text);
+}
+
+/* ---- Nothing yet: the character's bust fading out, a greeting, the composer, three ideas */
+.chat-empty,
+.chat-off {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--pa-s6) 0 10vh;
+}
+.chat-empty > .chat-col,
+.chat-off > .chat-col {
+  margin: auto;
+}
+.chat-hello,
+.chat-off-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.chat-hello {
+  margin-bottom: var(--pa-s8);
+}
+.chat-bust {
+  position: relative;
+  width: 168px;
+  margin-bottom: var(--pa-s2);
+}
+.chat-bust::before {
+  content: "";
+  position: absolute;
+  inset: 18px 14px 6px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--pa-accent-soft), transparent);
+}
+.chat-hello h1,
+.chat-off h1 {
+  margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-4xl);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+.chat-hello p,
+.chat-off p {
+  max-width: 480px;
+  margin: var(--pa-s2) 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+.chat-off .pa-btn {
+  margin-top: var(--pa-s6);
+}
+.chat-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--pa-s2);
+  margin-top: var(--pa-s4);
+}
+.chat-idea {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--pa-line);
+  border-radius: 18px;
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  transition:
+    border-color var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.chat-idea .i {
+  width: 16px;
+  height: 16px;
+  color: var(--pa-muted);
+  transition: color var(--pa-t-fast);
+}
+.chat-idea:hover {
+  border-color: var(--pa-line-strong);
+  color: var(--pa-ink);
+}
+.chat-idea:hover .i {
+  color: var(--pa-accent);
+}
+
+@media (max-width: 999.98px) {
+  .chat-col {
+    padding: 0 var(--pa-s5);
+  }
+  .me {
+    margin-left: var(--pa-s8);
+  }
+}
+@media (max-width: 560px) {
+  .chat-col {
+    padding: 0 var(--pa-s4);
+  }
+  .ai {
+    column-gap: var(--pa-s3);
+  }
+  .aside,
+  .notice {
+    margin-left: 40px;
+  }
+  .me {
+    margin-left: var(--pa-s6);
+  }
+  .chat-hello h1,
+  .chat-off h1 {
+    font-size: var(--pa-fs-3xl);
+  }
+}

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 190" width="160" height="190">
+  <g class="figure" stroke="#3d4f8a" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <g class="leg left"><rect x="60" y="150" width="16" height="30" rx="8" fill="#8eaef5" /></g>
+    <g class="leg right"><rect x="84" y="150" width="16" height="30" rx="8" fill="#8eaef5" /></g>
+    <g class="torso">
+      <ellipse class="arm left" cx="37" cy="122" rx="9" ry="16" fill="#8eaef5" />
+      <ellipse class="arm right" cx="123" cy="122" rx="9" ry="16" fill="#8eaef5" />
+      <g class="sprout">
+        <path d="M80 50 Q79 40 82 32" fill="none" />
+        <path d="M82 33 Q68 30 64 19 Q78 18 82 33 Z" fill="#6cc48a" stroke-width="2" />
+        <path d="M82 33 Q94 28 100 16 Q86 16 82 33 Z" fill="#6cc48a" stroke-width="2" />
+      </g>
+      <path d="M80 48 C112 48 126 80 126 114 C126 148 108 166 80 166 C52 166 34 148 34 114 C34 80 48 48 80 48 Z" fill="#a9c4ff" />
+      <ellipse cx="80" cy="136" rx="27" ry="22" fill="#f4f7ff" stroke="none" />
+      <g class="face" stroke="none">
+        <ellipse cx="55" cy="114" rx="8" ry="5" fill="#ffa9bb" />
+        <ellipse cx="105" cy="114" rx="8" ry="5" fill="#ffa9bb" />
+        <g class="eyes open">
+          <g class="eye"><ellipse cx="65" cy="100" rx="6" ry="8" fill="#26304f" /><circle cx="67" cy="97" r="2.2" fill="#fff" /></g>
+          <g class="eye"><ellipse cx="95" cy="100" rx="6" ry="8" fill="#26304f" /><circle cx="97" cy="97" r="2.2" fill="#fff" /></g>
+        </g>
+        <g class="eyes glad" display="none" fill="none" stroke="#26304f" stroke-width="2.8">
+          <path d="M58 102 Q65 93 72 102" />
+          <path d="M88 102 Q95 93 102 102" />
+        </g>
+        <g class="eyes shut" display="none" fill="none" stroke="#26304f" stroke-width="2.8">
+          <path d="M58 100 Q65 106 72 100" />
+          <path d="M88 100 Q95 106 102 100" />
+        </g>
+        <path class="mouth smile" d="M74 115 Q80 121 86 115" fill="none" stroke="#26304f" stroke-width="2.8" />
+        <ellipse class="mouth oh" display="none" cx="80" cy="118" rx="4" ry="5" fill="#26304f" />
+      </g>
+    </g>
+  </g>
+</svg>

@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import venv
 from dataclasses import dataclass
@@ -119,15 +120,21 @@ def install_astrbot(home: Path, *, run: Optional[Callable[..., object]] = None,
             _discard(installation)
             try:
                 step("mirror" if attempt else "tools")
-                # pip is a step of its own: the builder's own pip setup cannot be stopped.
-                venv.EnvBuilder(with_pip=False).create(bootstrap)
-                scratch.mkdir(parents=True, exist_ok=True)
-                run([str(python), "-m", "ensurepip", "--upgrade", "--default-pip"], env=downloads)
-                run([str(python), "-m", "pip", "install", *mirrors.pip_args(route), "uv>=0.8,<1"],
-                    env=downloads)
+                if getattr(sys, "frozen", False):
+                    # The installer's build has no Python to make a venv with: it ships uv.
+                    scratch.mkdir(parents=True, exist_ok=True)
+                    uv = [str(Path(sys._MEIPASS) / ("uv.exe" if os.name == "nt" else "uv"))]
+                else:
+                    # pip is a step of its own: the builder's own pip setup cannot be stopped.
+                    venv.EnvBuilder(with_pip=False).create(bootstrap)
+                    scratch.mkdir(parents=True, exist_ok=True)
+                    run([str(python), "-m", "ensurepip", "--upgrade", "--default-pip"], env=downloads)
+                    run([str(python), "-m", "pip", "install", *mirrors.pip_args(route), "uv>=0.8,<1"],
+                        env=downloads)
+                    uv = [str(python), "-m", "uv"]
                 if not attempt:
                     step("astrbot")
-                run([str(python), "-m", "uv", "--no-config", "tool", "install", *mirrors.uv_args(route),
+                run([*uv, "--no-config", "tool", "install", *mirrors.uv_args(route),
                      "--python", "3.12", "astrbot>=4.29,<5"], env=mirrors.uv_env(route, downloads))
                 break
             except (subprocess.CalledProcessError, DownloadStalled):

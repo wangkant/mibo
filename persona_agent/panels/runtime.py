@@ -50,7 +50,7 @@ def start_update(home: Path, commands: list[list[str]]) -> None:
 
 
 def mount(app, workspace, body) -> None:
-    from ..welcome import app_settings, save_app_settings
+    from ..welcome import app_settings, pet_figure, save_app_settings
 
     desktop = workspace.home / "runtime" / "desktop"
 
@@ -109,30 +109,35 @@ def mount(app, workspace, body) -> None:
         return await asyncio.to_thread(summary, request)
 
     def own_window(request: Request):
-        """The frameless window, for the page inside it and nobody else: a
-        browser tab on the same address draws no window bar."""
+        """The app window, for the page inside it and nobody else: a browser
+        tab on the same address draws no window bar and is sent nowhere by the pet."""
         window = getattr(app.state, "window", None)
-        if (window is None or not getattr(window, "frameless", False)
-                or not window.is_own_page(request.headers.get(WINDOW_HEADER, ""))):
+        if window is None or not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
             return None
         return window
 
-    def frame(window) -> dict:
+    def frame(window, goto: str = "") -> dict:
         # Without a title bar of its own the window leaves the bar and its buttons to the page.
-        return {"frameless": window is not None, "maximized": bool(window is not None and window.maximized)}
+        return {"frameless": bool(window is not None and window.frameless),
+                "maximized": bool(window is not None and window.maximized),
+                # A browser tab draws the figure the pet would be.
+                "figure": window.figure() if window is not None else pet_figure(desktop, workspace.config()),
+                "goto": goto}
 
     @app.get("/api/window")
     async def window_frame(request: Request):
         window = own_window(request)
-        if window is not None:
-            window.frame_seen()
-        return frame(window)
+        if window is None:
+            return await asyncio.to_thread(frame, None)
+        window.frame_seen()
+        # Where the pet sent the page goes out once. The figure is read from the settings file.
+        return await asyncio.to_thread(frame, window, window.take_goto())
 
     @app.post("/api/window")
     async def window_control(request: Request):
         action = str((await body(request)).get("action") or "")
         window = own_window(request)
-        if window is None or action not in ACTIONS:
+        if window is None or not window.frameless or action not in ACTIONS:
             raise ValueError("window_unavailable")
         if not await asyncio.to_thread(window.control, action):
             raise ValueError("window_unavailable")

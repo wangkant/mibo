@@ -121,7 +121,7 @@ def test_a_sign_in_url_is_read_without_starting_a_browser(site):
     assert direct.sign_in_url(KIND) == site.url + "/"
     made = direct.platform_for(KIND, {"account": "Robin"}, Path("home"))
     assert made.home == Path("home") and made.browser.profile == web.profile_path(Path("home"), KIND)
-    assert made.seen.path == direct.state_path(Path("home"), KIND) and made.browser.process is None
+    assert made.seen.path == direct.state_path(Path("home"), KIND) and made.browser.context is None
 
 
 def test_every_new_reason_is_named_and_explained_on_the_page_and_in_the_terminal():
@@ -372,7 +372,7 @@ def test_the_runner_builds_a_browser_platform_on_its_home(site, tmp_path):
     asyncio.run(signing_in_async(site, web.profile_path(tmp_path, KIND)))
     made = direct.platform_for(KIND, direct_base.load_credentials(tmp_path)[KIND], tmp_path)
     assert asyncio.run(made.check()) == "Robin"
-    assert made.browser.process is None and not leftovers(web.profile_path(tmp_path, KIND))
+    assert made.browser.context is None and not leftovers(web.profile_path(tmp_path, KIND))
     assert json.loads(json.dumps(made.keep())) == {"account": "Robin", "account_id": "42"}
 
 

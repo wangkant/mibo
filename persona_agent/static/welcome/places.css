@@ -1,0 +1,1130 @@
+/* Connect, a section of Settings. Every class starts with "places-"; the colours,
+   radii and type come from the shell's tokens in app.css. */
+.places-root {
+  --places-ok: var(--pa-green600);
+  --places-ok-soft: color-mix(in srgb, var(--pa-green600) 9%, var(--pa-surface));
+  --places-ok-line: color-mix(in srgb, var(--pa-green600) 26%, var(--pa-surface));
+  --places-ring-error: 0 0 0 3px color-mix(in srgb, var(--pa-error) 17%, transparent);
+  /* A mark on a solid green, red or accent: white in light, dark in dark. */
+  --places-on-solid: var(--pa-on-accent);
+  container-type: inline-size;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+.places-root *,
+.places-root *::before,
+.places-root *::after {
+  box-sizing: border-box;
+}
+.places-root [hidden] {
+  display: none !important;
+}
+.places-root p,
+.places-root h1,
+.places-root h2,
+.places-root h3,
+.places-root ol {
+  margin: 0;
+}
+.places-root :focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+.places-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- Cards: one per kind of account */
+.places-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+}
+.places-card {
+  background: var(--pa-surface);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  transition:
+    border-color var(--pa-t),
+    box-shadow var(--pa-t);
+}
+.places-card-open {
+  border-color: var(--pa-line-strong);
+  box-shadow: var(--pa-shadow-1);
+}
+.places-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+.places-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n100);
+  color: var(--pa-n600);
+}
+.places-mark-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.places-mark-text {
+  font: 750 13px/1 var(--pa-font-display);
+  letter-spacing: 0.02em;
+}
+.places-mark-mail {
+  background: var(--pa-a100);
+  color: var(--pa-accent);
+}
+/* A service's own colour: a tint of it behind, the colour itself pulled toward the ink so it reads in light and dark. */
+.places-mark-discord,
+.places-server-mark {
+  --brand: #4752c4;
+}
+.places-mark-qq {
+  --brand: #1a6fb8;
+}
+.places-mark-wechat {
+  --brand: #16834a;
+}
+.places-mark-bilibili {
+  --brand: #c8336f;
+}
+.places-mark-weibo {
+  --brand: #c4501f;
+}
+.places-mark-zhihu {
+  --brand: #1a5fd6;
+}
+.places-mark-youtube {
+  --brand: #c4302b;
+}
+.places-mark-outlook {
+  --brand: #1f6bb8;
+}
+.places-mark-slack {
+  --brand: #6b2b70;
+}
+.places-mark-discord,
+.places-mark-qq,
+.places-mark-wechat,
+.places-mark-bilibili,
+.places-mark-weibo,
+.places-mark-zhihu,
+.places-mark-youtube,
+.places-mark-outlook,
+.places-mark-slack,
+.places-server-mark {
+  background: color-mix(in srgb, var(--brand) 12%, var(--pa-surface));
+  color: color-mix(in srgb, var(--brand) 75%, var(--pa-ink));
+}
+.places-card-words {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.places-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.places-card-title {
+  color: var(--pa-ink);
+  font: 650 var(--pa-fs-lg) / var(--pa-lh-tight) var(--pa-font-display);
+}
+.places-card-line {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  overflow-wrap: anywhere;
+}
+.places-card[data-state="problem"] .places-card-line {
+  color: var(--pa-error);
+}
+
+/* The state, as a small pill beside the name */
+.places-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-n100);
+  color: var(--pa-n600);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.places-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.places-card[data-state="on"] .places-pill {
+  background: var(--places-ok-soft);
+  color: var(--places-ok);
+}
+.places-card[data-state="on"] .places-pill::before {
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--places-ok) 14%, transparent);
+}
+.places-card[data-state="problem"] .places-pill {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+.places-card[data-state="soon"] .places-pill,
+.places-card[data-state="thinking"] .places-pill {
+  background: var(--pa-amber50);
+  color: var(--pa-amber700);
+}
+
+.places-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s4);
+  padding: 0 20px 20px;
+  animation: places-rise var(--pa-t-slow) var(--pa-ease);
+}
+.places-card-body::before {
+  content: "";
+  height: 1px;
+  margin: 0 -20px 4px;
+  background: var(--pa-line);
+}
+@keyframes places-rise {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+/* ---- Kinds with no way in yet, side by side */
+.places-later {
+  margin-top: var(--pa-s6);
+}
+.places-later-title {
+  padding: 0 var(--pa-s1) var(--pa-s3);
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.places-later-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pa-s3);
+}
+.places-later .places-card {
+  background: var(--pa-n25);
+  box-shadow: none;
+}
+.places-later .places-card-head {
+  align-items: flex-start;
+}
+
+/* ---- Buttons */
+.places-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--pa-s4);
+  border: 1px solid transparent;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-text);
+  font: inherit;
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast),
+    transform var(--pa-t-fast);
+}
+.places-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+}
+.places-btn:disabled {
+  cursor: not-allowed;
+}
+.places-btn-sm {
+  height: 30px;
+  padding: 0 var(--pa-s3);
+  font-size: var(--pa-fs-sm);
+}
+.places-btn-sm .places-icon {
+  width: 14px;
+  height: 14px;
+}
+.places-btn-primary {
+  background: var(--pa-accent);
+  color: var(--pa-on-accent);
+  box-shadow: var(--pa-shadow-raise);
+}
+.places-btn-primary:hover:not(:disabled) {
+  background: var(--pa-accent-hover);
+}
+.places-btn-secondary {
+  background: var(--pa-surface);
+  border-color: var(--pa-line-strong);
+  box-shadow: var(--pa-shadow-raise);
+}
+.places-btn-secondary:hover:not(:disabled) {
+  background: var(--pa-sunken);
+  border-color: var(--pa-n300);
+  color: var(--pa-ink);
+}
+.places-btn-ghost {
+  color: var(--pa-muted);
+  font-weight: 500;
+}
+.places-btn-ghost:hover:not(:disabled) {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.places-btn-danger {
+  color: var(--pa-error);
+}
+.places-btn-danger:hover:not(:disabled) {
+  background: var(--pa-error-soft);
+}
+.places-btn-link {
+  height: auto;
+  padding: 2px 0;
+  border-radius: 4px;
+  color: var(--pa-accent);
+  font-size: var(--pa-fs-sm);
+}
+.places-btn-link:hover {
+  color: var(--pa-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.places-btn-link .places-icon {
+  width: 13px;
+  height: 13px;
+}
+.places-btn-dashed {
+  width: 100%;
+  height: 44px;
+  border: 1px dashed var(--pa-n300);
+  border-radius: var(--pa-r-md);
+  color: var(--pa-muted);
+}
+.places-btn-dashed:hover {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+}
+/* Busy: a spinner before the words, and the button keeps its colour so it reads as working. */
+.places-btn.places-busy {
+  cursor: progress;
+}
+.places-btn.places-busy::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: places-spin 0.7s linear infinite;
+}
+.places-btn.places-busy > .places-icon {
+  display: none;
+}
+.places-btn-primary.places-busy:disabled {
+  opacity: 0.86;
+}
+@keyframes places-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Notes, alerts and the done line */
+.places-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n50);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+}
+.places-note .places-icon {
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  color: var(--places-ok);
+}
+.places-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--pa-red200);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+  font-size: var(--pa-fs-sm);
+  animation: places-rise var(--pa-t) var(--pa-ease);
+}
+.places-alert-mark {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--pa-error);
+  color: var(--places-on-solid);
+  font: 700 11px/17px var(--pa-font);
+  text-align: center;
+}
+.places-done {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--places-ok-line);
+  border-radius: var(--pa-r-md);
+  background: var(--places-ok-soft);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  font-weight: 550;
+  animation: places-rise var(--pa-t-slow) var(--pa-ease);
+}
+.places-done-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--places-ok);
+  color: var(--places-on-solid);
+}
+.places-done-mark .places-icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.6;
+}
+.places-empty {
+  padding: 14px 16px;
+  border: 1px dashed var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-sm);
+  text-align: center;
+}
+
+/* ---- Rows: an account, an option, a channel */
+.places-list {
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  overflow: hidden;
+}
+.places-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px 12px 16px;
+}
+.places-row + .places-row {
+  border-top: 1px solid var(--pa-line);
+}
+.places-row-words {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.places-row-name {
+  color: var(--pa-ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.places-row-about {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  line-height: 1.45;
+}
+.places-row-status {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.places-row-status-error {
+  color: var(--pa-error);
+}
+.places-row-off .places-row-name {
+  color: var(--pa-muted);
+  font-weight: 500;
+}
+.places-mono {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-xs);
+}
+.places-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  cursor: pointer;
+}
+.places-option:hover {
+  background: var(--pa-n25);
+}
+
+/* A switch, drawn from a tick box */
+.places-switch {
+  flex: none;
+  position: relative;
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-n300);
+  cursor: pointer;
+  transition: background var(--pa-t);
+}
+.places-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(29, 27, 24, 0.2);
+  transition: transform var(--pa-t) var(--pa-ease);
+}
+.places-switch:hover {
+  background: var(--pa-n400);
+}
+.places-switch:checked {
+  background: var(--pa-accent);
+}
+.places-switch:checked:hover {
+  background: var(--pa-accent-hover);
+}
+.places-switch:checked::after {
+  transform: translateX(14px);
+}
+.places-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-faint);
+  cursor: pointer;
+}
+.places-remove:hover {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+
+/* ---- Forms: label above, then the control, then help */
+.places-mail-connect,
+.places-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s4);
+}
+.places-mail-connect {
+  gap: var(--pa-s3);
+}
+.places-step-title {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  font-weight: 650;
+}
+.places-intro {
+  color: var(--pa-text);
+}
+.places-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+}
+.places-chip {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font: inherit;
+  font-size: var(--pa-fs-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.places-chip:hover {
+  border-color: var(--pa-n300);
+  background: var(--pa-n25);
+  color: var(--pa-ink);
+}
+.places-chip:active {
+  transform: scale(0.98);
+}
+.places-chip[aria-pressed="true"] {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+  box-shadow: inset 0 0 0 1px var(--pa-accent);
+  font-weight: 600;
+}
+.places-cancel {
+  align-self: flex-start;
+}
+.places-mail-connect .places-form {
+  margin-top: var(--pa-s1);
+}
+
+.places-how {
+  padding: 14px 16px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n50);
+}
+.places-how-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.places-how-title {
+  color: var(--pa-ink);
+  font-weight: 650;
+}
+.places-steps {
+  margin-top: var(--pa-s2);
+  padding-left: 22px;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+}
+.places-steps li {
+  margin: 4px 0;
+  padding-left: 2px;
+}
+.places-steps li::marker {
+  color: var(--pa-accent);
+  font-weight: 650;
+}
+/* Discord's steps: numbered in circles, with room for a button. */
+.places-steps-big {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: places-step;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+  font-size: var(--pa-fs-md);
+}
+.places-steps-big li {
+  position: relative;
+  margin: 0;
+  padding: 1px 0 0 36px;
+  counter-increment: places-step;
+}
+.places-steps-big li::before {
+  content: counter(places-step);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pa-a100);
+  color: var(--pa-accent-ink);
+  font-size: var(--pa-fs-xs);
+  font-weight: 700;
+}
+.places-steps-big .places-btn {
+  margin-top: var(--pa-s2);
+}
+
+.places-fields {
+  display: grid;
+  gap: var(--pa-s4);
+}
+.places-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.places-label {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  font-weight: 600;
+}
+.places-help {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.5;
+}
+.places-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+  font-size: var(--pa-fs-md);
+  box-shadow: inset 0 1px 1px #1c1b1905;
+  outline: none;
+  transition:
+    border-color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.places-input::placeholder {
+  color: var(--pa-placeholder);
+}
+.places-input:hover:not(:focus) {
+  border-color: var(--pa-n300);
+}
+.places-input:focus,
+.places-input:focus-visible {
+  border-color: var(--pa-a500);
+  box-shadow: var(--pa-ring);
+  outline: none;
+}
+.places-input[aria-invalid="true"] {
+  border-color: var(--pa-error);
+}
+.places-input[aria-invalid="true"]:focus {
+  box-shadow: var(--places-ring-error);
+}
+.places-secret {
+  position: relative;
+  display: block;
+}
+.places-secret-input {
+  padding-right: 84px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-sm);
+  letter-spacing: 0.01em;
+}
+.places-secret-input::placeholder {
+  font-family: var(--pa-font);
+  font-size: var(--pa-fs-md);
+  letter-spacing: 0;
+}
+.places-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pa-muted);
+  font: inherit;
+  font-size: var(--pa-fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.places-reveal:hover {
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+}
+.places-reveal:focus-visible {
+  outline-offset: 0;
+}
+.places-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pa-s2);
+}
+
+/* ---- Discord, connected */
+.places-discord-on {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s4);
+}
+.places-bot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--places-ok-line);
+  border-radius: var(--pa-r-md);
+  background: var(--places-ok-soft);
+}
+.places-bot-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--places-ok);
+  color: var(--places-on-solid);
+}
+.places-bot-mark .places-icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.6;
+}
+/* Connected, but something needs a look: no tick, in amber. */
+.places-bot-problem {
+  border-color: var(--pa-amber200);
+  background: var(--pa-amber50);
+}
+.places-bot-problem .places-bot-mark {
+  background: var(--pa-amber700);
+}
+.places-bot-bang {
+  font: 750 14px/1 var(--pa-font-display);
+}
+.places-accounts-note {
+  margin-top: var(--pa-s3);
+}
+.places-invite {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s4);
+  padding: 14px 16px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n50);
+}
+.places-channels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+}
+.places-sub-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.places-server {
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  overflow: hidden;
+}
+.places-server-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--pa-n25);
+  border-bottom: 1px solid var(--pa-line);
+}
+.places-server-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: var(--pa-fs-xs);
+  font-weight: 700;
+}
+.places-server-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.places-count {
+  flex: none;
+  padding: 1px 9px;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-sunken);
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.places-count-some {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+  font-weight: 600;
+}
+.places-server .places-empty {
+  margin: 10px;
+}
+.places-channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.places-channel + .places-channel {
+  border-top: 1px solid var(--pa-line);
+}
+.places-channel:hover {
+  background: var(--pa-n25);
+}
+.places-channel-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pa-ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.places-hash {
+  width: 15px;
+  height: 15px;
+  color: var(--pa-faint);
+}
+.places-channel.places-row-off .places-channel-name {
+  color: var(--pa-muted);
+}
+.places-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- The other accounts: their marks, and a sign-in on its way */
+.places-mark-github,
+.places-mark-matrix {
+  background: var(--pa-n100);
+  color: var(--pa-n800);
+}
+.places-card[data-state="pending"] .places-pill {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent);
+}
+.places-card[data-state="pending"] .places-pill::before {
+  animation: places-blink 1.2s ease-in-out infinite;
+}
+@keyframes places-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.places-flow,
+.places-account-on,
+.places-wait-words,
+.places-mail-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s4);
+}
+.places-wait-words {
+  gap: var(--pa-s3);
+  min-width: 0;
+}
+.places-flow:empty,
+.places-account-on:empty {
+  display: none;
+}
+.places-wait-line {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.places-wait-ok {
+  color: var(--places-ok);
+  font-weight: 600;
+}
+.places-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--pa-a200);
+  border-top-color: var(--pa-accent);
+  border-radius: 50%;
+  animation: places-spin 0.8s linear infinite;
+}
+.places-wait-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s6);
+  padding: var(--pa-s4);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n25);
+}
+.places-qr {
+  flex: none;
+  width: 172px;
+  height: 172px;
+  padding: 10px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  /* A code to scan stays dark on white in either theme. */
+  background: #fff;
+  box-shadow: var(--pa-shadow-1);
+}
+.places-qr img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.places-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pa-s3);
+  padding: 12px 14px 12px 18px;
+  border: 1px dashed var(--pa-n300);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-n25);
+}
+.places-code-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--pa-ink);
+  font: 650 22px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.14em;
+  user-select: all;
+}
+.places-note-expired {
+  background: var(--pa-amber50);
+}
+.places-note-expired .places-icon {
+  color: var(--pa-amber700);
+}
+.places-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+  padding: 14px 16px;
+  border: 1px solid var(--pa-amber200);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-amber50);
+}
+.places-warn-title {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  color: var(--pa-amber700);
+  font-weight: 650;
+}
+.places-warn-title .places-icon {
+  width: 17px;
+  height: 17px;
+}
+.places-warn-text {
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+}
+.places-textarea {
+  height: auto;
+  min-height: 120px;
+  padding: 10px 14px;
+  font-size: var(--pa-fs-sm);
+  line-height: 1.5;
+  resize: vertical;
+}
+.places-how-open {
+  margin-top: var(--pa-s3);
+}
+.places-foot-split {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--pa-s2);
+}
+
+/* ---- Narrow: the page is its own width, not the window's */
+@container (max-width: 420px) {
+  .places-wait-panel {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pa-s4);
+  }
+}
+/* A phone: Settings' own padding leaves the list about 290px there, and 614px at most elsewhere. */
+@container (max-width: 440px) {
+  /* The words keep a readable width; the button goes under them, on their edge. */
+  .places-card-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 12px;
+    padding: 16px;
+  }
+  .places-card-words {
+    flex-basis: calc(100% - 54px);
+  }
+  .places-card-head > .places-btn {
+    margin-left: 54px;
+  }
+  .places-card-body {
+    padding: 0 16px 16px;
+  }
+  .places-card-body::before {
+    margin: 0 -16px 4px;
+  }
+  .places-later-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .places-invite {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .places-actions > .places-btn-primary {
+    flex: 1;
+  }
+}

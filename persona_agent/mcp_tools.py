@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit
 
-from . import langs
+from . import langs, quiet
 from .mcp_client import McpError, ToolResult, connect, describe, find_program
 from .storage import FileLock, LockUnavailable, atomic_write_text
 from .textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source, scrub_third_party_text
@@ -63,7 +63,8 @@ FIRST_START_WAIT_S = 30.0
 BACKOFF_S = (2.0, 300.0)
 #: A server that ran this long starts its backoff over.
 HEALTHY_S = 60.0
-WATCH_S = 3.0
+#: How often mcp.json is looked at for changes (not during a game or fullscreen).
+WATCH_S = 10.0
 #: Ready-made servers from the official reference set, offered where uvx is found.
 STARTERS = {
     "time": {"command": "uvx", "args": ["mcp-server-time"]},
@@ -664,6 +665,7 @@ class ToolHub:
     async def _watch_config(self) -> None:
         while True:
             await asyncio.sleep(WATCH_S)
+            await quiet.wait()
             try:
                 self._reconcile()
             except Exception as e:

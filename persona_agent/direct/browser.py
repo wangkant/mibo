@@ -3,7 +3,7 @@ browser on this computer, signed in by the owner, worked one step at a time.
 
 The browser is the one already installed (Edge, Chrome or Chromium), started
 as an ordinary process with a profile of its own under `<home>/platforms/browser/`
-and driven through its debugging port. Nothing is done to look less like a
+and driven over a pipe to it (never a debugging port). Nothing is done to look less like a
 program: no changed fingerprint, no solved verification. When a site asks for
 a verification or signs the account out, the platform stops and says so, and
 the owner deals with it in the window.
@@ -172,7 +172,6 @@ class Browser:
         self.profile = profile
         self.executable = executable
         self.headless = headless_wanted() if headless is None else headless
-        self.process: Optional[subprocess.Popen] = None
         self._driver: Any = None
         self._browser: Any = None
         self.context: Any = None
@@ -180,7 +179,7 @@ class Browser:
     async def start(self) -> Any:
         """Start the browser and return its one context, signed in as the profile is."""
         try:
-            from playwright.async_api import async_playwright
+            from playwright.async_api import Error as DriverError, async_playwright
         except ImportError:
             raise Refused(NO_DRIVER) from None
         program = self.executable or find_browser()
@@ -188,46 +187,35 @@ class Browser:
             raise Refused(NO_BROWSER)
         self.profile.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(end_profile, self.profile)
-        port_file = self.profile / "DevToolsActivePort"
-        port_file.unlink(missing_ok=True)
-        arguments = [str(program), f"--user-data-dir={self.profile}", "--remote-debugging-port=0",
+        # Driven over a pipe, not a debugging port: a port on 127.0.0.1 answers any
+        # other program or user on this computer, with the signed-in profile behind it.
+        # Only these flags, none of Playwright's own (they move where a profile keeps its keys).
+        arguments = [f"--user-data-dir={self.profile}", "--remote-debugging-pipe",
                      "--no-first-run", "--no-default-browser-check", "--window-size=1280,900",
                      # A window nobody looks at must keep drawing, or a click waits for a frame that never comes.
                      "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
                      "--disable-background-timer-throttling"]
         arguments.append("--headless=new" if self.headless else "--start-minimized")
-        self.process = _launch(arguments + ["about:blank"])
         try:
-            port = await self._port(port_file)
             self._driver = await async_playwright().start()
-            self._browser = await self._driver.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
-            self.context = self._browser.contexts[0]
+            try:
+                self.context = await self._driver.chromium.launch_persistent_context(
+                    str(self.profile), executable_path=str(program), headless=self.headless, no_viewport=True,
+                    ignore_default_args=True, args=arguments + ["about:blank"], timeout=START_S * 1000)
+            except DriverError:
+                raise ConnectionError(NO_START) from None
+            self._browser = self.context.browser
             self.context.set_default_timeout(STEP_MS)
         except BaseException:
             await self.stop()
             raise
         return self.context
 
-    async def _port(self, port_file: Path) -> int:
-        deadline = time.monotonic() + START_S
-        while time.monotonic() < deadline:
-            # The first process may end at once, having handed over: only a failure says it did not start.
-            if self.process is not None and self.process.poll() not in (None, 0):
-                break
-            try:
-                first = port_file.read_text(encoding="utf-8").splitlines()[0].strip()
-                if first.isdigit():
-                    return int(first)
-            except (OSError, IndexError):
-                pass
-            await asyncio.sleep(0.1)
-        raise ConnectionError(NO_START)
-
     async def stop(self) -> None:
         """Close the browser the way its window's close button does, so the
         sign-in reaches the disk, then end what is left."""
-        browser, driver, process = self._browser, self._driver, self.process
-        self._browser = self._driver = self.context = self.process = None
+        browser, driver = self._browser, self._driver
+        self._browser = self._driver = self.context = None
         if browser is not None:
             gone = asyncio.Event()
             browser.on("disconnected", lambda *_: gone.set())
@@ -247,7 +235,7 @@ class Browser:
                 await asyncio.wait_for(driver.stop(), 5)
             except Exception:
                 pass
-        await asyncio.to_thread(end_profile, self.profile, process)
+        await asyncio.to_thread(end_profile, self.profile)
 
 
 # ---------------------------------------------------------------- steps

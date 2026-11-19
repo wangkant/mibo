@@ -960,7 +960,9 @@ def write_env(env_path: Path, values: dict) -> None:
 
     from persona_agent.storage import FileLock
 
-    env_path.parent.mkdir(parents=True, exist_ok=True)
+    if not env_path.exists():
+        # The first .env makes its folder a home, as in copy_env_template.
+        secure_home(env_path.parent)
     with FileLock(env_path.with_name("." + env_path.name + ".lock"), timeout=10):
         text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
         updated = set_env_values(text, values)
@@ -995,11 +997,54 @@ def env_get(env_path: Path, key: str) -> str:
     return str(dotenv_values(env_path).get(key) or "").strip()
 
 
+def secure_home(home: Path) -> None:
+    """Make `home` if missing and open it, and all it holds, to its user alone.
+    Files the app writes without a mode (covers, logs, the page's token link)
+    take it from here: on POSIX the umask leaves them readable to all, and on
+    Windows a home outside the profile (D:\\...) inherits "Authenticated Users:
+    Modify", where chmod does nothing. Cheap once done, so every start calls
+    it, and homes made by earlier versions are narrowed too."""
+    home.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        os.chmod(home, 0o700)
+        return
+    if _acl_protected(home):
+        # Narrowed already, here or by its user; redoing it rewrites every file below.
+        return
+    whoami = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
+                            errors="replace", stdin=subprocess.DEVNULL,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    sid = whoami.stdout.strip().rsplit(",", 1)[-1].strip('"')
+    # What a profile folder grants: the user, SYSTEM and Administrators.
+    grants = [f"*{who}:(OI)(CI)F" for who in (sid, "S-1-5-18", "S-1-5-32-544")]
+    # A drive with no permissions to set (FAT, exFAT) refuses; nothing to narrow there.
+    subprocess.run(["icacls", str(home), "/inheritance:r", "/grant:r", *grants],
+                   capture_output=True, stdin=subprocess.DEVNULL,
+                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+def _acl_protected(path: Path) -> bool:
+    """Whether `path` keeps its own permissions rather than its parent folder's."""
+    import ctypes
+    from ctypes import wintypes
+
+    advapi = ctypes.WinDLL("advapi32")
+    descriptor = ctypes.c_void_p()
+    # SE_FILE_OBJECT, DACL_SECURITY_INFORMATION
+    if advapi.GetNamedSecurityInfoW(str(path), 1, 4, None, None, None, None, ctypes.byref(descriptor)):
+        return False
+    control, revision = wintypes.WORD(), wintypes.DWORD()
+    advapi.GetSecurityDescriptorControl(descriptor, ctypes.byref(control), ctypes.byref(revision))
+    ctypes.WinDLL("kernel32").LocalFree(descriptor)
+    return bool(control.value & 0x1000)  # SE_DACL_PROTECTED
+
+
 def copy_env_template(home: Path) -> Path:
-    """<home>/.env, copied from the shipped template when missing, narrowed to 0600."""
+    """<home>/.env, copied from the shipped template when missing, narrowed to 0600.
+    The first .env makes the folder a home, so the home is narrowed then too."""
     env_path = home / ".env"
     if not env_path.exists():
-        home.mkdir(parents=True, exist_ok=True)
+        secure_home(home)
         template = homes.resource(".env.example")
         if template.is_file():
             shutil.copyfile(template, env_path)
@@ -1045,6 +1090,8 @@ class Character:
     stem: str = ""
     # The name it had before 1.5, which homes set up then still carry.
     old_name: str = ""
+    # Its own name in each language, given whole instead of built on the stem.
+    names: tuple[tuple[str, str], ...] = ()
 
     @property
     def label(self) -> str:
@@ -1054,6 +1101,8 @@ class Character:
         """The character's own name in `lang`, which a name nobody chose follows."""
         if not self.stem:
             return ""
+        if self.names:
+            return dict(self.names)[lang]
         return self.stem + _NAME_SUFFIX.get(lang, "-chan")
 
     @property
@@ -1061,11 +1110,17 @@ class Character:
         """Every name this character has had in any language."""
         if not self.stem:
             return frozenset()
-        return frozenset({self.old_name, *(self.name_in(lang) for lang in LANGS)})
+        return frozenset({self.old_name, *(self.name_in(lang) for lang in LANGS)} - {""})
 
 
 TEMPLATE = "template"
 CHARACTERS: tuple[Character, ...] = (
+    # The app's own robot, the first: new homes start as it.
+    Character("pico", ("Pico the robot: small, curious and warm, takes words a little literally",
+                       "机器人皮可：小小的，好奇又温暖，听话有点太较真"),
+              stem="Pico", names=(("en", "Pico"), ("zh", "皮可"), ("zh-TW", "皮可"), ("ja", "ピコ"),
+                                  ("ko", "피코"), ("es", "Pico"), ("fr", "Pico"), ("de", "Pico"),
+                                  ("pt-BR", "Pico"), ("ru", "Пико"))),
     Character("dry-wit", ("Dry-witted friend: deadpan, short replies, teases lightly",
                           "冷面损友：冷幽默，回复简短，调侃适可而止")),
     Character("warm-listener", ("Warm listener: asks how you are, remembers the small things",

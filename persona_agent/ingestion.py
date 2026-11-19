@@ -29,6 +29,7 @@ import httpcore
 import httpx
 from httpcore._backends.auto import AutoBackend
 
+from . import quiet
 from .config_env import env_int
 from .connector import current_sink
 from .textproc import (_detect_image_mime, _truncate_framed,
@@ -1230,6 +1231,7 @@ class ContentIngestion:
             file_path = self.stickers.dir / fn
             if not file_path.exists():
                 continue
+            await quiet.wait()
             img_bytes = file_path.read_bytes()
             tacky = await self._judge_sticker_aesthetic(img_bytes)
             if tacky is not None:

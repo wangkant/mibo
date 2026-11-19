@@ -139,7 +139,7 @@ def test_nobody_signed_in_is_refused(site, tmp_path):
         with pytest.raises(Refused, match="sign_in_missing"):
             await made.check()
     asyncio.run(run())
-    assert made.browser.process is None
+    assert made.browser.context is None
 
 
 @needs_browser

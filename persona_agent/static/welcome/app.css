@@ -1,0 +1,1446 @@
+/* The app's design system. Every page (chats, settings, onboarding) draws
+   with these tokens and the shared controls below, so the app reads as one:
+   a warm-neutral canvas, type that carries it, one accent taken from the character. */
+:root {
+  /* Warm neutrals. */
+  --pa-n0: #ffffff;
+  --pa-n25: #fbfaf7;
+  --pa-n50: #f4f2ee;
+  --pa-n100: #efebe4;
+  --pa-n150: #e9e5de;
+  --pa-n200: #dcd7ce;
+  --pa-n300: #c9c4ba;
+  --pa-n400: #a7a199;
+  --pa-n500: #8d877e;
+  --pa-n600: #6f6a63;
+  --pa-n700: #4c4842;
+  --pa-n800: #36332e;
+  --pa-n900: #1d1b18;
+
+  /* The character's colour; app.js names the figure on <html>. */
+  --char: #ad4e2b;
+  --char-hi: #f0a07a;
+  --pa-a50: color-mix(in srgb, var(--char) 6%, #fff);
+  --pa-a100: color-mix(in srgb, var(--char) 13%, #fff);
+  --pa-a200: color-mix(in srgb, var(--char) 28%, #fff);
+  --pa-a300: color-mix(in srgb, var(--char) 48%, #fff);
+  --pa-a500: color-mix(in srgb, var(--char) 84%, #fff);
+  --pa-a600: var(--char);
+  --pa-a700: color-mix(in srgb, var(--char) 84%, #000);
+  --pa-a800: color-mix(in srgb, var(--char) 70%, #000);
+
+  --pa-red600: #b42318;
+  --pa-red50: #fdf1ef;
+  --pa-red200: #f4cbc5;
+  --pa-amber700: #8a5300;
+  --pa-amber50: #fdf6e8;
+  --pa-amber200: #f0dcae;
+  --pa-green600: #2f7d4f;
+
+  /* What the pages use. */
+  --pa-chrome: var(--pa-n50);
+  --pa-side-hover: #eae7e1;
+  --pa-canvas: var(--pa-n25);
+  --pa-surface: var(--pa-n0);
+  --pa-sunken: #f1eee9;
+  --pa-line: var(--pa-n150);
+  --pa-line-strong: var(--pa-n200);
+  --pa-ink: var(--pa-n900);
+  --pa-text: var(--pa-n800);
+  --pa-muted: var(--pa-n600);
+  --pa-faint: var(--pa-n500);
+  --pa-placeholder: var(--pa-n500);
+  --pa-hover: rgba(40, 32, 20, 0.04);
+  --pa-press: rgba(40, 32, 20, 0.07);
+  --pa-accent: var(--pa-a600);
+  --pa-accent-hover: var(--pa-a700);
+  --pa-accent-ink: var(--pa-a700);
+  --pa-accent-soft: var(--pa-a50);
+  --pa-accent-tint: var(--pa-a100);
+  --pa-accent-ring: color-mix(in srgb, var(--char) 8%, transparent);
+  --pa-on-accent: #ffffff;
+  --pa-error: var(--pa-red600);
+  --pa-error-soft: var(--pa-red50);
+  --pa-love: #d9475b;
+  --pa-live: #4f9a6b;
+  --pa-bubble: var(--pa-n100);
+  --pa-bubble-ink: var(--pa-n900);
+  --pa-send: var(--pa-n900);
+  --pa-send-ink: #ffffff;
+  --pa-cover-filter: none;
+  --pa-scrim: rgba(29, 27, 24, 0.18);
+  --pa-tip-bg: #1d1b18;
+  --pa-tip-ink: #f7f5f1;
+
+  /* Type: Segoe UI Variable for Latin, YaHei UI for Chinese, both Windows' own. */
+  --pa-font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    "PingFang SC", system-ui, sans-serif;
+  --pa-font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI",
+    "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --pa-fs-xs: 12px;
+  --pa-fs-sm: 13px;
+  --pa-fs-md: 14px;
+  --pa-fs-lg: 15px;
+  --pa-fs-xl: 17px;
+  --pa-fs-2xl: 20px;
+  --pa-fs-3xl: 24px;
+  --pa-fs-4xl: 28px;
+  --pa-lh-tight: 1.3;
+  --pa-lh: 1.55;
+  --pa-lh-loose: 1.7;
+
+  /* Spacing on a 4px step. */
+  --pa-s1: 4px;
+  --pa-s2: 8px;
+  --pa-s3: 12px;
+  --pa-s4: 16px;
+  --pa-s5: 20px;
+  --pa-s6: 24px;
+  --pa-s8: 32px;
+  --pa-s10: 40px;
+  --pa-s12: 48px;
+
+  --pa-r-xs: 6px;
+  --pa-r-sm: 8px;
+  --pa-r-md: 12px;
+  --pa-r-lg: 16px;
+  --pa-r-xl: 20px;
+  --pa-r-2xl: 24px;
+  --pa-r-pill: 999px;
+
+  --pa-shadow-1: 0 1px 2px rgba(31, 24, 12, 0.04), 0 2px 8px -2px rgba(31, 24, 12, 0.05);
+  --pa-shadow-2: 0 1px 2px rgba(31, 24, 12, 0.05), 0 8px 24px -8px rgba(31, 24, 12, 0.14);
+  --pa-shadow-raise: 0 1px 2px rgba(31, 24, 12, 0.06);
+  --pa-shadow-pop: 0 1px 2px rgba(31, 24, 12, 0.06), 0 12px 32px -8px rgba(31, 24, 12, 0.2);
+  --pa-shadow-composer: 0 1px 2px rgba(31, 24, 12, 0.04), 0 10px 32px -12px rgba(31, 24, 12, 0.16);
+  --pa-shadow-composer-focus: 0 1px 2px rgba(31, 24, 12, 0.05), 0 14px 36px -12px rgba(31, 24, 12, 0.24);
+  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char) 18%, transparent);
+  --pa-focus: 2px solid var(--pa-accent);
+
+  --pa-t-fast: 140ms;
+  --pa-t: 180ms;
+  --pa-t-slow: 280ms;
+  --pa-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* The frame: the bar along the top, the sidebar, its rail, and the window's corner. */
+  --pa-bar: 48px;
+  --pa-titlebar: var(--pa-bar);
+  --pa-side-width: 264px;
+  --pa-rail: 60px;
+  --pa-col: 712px;
+  --pa-wc: 138px;
+  /* Drag-only room left of the window's buttons: the desktop pet peeks over the
+     window's top edge here (window.py: 160px wide, 190px in from the right). */
+  --pa-pet-zone: 240px;
+
+  font-family: var(--pa-font);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+  color: var(--pa-text);
+  background: var(--pa-chrome);
+  color-scheme: light;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* Each figure's own colour, and its lighter form for a dark window. */
+:root[data-figure="pico"] {
+  --char: #2f7fb8;
+  --char-hi: #7cc8f2;
+}
+:root[data-figure="deepseek"] {
+  --char: #3c5aa6;
+  --char-hi: #8fa8e8;
+}
+:root[data-figure="chatgpt"] {
+  --char: #7a4fb0;
+  --char-hi: #c3a6ec;
+}
+:root[data-figure="claude"] {
+  --char: #b5532f;
+  --char-hi: #f0a07a;
+}
+:root[data-figure="sprout"] {
+  --char: #3d7f4b;
+  --char-hi: #8fd09c;
+}
+
+/* Dark: the same rooms with the lights down. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pa-n0: #2a2927;
+    --pa-n25: #222120;
+    --pa-n50: #1b1a18;
+    --pa-n100: #353330;
+    --pa-n150: #3a3835;
+    --pa-n200: #4a4743;
+    --pa-n300: #5a5751;
+    --pa-n400: #75716a;
+    --pa-n500: #85807a;
+    --pa-n600: #a8a39b;
+    --pa-n700: #c4bfb7;
+    --pa-n800: #dcd8d1;
+    --pa-n900: #f2efe9;
+    --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #222120);
+    --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #222120);
+    --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #222120);
+    --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #222120);
+    --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #222120);
+    --pa-a600: var(--char-hi);
+    --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
+    --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
+    --pa-red600: #f07a6c;
+    --pa-red50: #3a2423;
+    --pa-red200: #6b3631;
+    --pa-amber700: #e6b45c;
+    --pa-amber50: #352b1b;
+    --pa-amber200: #5e4a25;
+    --pa-green600: #6fc48f;
+    --pa-side-hover: #262523;
+    --pa-sunken: #312f2c;
+    --pa-hover: rgba(255, 250, 240, 0.05);
+    --pa-press: rgba(255, 250, 240, 0.08);
+    --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
+    --pa-on-accent: #14161c;
+    --pa-love: #f07386;
+    --pa-live: #5fb27e;
+    --pa-bubble: #353330;
+    --pa-bubble-ink: #e8e4dd;
+    --pa-send: #f2efe9;
+    --pa-send-ink: #1d1b18;
+    --pa-cover-filter: brightness(0.82) saturate(0.92);
+    --pa-scrim: rgba(0, 0, 0, 0.4);
+    --pa-tip-bg: #f2efe9;
+    --pa-tip-ink: #1d1b18;
+    --pa-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --pa-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
+    --pa-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --pa-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+    --pa-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+    --pa-shadow-composer-focus: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -12px rgba(0, 0, 0, 0.75);
+    --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char-hi) 22%, transparent);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --pa-n0: #2a2927;
+  --pa-n25: #222120;
+  --pa-n50: #1b1a18;
+  --pa-n100: #353330;
+  --pa-n150: #3a3835;
+  --pa-n200: #4a4743;
+  --pa-n300: #5a5751;
+  --pa-n400: #75716a;
+  --pa-n500: #85807a;
+  --pa-n600: #a8a39b;
+  --pa-n700: #c4bfb7;
+  --pa-n800: #dcd8d1;
+  --pa-n900: #f2efe9;
+  --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #222120);
+  --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #222120);
+  --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #222120);
+  --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #222120);
+  --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #222120);
+  --pa-a600: var(--char-hi);
+  --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
+  --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
+  --pa-red600: #f07a6c;
+  --pa-red50: #3a2423;
+  --pa-red200: #6b3631;
+  --pa-amber700: #e6b45c;
+  --pa-amber50: #352b1b;
+  --pa-amber200: #5e4a25;
+  --pa-green600: #6fc48f;
+  --pa-side-hover: #262523;
+  --pa-sunken: #312f2c;
+  --pa-hover: rgba(255, 250, 240, 0.05);
+  --pa-press: rgba(255, 250, 240, 0.08);
+  --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
+  --pa-on-accent: #14161c;
+  --pa-love: #f07386;
+  --pa-live: #5fb27e;
+  --pa-bubble: #353330;
+  --pa-bubble-ink: #e8e4dd;
+  --pa-send: #f2efe9;
+  --pa-send-ink: #1d1b18;
+  --pa-cover-filter: brightness(0.82) saturate(0.92);
+  --pa-scrim: rgba(0, 0, 0, 0.4);
+  --pa-tip-bg: #f2efe9;
+  --pa-tip-ink: #1d1b18;
+  --pa-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --pa-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
+  --pa-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --pa-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+  --pa-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --pa-shadow-composer-focus: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -12px rgba(0, 0, 0, 0.75);
+  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char-hi) 22%, transparent);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+/* Clipped, not hidden: a scrollIntoView inside a page must not shift the whole window. */
+html,
+body {
+  height: 100%;
+  overflow: clip;
+}
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pa-chrome);
+  /* How wide the sidebar's column is: whole, or the rail. */
+  --side-col: var(--pa-side-width);
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+[hidden] {
+  display: none !important;
+}
+::selection {
+  background: var(--pa-a200);
+  color: var(--pa-ink);
+}
+:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+/* Scrollbars that stay out of the way. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pa-line-strong) transparent;
+}
+/* A stroked icon, lucide-style, sized by its class. */
+svg.i {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- Shared controls: every page's buttons, fields and checks. */
+.pa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--pa-r-sm);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  transition:
+    background var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast),
+    transform var(--pa-t-fast);
+}
+.pa-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+}
+.pa-btn:disabled {
+  cursor: not-allowed;
+}
+.pa-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pa-btn-primary {
+  background: var(--pa-accent);
+  color: var(--pa-on-accent);
+  box-shadow: var(--pa-shadow-raise);
+}
+.pa-btn-primary:hover:not(:disabled) {
+  background: var(--pa-accent-hover);
+}
+.pa-btn-primary:disabled {
+  background: var(--pa-n150);
+  color: var(--pa-n400);
+  box-shadow: none;
+}
+.pa-btn-secondary {
+  background: var(--pa-surface);
+  border-color: var(--pa-line-strong);
+  color: var(--pa-text);
+  box-shadow: var(--pa-shadow-raise);
+}
+.pa-btn-secondary:hover:not(:disabled) {
+  background: var(--pa-sunken);
+  border-color: var(--pa-n300);
+  color: var(--pa-ink);
+}
+.pa-btn-secondary:disabled {
+  color: var(--pa-n400);
+  box-shadow: none;
+}
+.pa-btn-ghost {
+  background: transparent;
+  color: var(--pa-muted);
+  font-weight: 500;
+}
+.pa-btn-ghost:hover:not(:disabled) {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.pa-btn-ghost:disabled {
+  color: var(--pa-n300);
+}
+.pa-btn-link {
+  height: auto;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--pa-accent);
+  font-weight: 600;
+}
+.pa-btn-link:hover:not(:disabled) {
+  color: var(--pa-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pa-btn-sm {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--pa-r-sm);
+  font-size: var(--pa-fs-sm);
+}
+.pa-btn-lg {
+  height: 42px;
+  padding: 0 22px;
+  border-radius: var(--pa-r-md);
+  font-size: var(--pa-fs-lg);
+}
+
+.pa-input,
+.pa-select {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  box-shadow: inset 0 1px 1px rgba(31, 24, 12, 0.02);
+  transition:
+    border-color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+textarea.pa-input {
+  height: auto;
+  min-height: 80px;
+  padding: 9px 12px;
+  line-height: var(--pa-lh);
+  resize: vertical;
+}
+.pa-input::placeholder {
+  color: var(--pa-placeholder);
+}
+.pa-input:hover:not(:disabled),
+.pa-select:hover:not(:disabled) {
+  border-color: var(--pa-n300);
+}
+.pa-input:focus,
+.pa-select:focus {
+  outline: none;
+  border-color: var(--pa-a500);
+  box-shadow: var(--pa-ring);
+}
+.pa-input:disabled,
+.pa-select:disabled {
+  background: var(--pa-sunken);
+  color: var(--pa-n400);
+  cursor: not-allowed;
+}
+.pa-input[aria-invalid="true"] {
+  border-color: var(--pa-error);
+}
+.pa-select {
+  padding-right: 34px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%238d877e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  cursor: pointer;
+}
+
+/* A check mark: an <input type="checkbox" class="pa-check">. */
+.pa-check {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--pa-n300);
+  border-radius: 5px;
+  background: var(--pa-surface) center / 12px no-repeat;
+  cursor: pointer;
+  transition:
+    background-color var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.pa-check:hover:not(:disabled) {
+  border-color: var(--pa-a500);
+}
+.pa-check:checked {
+  border-color: var(--pa-accent);
+  background-color: var(--pa-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.pa-check:focus-visible {
+  outline: none;
+  box-shadow: var(--pa-ring);
+  border-color: var(--pa-a500);
+}
+.pa-check:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* A switch: an <input type="checkbox" class="pa-switch">. */
+.pa-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-n300);
+  cursor: pointer;
+  transition: background var(--pa-t);
+}
+.pa-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(29, 27, 24, 0.2);
+  transition: transform var(--pa-t) var(--pa-ease);
+}
+.pa-switch:hover:not(:disabled) {
+  background: var(--pa-n400);
+}
+.pa-switch:checked {
+  background: var(--pa-accent);
+}
+.pa-switch:checked:hover:not(:disabled) {
+  background: var(--pa-accent-hover);
+}
+.pa-switch:checked::after {
+  transform: translateX(14px);
+}
+.pa-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* A key on the keyboard, in a hint. */
+.pa-kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 1px solid var(--pa-line-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--pa-surface);
+  color: var(--pa-muted);
+  font: 500 11px/1.4 var(--pa-font);
+  text-align: center;
+}
+
+/* The character's face: its figure's first frame, cropped to the head. */
+.pa-face {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--pa-a100);
+}
+.pa-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(30, 40, 70, 0.08);
+}
+.pa-face img,
+.pa-figure img,
+.pa-bust img {
+  position: absolute;
+  max-width: none;
+  height: auto;
+  visibility: hidden;
+}
+.pa-face img.ready,
+.pa-figure img.ready,
+.pa-bust img.ready {
+  visibility: visible;
+}
+/* The whole figure, its first frame. */
+.pa-figure {
+  position: relative;
+  display: inline-block;
+  width: 84px;
+  aspect-ratio: 320 / 380;
+  overflow: hidden;
+}
+/* Head and shoulders in a square, fading out below. */
+.pa-bust {
+  position: relative;
+  display: inline-block;
+  width: 168px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(ellipse 50% 54% at 50% 42%, #000 64%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 54% at 50% 42%, #000 64%, transparent 100%);
+}
+
+/* A quiet loading shimmer any page can put on a placeholder block. */
+.pa-shimmer {
+  background: linear-gradient(90deg, var(--pa-sunken) 30%, var(--pa-n50) 50%, var(--pa-sunken) 70%);
+  background-size: 300% 100%;
+  animation: pa-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes pa-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* ---- The character's colour as one hairline along the window's top edge,
+   strongest where the pet peeks over it. */
+.topline {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 30%,
+    color-mix(in srgb, var(--pa-accent) 40%, transparent) calc(100% - var(--pa-wc) - var(--pa-pet-zone) - 160px),
+    var(--pa-accent) calc(100% - var(--pa-wc) - var(--pa-pet-zone)),
+    var(--pa-accent) calc(100% - var(--pa-wc)),
+    transparent 100%
+  );
+  opacity: 0.85;
+}
+
+/* ---- The bar along the top of the page: a drag strip with a plain chat's
+   title on the column's left edge, then nothing until the window's buttons,
+   so the pet always has its corner. */
+.titlebar {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  left: var(--side-col);
+  right: 0;
+  height: var(--pa-bar);
+  display: flex;
+  user-select: none;
+}
+body.onboarding .titlebar {
+  left: 0;
+}
+body.frameless .titlebar,
+body.frameless .side-top {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+body.frameless .titlebar button,
+body.frameless .titlebar input,
+body.frameless .side-top button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.titlebar-page {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: max(0px, calc((100% - var(--pa-col)) / 2));
+  right: calc(var(--pa-wc) + var(--pa-pet-zone));
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 var(--pa-s6);
+  pointer-events: none;
+}
+.titlebar-page:empty {
+  display: none;
+}
+/* Messages scroll under the title: the page's own colour fades out below it. */
+.titlebar-page:not(:empty) {
+  background: linear-gradient(var(--pa-canvas) 60%, transparent);
+}
+.titlebar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  margin-left: -10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: none;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  pointer-events: auto;
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.titlebar-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar-title .i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--pa-faint);
+  opacity: 0.6;
+  transition: opacity var(--pa-t-fast);
+}
+.titlebar-title:hover {
+  background: var(--pa-hover);
+}
+.titlebar-title:hover .i,
+.titlebar-title:focus-visible .i {
+  opacity: 1;
+}
+.titlebar-input {
+  width: min(320px, 100%);
+  height: 32px;
+  margin-left: -10px;
+  padding: 0 10px;
+  border: 1px solid var(--pa-a500);
+  border-radius: var(--pa-r-sm);
+  outline: none;
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  box-shadow: var(--pa-ring);
+  pointer-events: auto;
+}
+.pet-zone {
+  flex: none;
+  width: var(--pa-pet-zone);
+  margin-left: auto;
+}
+.window-controls {
+  flex: none;
+  align-self: flex-start;
+  display: flex;
+  width: var(--pa-wc);
+}
+.window-controls button {
+  width: 46px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--pa-muted);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.window-controls svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+.window-controls button:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.window-controls button:active {
+  background: var(--pa-press);
+}
+.window-controls button:focus-visible {
+  outline-offset: -2px;
+}
+#window-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+#window-close:active {
+  background: #a92a1d;
+  color: #fff;
+}
+.window-controls .when-maximized,
+body.maximized .window-controls .when-normal {
+  display: none;
+}
+body.maximized .window-controls .when-maximized {
+  display: block;
+}
+
+/* ---- Below it: the sidebar and the page. */
+.frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--side-col) minmax(0, 1fr);
+}
+/* Until the page knows its language there is nothing to read in the sidebar. */
+body.starting .side {
+  visibility: hidden;
+}
+.side {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 3;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--pa-s3) var(--pa-s3);
+  background: var(--pa-chrome);
+}
+.side button {
+  user-select: none;
+}
+.side-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: var(--pa-bar);
+  padding: 0 var(--pa-s1);
+}
+.side-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: none;
+  color: var(--pa-muted);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.side-icon:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+
+/* The character's card, the main chat: face with whether it is about, its name,
+   what it is doing now, and how many messages are new. Selected is a raised
+   surface with a hairline ring; hover is a wash. They never look alike. */
+.who {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  width: 100%;
+  padding: var(--pa-s2) var(--pa-s3) var(--pa-s2) var(--pa-s2);
+  border: 0;
+  border-radius: var(--pa-r-md);
+  background: none;
+  text-align: left;
+  transition:
+    background var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.who:hover {
+  background: var(--pa-side-hover);
+}
+.who.active {
+  background: var(--pa-surface);
+  box-shadow:
+    var(--pa-shadow-raise),
+    0 0 0 1px var(--pa-line);
+}
+.who-avatar {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 36px;
+}
+.who-face {
+  width: 36px;
+  height: 36px;
+}
+.who-live {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--pa-live);
+  box-shadow: 0 0 0 2px var(--pa-chrome);
+  transition: box-shadow var(--pa-t-fast);
+}
+.who:hover .who-live {
+  box-shadow: 0 0 0 2px var(--pa-side-hover);
+}
+.who.active .who-live {
+  box-shadow: 0 0 0 2px var(--pa-surface);
+}
+.who-live[data-state="asleep"] {
+  background: var(--pa-n400);
+}
+.who-live[data-state="off"] {
+  display: none;
+}
+.who-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.who-name {
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-sub {
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.who-sub:empty {
+  display: none;
+}
+.who-count {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--pa-accent);
+  color: var(--pa-on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One row of the sidebar: a new chat, the list in the rail, Settings. */
+.side-item,
+.side-chat-open {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  text-align: left;
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.side-item {
+  flex: none;
+  height: 36px;
+  padding: 0 var(--pa-s3);
+}
+.side-item .i {
+  color: var(--pa-muted);
+}
+.side-item:hover,
+.side-chat:hover .side-chat-open,
+.side-chat.menu-open .side-chat-open {
+  background: var(--pa-side-hover);
+  color: var(--pa-ink);
+}
+.side-item.active,
+.side-chat.active .side-chat-open {
+  background: var(--pa-surface);
+  box-shadow:
+    var(--pa-shadow-raise),
+    0 0 0 1px var(--pa-line);
+  color: var(--pa-ink);
+}
+.side-item.active {
+  font-weight: 500;
+}
+.side-item:focus-visible,
+.side-chat-open:focus-visible,
+.side-chat-more:focus-visible,
+.who:focus-visible {
+  outline-offset: -2px;
+}
+.side-new {
+  margin-top: var(--pa-s2);
+}
+.side-history {
+  display: none;
+}
+.kbd {
+  margin-left: auto;
+  color: var(--pa-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity var(--pa-t-fast);
+}
+.side-item:hover .kbd,
+.side-item:focus-visible .kbd {
+  opacity: 1;
+}
+
+/* The plain chats, under 今天 / 前 7 天 / 更早. */
+.side-chats {
+  flex: 1;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px var(--pa-s2);
+  overflow-y: auto;
+}
+.side-group-label {
+  margin: var(--pa-s5) var(--pa-s3) 6px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+}
+.side-group:first-child .side-group-label {
+  margin-top: var(--pa-s6);
+}
+.side-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.side-chat {
+  position: relative;
+  margin-bottom: 1px;
+}
+.side-chat-open {
+  height: 34px;
+  padding: 0 var(--pa-s3);
+}
+.side-chat-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-chat.untitled .side-chat-title {
+  color: var(--pa-muted);
+}
+/* On hover the title fades under one ⋯ button instead of being cut twice. */
+.side-chat:hover .side-chat-title,
+.side-chat:focus-within .side-chat-title,
+.side-chat.menu-open .side-chat-title {
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent calc(100% - 16px));
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent calc(100% - 16px));
+}
+.side-chat-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: transparent;
+  color: var(--pa-muted);
+  opacity: 0;
+  transition:
+    opacity var(--pa-t-fast),
+    background var(--pa-t-fast);
+}
+.side-chat-more .i {
+  width: 16px;
+  height: 16px;
+}
+.side-chat:hover .side-chat-more,
+.side-chat:focus-within .side-chat-more,
+.side-chat.menu-open .side-chat-more {
+  opacity: 1;
+}
+.side-chat-more:hover,
+.side-chat.menu-open .side-chat-more {
+  background: var(--pa-press);
+  color: var(--pa-ink);
+}
+.side-chat.renaming .side-chat-open,
+.side-chat.renaming .side-chat-more {
+  display: none;
+}
+.side-chat-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid var(--pa-a500);
+  border-radius: var(--pa-r-sm);
+  outline: none;
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  box-shadow: var(--pa-ring);
+}
+.side-spacer {
+  display: none;
+}
+.side-foot {
+  flex: none;
+  margin-top: var(--pa-s2);
+  padding-top: var(--pa-s2);
+  border-top: 1px solid var(--pa-line);
+}
+.side-note {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.side-note::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pa-live);
+}
+
+/* A chat's menu, over everything. */
+.side-menu {
+  position: fixed;
+  z-index: 40;
+  width: 148px;
+  padding: var(--pa-s1);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-pop);
+  animation: side-menu-in var(--pa-t-fast) var(--pa-ease);
+}
+@keyframes side-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.side-menu-item {
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  padding: 0 var(--pa-s2);
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: transparent;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  text-align: left;
+  white-space: nowrap;
+}
+.side-menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--pa-muted);
+}
+.side-menu-item:hover,
+.side-menu-item:focus-visible {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+  outline: none;
+}
+.side-menu-danger,
+.side-menu-danger svg {
+  color: var(--pa-error);
+}
+.side-menu-danger:hover,
+.side-menu-danger:focus-visible {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+
+/* ---- One question in the middle of the window (app.js confirmBox). */
+.confirm {
+  width: min(360px, calc(100vw - 48px));
+  padding: var(--pa-s5);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  box-shadow: var(--pa-shadow-pop);
+}
+.confirm::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.confirm-title {
+  margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 650;
+}
+.confirm-text {
+  margin: var(--pa-s2) 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-md);
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--pa-s2);
+  margin-top: var(--pa-s5);
+}
+.confirm-btn {
+  height: 36px;
+  padding: 0 var(--pa-s4);
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  background: none;
+  color: var(--pa-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.confirm-btn:hover {
+  background: var(--pa-hover);
+}
+.confirm-ok {
+  border-color: transparent;
+  background: var(--pa-error);
+  color: #fff;
+}
+.confirm-ok:hover {
+  background: color-mix(in srgb, var(--pa-error) 86%, #000);
+}
+
+/* The page: under the bar, the canvas, with a hairline against the sidebar. */
+.stage {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  padding-top: var(--pa-bar);
+  background: var(--pa-canvas);
+  border-left: 1px solid var(--pa-line);
+}
+.page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+/* Settings: one calm column on the same canvas, its cards on the surface. */
+#setup-view {
+  background: var(--pa-canvas);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+
+/* ---- The first run: a page of its own instead of the sidebar and pages. */
+.onboard-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-top: var(--pa-bar);
+  background: var(--pa-canvas);
+}
+body.onboarding .frame {
+  display: none;
+}
+
+/* ---- The rail: below 1000px, or when folded, the sidebar is a 60px strip of
+   icons with tooltips; opening it lays the whole sidebar over the page behind
+   a scrim, and the column under it never reflows. */
+.side-scrim {
+  display: none;
+}
+body.side-rail {
+  --side-col: var(--pa-rail);
+}
+body.side-rail:not(.side-open) .side {
+  align-items: center;
+  padding: 0 var(--pa-s2) var(--pa-s3);
+}
+body.side-rail:not(.side-open) .side-top {
+  justify-content: center;
+  padding: 0;
+}
+body.side-rail:not(.side-open) :is(.who-text, .side-item > span, .side-chats) {
+  display: none;
+}
+body.side-rail:not(.side-open) .who {
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+body.side-rail:not(.side-open) .who-count {
+  display: block;
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+  box-shadow: 0 0 0 2px var(--pa-chrome);
+}
+body.side-rail:not(.side-open) .who-count[hidden] {
+  display: none;
+}
+body.side-rail:not(.side-open) .side-item {
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+body.side-rail:not(.side-open) .side-history {
+  display: flex;
+  margin-top: var(--pa-s1);
+}
+body.side-rail:not(.side-open) .side-spacer {
+  display: block;
+  flex: 1;
+}
+body.side-rail:not(.side-open) .side-foot {
+  border-top: 0;
+}
+body.side-rail:not(.side-open) [data-tip]:hover::after,
+body.side-rail:not(.side-open) [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 6;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  border-radius: var(--pa-r-xs);
+  background: var(--pa-tip-bg);
+  color: var(--pa-tip-ink);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+body.side-rail.side-open .side {
+  position: fixed;
+  z-index: 30;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(var(--pa-side-width), calc(100% - 48px));
+  box-shadow:
+    1px 0 0 var(--pa-line),
+    16px 0 48px -16px rgba(20, 16, 10, 0.28);
+  animation: side-in var(--pa-t-slow) var(--pa-ease);
+}
+body.side-rail.side-open .side-scrim {
+  display: block;
+  position: fixed;
+  z-index: 29;
+  inset: 0;
+  background: var(--pa-scrim);
+  animation: side-scrim-in var(--pa-t) ease-out;
+}
+@keyframes side-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0.6;
+  }
+}
+@keyframes side-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (max-width: 999.98px) {
+  .titlebar-page {
+    padding: 0 var(--pa-s5);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -16,12 +17,17 @@ from typing import Iterable, Optional
 from .storage import append_jsonl, atomic_write_text
 
 KINDS = ("video", "article", "post", "page")
+# The walks, the sources, mail and Discord add from their own threads; a compact
+# between another's read and its append would lose that append.
+_write = threading.Lock()
 # What became of an item: the owner's doing, never the character's.
 NEW, KEPT, DISMISSED = "", "kept", "dismissed"
 TEXT_MAX = 20_000
 EXCERPT_MAX = 400
 PICTURE_MAX_BYTES = 200_000
 ITEMS_MAX = 2000
+# A thing the person reacted to this recently is kept past the limit while older ones can go.
+REACTED_DAYS = 45
 
 
 @dataclass
@@ -47,6 +53,14 @@ class Item:
     told: bool = False
     state: str = NEW
     id: str = ""
+    source: str = ""                    # the public source that brought it, "" for a walk's find
+    # The character's own judgement: love 0-3 (-1 before it was asked), a few short English tags,
+    # and whether it was asked at all, so "not asked" and "asked, said no" differ.
+    love: int = -1
+    tags: list = field(default_factory=list)
+    judged: bool = False
+    # The person's own mail or private message, kept only while they let the character read those (privacy.py).
+    private: bool = False
 
     def card(self) -> dict:
         """What the page draws: public facts, no file paths."""
@@ -105,11 +119,14 @@ class Library:
         item.kind = item.kind if item.kind in KINDS else "page"
         item.text = item.text[:TEXT_MAX]
         item.seen_at = item.seen_at or int(time.time())
-        before = self._rows().get(item.id)
-        if before is not None:
-            item.state, item.told = before.state, before.told or item.told
-        self.root.mkdir(parents=True, exist_ok=True)
-        append_jsonl(self.items_path, asdict(item))
+        with _write:
+            before = self._rows().get(item.id)
+            if before is not None:
+                item.state, item.told = before.state, before.told or item.told
+                if not item.judged:
+                    item.judged, item.love, item.tags = before.judged, before.love, before.tags
+            self.root.mkdir(parents=True, exist_ok=True)
+            append_jsonl(self.items_path, asdict(item))
         return item
 
     def get(self, ident: str) -> Optional[Item]:
@@ -120,28 +137,61 @@ class Library:
         return rows
 
     def change(self, ident: str, **values) -> Optional[Item]:
-        item = self.get(ident)
-        if item is None:
-            return None
-        for name, value in values.items():
-            if name in ("state", "told", "why", "fits"):
-                setattr(item, name, value)
-        append_jsonl(self.items_path, asdict(item))
+        # Read and written as one step, so two changes to one thing at once both stay.
+        with _write:
+            item = self.get(ident)
+            if item is None:
+                return None
+            for name, value in values.items():
+                if name in ("state", "told", "why", "fits", "love", "tags", "judged"):
+                    setattr(item, name, value)
+            append_jsonl(self.items_path, asdict(item))
         return item
 
     def to_tell(self) -> list[Item]:
-        """What it kept for its owner and has not said yet, oldest first."""
+        """What it kept for its owner and has not said yet, oldest first. What a source brought is
+        ranked by the feed, whatever the character's judgement of it said."""
         return [item for item in self.items(newest_first=False)
-                if item.fits and not item.told and item.state != DISMISSED]
+                if item.fits and not item.source and not item.told and item.state != DISMISSED]
 
     def seen(self, url: str) -> bool:
         return item_id(url) in self._rows()
 
     def compact(self) -> None:
-        """One line per item again, the oldest dismissed ones dropped past the limit."""
+        """One line per item again. Past the limit the dismissed go first, then the oldest
+        nobody reacted to in REACTED_DAYS, then the oldest of the rest; a kept one never goes."""
+        with _write:
+            self._compact()
+
+    def drop(self, gone) -> list[str]:
+        """Every item `gone(item)` is true of out of the file at once; their ids."""
+        with _write:
+            rows = self.items(newest_first=False)
+            dropped = [r.id for r in rows if gone(r)]
+            if dropped:
+                atomic_write_text(self.items_path, "".join(json.dumps(asdict(r), ensure_ascii=False) + "\n"
+                                                           for r in rows if r.id not in dropped))
+            return dropped
+
+    def _reacted(self) -> set[str]:
+        # The feed's events (see panels.feed), read here so the feed's model can still rebuild them.
+        try:
+            events = json.loads((self.root.parent / "feed.json").read_text(encoding="utf-8")).get("events")
+        except (OSError, ValueError, AttributeError):
+            return set()
+        since = time.time() - REACTED_DAYS * 86400
+        return {e[1] for e in events if isinstance(e, list) and len(e) >= 5 and e[0] >= since} \
+            if isinstance(events, list) else set()
+
+    def _compact(self) -> None:
         rows = self.items(newest_first=False)
+        recent = self._reacted() if len(rows) > ITEMS_MAX else set()
         while len(rows) > ITEMS_MAX:
-            drop = next((r for r in rows if r.state == DISMISSED), rows[0])
+            drop = (next((r for r in rows if r.state == DISMISSED), None)
+                    or next((r for r in rows if r.state != KEPT and r.id not in recent), None)
+                    or next((r for r in rows if r.state != KEPT), None))
+            if drop is None:
+                break
             rows.remove(drop)
             if drop.picture:
                 (self.pictures / drop.picture).unlink(missing_ok=True)

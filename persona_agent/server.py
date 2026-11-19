@@ -36,6 +36,7 @@ from persona_agent.memstore import MemoryFileDamaged
 from persona_agent.outbox import parse_pull, pull_problem
 from persona_agent.paths import ROOT, runtime_dir
 from persona_agent.roam import Roam
+from persona_agent import quiet
 from persona_agent.settings import AgentSettings
 from persona_agent.storage import (
     ALREADY_RUNNING, LockUnavailable, RuntimeInstanceLock, atomic_write_text)
@@ -730,6 +731,8 @@ async def lifespan(app: FastAPI):
         agent.tool_hub.start()
         _spawn(agent.probe_models())
         _spawn(agent.check_missed_mentions())
+        # The service's own loops wait during games and fullscreen; it looks itself until a page tells it (/v1/quiet).
+        _spawn(quiet.watch(runtime_dir))
         _spawn(agent.loop_check_missed())
         _spawn(agent.loop_proactive())  # self-guards on PROACTIVE_ENABLED
         agent.roam = Roam(agent, home=ROOT, runtime=runtime_dir())
@@ -1113,6 +1116,27 @@ async def _connector_outbox_admitted(request: Request):
     if agent is None or not agent.connector_outbox_enabled:
         return _error(404, "outbox_disabled", "the outbox is turned off")
     return await agent.outbox.pull(**pull, disconnected=request.is_disconnected)
+
+
+@app.post("/v1/quiet")
+async def page_quiet(request: Request):
+    """The page that started this service says whether quiet holds (a game or
+    something fullscreen in front, quiet.py), each time it changes. From the
+    first time on the service goes by it and stops looking for itself.
+
+    Same authentication as ``/v1/events``; the body is ``{"kind": "quiet",
+    "quiet": bool, "why": str}``."""
+    refused = _refuse_caller(request, CONNECTOR_TOKEN, token=True)
+    if refused is not None:
+        return refused
+    body = await _read_signed_body(request)
+    if isinstance(body, JSONResponse):
+        return body
+    told = _json_or_none(body)
+    if not isinstance(told, dict) or told.get("kind") != "quiet" or not isinstance(told.get("quiet"), bool):
+        return _invalid_schema('not a quiet body: {"kind": "quiet", "quiet": bool}')
+    quiet.follow(told["quiet"], str(told.get("why") or ""))
+    return {"quiet": quiet.active()}
 
 
 def _bind_problem(host: str, port: int) -> str | None:

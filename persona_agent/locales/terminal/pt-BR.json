@@ -680,5 +680,8 @@
 "Nothing approved or declined has that id. Run `{0}` to see the ids.": "Nenhuma conversa aprovada ou recusada tem esse ID. Execute `{0}` para ver os IDs.",
 "ACCESS_APPROVAL_PLATFORMS is set in the environment, which overrides .env; change it there.": "ACCESS_APPROVAL_PLATFORMS está definida no ambiente, que tem precedência sobre o .env; altere-a lá.",
 "forget an approval or a decline, so the chat asks again": "esquece uma aprovação ou uma recusa, e a conversa pede novamente",
-"the chat's id, as the list shows it": "o ID da conversa, como a lista o mostra"
+"the chat's id, as the list shows it": "o ID da conversa, como a lista o mostra",
+"Show the pet": "Mostrar o mascote",
+"--accept-risk applies only to connecting bilibili or youtube": "--accept-risk vale só para conectar bilibili ou youtube",
+"bilibili, youtube: accept the risks of using a personal account, which connecting otherwise asks about": "bilibili, youtube: aceitar os riscos de usar uma conta pessoal, que de outra forma são perguntados ao conectar"
 }

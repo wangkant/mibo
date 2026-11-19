@@ -17,7 +17,7 @@ from pathlib import Path
 from dotenv import dotenv_values
 from fastapi import Request
 
-from .. import __version__, langs, shortcut, usage
+from .. import __version__, autostart, langs, shortcut, usage
 from .. import connections as conn
 from .. import setup_wizard as sw
 from ..astrbot_install import AstrBotInstallation
@@ -152,14 +152,19 @@ class Desk:
     # ---- shortcuts
 
     def shortcuts(self) -> dict:
+        """`supported`: the icon and start at sign-in (Windows); `login_supported`:
+        start at sign-in, which macOS has too."""
+        if not autostart.supported():
+            return {"supported": False, "login_supported": False, "uvx": False, "icon": "off", "login": "off"}
         if not shortcut.WINDOWS:
-            return {"supported": False, "uvx": False, "icon": "off", "login": "off"}
+            return {"supported": False, "login_supported": True, "uvx": langs.under_uvx(), "icon": "off",
+                    "login": autostart.status(self.home)}
         try:
             found = shortcut.status(self.home)
         except (RuntimeError, ValueError):
             raise ValueError("desk_shortcut_failed") from None
         icon = [found[k] for k in shortcut.ICON]
-        return {"supported": True, "uvx": langs.under_uvx(),
+        return {"supported": True, "login_supported": True, "uvx": langs.under_uvx(),
                 "icon": "on" if all(s == "on" for s in icon) else
                         "off" if all(s == "off" for s in icon) else "other",
                 "login": found["startup"]}
@@ -167,15 +172,21 @@ class Desk:
     def set_shortcut(self, which: str, on: bool) -> dict:
         if which not in ("icon", "login"):
             raise ValueError("desk_invalid_place")
-        if not shortcut.WINDOWS:
+        if not (shortcut.WINDOWS or which == "login" and autostart.supported()):
             raise ValueError("desk_unsupported")
+        # uvx's copy is temporary; the installer's build is not.
         if on and langs.under_uvx():
             raise ValueError("desk_uvx")
-        kinds = shortcut.ICON if which == "icon" else shortcut.LOGIN
-        try:
-            failed = shortcut.run(shortcut.script(self.home, remove=not on, kinds=kinds))
-        except ValueError:
-            failed = "redirected folders"
+        if which == "login":
+            failed = autostart.set_login(self.home, on)
+            if not failed:
+                # The person chose: the first start's default no longer applies.
+                autostart.remember(self.home)
+        else:
+            try:
+                failed = shortcut.run(shortcut.script(self.home, remove=not on, kinds=shortcut.ICON))
+            except ValueError:
+                failed = "redirected folders"
         if failed:
             raise ValueError("desk_shortcut_failed")
         return self.shortcuts()
@@ -366,7 +377,7 @@ class Desk:
                     safety = self._write_backup(self.home / "backups", tag)
                     work(runtime, safety)
                 done = True
-                self.workspace.reset_chat()
+                self.workspace.reset_all_chats()
             finally:
                 if restart or not done:
                     self._start_again(was)

@@ -1,0 +1,1142 @@
+/* The first run. Every class starts with "onboard-"; the colours, radii and
+   type come from the shell's custom properties in app.css. */
+.onboard-root {
+  --onboard-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --onboard-dash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12h10' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: auto;
+  display: flex;
+  padding: 28px 16px;
+  background: var(--pa-canvas);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+/* The dark accent is light: the marks on it take --pa-on-accent's dark ink. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .onboard-root {
+    --onboard-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='%2314161c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --onboard-dash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12h10' fill='none' stroke='%2314161c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
+}
+:root[data-theme="dark"] .onboard-root {
+  --onboard-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7' fill='none' stroke='%2314161c' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --onboard-dash: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12h10' fill='none' stroke='%2314161c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.onboard-root *,
+.onboard-root *::before,
+.onboard-root *::after {
+  box-sizing: border-box;
+}
+.onboard-root [hidden] {
+  display: none !important;
+}
+.onboard-root button {
+  font: inherit;
+  cursor: pointer;
+}
+.onboard-root button:disabled {
+  cursor: default;
+}
+.onboard-root :focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+
+.onboard-card {
+  width: 100%;
+  max-width: 720px;
+  /* One size for every step, so the card does not jump; a long list scrolls inside. */
+  height: min(680px, 100%);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-xl);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-2);
+}
+
+/* ---- Where the person is: three steps, the ones behind filled in. */
+.onboard-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px 0;
+}
+.onboard-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.onboard-dot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pa-faint);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.onboard-dot + .onboard-dot::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  /* Clear of the name before it, so the line does not read as a dash after the word. */
+  margin: 0 2px 0 10px;
+  border-radius: 1px;
+  background: var(--pa-line);
+  transition: background 0.3s;
+}
+.onboard-dot-number {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--pa-line-strong);
+  background: var(--pa-surface);
+  font-size: 12px;
+  font-weight: 650;
+  transition:
+    background 0.3s,
+    border-color 0.3s,
+    color 0.3s;
+}
+.onboard-dot-now {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.onboard-dot-now .onboard-dot-number {
+  border-color: var(--pa-accent);
+  color: var(--pa-accent);
+  box-shadow: 0 0 0 4px var(--pa-accent-soft);
+}
+.onboard-dot-done {
+  color: var(--pa-muted);
+}
+/* A step behind is ticked off. */
+.onboard-dot-done .onboard-dot-number {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent) var(--onboard-check) center / 14px no-repeat;
+  color: transparent;
+}
+.onboard-dot-done + .onboard-dot::before {
+  background: var(--pa-accent);
+}
+.onboard-leave {
+  flex: none;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-muted);
+  font-size: 13px;
+}
+.onboard-leave:hover {
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+}
+
+/* ---- The character, and what it is saying */
+.onboard-talk {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 22px 26px 8px;
+}
+.onboard-figure {
+  flex: none;
+  width: 92px;
+  height: 109px;
+  overflow: hidden;
+}
+.onboard-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 100%;
+}
+/* Four frames side by side; the box shows the first. */
+.onboard-sheet {
+  display: block;
+  width: 400%;
+  max-width: none;
+  height: 100%;
+}
+.onboard-figure img {
+  animation: onboard-breathe 3.2s ease-in-out infinite;
+  transform-origin: 50% 100%;
+}
+@keyframes onboard-breathe {
+  50% {
+    transform: scale(1.015, 0.985);
+  }
+}
+.onboard-bubble {
+  position: relative;
+  flex: 1;
+  margin: 0 0 30px;
+  padding: 14px 18px;
+  border-radius: 18px 18px 18px 6px;
+  background: var(--pa-accent-soft);
+  color: var(--pa-ink);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.onboard-bubble::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: var(--pa-accent-soft);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+.onboard-bubble-in {
+  animation: onboard-pop 0.32s cubic-bezier(0.3, 0.7, 0.4, 1.2);
+  transform-origin: 0 100%;
+}
+@keyframes onboard-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+/* ---- The step itself */
+.onboard-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 26px 20px;
+}
+.onboard-pane {
+  animation: onboard-fade 0.28s ease-out;
+}
+@keyframes onboard-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.onboard-pane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.onboard-hint {
+  margin: 0;
+  color: var(--pa-muted);
+  font-size: 13.5px;
+}
+.onboard-free {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.onboard-count {
+  flex: none;
+  color: var(--pa-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.onboard-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.onboard-free .onboard-icon {
+  color: var(--pa-accent);
+}
+.onboard-note {
+  margin: 8px 0;
+  padding: 14px 16px;
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+}
+.onboard-loading {
+  height: 220px;
+  border-radius: var(--pa-r-lg);
+  background: linear-gradient(90deg, var(--pa-sunken) 0%, var(--pa-canvas) 50%, var(--pa-sunken) 100%);
+  background-size: 200% 100%;
+  animation: onboard-shimmer 1.2s linear infinite;
+}
+@keyframes onboard-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Topics to tap */
+.onboard-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.onboard-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: 18px;
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font-size: 14px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    padding 0.15s;
+}
+.onboard-chip:hover {
+  border-color: var(--pa-faint);
+}
+.onboard-chip-tick {
+  display: none;
+  width: 14px;
+  height: 14px;
+  margin-left: -4px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.onboard-chip[aria-pressed="true"] {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+  font-weight: 600;
+}
+.onboard-chip[aria-pressed="true"] .onboard-chip-tick {
+  display: block;
+}
+.onboard-chip-new {
+  animation: onboard-pop 0.3s ease-out;
+}
+
+/* A field and its button, side by side */
+.onboard-add {
+  display: flex;
+  gap: 8px;
+  max-width: 420px;
+  margin-top: 16px;
+}
+.onboard-add-wide {
+  max-width: none;
+  margin: 4px 0 8px;
+}
+.onboard-field {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.onboard-field::placeholder {
+  color: var(--pa-placeholder);
+}
+.onboard-field:focus,
+.onboard-field:focus-visible {
+  border-color: var(--pa-a500);
+  box-shadow: var(--pa-ring);
+  outline: none;
+}
+.onboard-add-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-ink);
+  color: var(--pa-surface);
+  font-weight: 600;
+}
+.onboard-add-button:hover {
+  background: var(--pa-n700);
+}
+.onboard-add-button:disabled {
+  opacity: 0.6;
+}
+
+/* Groups of places */
+.onboard-groups {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  overflow: hidden;
+}
+.onboard-group + .onboard-group {
+  border-top: 1px solid var(--pa-line);
+}
+.onboard-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 14px;
+}
+.onboard-group-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 6px 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.onboard-group-toggle:hover .onboard-group-name {
+  color: var(--pa-accent-ink);
+}
+.onboard-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--pa-faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s;
+}
+.onboard-group-open .onboard-chevron {
+  transform: rotate(90deg);
+}
+.onboard-group-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.onboard-group-name {
+  flex: none;
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.onboard-group-glance {
+  overflow: hidden;
+  color: var(--pa-faint);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.onboard-group-open .onboard-group-glance {
+  visibility: hidden;
+}
+.onboard-group-count {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.onboard-group-some .onboard-group-count {
+  color: var(--pa-accent-ink);
+}
+.onboard-tick-all {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 10px;
+  border-left: 1px solid var(--pa-line);
+  color: var(--pa-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.onboard-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 2px 12px;
+  padding: 0 10px 12px 38px;
+  animation: onboard-fade 0.2s ease-out;
+}
+.onboard-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: var(--pa-r-sm);
+  cursor: pointer;
+}
+.onboard-row:hover {
+  background: var(--pa-canvas);
+}
+.onboard-row-words {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.onboard-row-name {
+  color: var(--pa-ink);
+  font-weight: 550;
+}
+.onboard-row-about {
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+/* A tick box, drawn so it matches the rest */
+.onboard-check {
+  flex: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  border: 1.5px solid var(--pa-n300);
+  border-radius: 5px;
+  background: var(--pa-surface) center / 14px no-repeat;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s;
+}
+.onboard-tick-all .onboard-check {
+  margin: 0;
+}
+.onboard-check:checked {
+  border-color: var(--pa-accent);
+  background-color: var(--pa-accent);
+  background-image: var(--onboard-check);
+}
+.onboard-check:indeterminate {
+  border-color: var(--pa-accent);
+  background-color: var(--pa-accent);
+  background-image: var(--onboard-dash);
+}
+
+/* What was found at an address */
+.onboard-found {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.onboard-feed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  color: inherit;
+  text-align: left;
+}
+.onboard-feed:hover:not(:disabled) {
+  border-color: var(--pa-accent);
+}
+.onboard-feed .onboard-row-words {
+  flex: 1;
+}
+.onboard-feed .onboard-row-about {
+  white-space: nowrap;
+}
+.onboard-feed-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: var(--pa-ink);
+  color: var(--pa-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.onboard-feed-added {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+}
+.onboard-feed-added .onboard-feed-mark {
+  background: var(--pa-accent);
+}
+.onboard-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+  font-size: 13.5px;
+}
+.onboard-quiet {
+  margin: 28px 0 0;
+  padding-top: 14px;
+  border-top: 1px dashed var(--pa-line);
+  color: var(--pa-faint);
+  font-size: 12.5px;
+}
+
+/* ---- Back, skip, next */
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--pa-line);
+  border-radius: 0 0 var(--pa-r-xl) var(--pa-r-xl);
+  background: var(--pa-surface);
+}
+.onboard-gap {
+  flex: 1;
+}
+.onboard-back,
+.onboard-skip {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-muted);
+}
+.onboard-back:hover,
+.onboard-skip:hover {
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+}
+.onboard-next {
+  height: 42px;
+  min-width: 112px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-accent);
+  color: var(--pa-on-accent);
+  font-weight: 650;
+  box-shadow: 0 4px 14px #75321b33;
+  transition:
+    background 0.15s,
+    transform 0.1s;
+}
+.onboard-next:hover {
+  background: var(--pa-accent-hover);
+}
+.onboard-next:active {
+  transform: translateY(1px);
+}
+.onboard-next:disabled {
+  opacity: 0.7;
+}
+
+/* ---- Step one: the language, as a grid of names */
+.onboard-lang-hint {
+  margin-bottom: 14px;
+}
+.onboard-langs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.onboard-lang {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font-size: 15px;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.onboard-lang:hover {
+  border-color: var(--pa-faint);
+}
+.onboard-lang-tick {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.onboard-lang[aria-pressed="true"] {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+  font-weight: 600;
+}
+.onboard-lang[aria-pressed="true"] .onboard-lang-tick {
+  opacity: 1;
+}
+.onboard-lang-hint + .onboard-langs + .onboard-note {
+  margin-top: 14px;
+}
+
+/* ---- Step two: the characters, whole, side by side */
+.onboard-figures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+.onboard-pick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px 12px;
+  border: 1.5px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.15s;
+}
+.onboard-pick:hover {
+  border-color: var(--pa-line-strong);
+  transform: translateY(-2px);
+}
+.onboard-pick-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 150px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-canvas);
+}
+.onboard-pick-figure {
+  width: 112px;
+}
+.onboard-pick-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--pa-ink);
+}
+.onboard-pick-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--pa-accent-tint);
+  color: var(--pa-accent-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.onboard-pick-tick {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border-radius: 50%;
+  background: var(--pa-accent);
+  fill: none;
+  stroke: var(--pa-on-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+.onboard-pick[aria-pressed="true"] {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+}
+.onboard-pick[aria-pressed="true"] .onboard-pick-stage {
+  background: var(--pa-surface);
+}
+.onboard-pick[aria-pressed="true"] .onboard-pick-tick {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Step three: the model, a short form */
+.onboard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 460px;
+}
+.onboard-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onboard-form-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--pa-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.onboard-form .onboard-field {
+  flex: none;
+  height: 40px;
+}
+.onboard-select {
+  appearance: none;
+  padding-right: 36px;
+  background: var(--pa-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%237b7872' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat right 12px center / 16px;
+  cursor: pointer;
+}
+.onboard-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--pa-accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.onboard-link:hover {
+  color: var(--pa-accent-hover);
+  text-decoration: underline;
+}
+.onboard-link .onboard-icon {
+  width: 13px;
+  height: 13px;
+}
+.onboard-connect {
+  align-self: flex-start;
+  height: 42px;
+  min-width: 112px;
+  justify-content: center;
+}
+.onboard-form .onboard-quiet {
+  margin-top: 6px;
+}
+.onboard-connected {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-canvas);
+}
+.onboard-connected .onboard-row-words {
+  flex: 1;
+}
+.onboard-connected-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pa-green600) 13%, transparent);
+  color: var(--pa-green600);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---- Step five: where the person seems to be, and a few lines in their own words */
+.onboard-where-hint {
+  margin-bottom: 8px;
+}
+.onboard-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-canvas);
+}
+.onboard-where-loading {
+  height: 48px;
+}
+.onboard-where-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0;
+}
+.onboard-where-line strong {
+  color: var(--pa-ink);
+  font-weight: 650;
+}
+.onboard-where-sep {
+  margin-inline-end: 4px;
+  color: var(--pa-faint);
+}
+.onboard-where-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.onboard-where-site .onboard-icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.6;
+}
+.onboard-where-up .onboard-icon {
+  color: var(--pa-green600);
+}
+.onboard-where-down .onboard-icon {
+  color: var(--pa-error);
+}
+.onboard-where-unknown .onboard-icon {
+  color: var(--pa-faint);
+}
+.onboard-where-fix {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.onboard-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.onboard-tell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 22px;
+}
+.onboard-tell .onboard-tell-field {
+  flex: none;
+  height: auto;
+  min-height: 104px;
+  padding: 10px 14px;
+  line-height: var(--pa-lh);
+  resize: vertical;
+}
+.onboard-tell-field[readonly] {
+  background: var(--pa-canvas);
+  color: var(--pa-muted);
+}
+.onboard-tell-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.onboard-tell-count {
+  color: var(--pa-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.onboard-tell-button {
+  gap: 8px;
+}
+.onboard-tell[aria-busy="true"] .onboard-tell-button:disabled {
+  opacity: 0.8;
+  cursor: progress;
+}
+.onboard-spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: onboard-turn 0.8s linear infinite;
+}
+@keyframes onboard-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.onboard-told {
+  align-items: flex-start;
+  margin-top: 22px;
+  animation: onboard-fade 0.28s ease-out;
+}
+.onboard-told .onboard-connected-mark {
+  margin-top: 1px;
+}
+.onboard-told-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--pa-ink);
+  white-space: pre-wrap;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.onboard-told .onboard-row-about {
+  margin-top: 4px;
+}
+.onboard-told .onboard-back {
+  height: 30px;
+  padding: 0 10px;
+}
+
+/* What leaving the step empty means, in a line above the buttons */
+.onboard-need {
+  margin: 0;
+  padding: 10px 26px;
+  border-top: 1px solid var(--pa-line);
+  background: var(--pa-canvas);
+  color: var(--pa-muted);
+  font-size: 13px;
+}
+.onboard-need + .onboard-foot {
+  border-top: 0;
+}
+.onboard-back,
+.onboard-skip {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Five steps do not fit by name in a narrow window: the one now keeps its name. */
+@media (max-width: 860px) {
+  .onboard-dot:not(.onboard-dot-now) .onboard-dot-name {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .onboard-figures {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .onboard-root {
+    padding: 0;
+  }
+  .onboard-card {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .onboard-top {
+    padding: 14px 16px 0;
+  }
+  .onboard-dot + .onboard-dot::before {
+    width: 14px;
+    margin: 0 6px 0 0;
+  }
+  .onboard-dot:not(.onboard-dot-now) .onboard-dot-name {
+    display: none;
+  }
+  .onboard-talk {
+    gap: 10px;
+    padding: 16px 16px 4px;
+  }
+  .onboard-figure {
+    width: 64px;
+    height: 76px;
+  }
+  .onboard-bubble {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    font-size: 14.5px;
+  }
+  .onboard-body {
+    padding: 8px 16px 16px;
+  }
+  .onboard-pane-head {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .onboard-group-glance {
+    display: none;
+  }
+  .onboard-rows {
+    grid-template-columns: 1fr;
+    padding-left: 22px;
+  }
+  .onboard-foot {
+    padding: 12px 16px 14px;
+    border-radius: 0;
+  }
+  .onboard-next {
+    min-width: 0;
+  }
+}
+
+/* ---- The sources step: one search over the list, or an address of one's own */
+.onboard-search {
+  position: relative;
+  margin-bottom: 12px;
+}
+.onboard-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  width: 17px;
+  height: 17px;
+  margin-top: -8.5px;
+  fill: none;
+  stroke: var(--pa-faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.onboard-search .onboard-search-field {
+  width: 100%;
+  height: 42px;
+  padding-left: 38px;
+  border-radius: var(--pa-r-md);
+}
+.onboard-search + .onboard-found:not(:empty) {
+  margin-bottom: 14px;
+}
+.onboard-none {
+  padding: 16px 18px;
+  border: 1px dashed var(--pa-line-strong);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-canvas);
+}
+.onboard-none-title {
+  margin: 0 0 4px;
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.onboard-look .onboard-icon {
+  color: var(--pa-accent);
+}
+.onboard-look-box > .onboard-found:not(:empty) {
+  margin-top: 8px;
+}

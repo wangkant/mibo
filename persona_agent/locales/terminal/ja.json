@@ -680,5 +680,8 @@
 "forget an approval or a decline, so the chat asks again": "承認または拒否を取り消し、そのチャットが再び申請するようにします",
 "the chat's id, as the list shows it": "チャットの ID（一覧に表示されるもの）",
 "The file mcp.json in the home folder cannot be read as JSON. Correct it or remove it.": "personagent フォルダーの mcp.json を JSON として読み取れません。修正するか削除してください。",
-"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "personagent はサービスとして動作するようになりました（ログインしている間のみ）。出力は {0} に書き込まれます。"
+"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "personagent はサービスとして動作するようになりました（ログインしている間のみ）。出力は {0} に書き込まれます。",
+"Show the pet": "ペットを表示",
+"--accept-risk applies only to connecting bilibili or youtube": "--accept-risk は bilibili または youtube の接続にのみ使えます",
+"bilibili, youtube: accept the risks of using a personal account, which connecting otherwise asks about": "bilibili、youtube：個人アカウントを使うリスクを受け入れます（指定しない場合は接続時に確認します）"
 }

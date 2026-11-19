@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 190" width="160" height="190">
+  <g class="figure" stroke="#3d4f8a" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+    <g class="leg left">
+      <rect x="67" y="148" width="11" height="28" rx="5" fill="#fff1e8" />
+      <path d="M63 180 C63 172 68 170 73 170 C78 170 80 174 80 180 Z" fill="#a585dc" />
+    </g>
+    <g class="leg right">
+      <rect x="82" y="148" width="11" height="28" rx="5" fill="#fff1e8" />
+      <path d="M80 180 C80 174 82 170 87 170 C92 170 97 172 97 180 Z" fill="#a585dc" />
+    </g>
+    <g class="torso">
+      <g class="wings">
+        <path d="M66 106 C58 96 50 86 42 74 C34 76 22 78 12 86 C18 92 18 100 16 108 C24 106 30 110 32 118 C38 114 46 116 50 124 C56 118 62 118 68 120 Z" fill="#f1eef7" />
+        <path d="M42 78 L20 101 M42 78 L32 114 M42 78 L49 120" fill="none" stroke="#c4bdd6" stroke-width="1.5" />
+        <path d="M94 106 C102 96 110 86 118 74 C126 76 138 78 148 86 C142 92 142 100 144 108 C136 106 130 110 128 118 C122 114 114 116 110 124 C104 118 98 118 92 120 Z" fill="#f1eef7" />
+        <path d="M118 78 L140 101 M118 78 L128 114 M118 78 L111 120" fill="none" stroke="#c4bdd6" stroke-width="1.5" />
+      </g>
+      <path d="M80 34 C106 34 118 50 117 72 C124 88 116 102 123 116 C129 130 119 138 126 150 Q120 156 112 152 Q110 158 102 154 Q102 146 98 140 L62 140 Q58 146 58 154 Q50 158 48 152 Q40 156 34 150 C41 138 31 130 37 116 C44 102 36 88 43 72 C42 50 54 34 80 34 Z" fill="#d9c8ef" />
+      <path d="M44 100 Q41 116 44 130 M116 100 Q119 116 116 130" fill="none" stroke="#bea8e0" stroke-width="1.5" />
+      <g class="horns">
+        <path d="M60 48 C50 42 42 32 44 20 C45 13 51 8 58 10 C53 15 52 22 55 28 C58 34 63 37 67 42 Z" fill="#f5e8c6" />
+        <path d="M45 24 Q49 26 53 24 M47 32 Q52 33 56 30 M52 39 Q57 39 60 36" fill="none" stroke="#c9a65a" stroke-width="1.5" />
+        <path d="M100 48 C110 42 118 32 116 20 C115 13 109 8 102 10 C107 15 108 22 105 28 C102 34 97 37 93 42 Z" fill="#f5e8c6" />
+        <path d="M115 24 Q111 26 107 24 M113 32 Q108 33 104 30 M108 39 Q103 39 100 36" fill="none" stroke="#c9a65a" stroke-width="1.5" />
+      </g>
+      <g class="arm left">
+        <path d="M64 100 C55 104 46 114 42 128 C46 131 52 131 55 129 C57 120 62 113 69 108 Z" fill="#fbf9ff" />
+        <path d="M43 125 C47 128 52 128 55 126" fill="none" stroke="#d6ad4a" stroke-width="2" />
+        <circle cx="48" cy="134" r="5" fill="#fff1e8" />
+      </g>
+      <g class="arm right">
+        <path d="M96 100 C105 104 114 114 118 128 C114 131 108 131 105 129 C103 120 98 113 91 108 Z" fill="#fbf9ff" />
+        <path d="M117 125 C113 128 108 128 105 126" fill="none" stroke="#d6ad4a" stroke-width="2" />
+        <circle cx="112" cy="134" r="5" fill="#fff1e8" />
+      </g>
+      <path d="M63 108 L97 108 L110 156 Q80 164 50 156 Z" fill="#fbf9ff" />
+      <path d="M52 150 Q80 158 108 150" fill="none" stroke="#d6ad4a" stroke-width="2.5" />
+      <path d="M80 124 L80 146 M80 136 C74 133 69 137 71 141 C73 144 77 142 75 139 M80 136 C86 133 91 137 89 141 C87 144 83 142 85 139" fill="none" stroke="#e0bf6c" stroke-width="1.5" />
+      <path d="M70 95 L90 95 C99 98 106 106 108 117 Q94 124 80 119 Q66 124 52 117 C54 106 61 98 70 95 Z" fill="#fbf9ff" />
+      <path d="M55 113 Q67 119 80 115 Q93 119 105 113" fill="none" stroke="#d6ad4a" stroke-width="2" />
+      <path d="M70 96 L74 103 L80 107 L86 103 L90 96" fill="none" stroke="#d6ad4a" stroke-width="2" />
+      <path d="M80 103 L84.5 108.5 L80 115 L75.5 108.5 Z" fill="#8a4fd0" stroke="#d6ad4a" stroke-width="1.5" />
+      <ellipse cx="80" cy="68" rx="31" ry="29" fill="#fff1e8" />
+      <path d="M50 70 C42 50 56 33 80 33 C104 33 118 50 110 70 C107 60 103 54 98 50 C97 58 93 62 88 64 C88 56 86 50 82 46 C79 54 72 60 62 62 C64 56 64 52 62 49 C56 54 52 62 50 70 Z" fill="#dccbf2" />
+      <path d="M70 40 Q64 46 62 49 M90 40 Q96 44 98 50" fill="none" stroke="#bea8e0" stroke-width="1.5" />
+      <path d="M52 58 C44 70 48 82 44 94 C41 102 46 108 43 114 C52 110 58 102 56 94 C54 86 58 78 56 68 Z" fill="#dccbf2" />
+      <path d="M108 58 C116 70 112 82 116 94 C119 102 114 108 117 114 C108 110 102 102 104 94 C106 86 102 78 104 68 Z" fill="#dccbf2" />
+      <g class="face" stroke="none">
+        <ellipse cx="60" cy="84" rx="5.5" ry="3.2" fill="#ffc4d0" />
+        <ellipse cx="100" cy="84" rx="5.5" ry="3.2" fill="#ffc4d0" />
+        <g class="eyes open">
+          <g class="eye">
+            <ellipse cx="67" cy="75" rx="5.5" ry="7" fill="#3f2466" />
+            <ellipse cx="67" cy="77" rx="3.8" ry="4.6" fill="#9a5ed8" />
+            <circle cx="69" cy="72" r="2" fill="#fff" />
+            <path d="M60 70 Q67 65 74 69" fill="none" stroke="#3f2466" stroke-width="2.2" />
+          </g>
+          <g class="eye">
+            <ellipse cx="93" cy="75" rx="5.5" ry="7" fill="#3f2466" />
+            <ellipse cx="93" cy="77" rx="3.8" ry="4.6" fill="#9a5ed8" />
+            <circle cx="95" cy="72" r="2" fill="#fff" />
+            <path d="M86 69 Q93 65 100 70" fill="none" stroke="#3f2466" stroke-width="2.2" />
+          </g>
+        </g>
+        <g class="eyes glad" display="none" fill="none" stroke="#3f2466" stroke-width="2.8">
+          <path d="M61 77 Q67 69 73 77" />
+          <path d="M87 77 Q93 69 99 77" />
+        </g>
+        <g class="eyes shut" display="none" fill="none" stroke="#3f2466" stroke-width="2.8">
+          <path d="M61 75 Q67 80 73 75" />
+          <path d="M87 75 Q93 80 99 75" />
+        </g>
+        <path class="mouth smile" d="M76 87 Q80 91 84 87" fill="none" stroke="#7a3f5a" stroke-width="2.2" />
+        <ellipse class="mouth oh" display="none" cx="80" cy="89" rx="3" ry="3.8" fill="#7a3f5a" />
+      </g>
+    </g>
+  </g>
+</svg>

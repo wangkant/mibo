@@ -1,0 +1,229 @@
+/* The card beside the pet: one plain box with a hairline round it, no shadow
+   (the pet's window is cut to its shape). Its lift above the window's bottom
+   is in card.js too, which measures it and tells the window where it is: the
+   window takes the pointer there and round the figure alone, its corners cut
+   as round as the card's (CARD_RADIUS in window.py). */
+.card {
+  --card-bg: #ffffff;
+  --card-line: #d9d5cd;
+  --card-ink: #1d1b18;
+  --card-text: #6f6a63;
+  --card-faint: #a7a199;
+  --card-wash: rgba(40, 32, 20, 0.06);
+  --card-sunken: #efebe4;
+  position: absolute;
+  left: 0;
+  bottom: 80px;
+  width: 300px;
+  box-sizing: border-box;
+  background: var(--card-bg);
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  color: var(--card-ink);
+  font: 13px/1.45 system-ui, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+@media (prefers-color-scheme: dark) {
+  .card {
+    --card-bg: #262421;
+    --card-line: #45413b;
+    --card-ink: #f3f1ed;
+    --card-text: #bdb9b1;
+    --card-faint: #8d877e;
+    --card-wash: rgba(255, 255, 255, 0.08);
+    --card-sunken: #34312d;
+  }
+}
+body.card-right .card {
+  left: auto;
+  right: 0;
+}
+.card[hidden] {
+  display: none;
+}
+.card.measure {
+  visibility: hidden;
+}
+/* Its speech-bubble tail, pointing at the figure's head. */
+.card-tail {
+  position: absolute;
+  right: -7px;
+  bottom: 24px;
+  width: 12px;
+  height: 12px;
+  background: var(--card-bg);
+  border-top: 1px solid var(--card-line);
+  border-right: 1px solid var(--card-line);
+  transform: rotate(45deg);
+}
+body.card-right .card-tail {
+  right: auto;
+  left: -7px;
+  transform: rotate(-135deg);
+}
+.card-body {
+  max-height: 440px;
+  overflow: hidden;
+  padding: 10px 14px 14px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  margin-right: -6px;
+}
+.card-site {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--card-faint);
+  font-size: 12px;
+}
+.card-like,
+.card-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--card-faint);
+  cursor: pointer;
+}
+.card svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.card-like svg,
+.card-close svg {
+  width: 15px;
+  height: 15px;
+}
+.card-like:hover,
+.card-close:hover {
+  background: var(--card-wash);
+  color: var(--card-ink);
+}
+.card-like.on,
+.card-like.on:hover {
+  color: #d9475b;
+}
+.card-like.on svg {
+  fill: currentColor;
+}
+.card-media {
+  position: relative;
+  margin-top: 10px;
+  height: 152px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card-sunken);
+}
+.card-media img,
+.card-media iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+.card-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(29, 27, 24, 0.78);
+  cursor: pointer;
+}
+.card-play::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -8px 0 0 -4px;
+  border-style: solid;
+  border-width: 8px 0 8px 13px;
+  border-color: transparent transparent transparent #ffffff;
+}
+.card-play:hover {
+  background: #1d1b18;
+}
+.card-shield {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+.card-title {
+  margin-top: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-words {
+  margin: 6px 0 0;
+  color: var(--card-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.with-media .card-words {
+  -webkit-line-clamp: 2;
+}
+/* The character's own sentence leads the card. It is short by the rule it was written to, and is shown whole. */
+.card-words.card-line {
+  display: block;
+  margin: 2px 0 0;
+  color: var(--card-ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* A line the character says: only as wide as its words, the cross beside them. */
+.card.bubble {
+  width: max-content;
+  min-width: 96px;
+  max-width: 260px;
+}
+.bubble .card-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 8px 11px 14px;
+}
+.bubble .card-words {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  margin: 1px 0 0;
+  color: var(--card-ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.bubble .card-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+.bubble .card-close svg {
+  width: 13px;
+  height: 13px;
+}

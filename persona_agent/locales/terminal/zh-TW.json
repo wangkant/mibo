@@ -680,5 +680,8 @@
 "forget an approval or a decline, so the chat asks again": "撤銷核准或拒絕，該對話之後須重新申請",
 "the chat's id, as the list shows it": "對話的 ID，與清單中顯示的相同",
 "The file mcp.json in the home folder cannot be read as JSON. Correct it or remove it.": "無法將 personagent 資料夾中的 mcp.json 讀取為 JSON。請修正或刪除該檔案。",
-"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "personagent 現已作為服務執行，但僅在你登入期間執行。輸出會寫入 {0}。"
+"personagent runs as a service now, while you are logged in. Its output goes to {0}.": "personagent 現已作為服務執行，但僅在你登入期間執行。輸出會寫入 {0}。",
+"Show the pet": "顯示桌寵",
+"--accept-risk applies only to connecting bilibili or youtube": "--accept-risk 只適用於連接 bilibili 或 youtube",
+"bilibili, youtube: accept the risks of using a personal account, which connecting otherwise asks about": "bilibili、youtube：接受使用個人帳號的風險，否則連接時會詢問"
 }

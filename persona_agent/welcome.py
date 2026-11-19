@@ -11,6 +11,7 @@ import binascii
 from concurrent.futures import ThreadPoolExecutor
 import contextlib
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 import functools
 import hashlib
 import importlib
@@ -41,6 +42,8 @@ from .direct import base as direct_base
 from . import direct_setup
 from . import setup_wizard as sw
 from . import life
+from . import quiet
+from . import recommend
 from . import updates
 from . import window as appwindow
 from .astrbot_install import STALL_S, AstrBotInstallation, DownloadStalled, install_astrbot, progress_marker
@@ -54,10 +57,21 @@ ASSETS = Path(__file__).with_name("static") / "welcome"
 # ASSETS/i18n/<code>.json. The character still speaks en or zh prompts.
 PAGE_LANGUAGES = ("zh-TW", "ja", "ko", "es", "fr", "de", "pt-BR", "ru")
 # Parts of the page beyond its four first views. Each is a module in
-# persona_agent/panels with `mount(app, workspace, body)`, and a script and a
-# stylesheet of the same name under ASSETS/panels.
-PANELS = ("health", "runtime", "desk", "tuning", "learned", "agents", "chatapi", "practice", "cards", "lore",
-          "detect", "signin", "models", "approvals", "tools")
+# persona_agent/panels with `mount(app, workspace, body)`. The earlier page's
+# (PAGE_PANELS) also have a script and a stylesheet of the same name under
+# ASSETS/panels; the rest are drawn by the app page's own files (places.js, setup.js, chat.js).
+PAGE_PANELS = ("health", "runtime", "desk", "tuning", "learned", "agents", "chatapi", "practice", "cards", "lore",
+               "detect", "signin", "models", "approvals", "tools")
+PANELS = (*PAGE_PANELS, "feed", "sources", "look", "mail", "discord", "accounts", "profile", "quiet", "remarks",
+          "privacy")
+# The figures the pet can be, <key>.svg under the page's figures folder; the first is a new home's default.
+PET_FIGURES = ("pico", "deepseek", "chatgpt", "claude", "sprout")
+# The default before Pico, which homes set up then keep.
+OLD_DEFAULT_FIGURE = "deepseek"
+# The page's own files, served by name.
+PAGE_ASSETS = ("welcome.js", "welcome.css", "app.js", "app.css", "chat.js", "chat.css",
+               "onboard.js", "onboard.css", "places.js", "places.css", "setup.js", "setup.css",
+               "pet.js", "pet.css", "card.js", "card.css")
 TOKEN_HEADER = "x-personagent-setup-token"
 # Bytes; a chat message may be 8000 characters, three bytes each in Chinese.
 MAX_BODY = 32_768
@@ -87,6 +101,21 @@ MEMORY_TID = re.compile(r"r[0-9a-f]{10}")
 # The page's own connector: the outbox hands it only what is for this page's chat.
 PAGE_CONNECTOR = "local-welcome"
 CHAT_KEPT = 50
+# The chat that is the character's own: what it finds arrives there. The others are plain chats.
+MAIN_CHAT = "main"
+CHAT_ID = re.compile(r"[0-9a-f]{16}")
+# A plain chat is named by the first message sent in it, cut to TITLE_FIRST; a name given may be longer.
+TITLE_FIRST, TITLE_MAX = 40, 60
+# What the character found comes into the main chat one at a time, the character's own choice
+# (recommend), no sooner than SHARE_QUIET_S after the last time, at most SHARE_DAY a day; the first time at once.
+SHARE_QUIET_S, SHARE_DAY = 1200, 15
+SHARE_FILE = "chat-shares.json"
+# Seconds between the share loop's looks.
+SHARE_EVERY_S = 300
+# What the character shared since the person last spoke, quoted in their next message so it knows.
+SHARE_QUOTED = 5
+# Who the quotes are from: the character itself.
+PAGE_CHARACTER = "character"
 # A picture the character sent, stored by its content hash; nothing else is served.
 PICTURE_NAME = re.compile(r"[0-9a-f]{40}\.(png|jpg|gif|webp)")
 # A thing the character saw, as the library names it.
@@ -94,8 +123,10 @@ ITEM_ID = re.compile(r"[0-9a-f]{16}")
 LIBRARY_PICTURE_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 PICTURE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
 MAX_PICTURE = 8 * 1024 * 1024
-# Seconds between outbox pulls while the character service is not running.
-OUTBOX_IDLE_S = 3.0
+# Seconds between outbox pulls while the character service is not running; a message sent wakes it sooner.
+OUTBOX_IDLE_S = 30.0
+# During quiet the outbox is still pulled this long after a message is sent, for the rest of the reply.
+OUTBOX_FOLLOW_S = 120.0
 
 
 # The name the page's chat sends; the page shows the admin's name or its own word instead.
@@ -114,7 +145,9 @@ LOCAL_ONLY = frozenset({
     # A coding assistant's own settings, or an AstrBot folder the caller names, on this computer.
     ("POST", "/api/agents/coding"), ("POST", "/api/agents/astrbot"), ("POST", "/api/agents/astrbot/remove"),
     # A browser window opened on this computer for the owner to sign in.
-    ("POST", "/api/platforms/browser"), ("POST", "/api/platforms/signed-in")})
+    ("POST", "/api/platforms/browser"), ("POST", "/api/platforms/signed-in"),
+    # An account's sign-in, which may open a browser window on this computer.
+    ("POST", "/api/accounts/start")})
 SIGNIN_ASSETS = ("signin.js", "signin.css")
 # Seconds between the headless page's checks that the character still runs.
 KEEP_RUNNING_S = 5.0
@@ -123,6 +156,16 @@ KEEP_RUNNING_MAX_S = 300.0
 
 def _connector_type():
     return direct_base.sdk().Connector
+
+
+async def _first(*waits) -> None:
+    """Until the first of these awaitables is done; the others are dropped."""
+    tasks = [asyncio.ensure_future(w) for w in waits]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
 
 
 async def send_chat_items(url: str, token: str, conversation: str, text: str, *,
@@ -244,6 +287,80 @@ def _picture_kind(data: bytes) -> str:
     return ""
 
 
+def _now_iso() -> str:
+    return datetime.fromtimestamp(life.clock()).astimezone().isoformat(timespec="seconds")
+
+
+class PageChat:
+    """One chat of the page: its own conversation with the character and the
+    messages the page shows. The main chat is kept where the page always kept
+    its one chat, a plain chat in a file of its own named by its id."""
+
+    def __init__(self, path: Path, ident: str = MAIN_CHAT):
+        self.path, self.id = path, ident
+        saved = sw._read_json(path)
+        self.conversation = str(saved.get("conversation") or secrets.token_hex(12))[:64]
+        self.title = str(saved.get("title") or "")[:TITLE_MAX]
+        self.at = str(saved.get("at") or "")
+        messages = [m for m in saved.get("messages", []) if isinstance(m, dict)]
+        self.history, dropped = keep_recent(messages)
+        # An earlier release dropped silently, mid-reply too: a full chat had dropped some.
+        if "trimmed" not in saved and len(messages) >= CHAT_KEPT:
+            self.history, dropped = keep_recent([{}] + messages)
+        self.trimmed = bool(saved.get("trimmed")) or dropped
+        self.seq = int(saved.get("seq") or 0) if str(saved.get("seq") or 0).isdigit() else 0
+        for message in self.history:
+            # An earlier release kept no numbers; each message needs one to be fetched after.
+            if not isinstance(message.get("seq"), int):
+                self.seq += 1
+                message["seq"] = self.seq
+            self.seq = max(self.seq, message["seq"])
+
+    def tag(self) -> str:
+        return hashlib.sha256(self.conversation.encode()).hexdigest()[:12]
+
+    def page_key(self) -> str:
+        return f"private:{access.PAGE_PLATFORM}:{self.conversation}"
+
+    def append(self, entries: list[dict]) -> list[dict]:
+        self.at = _now_iso()
+        for entry in entries:
+            self.seq += 1
+            entry["seq"] = self.seq
+            # When it was said: the page draws its days and times from this.
+            entry.setdefault("at", self.at)
+        self.history, dropped = keep_recent(self.history + entries)
+        self.trimmed = self.trimmed or dropped
+        return entries
+
+    def view(self, after: int | None = None) -> dict:
+        """The chat as the page shows it; with `after`, only what came since that number.
+        `chat` changes when a new chat starts, so the page knows to start over."""
+        messages = [dict(m) for m in self.history if after is None or m["seq"] > after]
+        return {"messages": messages, "chat": self.tag(), "last": self.seq, "kept": CHAT_KEPT,
+                "trimmed": self.trimmed}
+
+    def reset(self) -> None:
+        self.conversation = secrets.token_hex(12)
+        self.history = []
+        self.trimmed = False
+
+    def save(self) -> None:
+        saved = {"conversation": self.conversation, "seq": self.seq, "messages": self.history,
+                 "trimmed": self.trimmed}
+        if self.id != MAIN_CHAT:
+            saved.update(title=self.title, at=self.at)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(self.path, json.dumps(saved, ensure_ascii=False))
+
+    def listed(self) -> dict:
+        return {"id": self.id, "title": self.title, "at": self.at}
+
+    def shared(self) -> list[dict]:
+        """The messages that brought something the character found, oldest first."""
+        return [m for m in self.history if (m.get("card") or {}).get("id")]
+
+
 class Workspace:
     def __init__(self, home: Path):
         self.home = home.resolve()
@@ -254,6 +371,13 @@ class Workspace:
         self._forgetting = False
         self._commands = None
         self._pulling = False
+        # Set when a message is sent: the outbox is pulled then, not at its next idle look.
+        self._outbox_wake = asyncio.Event()
+        self._sent_at = float("-inf")
+        # Set when something new came in (found): the share step looks then.
+        self._share_wake = asyncio.Event()
+        # One telling of quiet to the service at a time, so the last one told is the state now.
+        self._quiet_lock = asyncio.Lock()
         self._future = None
         self._closed = False
         self._cancelled = False
@@ -272,22 +396,53 @@ class Workspace:
         self._was_connected = False
         self._history_path = self.home / "runtime" / "desktop" / "browser-chat.json"
         self._pictures = self._history_path.with_name("chat-pictures")
-        saved = sw._read_json(self._history_path)
-        self._conversation = str(saved.get("conversation") or secrets.token_hex(12))[:64]
-        messages = [m for m in saved.get("messages", []) if isinstance(m, dict)]
-        self._history, dropped = keep_recent(messages)
-        # An earlier release dropped silently, mid-reply too: a full chat had dropped some.
-        if "trimmed" not in saved and len(messages) >= CHAT_KEPT:
-            self._history, dropped = keep_recent([{}] + messages)
-        self._trimmed = bool(saved.get("trimmed")) or dropped
-        self._seq = int(saved.get("seq") or 0) if str(saved.get("seq") or 0).isdigit() else 0
-        for message in self._history:
-            # An earlier release kept no numbers; each message needs one to be fetched after.
-            if not isinstance(message.get("seq"), int):
-                self._seq += 1
-                message["seq"] = self._seq
-            self._seq = max(self._seq, message["seq"])
+        # The main chat, where what the character finds arrives too, is the page's one chat of before.
+        self._main = PageChat(self._history_path)
+        self._chats: dict[str, PageChat] = {}
+        folder = self._history_path.with_name("chats")
+        for path in sorted(folder.glob("*.json")) if folder.is_dir() else ():
+            if CHAT_ID.fullmatch(path.stem):
+                self._chats[path.stem] = PageChat(path, path.stem)
+        # The one thing the pet's card and the share step bring next, chosen by the character's model.
+        self.chooser = recommend.Chooser(self)
         self.job = {"state": "idle", "stage": "", "error": ""}
+
+    # The main chat, as the page's one chat was named before.
+    @property
+    def _conversation(self) -> str:
+        return self._main.conversation
+
+    @_conversation.setter
+    def _conversation(self, value: str) -> None:
+        self._main.conversation = value
+
+    @property
+    def _history(self) -> list[dict]:
+        return self._main.history
+
+    @_history.setter
+    def _history(self, value: list[dict]) -> None:
+        self._main.history = value
+
+    @property
+    def _seq(self) -> int:
+        return self._main.seq
+
+    @property
+    def _trimmed(self) -> bool:
+        return self._main.trimmed
+
+    def _all_chats(self) -> list[PageChat]:
+        return [self._main, *self._chats.values()]
+
+    def _chat(self, ident) -> PageChat:
+        """The chat an id names: "main" or nothing for the main chat."""
+        ident = str(ident or MAIN_CHAT)
+        if ident == MAIN_CHAT:
+            return self._main
+        if ident not in self._chats:
+            raise ValueError("invalid_chat")
+        return self._chats[ident]
 
     @property
     def env(self) -> Path:
@@ -479,6 +634,7 @@ class Workspace:
                                  admin_name=old.get("ADMIN_NAME", ""),
                                  admin_relationship=old.get("ADMIN_RELATIONSHIP", ""))
             self._restart_agent()
+            self.figure_changed()
             return self.summary()
 
     def _keep_written_persona(self) -> None:
@@ -582,6 +738,7 @@ class Workspace:
             sw.write_own_avatar(self.home, data)
             sw.copy_env_template(self.home)
             sw.write_env(self.env, {"PERSONA_AVATAR": sw.OWN_AVATAR})
+            self.figure_changed()
             return self.summary()
 
     def remove_own_avatar(self) -> dict:
@@ -595,34 +752,73 @@ class Workspace:
                 card = self.home / "persona.txt"
                 origin = sw.shipped_persona(card.read_text(encoding="utf-8")) if card.is_file() else None
                 sw.write_env(self.env, {"PERSONA_AVATAR": sw.avatar_for(origin[0]) if origin else ""})
+                self.figure_changed()
             return self.summary()
 
-    def history(self, after: int | None = None) -> dict:
-        """The chat as the page shows it; with `after`, only what came since that number.
-        `chat` changes when a new chat starts, so the page knows to start over."""
-        messages = [dict(m) for m in self._history if after is None or m["seq"] > after]
-        return {"messages": messages, "chat": self._chat_tag(), "last": self._seq, "kept": CHAT_KEPT,
-                "trimmed": self._trimmed}
+    def history(self, after: int | None = None, chat: str = MAIN_CHAT) -> dict:
+        return self._chat(chat).view(after)
 
     def _chat_tag(self) -> str:
-        return hashlib.sha256(self._conversation.encode()).hexdigest()[:12]
+        return self._main.tag()
 
     def _page_key(self) -> str:
-        return f"private:{access.PAGE_PLATFORM}:{self._conversation}"
+        return self._main.page_key()
 
     def reset_chat(self) -> None:
-        self._conversation = secrets.token_hex(12)
-        self._history = []
-        self._trimmed = False
+        self._main.reset()
         self._save_chat()
 
-    def _append(self, entries: list[dict]) -> list[dict]:
-        for entry in entries:
-            self._seq += 1
-            entry["seq"] = self._seq
-        self._history, dropped = keep_recent(self._history + entries)
-        self._trimmed = self._trimmed or dropped
-        return entries
+    def reset_all_chats(self) -> None:
+        """Start the main chat anew and drop the plain chats, as after a full reset or restore."""
+        for chat in self._chats.values():
+            chat.path.unlink(missing_ok=True)
+        self._chats.clear()
+        self.reset_chat()
+
+    def _append(self, entries: list[dict], chat: PageChat | None = None) -> list[dict]:
+        return (chat or self._main).append(entries)
+
+    # -- the chats beside the main one
+
+    def chats(self) -> dict:
+        """The main chat and the plain chats, the latest first."""
+        main = self._main
+        listed = sorted(self._chats.values(), key=lambda c: datetime.fromisoformat(c.at), reverse=True)
+        return {"main": {"id": MAIN_CHAT, "name": self.config().get("PERSONA_NAME", "").strip(),
+                         "last": main.history[-1]["seq"] if main.history else 0},
+                "chats": [chat.listed() for chat in listed]}
+
+    async def new_chat(self) -> dict:
+        async with self._chat_lock:
+            ident = secrets.token_hex(8)
+            chat = PageChat(self._history_path.with_name("chats") / f"{ident}.json", ident)
+            chat.at = _now_iso()
+            self._chats[ident] = chat
+            self._save_chat(chat)
+            return chat.listed()
+
+    async def rename_chat(self, payload: dict) -> dict:
+        title = " ".join(str(payload.get("title") or "").split())
+        if not title or len(title) > TITLE_MAX:
+            raise ValueError("invalid_title")
+        async with self._chat_lock:
+            chat = self._chat(payload.get("id"))
+            if chat is self._main:
+                raise ValueError("invalid_chat")
+            chat.title = title
+            self._save_chat(chat)
+        return {"ok": True}
+
+    async def delete_chat(self, payload: dict) -> dict:
+        async with self._chat_lock:
+            chat = self._chat(payload.get("id"))
+            if chat is self._main:
+                raise ValueError("invalid_chat")
+            del self._chats[chat.id]
+            chat.path.unlink(missing_ok=True)
+            self._prune_pictures()
+            self._name_owner()
+        return {"ok": True}
 
     def _entry(self, item: dict) -> dict | None:
         """A reply item as a chat message: text, or a picture stored for the page
@@ -669,9 +865,9 @@ class Workspace:
         return name
 
     def picture(self, name: str) -> Path | None:
-        """A picture a message in this chat shows; None for any other name, link or missing file."""
+        """A picture a message in one of the chats shows; None for any other name, link or missing file."""
         if not PICTURE_NAME.fullmatch(str(name or "")) or not any(
-                m.get("picture") == name for m in self._history):
+                m.get("picture") == name for chat in self._all_chats() for m in chat.history):
             return None
         folder = self._pictures
         path = folder / name
@@ -693,7 +889,7 @@ class Workspace:
 
     def _prune_pictures(self) -> None:
         """Pictures no message shows any more are removed with the messages."""
-        kept = {m.get("picture") for m in self._history}
+        kept = {m.get("picture") for chat in self._all_chats() for m in chat.history}
         try:
             stored = list(self._pictures.iterdir()) if self._own_folder() else []
         except OSError:
@@ -705,17 +901,25 @@ class Workspace:
                 except OSError:
                     pass
 
-    def _save_chat(self) -> None:
-        atomic_write_text(self._history_path, json.dumps({"conversation": self._conversation, "seq": self._seq,
-                                                        "messages": self._history, "trimmed": self._trimmed},
-                                                       ensure_ascii=False))
+    def _save_chat(self, chat: PageChat | None = None) -> None:
+        (chat or self._main).save()
         self._prune_pictures()
         self._name_owner()
+        self.chat_changed()
+
+    # The window app replaces these two to tell its pages at once (window.py); elsewhere nothing is told.
+    def chat_changed(self) -> None:
+        """A chat was saved: a reply, a remark, something shared or delivered."""
+
+    def figure_changed(self) -> None:
+        """The character's figure may be another now."""
 
     def take_delivery(self, delivery: dict) -> tuple[str, int]:
-        """A message the character sends on its own (an outbox delivery) joins this chat."""
-        if str(delivery.get("conversation_key") or "") != self._page_key():
-            # A chat that has since been replaced: nothing is shown for it again.
+        """A message the character sends on its own (an outbox delivery) joins the chat it is for."""
+        key = str(delivery.get("conversation_key") or "")
+        chat = next((c for c in self._all_chats() if c.page_key() == key), None)
+        if chat is None:
+            # A chat that has since been replaced or deleted: nothing is shown for it again.
             return "unsupported", 0
         if self._forgetting:
             # The chat is being forgotten and replaced: shown now, it would vanish yet count as sent.
@@ -729,8 +933,8 @@ class Workspace:
                 break
             entries.append(entry)
         if entries:
-            self._append(entries)
-            self._save_chat()
+            chat.append(entries)
+            self._save_chat(chat)
         if not entries:
             return "failed", 0
         return ("sent" if len(entries) == len(items) else "partial"), len(entries)
@@ -751,7 +955,14 @@ class Workspace:
             async with httpx.AsyncClient(trust_env=False) as client:
                 while not self._closed:
                     if wait:
-                        await asyncio.sleep(wait)
+                        with contextlib.suppress(asyncio.TimeoutError):
+                            await asyncio.wait_for(self._outbox_wake.wait(), wait)
+                        self._outbox_wake.clear()
+                    # During a game or fullscreen what the character sends on its own waits in its
+                    # outbox; the rest of a reply to a message just sent does not.
+                    while quiet.active() and time.monotonic() - self._sent_at > OUTBOX_FOLLOW_S:
+                        await _first(quiet.wait(), self._outbox_wake.wait())
+                        self._outbox_wake.clear()
                     wait = OUTBOX_IDLE_S
                     try:
                         token = self.config().get("CONNECTOR_TOKEN", "")
@@ -760,9 +971,11 @@ class Workspace:
                         current = (self.services.agent_url, token)
                         agent = self.services.processes.get("agent")
                         if connector is None or current != address or agent is not process:
-                            # A service started since has a new outbox: pull it at once.
+                            # A service started since has a new outbox: pull it at once. It is told
+                            # quiet's state too, and stops looking for itself.
                             connector, address, process, resume = _connector_type()(
                                 *current, connector_id=PAGE_CONNECTOR, client=client), current, agent, 0.0
+                            asyncio.ensure_future(self.tell_quiet())
                     except Exception:
                         # Unreadable settings (a bad port, say) may be fixed while the page runs.
                         connector = None
@@ -794,6 +1007,26 @@ class Workspace:
         finally:
             self._pulling = False
 
+    async def tell_quiet(self) -> None:
+        """Quiet's state now, told to the character service (POST /v1/quiet), which
+        then goes by this page's look instead of its own (quiet.follow)."""
+        async with self._quiet_lock:
+            if not self.services.running("agent"):
+                return
+            token = self.config().get("CONNECTOR_TOKEN", "")
+            if not token:
+                return
+            sdk = direct_base.sdk()
+            state = quiet.state()
+            body = sdk.canonical_body({"kind": "quiet", "quiet": state["quiet"], "why": state["why"]})
+            try:
+                async with httpx.AsyncClient(trust_env=False) as client:
+                    await client.post(self.services.agent_url + "/v1/quiet", content=body, timeout=10,
+                                      headers=sdk.signed_headers(body, token))
+            except httpx.HTTPError:
+                # A service starting or stopping: it looks for itself until the next time it is told.
+                pass
+
     def _runtime(self) -> Path:
         # Where the service keeps its state, read the way its own process gets
         # it: .env over this process's environment, else <home>/runtime.
@@ -804,25 +1037,26 @@ class Workspace:
         return runtime if runtime.is_absolute() else self.home / runtime
 
     def _name_owner(self) -> None:
-        """Tell the service who talks in this page's chat: its owner."""
+        """Tell the service who talks in this page's chats: its owner, one line per chat."""
         path = self._runtime() / access.PAGE_OWNER_FILE
         if self.home not in path.resolve().parents:
             return  # a runtime folder outside the home is not this page's to write
+        owners = "\n".join(chat.conversation for chat in self._all_chats())
         try:
-            if path.read_text(encoding="utf-8").strip() == self._conversation:
+            if path.read_text(encoding="utf-8").strip() == owners:
                 return
         except (OSError, UnicodeDecodeError):
             pass
         try:
-            atomic_write_text(path, self._conversation)
+            atomic_write_text(path, owners)
             os.chmod(path, 0o600)
         except OSError:
             pass
 
     async def forget_chat(self) -> dict:
-        """Forget everything this page's chats remember, the ones "New chat" left
-        behind included, then start a new one. What chats on the platforms
-        remember about the page's owner is kept."""
+        """Forget everything the main chat remembers, the chats it left behind
+        included, then start it anew. The plain chats the page still lists keep
+        theirs, and so do chats on the platforms."""
         async with self._chat_lock:
             chat = self._page_key()
             self._forgetting = True
@@ -834,7 +1068,8 @@ class Workspace:
     async def _forget(self, chat: str) -> dict:
         await asyncio.to_thread(self.services.start_agent)
         raw = await self._activity_call("POST", "/api/dashboard/memory/forget_chat",
-                                        json={"conv": chat, "earlier_page": True})
+                                        json={"conv": chat, "earlier_page": True,
+                                              "keep": [c.page_key() for c in self._chats.values()]})
         if raw is None:
             raise ValueError("activity_unavailable")
         if raw.get("off"):
@@ -1079,35 +1314,57 @@ class Workspace:
     def cancel(self) -> None:
         self._cancelled = True
 
-    async def chat(self, text: str, after: int | None = None, retry: int | None = None) -> dict:
-        """Send `text`; the reply, and every message since `after` in order,
-        including what the character sent on its own meanwhile. `retry` names
-        the unanswered message this one sends again, which then goes."""
+    async def chat(self, text: str, after: int | None = None, retry: int | None = None,
+                   chat: str = MAIN_CHAT, reply_to: str = "") -> dict:
+        """Send `text` in one chat; the reply, and every message since `after` in
+        order, including what the character sent on its own meanwhile. `retry`
+        names the unanswered message this one sends again, which then goes.
+        `reply_to` names a thing the character brought that this message answers."""
         if not self.config().get("LLM_API_KEY"):
             raise ValueError("key_required")
         if not text.strip():
             raise ValueError("generic")
         if len(text) > 8000:
             raise ValueError("invalid_message")
+        # What the character sends after its reply comes through the outbox: pulled from now on, quiet or not.
+        self._sent_at = time.monotonic()
+        self._outbox_wake.set()
         async with self._chat_lock:
+            room = self._chat(chat)
             self._name_owner()
             if retry is not None:
-                self._history = [m for m in self._history
-                                 if not (m.get("seq") == retry and m.get("failed"))]
+                room.history = [m for m in room.history
+                                if not (m.get("seq") == retry and m.get("failed"))]
+            if room is not self._main and not room.title:
+                room.title = " ".join(text.split())[:TITLE_FIRST]
+            # The character's own record of the chat holds only what was said in turns: what it
+            # shared since the person last spoke reaches it as quotes in this message.
+            quotes = self._quotes(room)
+            asked = {"role": "user", "text": text}
+            # The thing answered is quoted last, nearest the words about it, and shown in the message.
+            answered = next((m for m in reversed(room.history)
+                             if reply_to and (m.get("card") or {}).get("id") == reply_to), None)
+            if answered:
+                quotes = [q for q in quotes if q["message_id"] != f"shared-{answered['seq']}"]
+                quotes.append(self._quote(answered))
+                card = answered["card"]
+                asked["quote"] = {k: card.get(k) or "" for k in ("id", "title", "kind", "site", "picture")}
             # Recorded first, so a message sent on its own during the reply comes after it.
-            (said,) = self._append([{"role": "user", "text": text}])
+            (said,) = room.append([asked])
             try:
                 await asyncio.to_thread(self.services.start_agent)
                 items = await send_chat_items(self.services.agent_url, self.config().get("CONNECTOR_TOKEN", ""),
-                                              self._conversation, text, capabilities=["outbox"],
+                                              room.conversation, text, capabilities=["outbox"],
                                               # The outbox reaches only a conversation with a handle.
-                                              reply_handle=self._conversation)
+                                              reply_handle=room.conversation,
+                                              **({"segments": [*quotes, {"type": "text", "text": text}],
+                                                  "bot_id": PAGE_CHARACTER} if quotes else {}))
             except BaseException as error:
-                self._unanswered(said, chat_failure(error))
+                self._unanswered(said, chat_failure(error), room)
                 raise
             if any(item.get("reason") == "excuse" for item in items):
                 # The model failed: here the admin checks the setup, so it is reported, not chatted about.
-                self._unanswered(said, "chat_failed")
+                self._unanswered(said, "chat_failed", room)
                 raise RuntimeError("the model did not answer")
             entries = self._entries(items)
             command = self._memory_command(text) if entries else None
@@ -1115,20 +1372,42 @@ class Workspace:
                 # An answer to a memory command is shown whole at once, not typed out.
                 if command:
                     entry["command"] = command[0]
-            self._append(entries)
-            dropped, query = self._drop_forgotten(command, said, entries)
-            self._save_chat()
+            room.append(entries)
+            dropped, query = self._drop_forgotten(command, said, entries, room)
+            self._save_chat(room)
             if query:
                 # Activity's recent lines lose the words too.
                 with contextlib.suppress(ValueError):
                     await self._activity_call("POST", "/api/dashboard/memory/forget_recent",
-                                              json={"conv": self._page_key(), "query": query})
+                                              json={"conv": room.page_key(), "query": query})
             reply = "\n".join(str(i.get("text", "")) for i in items if i.get("type") == "text")
             if dropped:
                 # Earlier messages went: the page draws the chat afresh.
-                return {"reply": reply, "forgotLines": dropped, **self.history()}
+                return {"reply": reply, "forgotLines": dropped, **room.view()}
             since = said["seq"] - 1 if after is None else after
-            return {"reply": reply, **self.history(since)}
+            return {"reply": reply, **room.view(since)}
+
+    @staticmethod
+    def _quotes(room: PageChat) -> list[dict]:
+        """What the character shared in this chat since the person last spoke, as
+        the quoted messages of theirs that it reads: its sentence, then the card."""
+        shared = []
+        for message in reversed(room.history):
+            if message.get("role") == "user" and not message.get("failed"):
+                break
+            if (message.get("card") or {}).get("id"):
+                shared.append(Workspace._quote(message))
+        return shared[:SHARE_QUOTED][::-1]
+
+    @staticmethod
+    def _quote(message: dict) -> dict:
+        """One message that brought something, as a quote the character reads."""
+        card = message["card"]
+        # A thing it had no sentence for is said by its title: not twice.
+        title = card.get("title") if card.get("title") != message.get("text") else ""
+        facts = " · ".join(v for v in (card.get("kind"), title, card.get("site")) if v)
+        return {"type": "reply", "message_id": f"shared-{message['seq']}", "sender_id": PAGE_CHARACTER,
+                "text": " ".join(v for v in (message.get("text"), f"[{facts}]", card.get("excerpt")) if v)}
 
     def _memory_command(self, text: str):
         """(kind, argument, chat language) when the character reads `text` as a
@@ -1143,7 +1422,7 @@ class Workspace:
         except Exception:
             return None
 
-    def _drop_forgotten(self, command, said: dict, answer: list[dict]) -> tuple[int, str]:
+    def _drop_forgotten(self, command, said: dict, answer: list[dict], room: PageChat) -> tuple[int, str]:
         """After a forget the character carried out, the page's own record of
         the forgotten words goes too: each earlier message holding them and the
         replies that answered it. The command and its answer stay. How many
@@ -1166,7 +1445,7 @@ class Workspace:
             # As the character found its note: word for word, or in another form of the words.
             return exact(text) or _loosely_names(query, text, spec.stopwords)
 
-        rows = self._history
+        rows = room.history
         fixed = {id(said), *(id(e) for e in answer)}
         gone: set[int] = set()
         dropping = False
@@ -1194,14 +1473,14 @@ class Workspace:
                     and id(rows[first - 1]) not in fixed:
                 first -= 1
             gone.update(range(first, last + 1))
-        self._history = [m for i, m in enumerate(rows) if i not in gone]
+        room.history = [m for i, m in enumerate(rows) if i not in gone]
         return len(gone), query
 
-    def _unanswered(self, said: dict, code: str) -> None:
+    def _unanswered(self, said: dict, code: str, room: PageChat) -> None:
         """Kept, marked, so the person can see which message went unanswered and send it again."""
         said["failed"] = code
         with contextlib.suppress(OSError):
-            self._save_chat()
+            self._save_chat(room)
 
     def _activity_token(self) -> str:
         try:
@@ -1258,8 +1537,8 @@ class Workspace:
                   "kind": str(c.get("kind", "")), "last": c.get("last_activity", 0),
                   "observing": int(c.get("observing", 0)), "learned": int(c.get("learned", 0)),
                   "latest": float(c.get("latest") or 0), "notes": int(c.get("memories", 0)),
-                  # This page's chat now, as against one "New chat" left behind.
-                  "current": str(c.get("id", "")) == self._page_key()}
+                  # One of this page's chats now, as against one replaced or deleted.
+                  "current": str(c.get("id", "")) in {chat.page_key() for chat in self._all_chats()}}
                  for c in raw.get("conversations", [])]
         return {"running": True, "off": False, "chats": chats}
 
@@ -1272,7 +1551,7 @@ class Workspace:
             raise ValueError("activity_unavailable")
         shown = _activity_chat(raw)
         # An earlier page chat: what was learned there is no longer used.
-        if shown["platform"] == access.PAGE_PLATFORM and chat != self._page_key():
+        if shown["platform"] == access.PAGE_PLATFORM and chat not in {c.page_key() for c in self._all_chats()}:
             shown["retired"] = True
         return shown
 
@@ -1340,7 +1619,7 @@ class Workspace:
         return await self.activity_chat(chat)
 
     async def activity_forget_chat(self, payload: dict) -> dict:
-        """Forget all one chat remembers; this page's own chat also starts anew."""
+        """Forget all one chat remembers; one of this page's own chats also starts anew."""
         chat = str(payload.get("chat") or "")
         if not chat or len(chat) > 512:
             raise ValueError("invalid_chat")
@@ -1350,6 +1629,11 @@ class Workspace:
                                            json={"conv": chat})
         if result is None or result.get("off"):
             raise ValueError("activity_unavailable")
+        room = next((c for c in self._chats.values() if c.page_key() == chat), None)
+        if room is not None:
+            async with self._chat_lock:
+                room.reset()
+                self._save_chat(room)
         return {"ok": True, "forgotten": int(result.get("forgotten") or 0)}
 
     # -- the character's home and days
@@ -1406,21 +1690,134 @@ class Workspace:
         sent = {"id": ident, **({"kept": kept} if action == "keep" else {})}
         raw = await self._life_call("POST", f"/api/dashboard/days/{action}", json=sent)
         if raw is not None and raw.get("ok"):
-            return {"ok": True, "kept": bool(raw.get("kept"))}
-        item = life.mark(self._library(), ident, action, kept)
-        if item is None:
-            raise ValueError("item_gone")
-        return {"ok": True, "kept": item.state == life.KEPT}
+            done = bool(raw.get("kept"))
+        else:
+            item = life.mark(self._library(), ident, action, kept)
+            if item is None:
+                raise ValueError("item_gone")
+            done = item.state == life.KEPT
+        if action == "keep":
+            # A card in the main chat shows the same choice the next time it is drawn.
+            cards = [m["card"] for m in self._main.shared() if m["card"]["id"] == ident]
+            for card in cards:
+                card["liked"] = done
+            if cards:
+                self._save_chat()
+        return {"ok": True, "kept": done}
 
-    async def _say(self, items: list) -> dict:
-        """Bring things it saw into this chat as its own messages, each with its card."""
+    def fold_card(self, ident: str, action: str) -> None:
+        """A card turned down in the main chat (skip or hide_source) stays folded the next time it is drawn."""
+        cards = [m["card"] for m in self._main.shared() if m["card"]["id"] == ident]
+        for card in cards:
+            card["skipped"] = action
+        if cards:
+            self._save_chat()
+
+    async def _say(self, items: list, served: dict | None = None) -> dict:
+        """Bring things it saw into the main chat as its own messages, each with
+        its card; each is then seen in the feed and told, so neither the pet's
+        card nor this chat brings it again. `served`: the choice's fields by id: the
+        character's line, said as the message, and the ranking's slot; its rank is its
+        place in the batch. Without it, a find the pet's card showed keeps what the card was handed."""
+        from .panels import feed
+
+        served = feed.on_card if served is None else served
         since = self._seq
         if items:
-            self._append([life.said(item) for item in items])
+            messages = [life.said(item) for item in items]
+            for rank, (item, message) in enumerate(zip(items, messages)):
+                shaped = (served or {}).get(item.id, {})
+                if shaped.get("line"):
+                    message["text"] = shaped["line"]
+                if message.get("card"):
+                    message["card"].update(rank=rank, slot=shaped.get("slot", ""))
+            self._append(messages)
             self._save_chat()
-            for item in items:
+            for rank, item in enumerate(items):
+                await asyncio.to_thread(feed.remember, self._runtime(), item, "seen", surface="chat", rank=rank,
+                                        slot=(served or {}).get(item.id, {}).get("slot", ""))
                 await self.mark_item(item.id, "told")
         return {"count": len(items), **self.history(since)}
+
+    def _share_due(self) -> bool:
+        """Whether the share step brings something now, at the pace SHARE_* sets;
+        never before the first run is done."""
+        now = life.clock()
+        if not app_settings(self._history_path.parent).get("toured"):
+            return False
+        pace = self._share_pace(now)
+        first = pace["chat"] != self._main.tag()
+        return pace["count"] < SHARE_DAY and (first or now - pace["at"] >= SHARE_QUIET_S)
+
+    def _share_pace(self, now: float) -> dict:
+        """When the main chat last had things shared, which chat that was, and how many today."""
+        saved = sw._read_json(self._history_path.with_name(SHARE_FILE))
+        today = date.fromtimestamp(now).isoformat()
+        return {"at": float(saved.get("at") or 0), "chat": str(saved.get("chat") or ""),
+                "count": int(saved.get("count") or 0) if saved.get("day") == today else 0, "day": today}
+
+    async def share(self) -> int:
+        """The share step: the character's choice comes into the main chat as its
+        own message, once one is ready (the chooser wakes this step then). One at a
+        time with the chats: skipped while one is busy."""
+        if self._chat_lock.locked():
+            return 0
+        async with self._chat_lock:
+            if not await asyncio.to_thread(self._share_due):
+                return 0
+            chosen = await self.chooser.take("chat")
+            if chosen is None:
+                return 0
+            shaped, item = chosen
+            now = life.clock()
+            pace = self._share_pace(now)
+            atomic_write_text(self._history_path.with_name(SHARE_FILE),
+                              json.dumps({"at": now, "chat": self._main.tag(), "day": pace["day"],
+                                          "count": pace["count"] + 1}))
+            await self._say([item], {item.id: shaped})
+            return 1
+
+    async def share_loop(self) -> None:
+        """The share step every SHARE_EVERY_S, and at once when something new came in (found)."""
+        while not self._closed:
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._share_wake.wait(), SHARE_EVERY_S)
+            self._share_wake.clear()
+            await quiet.wait()
+            try:
+                await self.share()
+            except Exception:
+                traceback.print_exc()
+
+    def found(self) -> None:
+        """Something new came in (a sources round kept some, the tour ended): the
+        share step looks now, and so does the pet (news)."""
+        self._share_wake.set()
+        self.news()
+
+    def news(self) -> None:
+        """The window app replaces this to have the pet look at once (window.py)."""
+
+    async def bring(self, payload: dict) -> dict:
+        """One thing into the main chat (the pet's card opens it there): the message
+        that already carries it, else the character shares it now."""
+        item = self._item(payload)
+        async with self._chat_lock:
+            here = [m for m in self._main.shared() if m["card"]["id"] == item.id]
+            if not here:
+                await self._say([item])
+                here = [m for m in self._main.shared() if m["card"]["id"] == item.id]
+            return {"seq": here[-1]["seq"]}
+
+    async def remark(self, text: str) -> bool:
+        """A line of its own about what its person is doing, into the main chat; False while a chat is busy."""
+        if self._chat_lock.locked():
+            return False
+        async with self._chat_lock:
+            # The page draws a remark as a quiet aside, not a reply.
+            self._append([{"role": "assistant", "text": text, "remark": True}])
+            self._save_chat()
+        return True
 
     async def tell(self) -> dict:
         async with self._chat_lock:
@@ -1655,8 +2052,26 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
     @asynccontextmanager
     async def lifespan(app):
         later = [asyncio.create_task(workspace.outbox_loop())]
+        # Games and fullscreen in front: the background loops wait and the pet hides (quiet.py).
+        # The character service hears each change from here and does not look itself.
+        quiet.listen(lambda _state: asyncio.ensure_future(workspace.tell_quiet()))
+        # Mail and messages the character may not read: how many came is said from here (privacy.py).
+        app.state.privacy.attach()
+        later.append(asyncio.create_task(quiet.watch(workspace._runtime)))
+        # The public sources need no model and no service: they are read whenever the page runs.
+        later.append(asyncio.create_task(app.state.sources.loop()))
+        # The person's own mail and Discord are read on their own too, once connected.
+        later.append(asyncio.create_task(app.state.mail.loop()))
+        later.append(asyncio.create_task(app.state.discord.loop()))
+        # The other accounts connected in Settings › Connect (Discord is read by its own loop above).
+        later.append(asyncio.create_task(app.state.accounts.loop()))
+        # What the character found comes into the main chat at its own pace, whether or not it is open.
+        later.append(asyncio.create_task(workspace.share_loop()))
         if headless:
             later.append(asyncio.create_task(keep_running(workspace)))
+        else:
+            # Now and then a line about what the person is doing (remarks.py).
+            later.append(asyncio.create_task(app.state.remarks.loop()))
         try:
             if not headless and workspace.summary()["platforms"] and workspace.config().get("LLM_API_KEY"):
                 workspace.start_job("start")
@@ -1758,7 +2173,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
                    "field_required", "invalid_field", "invalid_persona", "invalid_feature",
                    "invalid_chat", "activity_unavailable", "activity_changed", "forget_needs_activity",
                    "activity_restore_gone", "activity_restore_exists",
-                   "avatar_type", "avatar_too_large", "local_only", "item_gone"}
+                   "avatar_type", "avatar_too_large", "local_only", "item_gone", "invalid_title"}
         error = str(exc)
         known = error in allowed or any(
             error in importlib.import_module(f"{__package__}.panels.{name}").ERRORS for name in PANELS)
@@ -1767,6 +2182,14 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
     @app.get("/")
     async def index(request: Request):
         # Another device sees the sign-in page until it has signed in.
+        if request.state.remote and not request.state.signed_in:
+            return FileResponse(ASSETS / "signin.html")
+        # The app: what the character found, and the chat.
+        return FileResponse(ASSETS / "app.html")
+
+    @app.get("/classic")
+    async def classic(request: Request):
+        # The earlier page: setup, the character, connecting apps.
         if request.state.remote and not request.state.signed_in:
             return FileResponse(ASSETS / "signin.html")
         return FileResponse(ASSETS / "index.html")
@@ -1828,14 +2251,23 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
 
     @app.get("/assets/{name}")
     async def asset(name: str):
-        if name not in ("welcome.js", "welcome.css", "pet.js", "pet.css", *SIGNIN_ASSETS):
+        if name not in (*PAGE_ASSETS, *SIGNIN_ASSETS):
             raise HTTPException(404)
         return FileResponse(ASSETS / name)
+
+    @app.get("/assets/figures/{name}")
+    async def pet_figure(name: str):
+        # A figure is a drawing (<key>.svg) or a sheet of frames cut from a painting (<key>.webp).
+        key, _, kind = name.rpartition(".")
+        path = ASSETS / "figures" / name
+        if key not in PET_FIGURES or kind not in ("svg", "webp") or not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, media_type="image/svg+xml" if kind == "svg" else "image/webp")
 
     @app.get("/assets/panels/{name}")
     async def panel_asset(name: str):
         stem, _, kind = name.rpartition(".")
-        if stem not in PANELS or kind not in ("js", "css"):
+        if stem not in PAGE_PANELS or kind not in ("js", "css"):
             raise HTTPException(404)
         return FileResponse(ASSETS / "panels" / name)
 
@@ -1986,7 +2418,8 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
 
         try:
             return await workspace.chat(str(payload.get("text") or ""), number(payload.get("after")),
-                                        number(payload.get("retry")))
+                                        number(payload.get("retry")), str(payload.get("chat") or MAIN_CHAT),
+                                        str(payload.get("reply_to") or ""))
         except ValueError:
             raise
         except Exception as error:
@@ -2005,8 +2438,36 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
         return await workspace.forget_chat()
 
     @app.get("/api/chat/history")
-    async def history(after: int | None = None):
-        return workspace.history(after)
+    async def history(after: int | None = None, chat: str = MAIN_CHAT):
+        if workspace._chat(chat) is workspace._main:
+            # Looked at: what the character found may come in now, when it is time.
+            try:
+                await workspace.share()
+            except Exception:
+                # The chat still opens with what it holds; the loop tries again.
+                traceback.print_exc()
+        return workspace.history(after, chat)
+
+    @app.post("/api/chat/bring")
+    async def bring(request: Request):
+        return await workspace.bring(await body(request))
+
+    @app.get("/api/chats")
+    async def chats():
+        return workspace.chats()
+
+    @app.post("/api/chats")
+    async def new_chat(request: Request):
+        await body(request)
+        return await workspace.new_chat()
+
+    @app.post("/api/chats/rename")
+    async def rename_chat(request: Request):
+        return await workspace.rename_chat(await body(request))
+
+    @app.post("/api/chats/delete")
+    async def delete_chat(request: Request):
+        return await workspace.delete_chat(await body(request))
 
     @app.get("/api/chat/picture/{name}")
     async def chat_picture(name: str):
@@ -2147,6 +2608,29 @@ def save_app_settings(desktop: Path, **changes) -> dict:
     return values
 
 
+def pet_figure(desktop: Path, config: dict) -> str:
+    """Which figure the pet is: the one chosen from its menu, else the character's own, else the home's default."""
+    settings = app_settings(desktop)
+    if settings.get("pet") in PET_FIGURES:
+        return settings["pet"]
+    avatar = config.get("PERSONA_AVATAR", "")
+    if avatar in PET_FIGURES:
+        return avatar
+    return settings.get("default_figure") if settings.get("default_figure") in PET_FIGURES else PET_FIGURES[0]
+
+
+def keep_default_figure(home: Path) -> None:
+    """Note once which figure the home has when none is chosen: a home set up
+    before Pico became the first keeps the one it had."""
+    desktop = home / "runtime" / "desktop"
+    settings = app_settings(desktop)
+    if "default_figure" in settings:
+        return
+    older = settings.get("toured") or (home / "persona.txt").is_file()
+    desktop.mkdir(parents=True, exist_ok=True)
+    save_app_settings(desktop, default_figure=OLD_DEFAULT_FIGURE if older else PET_FIGURES[0])
+
+
 def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Path,
                      hidden: bool = False) -> None:
     """The page in its own window on this thread, the server behind it on another."""
@@ -2159,16 +2643,28 @@ def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Pat
                           "until you open it again. Close it?")
 
     def words() -> dict:
-        return {"open": langs.term("Open personagent"), "quit": langs.term("Quit"),
+        return {"open": langs.term("Open personagent"), "quit": langs.term("Quit"), "pet": langs.term("Show the pet"),
                 "still": langs.term("personagent is still running here, and the character keeps answering.")}
+
+    def figure() -> str:
+        return pet_figure(desktop, app.state.workspace.config())
+
+    def figures() -> list[tuple[str, str]]:
+        from .panels import look
+        return [(row["key"], row["name"]) for row in look.names(langs.terminal_lang())]
 
     window = appwindow.AppWindow(
         url, storage=desktop / "webview", confirm=confirm, words=words,
         background=lambda: bool(app_settings(desktop).get("background")),
         # Hidden only makes sense where closing can hide too.
         start_hidden=hidden and bool(app_settings(desktop).get("background")),
-        pet=True)
+        pet=True, figure=figure, figures=figures,
+        choose=lambda key: save_app_settings(desktop, pet=key))
     app.state.window = window
+    # The window's pages are told of a chat or a figure that changed, or of something found, and need not keep asking.
+    app.state.workspace.chat_changed = lambda: window.chats_changed()
+    app.state.workspace.figure_changed = lambda: window.refigure()
+    app.state.workspace.news = lambda: window.pet_look()
 
     def stop() -> None:
         server.should_exit = True
@@ -2212,6 +2708,8 @@ def main(argv: list[str] | None = None, prog: str = "personagent start") -> int:
     if args.terminal:
         return sw.start_main([])
     home = homes.find_home()
+    # Before anything is written in it: app.log and welcome.json hold the page's token link.
+    sw.secure_home(home)
     desktop = home / "runtime" / "desktop"
     # Started by pythonw, as the shortcut does: no terminal, so sentences go to
     # a log and a refusal to a dialog.
@@ -2286,6 +2784,7 @@ def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], l
         notice = updates.line(updates.notice(home))
         if notice:
             print(langs.term(notice), flush=True)
+        keep_default_figure(home)
         app = create_app(home, token, gate=pageaccess.gate_for(home, settings))
         server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=port, log_level="warning"))
         if windowed:

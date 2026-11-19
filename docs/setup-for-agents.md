@@ -35,7 +35,7 @@ Ask these in one message, with the defaults shown, and accept "use the defaults"
 | Question | Default | Becomes |
 |---|---|---|
 | Which language should the character speak? English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português (Brasil) or Русский | the language the user writes to you in | `--lang` with `en`, `zh`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `de`, `pt-BR` or `ru`. `personagent init --help` lists the codes the installed version takes |
-| The character's name. It answers when its name comes up in a chat | `小夏` (both Chinese), `ノヴァ` (Japanese), `노바` (Korean), `Нова` (Russian), `Nova` (the others); with `chatgpt`, `deepseek` or `claude`, the character's own name: `ChatGPT`, `DeepSeek` or `Claude` | `--name` |
+| The character's name. It answers when its name comes up in a chat | `小夏` (both Chinese), `ノヴァ` (Japanese), `노바` (Korean), `Нова` (Russian), `Nova` (the others); with `pico`, `Pico` (`皮可` in Chinese); with `chatgpt`, `deepseek` or `claude`, the character's own name: `ChatGPT`, `DeepSeek` or `Claude` | `--name` |
 | Its personality: one of the table below, or their own description | warm listener (`warm-listener`) | `--persona` (table below), or your own `persona.txt` (step 4) |
 | Which model service do they have, or want, an API key for? | OpenRouter's free models | `--provider` (table below) |
 | Where should the home folder live? | `~/personagent` (on Windows `C:\Users\<name>\personagent`) | `<home>` |
@@ -64,6 +64,7 @@ Personalities:
 
 | `--persona` | Character | 中文 |
 |---|---|---|
+| `pico` | Pico the robot: small, curious and warm, takes words a little literally | 机器人皮可 |
 | `dry-wit` | Dry-witted friend: deadpan, short replies, teases lightly | 冷面损友 |
 | `warm-listener` | Warm listener: asks how you are, remembers the small things | 温和的倾听者 |
 | `gamer` | Gamer: co-op shooters and roguelikes, friendly trash talk | 游戏伙伴 |

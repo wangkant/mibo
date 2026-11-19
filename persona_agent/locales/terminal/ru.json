@@ -680,5 +680,8 @@
 "Nothing approved or declined has that id. Run `{0}` to see the ids.": "Нет одобренного или отклонённого чата с этим идентификатором. Выполните `{0}`, чтобы увидеть идентификаторы.",
 "ACCESS_APPROVAL_PLATFORMS is set in the environment, which overrides .env; change it there.": "ACCESS_APPROVAL_PLATFORMS задана в окружении, которое имеет приоритет над .env; измените её там.",
 "forget an approval or a decline, so the chat asks again": "отменяет одобрение или отклонение, и чат снова отправляет запрос",
-"the chat's id, as the list shows it": "идентификатор чата, как он показан в списке"
+"the chat's id, as the list shows it": "идентификатор чата, как он показан в списке",
+"Show the pet": "Показать питомца",
+"--accept-risk applies only to connecting bilibili or youtube": "--accept-risk действует только при подключении bilibili или youtube",
+"bilibili, youtube: accept the risks of using a personal account, which connecting otherwise asks about": "bilibili, youtube: принять риски использования личного аккаунта (иначе об этом спросят при подключении)"
 }

@@ -279,7 +279,8 @@ def failure_sentence(error: BaseException) -> str:
     """What a failed probe means and what to check, in one sentence for
     langs.term; '' when the raw detail says more."""
     if isinstance(error, urllib.error.HTTPError):
-        host = urlsplit(error.url or "").netloc or "the service"
+        # filename is the request's URL on every HTTPError; .url needs a response body behind it.
+        host = urlsplit(error.filename or "").netloc or "the service"
         if error.code in (401, 403):
             return (f"{host} refused the key (HTTP {error.code}). "
                     "Check the key for this service in .env.")

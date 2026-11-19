@@ -24,18 +24,19 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, NamedTuple, Optional
 from urllib.parse import parse_qs, urljoin, urlsplit
 
-from . import people, visits
+from . import people, profile, quiet, situation, visits
 from .direct import browser as web
 from .ingestion import MAX_IMAGE_PIXELS, _RESERVED_LOCAL_NAMES, _is_internal_ip, _resolve_public_target
 from .library import PICTURE_MAX_BYTES, TEXT_MAX, Item, Library, item_id
 from .llm import purpose
+from .panels.feed import site_taste
 from .storage import atomic_write_text
 from .textproc import (SLEEP_HOUR_END, SLEEP_HOUR_START, _UNTRUSTED_INPUT_RULES, _WEB_DESC_CLOSE,
                        _WEB_DESC_OPEN, _clean_prompt_source, _env_tz_offset, _fence_user_data,
-                       strip_json_fences)
+                       default_tz_offset, parse_tz_offset, strip_json_fences)
 
 logger = logging.getLogger("personagent.roam")
 
@@ -47,7 +48,9 @@ PLAYER_HOSTS = ("www.youtube-nocookie.com", "player.bilibili.com", "player.vimeo
 IDLE_S = 300.0
 OPEN_MS = 20_000
 SETTLE_S = 1.5
+# The shortest and the longest the walk loop sleeps between looks.
 TICK_S = 30.0
+NAP_S = 1800.0
 FIRST_WALK_S = 120.0
 #: The owner may send it out again this long after it came back.
 REQUEST_GAP_S = 1800.0
@@ -57,6 +60,20 @@ PICTURE_FETCH_MAX = 8_000_000
 DESCRIPTION_MAX = 1000
 PROMPT_EXCERPT = 400
 WHY_MAX = 200
+TAGS_MAX, TAG_LEN = 5, 30
+# The batched judgement of what the sources brought: JUDGE_TOP of the ranking's best unjudged things
+# and as many drawn at random, at most JUDGE_DAY calls a day and JUDGE_GAP_S apart, in waking hours.
+JUDGE_TOP, JUDGE_RANDOM = 8, 8
+JUDGE_MIN = 8
+JUDGE_DAYS = 3
+JUDGE_DAY = 4
+JUDGE_GAP_S = 3 * 3600
+JUDGE_EXCERPT = 160
+# What the character's sentence may and may not say; the label under it says what the ranking used.
+_WHY_RULE = ("The why is one sentence in your own voice about what you yourself see in it. Never say the owner "
+             "opened, liked or asked for something like it, and never mention scores or rankings.")
+_ROW = ('{"n": <number>, "fits": true or false, "love": <0-3, how much you yourself love it>, '
+        '"tags": ["<3-5 short English lowercase tags>"], "why": "<one sentence>"}')
 
 _KNOWN_SITES = {"bilibili.com": "Bilibili", "b23.tv": "Bilibili", "youtube.com": "YouTube",
                 "youtu.be": "YouTube"}
@@ -552,6 +569,7 @@ class Roam:
         self.pause = (3.0, 8.0)
         self.settle_s = SETTLE_S
         self._requested = False
+        self._wake = asyncio.Event()
         self._walking = False
         self._topics: list[str] = []
         if self.library.outing().state == "out":
@@ -570,10 +588,7 @@ class Roam:
         return ""
 
     def _asleep(self, now: float) -> bool:
-        hour = datetime.fromtimestamp(now, timezone(timedelta(hours=_env_tz_offset()))).hour
-        if SLEEP_HOUR_START <= SLEEP_HOUR_END:
-            return SLEEP_HOUR_START <= hour < SLEEP_HOUR_END
-        return hour >= SLEEP_HOUR_START or hour < SLEEP_HOUR_END
+        return asleep(now, _env_tz_offset())
 
     def _walks_today(self, now: float) -> int:
         outing = self.library.outing()
@@ -602,8 +617,21 @@ class Roam:
         return not code, code
 
     def request(self) -> None:
-        """Go at the next tick, sooner than the walks' own spacing allows."""
+        """Go now, sooner than the walks' own spacing allows."""
         self._requested = True
+        self._wake.set()
+
+    def _nap(self, now: float) -> float:
+        """Seconds the loop sleeps: until a walk may be due, or the reader's browser
+        has been idle long enough to close, at most NAP_S and at least TICK_S.
+        Asleep or out of walks for the day, NAP_S: a walk a little late is no matter."""
+        times = [NAP_S]
+        if not self._held(now):
+            last = self.library.outing().last_end
+            times.append(max(self.started + FIRST_WALK_S, last + self.settings.roam_gap_h * 3600) - now)
+        if self.visitor.context is not None:
+            times.append(self.visitor.used + IDLE_S - self.visitor.clock())
+        return max(TICK_S, min(times))
 
     def _due(self, now: float) -> bool:
         if self._held(now):
@@ -617,9 +645,16 @@ class Roam:
         code = self.available()
         if code or not self.settings.roam_enabled:
             logger.info("roam: walks are off (%s)", code or OFF)
+            # No browser support, no model, or switched off: each comes back only with a restart of
+            # the service (a new install, or a settings save), so there is nothing to wake for.
+            return
         try:
             while True:
-                await asyncio.sleep(TICK_S)
+                # Asleep, out of walks for the day or just back, a look at the next wake is enough.
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(self._wake.wait(), self._nap(self.clock()))
+                self._wake.clear()
+                await self._hush()
                 try:
                     await self.tick()
                 except asyncio.CancelledError:
@@ -749,8 +784,8 @@ class Roam:
         return [text for _, text in rows if text][:40]
 
     def _topic(self, notes: list[str]) -> str:
-        """An interest named in a note, as a few search words, never the note itself."""
-        found = []
+        """An interest named in a note, or one of the profile's walk words; a few search words, never the note itself."""
+        found = [w for w in profile.load(self.library.root.parent)["walk_words"] if w not in self._topics]
         for note in notes:
             for pattern in (_INTEREST_ZH, _INTEREST_EN):
                 match = pattern.search(note)
@@ -768,12 +803,33 @@ class Roam:
         lang = "zh" if str(getattr(self.agent, "agent_lang", "en")) == "zh" else "en"
         topic = self._topic(self._owner_notes())
         if topic:
-            searches = [("Bilibili", "bilibili_search", topic), ("YouTube", "youtube_search", topic)]
-            return _Plan(searches if lang == "zh" else searches[::-1], topic)
-        return _Plan([("Bilibili", "bilibili_hot", ""),
-                      ("YouTube", "youtube_search", random.choice(_GENERAL[lang]))])
+            plan = _Plan([("Bilibili", "bilibili_search", topic), ("YouTube", "youtube_search", topic)], topic)
+        else:
+            plan = _Plan([("Bilibili", "bilibili_hot", ""),
+                          ("YouTube", "youtube_search", random.choice(_GENERAL[lang]))])
+        from . import taste
+        runtime = self.library.root.parent
+        # A site that cannot be reached from here, or showed visitors a wall lately, is left out until it is due
+        # a retry; the rest go by where the person is, then what they do with each site's finds: the taste
+        # model's sampled coefficient for the site, or the feed's points for it while the model is off.
+        plan.sources = [s for s in plan.sources if situation.walkable(runtime, self._list_host(s[1]))]
+        if taste.enabled(runtime):
+            sampler = taste.Sampler(taste.load(runtime), taste.Priors(runtime), random.getrandbits(32))
+            learned = {site: sampler.theta("origin:site:" + site) for site, _, _ in plan.sources}
+        else:
+            learned = site_taste(runtime)
+        plan.sources.sort(key=lambda s: -(situation.walk_prior(runtime, s[0]) + learned.get(s[0], 0.0)))
+        return plan
+
+    def _ui_lang(self) -> str:
+        return str(getattr(self.agent, "chat_lang", "") or getattr(self.agent, "agent_lang", "") or "en")
+
+    def _list_host(self, name: str) -> str:
+        """The host a walk's list is read from."""
+        return _host(self.bases[{"bilibili_hot": "bilibili", "bilibili_search": "bilibili_search"}.get(name, "youtube")])
 
     async def _list(self, name: str, words: str) -> list[visits.Found]:
+        runtime, host = self.library.root.parent, self._list_host(name)
         async with self.visitor.page() as page:
             try:
                 if name == "bilibili_hot":
@@ -782,10 +838,16 @@ class Roam:
                     found, wall = await visits.bilibili_search(page, words, base=self.bases["bilibili_search"],
                                                                video_base=self.bases["bilibili"])
                 else:
-                    found, wall = await visits.youtube_search(page, words, base=self.bases["youtube"])
+                    found, wall = await visits.youtube_search(page, words, base=self.bases["youtube"],
+                                                              **situation.youtube_place(runtime, self._ui_lang()))
             except Exception as exc:
                 logger.info("roam: the list %s did not open (%s)", name, type(exc).__name__)
+                # Chromium's own connection errors say the site cannot be reached from here.
+                if situation.navigation_failed(exc):
+                    situation.record(runtime, host, False)
                 return []
+        situation.record(runtime, host, True)
+        situation.record_wall(runtime, host, bool(wall))
         if wall:
             logger.info("roam: %s shows a %s wall to visitors; nothing is read there", name, wall)
         return found
@@ -813,7 +875,8 @@ class Roam:
                     self.library.at(site)
                 lists.append(found)
                 await self._rest()
-            if plan.topic and not any(lists) and self._may_visit("Bilibili", now):
+            if (plan.topic and not any(lists) and self._may_visit("Bilibili", now)
+                    and situation.walkable(self.library.root.parent, self._list_host("bilibili_hot"))):
                 lists.append(await self._list("bilibili_hot", ""))
                 self._count_page("Bilibili", now)
             wanted = random.randint(3, max(3, self.settings.roam_pages))
@@ -831,9 +894,10 @@ class Roam:
                     if found.site not in sites:
                         sites.append(found.site)
                 await self._rest()
-            for index, why, fits in await self._choose(read):
-                chosen = read[index]
-                chosen.item.outing, chosen.item.why, chosen.item.fits = outing, why, fits
+            for choice in await self._choose(read):
+                chosen = read[choice.index]
+                chosen.item.outing, chosen.item.why, chosen.item.fits = outing, choice.why, choice.fits
+                chosen.item.love, chosen.item.tags, chosen.item.judged = choice.love, list(choice.tags), choice.love >= 0
                 chosen.item.seen_at = int(now)
                 if chosen.picture:
                     chosen.item.picture = self.library.save_picture(chosen.item.id, chosen.picture)
@@ -847,23 +911,31 @@ class Roam:
 
     async def _rest(self) -> None:
         await asyncio.sleep(random.uniform(*self.pause))
+        await self._hush()
 
-    async def _choose(self, read: list[_Read]) -> list[tuple[int, str, bool]]:
-        """Which pages to keep, why, and whether each fits the owner, asked of the model once."""
+    async def _hush(self) -> None:
+        """While quiet nothing walks: the browser closes, and opens again after."""
+        if quiet.active():
+            await self.visitor.stop()
+            await quiet.wait()
+
+    async def _choose(self, read: list[_Read]) -> list[Choice]:
+        """Which pages to keep, and for each why, whether it fits the owner, how much the character
+        loves it and its tags, asked of the model once."""
         if not read:
             return []
         try:
             system, user = self._prompt(read)
             with purpose("roam"):
                 answer = await self.agent._call_llm(system, [{"role": "user", "content": user}], self.agent.model,
-                                                    max_tokens=600, enable_search=False, disable_thinking=True,
+                                                    max_tokens=900, enable_search=False, disable_thinking=True,
                                                     temperature=0.4, json_object=True)
-            chosen = parse_choice(answer, len(read))
+            chosen = parse_choice(answer, len(read), KEEP_MAX)
         except Exception as exc:
             logger.warning("roam: the model did not choose (%s)", type(exc).__name__)
             chosen = None
         if chosen is None:
-            return [(n, "", n == 0) for n in range(min(KEEP_MAX, len(read)))]
+            return [Choice(n, "", n == 0) for n in range(min(KEEP_MAX, len(read)))]
         return chosen
 
     def _prompt(self, read: list[_Read]) -> tuple[str, str]:
@@ -875,10 +947,9 @@ class Roam:
             f"You are {name or 'the character described below'}.\n{persona}\n\n"
             "You have just been out on the web as a visitor and read the pages listed below. Choose at most "
             f"{KEEP_MAX} worth keeping. For each, write one sentence in {NAMES.get(lang, lang)}, in your own "
-            "voice, on why you stopped there, and say whether it fits your owner, judged by what you know about "
-            "them. Answer with JSON only: "
-            '{"keep": [{"n": <page number>, "why": "<one sentence>", "fits": true or false}]}. '
-            "An empty list is allowed.\n\n" + _UNTRUSTED_INPUT_RULES)
+            "voice, on why you stopped there, say whether it fits your owner, judged by what you know about "
+            "them, how much you yourself love it (0-3), and 3-5 tags. " + _WHY_RULE + " Answer with JSON only: "
+            '{"items": [' + _ROW + ']}. An empty list is allowed.\n\n' + _UNTRUSTED_INPUT_RULES)
         notes = self._owner_notes()[:15]
         pages = []
         for number, page in enumerate(read, 1):
@@ -888,8 +959,37 @@ class Roam:
                          f"{excerpt}")
         user = ("What you know about your owner:\n"
                 + (_fence_user_data("\n".join(f"- {n}" for n in notes)) if notes else "(nothing yet)")
+                + "\n\n" + knowing(self.library.root.parent, self.clock())
                 + "\n\nThe pages:\n" + fence_pages("\n\n".join(pages)))
         return system, user
+
+
+class Choice(NamedTuple):
+    """The character's judgement of one page: `love` is -1 when it did not say."""
+    index: int
+    why: str
+    fits: bool
+    love: int = -1
+    tags: tuple = ()
+
+
+def asleep(now: float, offset_hours: float) -> bool:
+    hour = datetime.fromtimestamp(now, timezone(timedelta(hours=offset_hours))).hour
+    if SLEEP_HOUR_START <= SLEEP_HOUR_END:
+        return SLEEP_HOUR_START <= hour < SLEEP_HOUR_END
+    return hour >= SLEEP_HOUR_START or hour < SLEEP_HOUR_END
+
+
+def knowing(runtime: Path, now: float) -> str:
+    """The profile's text about the owner, what the character came to like from them, and their situation today."""
+    known = profile.load(runtime)
+
+    def block(title: str, text: str) -> str:
+        return f"{title}:\n" + (_fence_user_data(text) if text.strip() else "(nothing yet)")
+
+    return "\n\n".join([block("Your notes about your owner", known["owner"]),
+                        block("Things your owner showed you that you came to like", known["character_learned"]),
+                        "Their situation:\n" + (situation.notes(runtime, now) or "(unknown)")])
 
 
 def fence_pages(text: str) -> str:
@@ -898,29 +998,146 @@ def fence_pages(text: str) -> str:
     return f"{_WEB_DESC_OPEN}[external_web_pages]\n{cleaned}\n[/external_web_pages]{_WEB_DESC_CLOSE}"
 
 
-def parse_choice(answer: Any, count: int) -> Optional[list[tuple[int, str, bool]]]:
-    """[(page index, why, fits)] from the model's answer, or None when it is not exactly the asked form."""
+def parse_choice(answer: Any, count: int, limit: int = KEEP_MAX) -> Optional[list[Choice]]:
+    """The valid rows of the model's answer, at most `limit`, each page once; a row that is not
+    in the asked form is left out. None when the answer is not the asked JSON at all."""
     try:
         value = json.loads(strip_json_fences(str(answer or "")))
     except ValueError:
         return None
-    keep = value.get("keep") if isinstance(value, dict) else None
-    if not isinstance(keep, list) or len(keep) > KEEP_MAX:
+    rows = (value.get("items", value.get("keep")) if isinstance(value, dict) else None)
+    if not isinstance(rows, list):
         return None
     chosen, seen = [], set()
-    for row in keep:
-        if not isinstance(row, dict):
-            return None
-        number, why, fits = row.get("n"), row.get("why"), row.get("fits")
+    for row in rows:
+        if not isinstance(row, dict) or len(chosen) >= limit:
+            continue
+        number, why, fits, love = row.get("n"), row.get("why"), row.get("fits"), row.get("love", -1)
         if (isinstance(number, bool) or not isinstance(number, int) or not 1 <= number <= count
-                or number in seen or not isinstance(why, str) or not isinstance(fits, bool)):
-            return None
+                or number in seen or not isinstance(why, str) or not isinstance(fits, bool)
+                or isinstance(love, bool) or love not in (-1, 0, 1, 2, 3)):
+            continue
         why = " ".join(why.split())
         if not why or len(why) > WHY_MAX:
-            return None
+            continue
+        tags = row.get("tags") if isinstance(row.get("tags"), list) else []
+        tags = list(dict.fromkeys(t for t in (" ".join(str(x).split()).lower()[:TAG_LEN] for x in tags
+                                               if isinstance(x, str)) if t))[:TAGS_MAX]
         seen.add(number)
-        chosen.append((number - 1, why, fits))
+        chosen.append(Choice(number - 1, why, fits, int(love), tuple(tags)))
     return chosen
+
+
+# ---------------------------------------------------------------- the judgement of what sources bring
+
+def _judged(runtime: Path) -> dict:
+    """When the last judgement was asked for, and how many were asked for today."""
+    try:
+        saved = json.loads((Path(runtime) / profile.CALLS_FILE).read_text(encoding="utf-8")).get("judge") or {}
+    except (OSError, ValueError, AttributeError):
+        saved = {}
+    return saved if isinstance(saved, dict) else {}
+
+
+def _claim(runtime: Path, now: float) -> None:
+    path = Path(runtime) / profile.CALLS_FILE
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        saved = {}
+    day = time.strftime("%Y-%m-%d", time.localtime(now))
+    was = _judged(runtime)
+    saved["judge"] = {"at": now, "day": day, "today": (int(was.get("today") or 0) if was.get("day") == day else 0) + 1}
+    Path(runtime).mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps(saved, ensure_ascii=False))
+
+
+def candidates(runtime: Path, now: float, rng: random.Random) -> list[Item]:
+    """What to judge: JUDGE_TOP of the ranking's best unseen, unjudged things of the last JUDGE_DAYS,
+    JUDGE_RANDOM of the rest at random, in one shuffle; [] when fewer than JUDGE_MIN wait."""
+    from .panels import feed
+    path = Path(runtime) / feed.TASTE_FILE
+    waiting = [item for shaped, item in feed.ranked(Library(runtime), feed._load(path), now, feed.load_topics(path))
+               if not shaped["seen"] and not getattr(item, "judged", False)
+               and item.seen_at >= now - JUDGE_DAYS * 86400]
+    if len(waiting) < JUDGE_MIN:
+        return []
+    rest = waiting[JUDGE_TOP:]
+    picked = waiting[:JUDGE_TOP] + rng.sample(rest, min(JUDGE_RANDOM, len(rest)))
+    rng.shuffle(picked)
+    return picked
+
+
+def judge_prompt(runtime: Path, home: Path, values: dict, picked: list[Item], now: float) -> tuple[str, str]:
+    from .langs import NAMES
+    name, persona, lang = profile.character(home, values)
+    system = (
+        f"You are {name}.\n{persona[:1500]}\n\n"
+        "Below are things the places you read for your owner brought in. For each one, say whether it fits "
+        "your owner, judged by what you know about them, how much you yourself love it (0-3), 3-5 tags, and "
+        f"one sentence in {NAMES.get(lang, lang)}, in your own voice, on what you make of it. " + _WHY_RULE
+        + ' Answer with JSON only, one row per thing: {"items": [' + _ROW + "]}.\n\n" + _UNTRUSTED_INPUT_RULES)
+    rows = []
+    for number, item in enumerate(picked, 1):
+        excerpt = " ".join((item.description or item.text).split())[:JUDGE_EXCERPT]
+        rows.append(f"{number}. [{item.kind}] {item.title}\nsite: {item.site}\nauthor: {item.author or '-'}\n{excerpt}")
+    # Before the first rewrite the notes about the owner are not in the profile's text yet.
+    notes = [] if profile.rewritten(runtime) else profile._owner_notes(runtime, values)
+    known = ("What you remember of your owner:\n" + _fence_user_data("\n".join(f"- {n}" for n in notes)) + "\n\n"
+             if notes else "")
+    return system, known + knowing(runtime, now) + "\n\nThe things:\n" + fence_pages("\n\n".join(rows))
+
+
+async def judge(runtime: Path, home: Optional[Path] = None, now: Optional[float] = None,
+                rng: Optional[random.Random] = None) -> int:
+    """After a round: the profile's own rewrite when due, then one batched judgement of what the
+    sources brought when enough waits, written to the library. How many things were judged.
+    `home` is the folder of the .env the model is read from, runtime's parent unless given."""
+    runtime = Path(runtime)
+    home = runtime.parent if home is None else Path(home)
+    # Before the clock is read: a long game would leave `now` hours old.
+    await quiet.wait()
+    now = time.time() if now is None else now
+    values = profile.values_of(home)
+    if not profile.configured(values):
+        return 0
+    await profile.refresh(runtime, home, now)
+    was = _judged(runtime)
+    today = int(was.get("today") or 0) if was.get("day") == time.strftime("%Y-%m-%d", time.localtime(now)) else 0
+    offset = parse_tz_offset(values.get("PERSONA_TZ_OFFSET_HOURS", ""))
+    if (today >= JUDGE_DAY or now - float(was.get("at") or 0) < JUDGE_GAP_S
+            or asleep(now, default_tz_offset() if offset is None else offset)
+            or situation.value(runtime, "metered")):
+        return 0
+    # Ranking the library and reading files is slow work: off the app's loop, which serves the page.
+    picked = await asyncio.to_thread(candidates, runtime, now, rng or random.Random())
+    if not picked:
+        return 0
+    _claim(runtime, now)
+    system, user = await asyncio.to_thread(judge_prompt, runtime, home, values, picked, now)
+    try:
+        answer = await profile.ask(runtime, home, values, "judge", system, user, max_tokens=2000, now=now)
+    except Exception as exc:
+        logger.warning("roam: the judgement did not come back (%s)", type(exc).__name__)
+        return 0
+    done = await asyncio.to_thread(_write_judgement, Library(runtime), picked,
+                                   parse_choice(answer, len(picked), len(picked)) or [])
+    logger.info("roam: judged %d of %d things the sources brought", done, len(picked))
+    return done
+
+
+def _write_judgement(library: Library, picked: list[Item], choices: list[Choice]) -> int:
+    """Each answered row into the library; a thing asked about with no usable row is marked asked, so the
+    next judgement does not ask again. How many were answered."""
+    answered = {choice.index: choice for choice in choices if choice.love >= 0}
+    for n, item in enumerate(picked):
+        choice = answered.get(n)
+        if choice:
+            library.change(item.id, love=choice.love, tags=list(choice.tags), judged=True,
+                           why=choice.why, fits=choice.fits)
+        else:
+            library.change(item.id, judged=True)
+    return len(answered)
 
 
 def _interleave(lists: list[list[visits.Found]]) -> list[visits.Found]:

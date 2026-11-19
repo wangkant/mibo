@@ -1,7 +1,13 @@
 /* The pet: the character alone in a small window with nothing behind it.
-   The window leaves out one colour, a step from the outline (PET_KEY in
-   window.py), so every shape that meets the outside carries the outline
-   colour and nothing here is half transparent. */
+   The page is drawn over the desktop as it is, and the window takes the
+   pointer only round the figure and its card (window.py).
+
+   A figure is one of the files under figures/, put in by pet.js. A sheet
+   (.sheet) is four frames cut from a painting, rest, blink, talk and look:
+   this sheet swaps them and moves the whole figure, which has no limbs of
+   its own. A drawing shares one skeleton (.figure > .leg.left, .leg.right,
+   .torso > .arm.left, .arm.right, .face > .eyes.open/.glad/.shut,
+   .mouth.smile/.oh) and carries its own colours: this sheet only moves it. */
 html,
 body {
   margin: 0;
@@ -10,86 +16,102 @@ body {
   overflow: hidden;
   background: transparent;
   user-select: none;
-  cursor: grab;
 }
+/* The figure keeps the window's bottom corner: a card beside it grows the
+   window away from it (window.py), on the left unless the screen ends there. */
 .pet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   width: 160px;
   height: 190px;
+  cursor: grab;
+  touch-action: none;
+}
+body.card-right .pet {
+  right: auto;
+  left: 0;
 }
 .pet.held {
   cursor: grabbing;
 }
-svg {
+/* Peeking over the app window, the window is only the strip from above the
+   head to under the eyes; the figure hangs from its top by --peek-top (pet.js),
+   and the rest of it is below the window's bottom, behind the app window. */
+.pet.peek {
+  top: var(--peek-top, -10px);
+  right: auto;
+  bottom: auto;
+  left: 0;
+  cursor: pointer;
+}
+.actor,
+.figure-box {
+  position: absolute;
+  inset: 0;
+}
+.pet svg {
   display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 svg * {
   transform-box: fill-box;
 }
-
-/* ---- how it is drawn */
-.body {
-  fill: #a9c4ff;
-  stroke: #3d4f8a;
-  stroke-width: 2.5;
-}
-.belly {
-  fill: #f4f7ff;
-}
-.arm,
-.leg rect {
-  fill: #8eaef5;
-  stroke: #3d4f8a;
-  stroke-width: 2.5;
-}
-.stem {
-  fill: none;
-  stroke: #3d4f8a;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-.leaf {
-  fill: #6cc48a;
-  stroke: #3d4f8a;
-  stroke-width: 2;
-  stroke-linejoin: round;
-}
-.blush {
-  fill: #ff9bb0;
-  opacity: 0.55;
-}
-.eye ellipse {
-  fill: #26304f;
-}
-.glint {
-  fill: #fff;
-}
-.eyes.glad path,
-.eyes.shut path,
-.mouth.smile {
-  fill: none;
-  stroke: #26304f;
-  stroke-width: 2.8;
-  stroke-linecap: round;
-}
-.mouth.oh {
-  fill: #26304f;
-}
-.dots circle {
-  fill: #3d4f8a;
-}
-.zz text {
-  fill: #3d4f8a;
-  font: 700 15px system-ui, sans-serif;
-}
-.eyes.glad,
-.eyes.shut,
-.mouth.oh,
 .dots,
 .zz {
   display: none;
 }
+.zz text {
+  font: 700 15px system-ui, sans-serif;
+}
 
-/* ---- at rest: it breathes, blinks, and its leaves sway */
+/* ---- out of sight below the window's bottom, and back up with a little overshoot */
+.pet.away .actor {
+  transform: translateY(110%);
+  transition: transform 0.22s ease-in;
+}
+.pet.rise .actor {
+  animation: rise 0.52s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes rise {
+  0% {
+    transform: translateY(110%);
+  }
+  62% {
+    transform: translateY(-7px);
+  }
+  82% {
+    transform: translateY(2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+/* Peeking: now and then it sinks a little, and patted it ducks and pops up. */
+.pet.sink .actor {
+  animation: sink 1.6s ease-in-out;
+}
+@keyframes sink {
+  30%,
+  65% {
+    transform: translateY(16px);
+  }
+}
+.pet.pat .actor {
+  animation: duck 0.48s ease-in-out;
+}
+@keyframes duck {
+  40% {
+    transform: translateY(48%);
+  }
+  75% {
+    transform: translateY(-5px);
+  }
+}
+
+/* ---- at rest: it breathes and blinks */
 .figure {
   transform-origin: 50% 100%;
   animation: bob 2.6s ease-in-out infinite;
@@ -98,6 +120,7 @@ svg * {
   transform-origin: 50% 100%;
   animation: breathe 2.6s ease-in-out infinite;
 }
+/* The sprout's own leaves sway. */
 .sprout {
   transform-origin: 50% 100%;
   animation: sway 3.4s ease-in-out infinite;
@@ -106,20 +129,56 @@ svg * {
   transform-origin: center;
   animation: blink var(--blink, 4.6s) infinite;
 }
-.arm {
-  transform-origin: 50% 10%;
+/* Where each drawing's arms join it and how far a raised one goes. The ones
+   with shoulders turn the arm about the top of it, towards the body, and lift
+   it out to the side: drawn behind the hair and the dress, an arm raised
+   higher would vanish behind them. The sprout holds its arms out from its
+   sides and lifts them right up. */
+.figure-box {
+  --shoulder-left: 82% 6%;
+  --shoulder-right: 18% 6%;
+  --arm-rest: 0deg;
+  --raise: 105deg;
+  --lift-x: 5px;
+  --lift-y: -3px;
+}
+.figure-box[data-figure="sprout"] {
+  --shoulder-left: 50% 10%;
+  --shoulder-right: 50% 10%;
+  --arm-rest: 14deg;
+  --raise: 150deg;
+  --lift-x: 4px;
+  --lift-y: -24px;
 }
 .arm.left {
-  transform: rotate(14deg);
+  transform-origin: var(--shoulder-left);
+  transform: rotate(var(--arm-rest));
 }
 .arm.right {
-  transform: rotate(-14deg);
+  transform-origin: var(--shoulder-right);
+  transform: rotate(calc(-1 * var(--arm-rest)));
 }
 .leg {
   transform-origin: 50% 0;
 }
 .face {
   transition: transform 0.25s ease;
+}
+.sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: 50% 100%;
+  animation: breathe-whole 2.6s ease-in-out infinite;
+}
+.sheet img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 640px;
+  height: 190px;
+  -webkit-user-drag: none;
+  animation: blink-frame var(--blink, 4.6s) step-end infinite;
 }
 @keyframes bob {
   50% {
@@ -129,6 +188,11 @@ svg * {
 @keyframes breathe {
   50% {
     transform: scale(1.02, 0.975);
+  }
+}
+@keyframes breathe-whole {
+  50% {
+    transform: translateY(-1px) scale(1.012, 0.988);
   }
 }
 @keyframes sway {
@@ -150,9 +214,23 @@ svg * {
     transform: scaleY(0.08);
   }
 }
+/* A sheet blinks with its second frame. */
+@keyframes blink-frame {
+  0%,
+  96% {
+    left: 0;
+  }
+  97% {
+    left: -160px;
+  }
+  99.5% {
+    left: 0;
+  }
+}
 
-/* ---- walking: the legs take turns and the face leads the way */
-.pet.walk .figure {
+/* ---- walking: the legs take turns and the face leads the way; a sheet waddles */
+.pet.walk .figure,
+.pet.walk .sheet {
   animation: waddle 0.44s ease-in-out infinite;
 }
 .pet.walk .leg.left {
@@ -179,7 +257,7 @@ svg * {
     transform: rotate(-3deg);
   }
   50% {
-    transform: rotate(3deg) translateY(-2px);
+    transform: rotate(3deg) translateY(-3px);
   }
 }
 @keyframes step {
@@ -190,23 +268,23 @@ svg * {
 @keyframes swing-left {
   0%,
   100% {
-    transform: rotate(30deg);
+    transform: rotate(calc(var(--arm-rest) + 16deg));
   }
   50% {
-    transform: rotate(-4deg);
+    transform: rotate(calc(var(--arm-rest) - 18deg));
   }
 }
 @keyframes swing-right {
   0%,
   100% {
-    transform: rotate(-30deg);
+    transform: rotate(calc(-1 * var(--arm-rest) - 16deg));
   }
   50% {
-    transform: rotate(4deg);
+    transform: rotate(calc(18deg - var(--arm-rest)));
   }
 }
 
-/* ---- looking about */
+/* ---- looking about; a sheet looks down for it */
 .pet.look .face {
   animation: look 1.8s ease-in-out;
 }
@@ -221,33 +299,45 @@ svg * {
   }
 }
 
-/* ---- a wave */
-.pet.wave .arm.right {
-  transform-origin: 50% 90%;
-  animation: wave 0.4s ease-in-out 4;
-}
+/* ---- glad eyes for a wave, a pat, a card and its "here you go" */
 .pet.wave .eyes.open,
 .pet.glad .eyes.open,
-.pet.jump .eyes.open {
+.pet.give .eyes.open {
   display: none;
 }
 .pet.wave .eyes.glad,
 .pet.glad .eyes.glad,
-.pet.jump .eyes.glad {
+.pet.give .eyes.glad {
   display: inline;
+}
+.pet.wave .arm.right {
+  animation: wave 0.4s ease-in-out 4;
+}
+.pet.wave .sheet {
+  animation: wiggle 0.4s ease-in-out 4;
 }
 @keyframes wave {
   0%,
   100% {
-    transform: translate(6px, -26px) rotate(-150deg);
+    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(15deg - var(--raise)));
   }
   50% {
-    transform: translate(6px, -26px) rotate(-190deg);
+    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-15deg - var(--raise)));
+  }
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
   }
 }
 
-/* ---- a hop, on its own or when patted */
-.pet.hop .figure {
+/* ---- a hop, on its own, when patted, or when it has found something */
+.pet.hop .figure,
+.pet.hop .sheet {
   animation: hop 0.6s cubic-bezier(0.3, 0, 0.4, 1);
 }
 @keyframes hop {
@@ -267,7 +357,8 @@ svg * {
 }
 
 /* ---- picked up: it dangles */
-.pet.held .figure {
+.pet.held .figure,
+.pet.held .sheet {
   animation: dangle 0.5s ease-in-out infinite;
   transform-origin: 50% 0;
 }
@@ -277,13 +368,11 @@ svg * {
 .pet.held .leg.right {
   animation-delay: -0.25s;
 }
-.pet.held .arm.left,
-.pet.jump .arm.left {
-  transform: translate(-4px, -24px) rotate(150deg);
+.pet.held .arm.left {
+  transform: translate(calc(-1 * var(--lift-x)), var(--lift-y)) rotate(var(--raise));
 }
-.pet.held .arm.right,
-.pet.jump .arm.right {
-  transform: translate(4px, -24px) rotate(-150deg);
+.pet.held .arm.right {
+  transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-1 * var(--raise)));
 }
 .pet.held .mouth.smile {
   display: none;
@@ -310,14 +399,15 @@ svg * {
   }
 }
 
-/* ---- taking the window out: it crouches, reaches, and lifts */
-.pet.pull .figure {
-  animation: pull 0.55s ease-in-out;
+/* ---- "here you go": it crouches, holds the window out with a raised arm, and lifts */
+.pet.give .figure,
+.pet.give .sheet {
+  animation: give 0.6s ease-in-out;
 }
-.pet.pull .arm.right {
-  animation: reach 0.55s ease-in-out;
+.pet.give .arm.right {
+  animation: offer 0.6s ease-in-out forwards;
 }
-@keyframes pull {
+@keyframes give {
   35% {
     transform: scale(1.08, 0.88) rotate(-6deg);
   }
@@ -325,58 +415,58 @@ svg * {
     transform: translateY(-6px) scale(0.95, 1.07) rotate(4deg);
   }
 }
-@keyframes reach {
+@keyframes offer {
   0% {
-    transform: rotate(-14deg);
+    transform: rotate(calc(-1 * var(--arm-rest)));
   }
   35% {
     transform: rotate(45deg);
   }
   75%,
   100% {
-    transform: translate(4px, -24px) rotate(-150deg);
+    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-1 * var(--raise)));
   }
 }
 
-/* ---- in the air, on its way to the window's edge or back */
-.pet.jump .figure {
-  animation: none;
-  transform: scale(0.94, 1.06);
+/* ---- peeking over the app window: eyes lowered to the screen */
+.pet.peek .face {
+  transform: translateY(3px);
 }
-.pet.jump .leg {
-  transform: translateY(-9px);
+.pet.peek .overlay {
+  visibility: hidden;
 }
 
-/* ---- on the window's top edge it is an icon of itself: small, still, and
-   landing with a bounce. The edge crosses this window PET_OVERLAP (window.py)
-   above its bottom, and the icon stands on it. */
-.pet.lying .figure {
-  transform: translateY(-12px) scale(0.42);
-  animation: settle 0.4s ease-out;
-}
-.pet.lying .torso,
-.pet.lying .sprout,
-.pet.lying .eye {
+/* ---- a sheet's frames: talking when glad, held or giving; looking down
+   while it peeks, still blinking; eyes closed asleep */
+.pet.glad .sheet img,
+.pet.wave .sheet img,
+.pet.give .sheet img,
+.pet.held .sheet img {
+  left: -320px;
   animation: none;
 }
-@keyframes settle {
-  0% {
-    transform: translateY(-12px) scale(1);
+.pet.look .sheet img,
+.pet.peek .sheet img {
+  left: -480px;
+  animation-name: blink-look;
+}
+@keyframes blink-look {
+  0%,
+  96% {
+    left: -480px;
   }
-  55% {
-    transform: translateY(-12px) scale(0.34, 0.46);
+  97% {
+    left: -160px;
   }
-  80% {
-    transform: translateY(-12px) scale(0.46, 0.39);
-  }
-  100% {
-    transform: translateY(-12px) scale(0.42);
+  99.5% {
+    left: -480px;
   }
 }
 
 /* ---- what the character is doing */
 .pet[data-state="asleep"] .figure,
-.pet[data-state="asleep"] .torso {
+.pet[data-state="asleep"] .torso,
+.pet[data-state="asleep"] .sheet {
   animation-duration: 4.4s;
 }
 .pet[data-state="asleep"] .eyes.open,
@@ -385,6 +475,10 @@ svg * {
 }
 .pet[data-state="asleep"] .eyes.shut {
   display: inline;
+}
+.pet[data-state="asleep"] .sheet img {
+  left: -160px;
+  animation: none;
 }
 .pet[data-state="asleep"] .zz {
   display: inline;
@@ -427,6 +521,11 @@ svg * {
     transform: translateY(0);
   }
 }
-.pet[data-state="out"] .figure {
+.pet[data-state="out"] .figure-box {
   visibility: hidden;
+}
+
+/* While pet.js measures a drawing's eyes, they show whatever it is doing. */
+.pet.measure .eyes.open {
+  display: inline;
 }

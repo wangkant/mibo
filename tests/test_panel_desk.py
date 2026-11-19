@@ -152,7 +152,7 @@ def test_link_status_tells_this_copy_from_another(client, workspace, monkeypatch
     fake_windows(monkeypatch, [{"kind": "desktop", **mine}, {"kind": "programs", **mine},
                                {"kind": "startup", "target": str(program), "arguments": "-m other"}])
     value = client.get("/api/desk/shortcuts", headers=HEADERS).json()
-    assert value == {"supported": True, "uvx": False, "icon": "on", "login": "other"}
+    assert value == {"supported": True, "login_supported": True, "uvx": False, "icon": "on", "login": "other"}
     fake_windows(monkeypatch, [{"kind": "desktop", **mine}])
     assert client.get("/api/desk/shortcuts", headers=HEADERS).json()["icon"] == "other"
     fake_windows(monkeypatch, [])

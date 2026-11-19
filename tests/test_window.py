@@ -116,7 +116,10 @@ def webview(monkeypatch):
 
     module.create_window = create_window
     module.start = start
+    module.settings = {}
     monkeypatch.setitem(sys.modules, "webview", module)
+    # WebView2's own events, which the stand-in has none of.
+    monkeypatch.setattr(window, "_own_pages", lambda shown, origin: None)
     return module
 
 
@@ -383,7 +386,7 @@ def test_the_window_hides_instead_of_closing_only_when_the_person_chose_that(pag
     assert options["background"]() is False and options["start_hidden"] is False
     welcome.save_app_settings(page.home, background=True)
     assert options["background"]() is True, "read at the moment of closing, not at start"
-    assert set(options["words"]()) == {"open", "quit", "still"}
+    assert set(options["words"]()) == {"open", "quit", "pet", "still"}
     made = _fake_window(monkeypatch, lambda fake: True)
     welcome._serve_in_window(page.app, _Server(), None, "http://127.0.0.1:1/", page.home, hidden=True)
     assert made[0].options["start_hidden"] is True
@@ -682,7 +685,7 @@ async def test_forgetting_a_chat_asks_the_service_once_then_starts_a_new_one(tmp
     # The page's chats are forgotten, earlier ones included; chats on the platforms are kept.
     assert done == {"ok": True, "forgotten": 3}
     assert calls == [("POST", "/api/dashboard/memory/forget_chat",
-                      {"conv": chat, "earlier_page": True})]
+                      {"conv": chat, "earlier_page": True, "keep": []})]
     assert workspace._conversation != before and workspace._history == []
 
 

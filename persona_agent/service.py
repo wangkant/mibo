@@ -46,6 +46,9 @@ def command(home: Path) -> tuple[list[str], Path]:
     """What the service runs, and where: this installation's interpreter on `home`."""
     from .updates import _python
 
+    if getattr(sys, "frozen", False):
+        # The installer's build is the program itself.
+        return [sys.executable, "--home", str(Path(home).resolve()), "up"], Path(home).resolve()
     argv = [_python(), "-m", "persona_agent", "--home", str(Path(home).resolve()), "up"]
     # `-m persona_agent` finds the package from a checkout's root.
     return argv, homes.CHECKOUT if homes.is_checkout() else Path(home).resolve()

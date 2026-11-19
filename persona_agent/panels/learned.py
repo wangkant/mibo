@@ -114,8 +114,9 @@ def _live(runtime: Path, env: dict, lin: lineage.PersonaLineage, pool: str) -> d
     version = str(env.get("PERSONA_VERSION") or "").strip()
     scope = evidence.normalize_scope({"lang": _current(env), "persona": env.get("PERSONA_NAME"),
                                       "persona_version": version})
-    page = "".join(channels.learning_key(channels.DM_ROUTING_PREFIX + owner)
-                   for owner in sorted(access.page_owner(runtime)))
+    # Every chat the page holds now: the main one and its plain chats.
+    page = frozenset(channels.learning_key(channels.DM_ROUTING_PREFIX + owner)
+                     for owner in access.page_owner(runtime))
     # The character reads only its own language's ledger.
     return {**scope, "root": lin.root(version), "page": page, "pool": pool}
 
@@ -132,7 +133,7 @@ def _gap(cand: dict, live: dict) -> str:
         return "persona"
     conv = str(scope.get("conv_id") or "")
     # A reset page chat never comes back; other chats may talk again.
-    if live["page"] and channels.platform_of(conv) == access.PAGE_PLATFORM and conv != live["page"]:
+    if live["page"] and channels.platform_of(conv) == access.PAGE_PLATFORM and conv not in live["page"]:
         return "chat"
     return ""
 

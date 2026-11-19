@@ -400,6 +400,12 @@ body.maximized .window-controls .when-maximized {
   background: var(--hover);
   color: var(--ink);
 }
+/* Back to the app at "/": the token and window key stay in this tab's storage. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 .page {
   max-width: 980px;
   margin: 0 auto;

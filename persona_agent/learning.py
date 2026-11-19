@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 from . import (access, adoption, candidates, channels, chatlangs, evidence,
-               evolution, promotion, reactions)
+               evolution, promotion, quiet, reactions)
 from .textproc import (TextProcessing, _fence_user_data, _truncate_framed,
                        salvage_json_object)
 from .storage import append_jsonl_rotating
@@ -1408,6 +1408,7 @@ class Learning:
         while True:
             try:
                 await asyncio.sleep(self.promote_judge_interval_s)
+                await quiet.wait()
                 await self._adoption_tick()
             except asyncio.CancelledError:
                 return
@@ -1430,6 +1431,7 @@ class Learning:
         while True:
             try:
                 await asyncio.sleep(self.evolve_interval)
+                await quiet.wait()
                 await self._evolve_tick()
             except asyncio.CancelledError:
                 return
