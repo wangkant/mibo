@@ -6,7 +6,7 @@
 [![Python 3.10–3.14](https://img.shields.io/badge/Python-3.10%E2%80%933.14-0969da?style=flat-square)](https://www.python.org/downloads/)
 [![许可证：Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square)](LICENSE)
 
-[English](README.md) · **简体中文**
+[English](README.md) · **简体中文** · [繁體中文](docs/readme/README.zh-TW.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Deutsch](docs/readme/README.de.md) · [Português (Brasil)](docs/readme/README.pt-BR.md) · [Русский](docs/readme/README.ru.md)
 
 Mibo 在本机运行，使用你自备的模型服务，数据保存在本机的单个文件夹中。目标平台为 Windows 10 和 11。
 
@@ -43,7 +43,7 @@ python -m pip install -e .
 mibo
 ```
 
-首次运行时需选择语言、角色并填写模型密钥。数据保存在 `~/mibo`，也可通过 `mibo --home DIR` 指定。
+首次运行时需选择语言、角色并填写模型密钥。从克隆目录运行时，数据保存在该目录中（已列入 .gitignore）；安装版保存在 `~/mibo`。可通过 `mibo --home DIR` 指定其他文件夹。
 
 在 macOS 和 Linux 上，请使用 `python -m pip install -e ".[app]"` 安装。程序操作和内置浏览器仅支持 Windows。
 

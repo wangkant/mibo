@@ -6,7 +6,7 @@ A desktop companion. One character talks with you, remembers you, recommends one
 [![Python 3.10–3.14](https://img.shields.io/badge/Python-3.10%E2%80%933.14-0969da?style=flat-square)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square)](LICENSE)
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md) · [繁體中文](docs/readme/README.zh-TW.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Deutsch](docs/readme/README.de.md) · [Português (Brasil)](docs/readme/README.pt-BR.md) · [Русский](docs/readme/README.ru.md)
 
 Mibo runs locally with a model you bring, and stores its data in a single folder on your computer. It targets Windows 10 and 11.
 
@@ -43,7 +43,7 @@ python -m pip install -e .
 mibo
 ```
 
-The first run asks for a language, a character and a model key. Data is kept in `~/mibo`, or in the folder given with `mibo --home DIR`.
+The first run asks for a language, a character and a model key. Run from a clone, data is kept in the clone (gitignored); an installed copy uses `~/mibo`. `mibo --home DIR` chooses another folder.
 
 On macOS and Linux, install with `python -m pip install -e ".[app]"`. Program control and the built-in browser are Windows-only.
 

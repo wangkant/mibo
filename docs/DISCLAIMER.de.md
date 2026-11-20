@@ -1,46 +1,14 @@
 # Haftungsausschluss
 
-[English](DISCLAIMER.md) · [简体中文](DISCLAIMER.zh-CN.md) · [繁體中文](DISCLAIMER.zh-TW.md) · [日本語](DISCLAIMER.ja.md) · [한국어](DISCLAIMER.ko.md) · [Español](DISCLAIMER.es.md) · [Français](DISCLAIMER.fr.md) · Deutsch · [Português (Brasil)](DISCLAIMER.pt-BR.md) · [Русский](DISCLAIMER.ru.md)
+[English](DISCLAIMER.md) · [简体中文](DISCLAIMER.zh-CN.md) · [繁體中文](DISCLAIMER.zh-TW.md) · [日本語](DISCLAIMER.ja.md) · [한국어](DISCLAIMER.ko.md) · [Español](DISCLAIMER.es.md) · [Français](DISCLAIMER.fr.md) · **Deutsch** · [Português (Brasil)](DISCLAIMER.pt-BR.md) · [Русский](DISCLAIMER.ru.md)
 
-mibo wird unter der [Apache License 2.0](../LICENSE) veröffentlicht: Nutzung, Änderung und Weitergabe sind kostenlos, auch für kommerzielle Zwecke. Das Programm bringt eine KI-Figur in Ihre Chats, und Sie sind derjenige, der es betreibt. Sie sind dafür verantwortlich, was es sagt, wo es dies sagt und welche Konten es verwendet. Diese Seite stellt keine Rechtsberatung dar.
+Mibo ist Software, die auf Ihrem eigenen Computer läuft. Diese Seite ist keine Rechtsberatung.
 
-## Chat-Plattformen und Ihre Konten
-
-mibo erreicht eine Chat-Plattform auf zwei Wegen. Zehn Plattformen verbindet es selbst: offizielle QQ-Bots, persönliches WeChat, Telegram, Discord, Matrix, Twitch, IRC, Zulip, VK und Stoat. Jede andere Plattform läuft über eine Brücke eines Drittanbieters, in der Regel das AstrBot, das mibo für Sie herunterlädt und ausführt. Ihr Risiko hängt davon ab, als was sich die Verbindung anmeldet.
-
-- **Offizielle Bot-APIs** sind für Bots vorgesehen. Dazu gehören die offizielle QQ-Bot-API, Tencents iLink-Bot-API für persönliches WeChat, die Bot-APIs von Telegram und Discord, ein Generic Bot in Zulip, die Bots Long Poll API einer VK-Community mit einem Zugriffsschlüssel der Community, ein Bot in Stoat sowie Slack, KOOK, Feishu/Lark, DingTalk, WeCom und ähnliche Plattformen. Sie müssen dennoch die Entwicklerbedingungen und Ratenlimits jeder Plattform einhalten.
-- **Eigene Konten in offenen Netzwerken.** In Matrix, Twitch und IRC ist ein Bot ein gewöhnliches Konto, das Sie für ihn erstellen, und mibo verwendet die dokumentierte Schnittstelle des Netzwerks: die Matrix Client-Server API auf dem Homeserver, auf dem das Bot-Konto liegt, die Twitch API mit einer Anmeldung, die das Konto der Figur für eine von Ihnen registrierte Anwendung bestätigt, und das IRC-Protokoll über TLS mit dem eigenen Nicknamen des Bots. Es gelten die Bedingungen dieses Homeservers, von Twitch und jedes IRC-Netzwerks sowie die Regeln jedes Raums und Kanals. Manche verlangen eine Erlaubnis, bevor ein Bot beitritt: Libera.Chat etwa verlangt die ausdrückliche Erlaubnis der Operatoren eines Kanals, bevor ein KI-Bot ihm beitritt.
-- **Inoffizielle Clients** melden sich als gewöhnliches Benutzerkonto an und steuern es per Software. Die Plattform erlaubt dies nicht und kann es in ihren Bedingungen untersagen. Sie kann das Konto einschränken, einfrieren oder dauerhaft sperren. Dies betrifft:
-  - **QQ über NapCat, LLOneBot, Lagrange oder eine andere OneBot-Implementierung**, also die fortgeschrittene Option OneBot v11. Ein offizieller QQ-Bot benötigt nichts davon. Tencent erlaubt diese Clients nicht, und das Risiko ist bei Cloud- oder ausländischen IP-Adressen am höchsten.
-  - **WhatsApp, Signal, Messenger, Instagram, Google Messages und andere über eine mautrix-Brücke**; auf diesem Weg erreicht sie der Matrix-Konnektor. Die Brücke ist ein inoffizieller Client des jeweiligen Netzwerks, und einige dieser Netzwerke regeln automatisierte Nachrichten in ihren Bedingungen.
-  - Alles andere, was sich als Person anmeldet.
-
-Wenn Sie einen dieser Wege nutzen, verwenden Sie ein eigenes Konto, dessen Verlust Sie verkraften können, niemals Ihr Hauptkonto. Betreiben Sie es nach Möglichkeit aus einem Heimnetz statt von einem Cloud-Server. Lesen Sie die aktuellen Bedingungen jedes Netzwerks, das Sie verbinden. Weder der Autor von mibo noch die Betreuer der Drittprojekte, mit denen es zusammenarbeitet (AstrBot, NapCat, Koishi, mautrix und andere), haften für ein verlorenes oder eingeschränktes Konto.
-
-## Offenlegen, dass es sich um einen Bot handelt
-
-- Teilen Sie den Teilnehmern eines Chats mit, dass sie mit einer KI sprechen, und holen Sie die Zustimmung des Gruppeninhabers oder der Administratoren ein, bevor Sie den Bot hinzufügen. Geben Sie dem Konto einen Namen, der dies deutlich macht, und vermerken Sie es im Profil, sofern die Plattform ein Profil vorsieht.
-- Wenn jemand ernsthaft fragt, ob er mit einer KI spricht, ist mibo so gebaut, dass es dies bestätigt. Bearbeiten Sie die Persona nicht so, dass sie dies leugnet.
-- Verwenden Sie das Programm nicht, um sich als reale Person auszugeben oder jemanden darüber zu täuschen, mit wem oder was er spricht. Manche Plattformen und Länder verlangen, dass Bots offengelegt werden, oder schränken automatisierte Konten ein. Prüfen Sie die Regeln, die für Sie gelten.
-- Setzen Sie es nicht in Gruppen ein, in denen seine Antworten Menschen schaden oder sie irreführen könnten, etwa in Gruppen zu medizinischen, rechtlichen, finanziellen oder Krisenthemen und in Gruppen mit Kindern.
-- Wenn jemand den Bot bittet, die Gruppe zu verlassen, oder fragt, was er über ihn weiß, nehmen Sie dies ernst. Der Administrator kann ihn eine Notiz vergessen lassen (`<name>, forget ...`), und alles, was er speichert, liegt in seinem mibo-Ordner (siehe unten).
-
-## Bildnachweis für die Porträts
-
-Die Porträts von DeepSeek-chan, GPT-chan und Claude-chan wurden für mibo nach Entwürfen gezeichnet, die in der Community bereits verbreitet sind. DeepSeek-chan geht auf 溟月 zurück, eine Originalfigur des Bilibili-Creators 上善无形 (CC BY-NC-SA 4.0), im Dienstmädchen-Outfit, das ZipZipPipe ihr gegeben hat. GPT-chan folgt ZipZipPipes weißer Drachin. Claude-chan folgt einem Community-Entwurf, dessen ursprünglicher Urheber nicht bekannt ist. Die Porträts stehen unter einer eigenen Lizenz, CC BY-NC-SA 4.0: Behalten Sie die Namensnennung bei, nutzen Sie die Porträts nicht kommerziell und geben Sie Änderungen unter derselben Lizenz weiter. Siehe `mibo/static/characters/LICENSE.md`.
-
-## Was Ihr Modellanbieter sieht
-
-Jede Antwort sendet dem Modellanbieter einen Prompt aus der Persona, den letzten Nachrichten des Chats (mit Namen und Zeitpunkten), der Zusammenfassung des bisherigen Gesprächs, den Fakten und Ereignissen, die sich der Bot über den Chat merkt, und dem, was er aus dem Gelernten abgerufen hat. Die Gedächtniskonsolidierung sendet die letzten Nachrichten und Notizen eines Chats an das Bewertungsmodell, und die eigenen Lernentscheidungen des Bots senden eine Antwort, die Reaktionen darauf und die vorgeschlagenen Formulierungen an das Modell, das sie trifft. Wenn Sie ein Bildmodell einstellen, werden Bilder an dieses gesendet. Andere Dienste, die Sie aktivieren, erhalten ebenfalls Teile davon. Dazu gehören die von Ihnen konfigurierten Endpunkte für Ersatzmodell, Bewertung, Selbstbewertung und Embeddings sowie die Websuche, die eine kurze Anfrage an Tavily sendet, wenn Sie einen Schlüssel festlegen, und andernfalls an DuckDuckGo. Die Update-Prüfung übermittelt pypi.org nur die Versionsnummer von mibo, höchstens einmal täglich; `UPDATE_CHECK_ENABLED=false` deaktiviert sie.
-
-Lesen Sie die Richtlinie zur Datenspeicherung jedes Anbieters, bevor Sie ihn nutzen. Manche Anbieter speichern Prompts, und manche trainieren damit, sofern Sie nicht widersprechen. Die Voreinstellung, die kostenlosen Modelle von OpenRouter, kann solche Anbieter einschließen. Ein lokales Modell (Ollama, llama.cpp) behält die Prompts auf Ihrem Rechner. Die Teilnehmer des Chats haben den Bedingungen keines Anbieters zugestimmt; teilen Sie ihnen daher mit, wohin ihre Nachrichten gelangen.
-
-## Was auf Ihrem Rechner gespeichert wird
-
-Alles, was das Programm speichert, liegt in seinem mibo-Ordner. Einstellungen und API-Schlüssel stehen in `.env`. Bot-Zugangsdaten und das AstrBot, das es für Sie ausführt, liegen in `platforms/`. `runtime/` enthält die letzten Nachrichten jedes Chats für 72 Stunden, die Fakten, Ereignisse und Zusammenfassungen, die es sich merkt, was es aus dem Gedächtnis entfernt hat, für bis zu 30 Tage, die von ihm bewerteten Reaktionen (wörtlich zitiert), das Lernprotokoll, die gelernten Beispiele und eine Zählung seiner Modellnutzung. Wenn Sie `SERVER_LOG_FILE` setzen, können auch die Protokolle Details aus Gesprächen enthalten. Halten Sie den Ordner privat. Veröffentlichen Sie ihn niemals und hängen Sie ihn niemals an ein Issue an, und sichern Sie ihn, wenn Ihnen das Gelernte wichtig ist. Die Gesetze zum Speichern und Verarbeiten fremder Nachrichten unterscheiden sich je nach Land, und die Einhaltung der für Sie geltenden Gesetze liegt in Ihrer Verantwortung.
-
-Das Programm kann Falsches lernen. Reaktionen ändern es nur bei zwei übereinstimmenden Reaktionen aus demselben Chat, mindestens eine davon von der Person, an die die Antwort gerichtet war. Wo Reaktionen eine Änderung nicht klären können, entscheidet der Bot selbst mit einem Modellaufruf, und ein Modell kann sich irren. Niemand wird gebeten, diese Änderungen zu bestätigen. Jede Änderung wird in einem Lernprotokoll festgehalten, das nur ergänzt wird, mit der Angabe, wer sie entschieden hat und warum, und Sie können sie mit `mibo learned` oder in der Ansicht **Aktivität** der lokalen Seite rückgängig machen. Prüfen Sie es regelmäßig. Was sich das Programm merkt, lässt sich dort ebenfalls lesen und vergessen, oder mit `mibo memory`.
-
-## Keine Gewährleistung
-
-Die Software wird „wie besehen“ bereitgestellt, ohne jegliche ausdrückliche oder stillschweigende Gewährleistung. Die Autoren haften nicht für Ansprüche, Schäden oder Verluste, die aus ihrer Nutzung entstehen. Siehe [LICENSE](../LICENSE).
+| | |
+|---|---|
+| **Modelldienst** | Sie wählen den Modelldienst und stellen seinen Schlüssel bereit. Ihre Nachrichten, was Mibo über Sie speichert, und die für eine Antwort gelesenen Inhalte werden an diesen Dienst gesendet; es gelten dessen Bedingungen und Datenschutzrichtlinien. |
+| **Aktionen** | Mibo handelt auf Websites, in anderen Programmen und in Ihren Dateien mit Ihrer Zustimmung oder im Rahmen der Regeln, die Sie in den Einstellungen festlegen. Es gelten die Bedingungen dieser Websites und Programme; Ihre Konten und was mit ihnen geschieht, liegen in Ihrer Verantwortung. |
+| **Skills und MCP-Server** | Sie sind Code, den Dritte schreiben und pflegen, unter eigenen Lizenzen und Bedingungen. Über die Installation entscheiden Sie. |
+| **Empfehlungen** | Sie stammen aus öffentlichen Quellen. Mibo prüft oder billigt sie nicht; die Rechte daran liegen bei den jeweiligen Inhabern. |
+| **Lizenz** | [Apache License 2.0](../LICENSE). Code Dritter behält seine eigene Lizenz ([NOTICE](../NOTICE)); die Charakterporträts stehen unter CC BY-NC-SA 4.0 ([Details](../mibo/static/characters/LICENSE.md)). |
+| **Keine Gewährleistung** | Mibo wird „wie besehen“ bereitgestellt, ohne jegliche Gewährleistung. Die Autoren haften nicht für Ansprüche, Schäden oder Verluste, die aus der Nutzung entstehen. |

@@ -1,0 +1,61 @@
+name: Reply or action report
+description: The character said or did X; it should have said or done Y
+labels: ["reply"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quote only the lines needed, with names, addresses and other personal details removed. Never paste keys or tokens.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Conversation
+        - Memory
+        - Recommendations
+        - Walks
+        - Built-in browser
+        - Other programs
+        - Commands and files
+        - Skills
+        - MCP connectors
+        - Scheduled tasks
+    validations:
+      required: true
+  - type: textarea
+    id: asked
+    attributes:
+      label: What was asked
+      description: The message, and the turn before it if it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: did
+    attributes:
+      label: What the character said or did (X)
+      description: The reply as shown, and the steps listed under it.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What it should have said or done (Y)
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: The model service and model id.
+      placeholder: DeepSeek, deepseek-flash
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings › About, or `mibo --version`.
+      placeholder: "1.5.0"
+    validations:
+      required: true

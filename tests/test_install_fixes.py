@@ -66,9 +66,13 @@ def test_a_python_path_with_spaces_is_runnable_in_powershell(monkeypatch) -> Non
 
 
 def test_release_is_gated_on_main_and_the_tests() -> None:
-    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    build = text.split("\n  pypi:")[0]
-    assert "merge-base --is-ancestor" in build and "origin main" in build
-    assert "python -m pytest" in build
-    assert build.index("merge-base --is-ancestor") < build.index("python -m build")
-    assert build.index("python -m pytest") < build.index("python -m build")
+    import yaml
+
+    jobs = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    test = "\n".join(step.get("run", "") for step in jobs["test"]["steps"])
+    assert test.index("merge-base --is-ancestor") < test.index("python -m pytest")
+    assert "origin main" in test
+    # Both apps wait for the test job, and the release waits for both apps; nothing goes to PyPI.
+    assert jobs["windows-installer"]["needs"] == jobs["macos-app"]["needs"] == "test"
+    assert set(jobs["github-release"]["needs"]) == {"test", "windows-installer", "macos-app"}
+    assert set(jobs) == {"test", "windows-installer", "macos-app", "github-release"}

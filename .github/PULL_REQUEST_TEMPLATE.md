@@ -1,22 +1,13 @@
-## What and why
+## Change
 
-<!-- What the change does, and the problem it fixes. For a persona or prompt change, describe the reply you saw and the one you wanted. -->
-
-## Tests
-
-<!-- Run these from the repo with the venv active, and tick what you ran. -->
-
-- [ ] `python -m pytest -q`
-- [ ] `ruff check . --select F401,F811,F821,F841`
-- [ ] A test for the new behaviour, or the reason there is none
-- [ ] `tools/package_smoke.py` and `tools/welcome_smoke.py`, if packaging, the CLI, the local page or shipped files changed
-
-## Docs
-
-- [ ] README, `docs/` or `.env.example` updated where behaviour or a setting changed (and the page's translations in `docs/` and `docs/readme/`, if it has any)
-- [ ] `CHANGELOG.md` has a line under `## [Unreleased]` for anything a user can see
+<!-- What the change does and the problem it fixes. For a prompt change, the reply or action seen and the one wanted. -->
 
 ## Checks
 
-- [ ] No keys, tokens, bot credentials, QQ numbers or real chat text in the diff
-- [ ] Code, comments and commit messages are in English
+- [ ] `python -m pytest -q`
+- [ ] `ruff check . --select F401,F811,F821,F841`
+- [ ] `python tools/copy_check.py` lists none of the new interface text
+- [ ] `tools/package_smoke.py` and `tools/welcome_smoke.py`, if packaging, the CLI, the local page or shipped files changed
+- [ ] Interface text in all ten catalogs (`mibo/locales/`); `.env.example` and the documents updated where a setting or a fact changed
+- [ ] `CHANGELOG.md` has a line under `## [Unreleased]` for a visible change
+- [ ] No keys, tokens or real conversations in the diff

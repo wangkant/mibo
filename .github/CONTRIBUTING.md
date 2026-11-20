@@ -1,61 +1,37 @@
 # Contributing
 
-Thanks for taking a look. Most of the work in this project is in the prompt
-and the learning design, so a bug report that quotes the reply the bot
-produced is worth more than a feature request.
-
-## Getting set up
+## Setup
 
 ```bash
-git clone https://github.com/wangkant/mibo.git
+git clone https://github.com/wangkant/mibo
 cd mibo
-python -m venv .venv
-. .venv/bin/activate              # Windows: .venv\Scripts\activate
 python -m pip install -e ".[dev]"
-python -m mibo           # opens the local page
+mibo
 ```
 
-In a clone, the home folder is the clone itself. `.env`, `persona.txt` and
-`runtime/` sit next to `mibo/` and are gitignored.
+Run from a clone, the clone is the home folder: `.env`, `persona.txt` and `runtime/` sit beside `mibo/` and are gitignored. `mibo --home DIR` uses another folder.
 
-## Running the tests
+## Checks
 
-With the venv active, run the checks CI runs:
+Run what CI runs before opening a pull request:
 
 ```bash
-python -m pip install -e ".[dev]"
 python -m pytest -q
 ruff check . --select F401,F811,F821,F841
 python -m compileall -q mibo tools tests
 ```
 
-The suite takes about a minute and needs no network or API key, because the
-tests stub the model and the transport. Run these before you open a PR.
+The suite stubs the model and needs no key. The ruff line catches dead and undefined names only.
 
-The ruff line catches dead and undefined names.
+| Workflow | Runs |
+|---|---|
+| `ci.yml` | The suite on Linux (Python 3.10–3.14) and Windows (3.12); builds the wheel and sdist, installs each into a clean venv and runs the two smoke scripts |
+| `window.yml` | Opens the app window on Linux, macOS and Windows with a stand-in model (`tools/window_smoke.py`) |
+| `release.yml` | See [Releasing](#releasing) |
 
-CI runs the suite on Python 3.10 to 3.14 on Linux and on 3.12 on Windows.
-Its `package` job, on Linux and Windows, builds the wheel and the sdist,
-runs `twine check --strict`, installs each into a clean venv outside the
-checkout, and runs `tools/package_smoke.py` and `tools/welcome_smoke.py`
-against the installed command. CI compiles `.`. Locally, name the
-directories instead so compileall skips `.venv`.
+### Smoke scripts
 
-One file, or one test, for a fast loop:
-
-```bash
-python -m pytest tests/test_library.py
-python -m pytest tests/test_library.py -k compacting
-```
-
-### The package smoke tests
-
-`tools/package_smoke.py` checks, offline, that an installed `mibo`
-command works with no checkout around it: it runs `--version`.
-`tools/welcome_smoke.py` opens the installed local page, saves a key, chats
-and exits, using only localhost.
-Run both after you change packaging, the CLI, the local page or the files a
-wheel ships. Pass the version in `pyproject.toml` to `--version`:
+Run both after changing packaging, the CLI, the local page or the files a wheel ships. `package_smoke.py` checks the installed command's `--version`; `welcome_smoke.py` opens the installed page, saves a key, chats and exits, on localhost only.
 
 ```bash
 python -m pip install build
@@ -66,245 +42,76 @@ python tools/package_smoke.py --mibo /tmp/smoke-env/bin/mibo --version X.Y.Z
 python tools/welcome_smoke.py --mibo /tmp/smoke-env/bin/mibo
 ```
 
-### Writing a test
+### Tests
 
-- A test is a module-level `test_*` function in `tests/test_*.py`. pytest
-  finds it, so there is nothing to register.
-- The pytest settings in `pyproject.toml` put the repo root and `tools/` on
-  the import path, so tests import `mibo` and the CLI tools the way
-  a deployment does.
-- `tests/conftest.py` provides the `tmp` fixture, a scratch directory per
-  test. It also runs each `async def` test on its own event loop, and skips
-  the 5 s bare-call debounce unless a test is marked `bare_call_wait`.
-  pytest is the only test dependency.
-- `tests/helpers.py` has `check(name, cond, detail)`, which asserts and
-  names the property that failed. Use it or a plain `assert`.
-- `isolated_agent(tmp, **settings)` in `tests/helpers.py` builds a real
-  `Agent`. A suite's own `make_agent()` passes only what differs, such as
-  the persona name, admins, a NapCat URL or stubs.
-
-**Tests must never write the repo's real state files.** Everything mutable
-lives under `runtime/`, and a relative state-file setting such as
-`MEMORY_FILE=memory.json` resolves there. `isolated_agent()`
-redirects every state file into `tmp`. With `seeds=True` it also swaps the
-shipped seed pools for empty ones.
-
-The evidence log, the candidate ledger, both promoted views and the persona
-lineage all live next to `examples_file` (`Agent.learning_dir`), so
-redirecting the example pool moves the whole learning layer. Put any new
-learned state in that directory, not under `ROOT`.
-
-## The learning path: evidence, candidates, promotion
-
-These terms have exactly these meanings in code, tests and docs. Keep them
-distinct in a PR.
-
-- **Evidence**: an append-only record of something that happened in a
-  conversation. A reaction is evidence. It carries no authority.
-- **Candidate**: a versioned, proposed behaviour change produced by
-  adjudicating evidence. Inert until promoted.
-- **Promotion**: granting a candidate authority to affect future behaviour.
-- **Rollback / supersession**: removing that authority later, without
-  erasing history.
-
-The design enforces two rules.
-
-1. **Nothing in the automatic path writes a retrieval pool.** It records
-   evidence, proposes a candidate, and asks `promotion.decide`. If your
-   change appends to `examples_file` or `feedback_file` from the agent, it
-   is in the wrong layer.
-2. **A single automatic signal must never permanently change behaviour.**
-   Promotion needs at least two distinct compatible events, at least one of
-   them strong. `PROMOTE_MIN_EVENTS` and `PROMOTE_MIN_STRONG` can raise those
-   floors but not lower them. A new signal source belongs in
-   `evidence.classify_strength`, with a written reason for its class. "The
-   admin said so" is not a substitute for being the person the reply was
-   aimed at.
-
-Both logs are append-only. To correct a mistake, append a lifecycle event.
-Never edit a row.
+- A test is a module-level `test_*` function in `tests/test_*.py`; pytest is the only test dependency.
+- Tests never write the repository's real state. Use the `tmp` fixture (`tests/conftest.py`) and `isolated_agent(tmp, ...)` (`tests/helpers.py`), a real `Agent` whose state lives under `tmp`.
+- Nothing Windows-only runs at import time or in a test without a stand-in: the same suite runs on Linux.
 
 ## Code layout
 
-`Agent` (`agent.py`) builds the runtime state. It is composed from mixins,
-one per concern, and calls the pure modules below by name. Deciding whether
-to speak, building the prompt and retrieving what goes into it are separate
-modules, so each can be read, tested and replaced on its own.
+Paths are under `mibo/` unless noted.
 
-The entry points:
-
-| Entry | What it is |
+| Area | Where |
 |---|---|
-| `mibo` (`mibo/cli.py`) | The command: `start` (the default), `run`, `mcp`, `hook`. Each subcommand imports its module only when it runs, so `--home` is in the environment first. Also `python -m mibo` |
-| `mibo/welcome.py`, `static/welcome/` | The local page `mibo start` opens on 127.0.0.1: Chat, Activity, Character & settings, with its JSON API. Activity reads the agent service's `/api/dashboard/` with the token in `<runtime>/dashboard.token`. A second `start` reuses an open page. `static/characters/` holds the character portraits, under their own `LICENSE.md`. The images at the top of `static/` are illustrations the READMEs of earlier releases still link to; the wheel leaves them out |
-| `mibo/services.py` | The process the page starts (the agent): it ends with the page, and what a crashed run left is stopped at the next start |
-| `mibo/home.py` | Where a deployment lives (`AGENT_HOME`, the checkout, the working folder, `~/mibo`) and where shipped files are found. Stdlib only |
-| `mibo/server.py` | The FastAPI service: `/v1/events`, `/v1/outbox`, `/health`, the deprecated `/v1/onebot`, startup checks. `mibo run` starts it |
-| `mibo/setup_wizard.py` | A home's setup: the model providers, the `.env` file, the persona and its picture, the key test |
-| `mibo/coding.py` | The character inside coding agents: `mcp`, the stdio MCP server Claude Code, Codex or DeepSeek Harness starts, `hook`, the optional Stop hook, and what the page's agents panel writes into the coding agent's configuration |
-| `mibo/dashboard.py` | The agent service's Activity API under `/api/dashboard/`, its token, and the plain-text note at `/`. `decision_log.py` keeps the recent speak decisions it returns |
-| `mibo/updates.py` | The update notice: asks PyPI for a newer release at most once a day, sending only the version number, and points to its installer on the release page. `UPDATE_CHECK_ENABLED=false` turns it off |
+| App, window and Settings | `cli.py`, `welcome.py` (local page, token, API), `window.py`, `static/welcome/`, `panels/` (one module per Settings section) |
+| Character and chat | `agent.py`, `character.py`, `dm.py`, `turns.py`, `prompt.py`, `prompts.py`, `llm.py`, `endpoints.py`, `abilities.py` (what the model can do, measured by probes) |
+| Memory | `person.py`, `consolidate.py`, `memory.py`, `memstore.py`, `chatlog.py`, `pastchats.py`, `retrieval.py`, `ranking.py`, `embeddings.py` |
+| Recommendations and walks | `recommend.py`, `taste.py`, `pacing.py`, `roam.py`, `library.py`, `today.py`, `sources/` |
+| Web and built-in browser | `web/`, `browser.py`, `browsed.py`, `signwatch.py`, `installed_browser.py`, `search.py`, `ingestion.py` |
+| Other programs (Windows) | `desk/` (UI Automation), `see/` (by screenshot, where no structure can be read) |
+| Commands and files | `shell/` |
+| Approval | `cardwait.py`, `review.py`, `turnon.py`, and the `gate.py` / `grants.py` of `web/`, `desk/` and `shell/` |
+| Skills and MCP | `skills/`, `mcp_*.py`, `runtimes.py`, `secretstore.py` |
+| Scheduled tasks | `schedule.py`, `schedule_tool.py` |
+| Desktop figure | `petchat.py`, `petoff.py`, `petshot.py`, `remarks.py`, `activity.py`, `quiet.py` |
+| Languages | `i18n.py`, `locales/`, `langs.py`, `chatlangs/`, `timewords.py` |
+| Home, settings and storage | `home.py`, `paths.py`, `settings.py`, `config_env.py`, `setup_wizard.py`, `storage.py` |
+| Packaging | `packaging/windows/` (repository root) |
+| Scripts | `tools/` (repository root): measurements and checks, not shipped |
 
-The rest of the package:
+To add a setting, add it to `AgentSettings` in `settings.py`, read it with the `config_env` helpers and document it in `.env.example`. `tests/test_http.py` fails when a setting the code reads is missing there.
 
-| Module | Owns |
-|---|---|
-| `mibo/agent.py` | `Agent`: construction, runtime state, the ledgers and views it holds, shutdown |
-| `mibo/turns.py` | Intake: dedup, admission, debounce and the group turn from message to send |
-| `mibo/decision.py` | Whether to speak: a group turn's mode (`choose_group_mode`), pacing skips (`pacing_skip`), the cheap gate model (`_gate`), the turn's model work (`_think`), and the shared reply finalizer (`_final_reply`) |
-| `mibo/prompt.py` | What the model reads: `_build_group_prompt`, `_build_dm_prompt` and their context blocks |
-| `mibo/retrieval.py` | What past material a turn sees: examples, memories, and the embeddings fetched for them ahead of the prompt |
-| `mibo/ranking.py` | The retrieval score: BM25, embedding similarity, scope and recency, with their weights (pure logic) |
-| `mibo/embeddings.py` | The optional `/embeddings` call and its cache, in memory and in `runtime/embeddings.jsonl` |
-| `mibo/dm.py` | The one-on-one turn |
-| `mibo/messages.py` | Reading a message: its text, quotes, buffer lines, @-mentions |
-| `mibo/addressing.py` | Whether a message names the persona: the one rule the group turn, the missed-mention sweep and the memory commands share |
-| `mibo/llm.py` | Model calls: clients, endpoints, retries, fallback, probes, model routing |
-| `mibo/search.py` | Web search when a turn needs it |
-| `mibo/proactive.py` | Speaking first: the proactive loops |
-| `mibo/memory.py` | Memory commands, automatic memories, core memory |
-| `mibo/views.py` | Seed and learned data kept fresh from disk: pools, promoted views, filters |
-| `mibo/settings.py` | `AgentSettings`: everything the agent is configured with, built once and passed in |
-| `mibo/config_env.py` | The one way to read a setting from the environment (`env_int`, `env_bool`, `env_str`, ...) |
-| `mibo/langs.py`, `locales/` | The ten languages mibo speaks to the person running it. English and Chinese sit next to the code that prints them. `locales/<code>.json` holds the other eight, and `locales/terminal/<code>.json` holds every language but English for `--help` and the refusals of a start. Both are keyed by the English sentence. `tools/locale_gaps.py` lists what a language still lacks, and `tests/test_locales.py` fails on a gap |
-| `mibo/chatlangs/` | The languages people chat in, one module each: how a memory command in that language is read, and the fixed lines the agent says without the model |
-| `mibo/prompts.py` | The persona contract (style guide, output protocol, intent rules) and the `[style]` block parser |
-| `mibo/textproc.py` | Pure text: tokenising, sanitising, the whitelist validator, splitting, the prompt's data frames |
-| `mibo/ingestion.py` | Links, share cards, images, OCR, vision, SSRF guard |
-| `mibo/transport.py` | Throttling, chunking, typing simulation, sends, connector conversation LRU |
-| `mibo/learning.py` | Self-eval, reaction adjudication, the evolution loop: the glue that records evidence and proposes candidates |
-| `mibo/evidence.py` | The append-only evidence log: schema, strength classification, idempotent appends (pure logic) |
-| `mibo/candidates.py` | Versioned candidates, the append-only lifecycle ledger, the materialized retrieval views (pure logic) |
-| `mibo/promotion.py` | The promotion policy: thresholds, scope compatibility, conflicts. `EvidenceIndex` and `retract_example` |
-| `mibo/reactions.py` | Reaction attribution and adjudicator prompts (pure logic) |
-| `mibo/evolution.py` | Low-score eval → diagnosis → BAD/OK pair, dedup, pool trimming (pure logic) |
-| `mibo/endpoints.py` | Which OpenAI-compatible endpoint serves a model name (the fallback may have its own), and base-URL spelling |
-| `mibo/connector.py` | Translating a `/v1/events` event to the internal shape, and the reply sink ([docs/connectors.md](../docs/connectors.md) has the schema) |
-| `mibo/outbox.py` | Messages no request is waiting for: each connector conversation's reply handle, and the queue a connector pulls from `/v1/outbox` |
-| `mibo/channels.py` | The one place conversation, memory and learning keys are derived from an event |
-| `mibo/access.py` | Who the admin is and who is admitted, per platform: `ADMIN_IDS`, `ACCESS_GROUPS` and `ACCESS_DM_USERS` (pure logic) |
-| `mibo/lineage.py` | Which persona-document hashes count as one character, so a persona edit doesn't orphan what was learned |
-| `mibo/stickers.py` | Sticker library: ingestion, dedup, tagging, persona-fit gate, selection |
-| `mibo/storage.py` | File locks, atomic replace, locked JSONL appends and rotation |
-| `mibo/paths.py` | Deployment root (`AGENT_HOME`), runtime-dir isolation, seed lookup, JSONL reading |
-| `mibo/health.py`, `preflight.py` | Dependency probes; startup config check (missing or misspelled keys) |
-| `tools/` | Offline scripts that are not part of the package |
+## Languages
 
-New behaviour goes in the module that owns the concern. If a change needs
-state from two mixins, it probably belongs in `agent.py`.
+The interface ships in ten languages: English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português (Brasil) and Русский.
 
-A module stays out of the mixin chain when it needs no agent state.
-`textproc.py` is an example. It is called by name
-(`TextProcessing._sanitize_reply(...)`), so a reply-safety gate can be
-tested without constructing an `Agent`.
-
-To add a setting, add it to `AgentSettings` in `settings.py` and read it
-with the `config_env` helpers. Settings of the HTTP layer, such as
-`SERVER_HOST`, are read in `server.py`. Then document the setting in
-`.env.example`. Preflight reports any `.env` key that is not in
-`.env.example` as a misspelling, and `tests/test_http.py` fails if a setting
-the code reads is missing from `.env.example`.
+- Catalogs: `mibo/locales/<code>.json`, in i18next's JSON layout. `tools/locale_gaps.py` lists what a catalog lacks; `tests/test_locales.py` fails on a gap.
+- Chinese interface text is written, formal Chinese. `tools/copy_check.py` lists spoken forms; a line that is the character's or the person's own words carries a `copy: voice` comment.
+- Documents: `README.md`, `README.zh-CN.md`, `docs/readme/README.<code>.md` and `docs/DISCLAIMER[.<code>].md`. English is the source; a change of fact goes into every translation.
 
 ## Style
 
-- Write code, comments, logs and commit messages in English. Chinese is for
-  user-facing chat copy and prompt text only.
-- Comments explain a constraint the code cannot show, such as why a lock is
-  released before a send or why a guard fails closed. Don't narrate the next
-  line.
-- A change to `prompts.py` changes the persona's behaviour, so treat prompt
-  text as behaviour and describe the failure you observed in the PR.
-- Keep AI-assistant tooling files out of the repo, such as `CLAUDE.md`,
-  `.cursor*` and agent scratch directories. The repo holds project files
-  only.
-
-## Reporting a persona bug
-
-Use the "Persona report" issue form. It asks for three things:
-
-1. The last few context lines, with names and IDs redacted.
-2. What the bot replied.
-3. What a real person would have said instead.
-
-Together they form the BAD/OK pair the learning loop uses, and they often
-become the fix directly as a row in `data/feedback.<lang>.jsonl`. Copy the
-shape of an existing row: `context`, `reply`, `better`, and
-`"rating": "better"`. The form also asks for the persona excerpt and the
-model, because both change what a reply looks like.
-
-## Documentation
-
-The English page is the source of truth. These pages exist in ten
-languages (English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français,
-Deutsch, Português (Brasil) and Русский): `README`, `docs/start`,
-`docs/guide`, `docs/connectors` and `docs/DISCLAIMER`. A
-translation sits next to its page as `<page>.<code>.md`. The README's are
-`README.zh-CN.md` at the root and the other eight in `docs/readme/`. A
-translation is written in natural language for its readers rather than
-translated line by line. When you change a fact in the English page, change
-it in every translation.
-
-Images in a README use absolute `raw.githubusercontent.com` URLs so they render on
-PyPI.
+- Code, comments, logs and commit messages are in English.
+- Comments state what the code cannot show; they do not narrate the next line.
+- A change to prompt text changes behaviour: describe the failure it fixes in the pull request.
+- No AI-assistant tooling files (`CLAUDE.md`, `.cursor*`, agent scratch folders) in the repository.
+- Never attach `.env`, `runtime/`, keys, tokens or real conversations to an issue or a commit.
 
 ## Releasing
 
-A release is a tag. Only the maintainer cuts one.
+A release is a tag on `main`, built into the Windows installer and published as a GitHub Release. There is no PyPI package. Only the maintainer cuts a release.
 
-1. Put the version in `pyproject.toml`, `mibo/__init__.py`
-   (`__version__`) and the plugin's `metadata.yaml`. A test fails if the
-   three differ.
-2. Put it in the pages that name a version. No test checks these.
-   - The status line in the last section of `docs/guide.md` and its nine
-     translations ("mibo X.Y.Z is on PyPI").
-   - `docs/setup-for-agents.md` names the oldest release its commands work
-     with in four places: "works with mibo X.Y.Z from PyPI and
-     later" at the top, then `mibo X.Y.Z` in the checklist, in the
-     install check and in the start log. Raise the four when the file uses
-     something the release adds. A step that waits for a release says
-     "newer than A.B.C". Make that line name the release.
-3. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] — YYYY-MM-DD`
-   (an em dash) and put a new, empty `## [Unreleased]` above it. In the link
-   list at the end, add
-   `[X.Y.Z]: https://github.com/wangkant/mibo/compare/vA.B.C...vX.Y.Z`
-   under the `[Unreleased]` line and point that line at `vX.Y.Z...HEAD`. The
-   section under the version becomes the release notes.
-4. Merge to `main` and wait for CI to pass.
-5. Tag `main` and push the tag:
+1. Set the version in `pyproject.toml` and `mibo/__init__.py`; a test fails if they differ.
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add an empty `## [Unreleased]` above it. That section becomes the release notes.
+3. Merge to `main`, wait for CI, then tag:
 
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
 
-The `Release` workflow (`.github/workflows/release.yml`) then runs three
-jobs in order:
+The tag starts `.github/workflows/release.yml`:
 
-1. **build** refuses a tag whose commit is not on `main`, then runs the test
-   suite. Next, `tools/release_notes.py` fails the release if the tag is not
-   `v` plus the version in `pyproject.toml`, or if `CHANGELOG.md` has no
-   non-empty `## [X.Y.Z]` section. The job then builds the sdist and the
-   wheel, runs `twine check --strict`, and smoke-tests the wheel with
-   `tools/package_smoke.py` before anything is published.
-2. **pypi** publishes that build to PyPI by trusted publishing, through the
-   GitHub environment named `pypi`. No token is stored.
-3. **github-release** creates the GitHub Release for the tag, attaches the
-   sdist and the wheel, and uses the changelog section as the release notes.
+| Job | Does |
+|---|---|
+| `test` | Refuses a tag not on `main`, runs the suite, checks the tag against `pyproject.toml` and takes the notes from `CHANGELOG.md` (`tools/release_notes.py`) |
+| `windows-installer` | `packaging/windows/build.ps1`: PyInstaller, then Inno Setup, giving `mibo-X.Y.Z-setup.exe` |
+| `macos-app` | The same PyInstaller spec, giving an unsigned `mibo-X.Y.Z-macos-arm64.dmg` |
+| `github-release` | Creates the GitHub Release for the tag with both files and the notes |
 
-A manual run of the workflow from a branch only builds the files and
-uploads them as workflow artifacts. Run it from a tag to release. PyPI needs
-a trusted publisher for this repository, set up once on pypi.org: owner
-`wangkant`, repository `mibo`, workflow `release.yml`, environment
-`pypi`.
+A manual run from a branch builds the two files as workflow artifacts and publishes nothing. To build the installer locally:
 
-## Privacy
-
-Never attach real group chat logs, QQ numbers, platform credentials or API
-keys to an issue. `.env`, `persona.txt`, `runtime/`, `platforms/`,
-`eval.jsonl`, `memory.json` and the sticker library are gitignored for this
-reason. Check `git status` before you commit.
-
-The evidence log quotes real reactions verbatim, so it lives under
-`runtime/` with the rest. It stores only the structured verdict and a
-one-sentence reason, never a model's chain of thought. Don't add a field
-that would change that.
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1   # dist\mibo-X.Y.Z-setup.exe
+```
