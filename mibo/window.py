@@ -1182,7 +1182,9 @@ class AppWindow:
         if self._browser is not None:
             with contextlib.suppress(Exception):
                 self._browser.close()
-        for window in (self._pet, self._window):
+        # Every window goes, the hidden compact chat too: pywebview ends its loop only when none is left.
+        compact = self._compact.window if self._compact is not None else None
+        for window in (compact, self._pet, self._window):
             if window is not None:
                 with contextlib.suppress(Exception):
                     window.destroy()

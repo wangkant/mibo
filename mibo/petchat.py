@@ -86,6 +86,11 @@ class Compact:
         win = webview.create_window(w.TITLE, html="<!doctype html><title></title>", width=SIZE[0], height=SIZE[1],
                                     hidden=True, frameless=True, on_top=True, resizable=False, easy_drag=False,
                                     text_select=True, shadow=True)
+        # Known at once, so that quitting closes it too (AppWindow.close); quit before that, it goes here.
+        self.window = win
+        if owner._leaving:
+            win.destroy()
+            return
         win.expose(api.away, api.full)
         win.events.loaded.wait(LOAD_S)
         w._text_menus(win)
@@ -109,7 +114,6 @@ class Compact:
             form.Deactivate += self._lost
 
         owner._on_pet(dress)
-        self.window = win
 
     def _spot(self) -> tuple[int, int, int, int, int]:
         """On the pet's thread: beside the figure, on the side with room, its bottom on the figure's feet,

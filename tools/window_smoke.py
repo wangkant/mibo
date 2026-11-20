@@ -1,6 +1,6 @@
 """Open the real app window on a scratch home and check that the page runs in it.
 
-    python tools/window_smoke.py [--home DIR]
+    python tools/window_smoke.py [--home DIR] [--at X,Y]
 
 For the platforms tools/window_driver.py cannot reach (macOS, and Linux with
 `mibo[app]`), and for Windows too: it runs `mibo start` in this
@@ -48,7 +48,8 @@ SKIP = "(() => { const b = document.querySelector('#onboard-view .onboard-skip')
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--home", help="a scratch folder to use as the mibo home (default: a new temporary one)")
-    parser.add_argument("--offscreen", action="store_true", help="open the window off screen, for a desk someone is using")
+    parser.add_argument("--at", metavar="X,Y", help="where the windows open, in screen px: on a second monitor,"
+                        " or off screen (-4000,60), for a desk someone is using")
     args = parser.parse_args(argv)
     home = Path(args.home or tempfile.mkdtemp(prefix="mibo-window-")).resolve()
     home.mkdir(parents=True, exist_ok=True)
@@ -66,10 +67,11 @@ def main(argv: list[str] | None = None) -> int:
     from mibo import welcome
     from mibo import window as appwindow
 
-    if args.offscreen:
+    if args.at:
         import webview
+        x, y = (int(v) for v in args.at.split(","))
         create = webview.create_window
-        webview.create_window = lambda *a, **k: create(*a, **{**k, "x": -4000, "y": 60})
+        webview.create_window = lambda *a, **k: create(*a, **{**k, "x": x, "y": y})
 
     seen: dict = {}
 
@@ -174,6 +176,13 @@ def main(argv: list[str] | None = None) -> int:
             check("a new home opens on the first run", until(f"{VISIBLE}('onboard-view')", 30) is True)
             bar = "document.body.classList.contains('frameless') && !document.getElementById('window-controls').hidden"
             if sys.platform == "win32":
+                # The app starts as the pet alone; double-clicking it opens the window, as here.
+                seen["app"].show()
+                deadline = time.time() + 20
+                while time.time() < deadline and seen["app"].hidden:
+                    time.sleep(0.2)
+                check("the pet opens the window",
+                      not seen["app"].hidden and until("document.visibilityState === 'visible'", 20) is True)
                 # On Windows the window has no title bar: the page is the bar and holds its buttons.
                 check("the window has no title bar and the page draws the bar",
                       seen["app"].frameless is True and until(bar, 20) is True, js(bar))
