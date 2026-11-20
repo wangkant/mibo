@@ -2,17 +2,17 @@
 
 English · [简体中文](DISCLAIMER.zh-CN.md) · [繁體中文](DISCLAIMER.zh-TW.md) · [日本語](DISCLAIMER.ja.md) · [한국어](DISCLAIMER.ko.md) · [Español](DISCLAIMER.es.md) · [Français](DISCLAIMER.fr.md) · [Deutsch](DISCLAIMER.de.md) · [Português (Brasil)](DISCLAIMER.pt-BR.md) · [Русский](DISCLAIMER.ru.md)
 
-personagent is released under the [Apache License 2.0](../LICENSE): free to use, change and share, for commercial purposes too. It puts an AI
+mibo is released under the [Apache License 2.0](../LICENSE): free to use, change and share, for commercial purposes too. It puts an AI
 character in your chats, and you are the one who runs it. You are responsible
 for what it says, where it says it and which accounts it uses. This page is
 not legal advice.
 
 ## Chat platforms and your accounts
 
-personagent reaches a chat platform in one of two ways. It connects ten
+mibo reaches a chat platform in one of two ways. It connects ten
 platforms itself: QQ official bots, personal WeChat, Telegram, Discord,
 Matrix, Twitch, IRC, Zulip, VK and Stoat. Every other platform goes through a
-third-party bridge, usually the AstrBot that personagent downloads and runs
+third-party bridge, usually the AstrBot that mibo downloads and runs
 for you. Your risk depends on what the connection logs in as.
 
 - **Official bot APIs** are made for bots. These include the official QQ bot
@@ -22,7 +22,7 @@ for you. Your risk depends on what the connection logs in as.
   DingTalk, WeCom and similar platforms. You still have to follow each
   platform's developer terms and rate limits.
 - **Accounts of their own on open networks.** On Matrix, Twitch and IRC a bot
-  is an ordinary account that you create for it, and personagent uses the
+  is an ordinary account that you create for it, and mibo uses the
   network's documented interface: the Matrix Client-Server API on the
   homeserver that holds the bot account, the Twitch API with a sign-in that
   the character's account approves for an application you register, and the
@@ -46,7 +46,7 @@ for you. Your risk depends on what the connection logs in as.
 
 If you use one of these, use a dedicated account you can afford to lose, never
 your main one. Where you can, run it from a home network rather than a cloud
-server. Read the current terms of every network you connect. Neither the author of personagent nor the
+server. Read the current terms of every network you connect. Neither the author of mibo nor the
 maintainers of any third-party project it works with (AstrBot, NapCat, Koishi,
 mautrix and others) accept liability for a lost or restricted account.
 
@@ -56,7 +56,7 @@ mautrix and others) accept liability for a lost or restricted account.
   agreement of the group's owner or admins before you add it. Give the
   account a name that makes this obvious, and say so in its profile where the
   platform has one.
-- When someone sincerely asks whether it is an AI, personagent is built to say
+- When someone sincerely asks whether it is an AI, mibo is built to say
   so. Do not edit the persona to make it deny this.
 - Do not use it to impersonate a real person, or to mislead anyone about who
   or what they are talking to. Some platforms and some countries require bots
@@ -72,14 +72,14 @@ mautrix and others) accept liability for a lost or restricted account.
 ## Portrait credits
 
 The portraits of the DeepSeek whale girl, the GPT dragon girl and the Claude
-lady were drawn for personagent after designs the community already draws.
+lady were drawn for mibo after designs the community already draws.
 The whale girl derives from 溟月, an original character by the Bilibili
 creator 上善无形 (CC BY-NC-SA 4.0), in the maid outfit that ZipZipPipe gave
 her. The dragon girl follows ZipZipPipe's white dragon. The Claude lady
 follows a community design whose first artist is not known. The portraits are
 licensed CC BY-NC-SA 4.0, a licence of their own: keep the credit, do not use
 them commercially, and share changes under the same licence. See
-`persona_agent/static/characters/LICENSE.md`.
+`mibo/static/characters/LICENSE.md`.
 
 ## What your model provider sees
 
@@ -94,7 +94,7 @@ to it. Other services you turn on see parts of this too. They
 include the fallback, judge, self-evaluation and embedding endpoints you
 configure, and web search, which sends a short query to Tavily if you set a
 key and to DuckDuckGo otherwise. The update check sends pypi.org only
-personagent's version number, at most once a day; `UPDATE_CHECK_ENABLED=false`
+mibo's version number, at most once a day; `UPDATE_CHECK_ENABLED=false`
 turns it off.
 
 Read each provider's data-retention policy before you use it. Some providers
@@ -122,9 +122,9 @@ reactions from the same chat, at least one of them from the person the reply
 was for. Where reactions cannot settle a change, the bot decides itself with
 a model call, and a model can misjudge. Nobody is asked to confirm these
 changes. Every change is recorded in an append-only ledger with who decided
-it and why, and you can undo it with `personagent learned` or in the local
+it and why, and you can undo it with `mibo learned` or in the local
 page's Activity view. Check it from time to time. What it remembers can be
-read and forgotten there too, or with `personagent memory`.
+read and forgotten there too, or with `mibo memory`.
 
 ## No warranty
 

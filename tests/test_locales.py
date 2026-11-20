@@ -1,9 +1,9 @@
-"""persona_agent/locales/: every language has every key, with its slots, in its own script."""
+"""mibo/locales/: every language has every key, with its slots, in its own script."""
 from __future__ import annotations
 
 import pytest
 
-from persona_agent import i18n, langs
+from mibo import i18n, langs
 from tools import locale_gaps
 
 from helpers import check

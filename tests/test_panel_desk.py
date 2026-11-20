@@ -10,10 +10,10 @@ from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 import pytest
 
-from persona_agent import i18n, shortcut
-from persona_agent import setup_wizard as sw
-from persona_agent import welcome
-from persona_agent.panels import desk
+from mibo import i18n, shortcut
+from mibo import setup_wizard as sw
+from mibo import welcome
+from mibo.panels import desk
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

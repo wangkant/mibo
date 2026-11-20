@@ -55,9 +55,9 @@ def draws(snaps: list[tuple[dict, dict]], rounds: int) -> None:
     import tempfile
     import time
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from persona_agent import situation
-    from persona_agent.panels import feed
-    from persona_agent.sources import base, catalog, weights
+    from mibo import situation
+    from mibo.panels import feed
+    from mibo.sources import base, catalog, weights
     items, labels = {}, {}
     for got, said in snaps:
         items.update(got)

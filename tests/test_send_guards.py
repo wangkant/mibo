@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from persona_agent import chatlangs
-from persona_agent.textproc import (
+from mibo import chatlangs
+from mibo.textproc import (
     TextProcessing as TP,
 )
 

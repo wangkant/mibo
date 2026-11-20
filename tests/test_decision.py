@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent import decision
+from mibo import decision
 
 from helpers import check, isolated_agent
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from persona_agent.agent import Agent
+from mibo.agent import Agent
 
 from helpers import isolated_agent
 

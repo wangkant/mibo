@@ -1,4 +1,4 @@
-"""Measure how Mibo shares the computer while it operates another program (persona_agent/desk), with no model.
+"""Measure how Mibo shares the computer while it operates another program (mibo/desk), with no model.
 
     python tools/desk_manners.py --home DIR [--tree DIR] [--only idle,pause,menu,double] [--out FILE]
 
@@ -123,7 +123,7 @@ class Bench:
         self.home = Path(args.home).resolve()
         self.home.mkdir(parents=True, exist_ok=True)
         sys.path.insert(0, str(Path(args.tree).resolve() if args.tree else Path(__file__).resolve().parents[1]))
-        from persona_agent.desk import grants, hands, operate, panel, strip, uia, win32
+        from mibo.desk import grants, hands, operate, panel, strip, uia, win32
         self.g, self.hands_mod, self.operate, self.panel, self.strip_mod, self.uia, self.win32 = (
             grants, hands, operate, panel, strip, uia, win32)
         win32.dpi_aware()

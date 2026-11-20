@@ -12,8 +12,8 @@ import json
 import time
 from pathlib import Path
 
-from persona_agent import recent
-from persona_agent.agent import Agent
+from mibo import recent
+from mibo.agent import Agent
 
 from helpers import check
 from helpers import make_agent

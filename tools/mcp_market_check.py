@@ -27,7 +27,7 @@ def call(path: str, body=None):
     request = urllib.request.Request(
         f"http://{address.netloc}/api/{path}", data=None if body is None else json.dumps(body).encode(),
         method="GET" if body is None else "POST",
-        headers={"Content-Type": "application/json", "X-Personagent-Setup-Token": token})
+        headers={"Content-Type": "application/json", "X-Mibo-Setup-Token": token})
     start = time.perf_counter()
     try:
         with opener.open(request, timeout=120) as response:

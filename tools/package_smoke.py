@@ -1,9 +1,9 @@
-"""Smoke-test an installed `personagent` command: it answers --version with the version it was built as.
+"""Smoke-test an installed `mibo` command: it answers --version with the version it was built as.
 
 The app itself (its page, a saved key, a chat turn, a clean exit) is run by tools/welcome_smoke.py, which
 takes its stand-in model (FakeModel) and its clean environment (_env) from here.
 
-    python tools/package_smoke.py --personagent .venv/bin/personagent --version 1.0.0
+    python tools/package_smoke.py --mibo .venv/bin/mibo --version 1.0.0
 """
 from __future__ import annotations
 
@@ -60,20 +60,20 @@ def _env() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--personagent", default=shutil.which("personagent") or "",
-                   help="the installed command (default: personagent on PATH)")
+    p.add_argument("--mibo", default=shutil.which("mibo") or "",
+                   help="the installed command (default: mibo on PATH)")
     p.add_argument("--version", dest="expect_version", default="",
-                   help="the version `personagent --version` must print")
+                   help="the version `mibo --version` must print")
     args = p.parse_args(argv)
-    if not args.personagent:
-        p.error("no personagent command found; pass --personagent")
-    cmd = [shutil.which(args.personagent) or args.personagent, "--version"]
+    if not args.mibo:
+        p.error("no mibo command found; pass --mibo")
+    cmd = [shutil.which(args.mibo) or args.mibo, "--version"]
     print("$", " ".join(cmd), flush=True)
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
                             env=_env())
     said = result.stdout.strip()
     print("  " + (said + result.stderr.strip())[:2000])
-    ok = result.returncode == 0 and said.startswith(f"personagent {args.expect_version}".strip())
+    ok = result.returncode == 0 and said.startswith(f"mibo {args.expect_version}".strip())
     print("smoke:", "all steps passed" if ok else "FAILED version")
     return 0 if ok else 1
 

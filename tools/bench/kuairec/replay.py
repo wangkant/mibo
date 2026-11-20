@@ -100,9 +100,9 @@ def _load_app():
     if _app:
         return _app
     sys.path.insert(0, str(ROOT))
-    from persona_agent import life, recommend, situation, taste
-    from persona_agent.library import Library
-    from persona_agent.panels import feed
+    from mibo import life, recommend, situation, taste
+    from mibo.library import Library
+    from mibo.panels import feed
     clock = [T0]
     life.clock = lambda: clock[0]
     # Refit by hand once per card, after its reactions, as the app's minute timer would.

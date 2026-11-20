@@ -6,7 +6,7 @@
 blink.png, talk.png and look.png (the same picture with only the face
 changed) and meta.json ({"ground": "#rrggbb", "face": [x, y, w, h]}).
 
-Writes persona_agent/static/welcome/figures/<key>.webp for each key named
+Writes mibo/static/welcome/figures/<key>.webp for each key named
 (all of them when none is): four frames side by side, rest, blink, talk and
 look, 320x380 each and shown at 160x190. Also writes <art>/gallery.png, the
 rest frames side by side, to look at. The characters are scaled as one set,
@@ -41,7 +41,7 @@ from PIL import (
     ImageStat,
 )
 
-FIGURES = Path(__file__).resolve().parents[1] / "persona_agent" / "static" / "welcome" / "figures"
+FIGURES = Path(__file__).resolve().parents[1] / "mibo" / "static" / "welcome" / "figures"
 FACES = ("blink", "talk", "look")
 FRAME = (320, 380)
 # Sheet pixels. Shown at half size: feet 10 px above the frame's bottom, a

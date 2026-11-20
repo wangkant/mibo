@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent.agent import Agent
+from mibo.agent import Agent
 
 from helpers import check, isolated_agent
 

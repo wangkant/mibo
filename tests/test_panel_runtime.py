@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from persona_agent import updates, welcome
-from persona_agent.panels import runtime
+from mibo import updates, welcome
+from mibo.panels import runtime
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
@@ -83,7 +83,7 @@ def test_someone_who_asks_is_told_even_with_the_daily_check_off(page, monkeypatc
 
 
 def test_the_panel_shows_what_the_models_used_today_and_this_week(page) -> None:
-    from persona_agent import usage
+    from mibo import usage
 
     assert page.client.get("/api/runtime", headers=HEADERS).json()["usage"]["week"]["calls"] == 0
     now = time.time()
@@ -101,7 +101,7 @@ def test_the_panel_shows_what_the_models_used_today_and_this_week(page) -> None:
 
 
 def test_the_panel_splits_todays_requests_by_purpose(page) -> None:
-    from persona_agent import usage
+    from mibo import usage
 
     now = time.time()
     book = usage.UsageBook(page.home / "runtime" / usage.USAGE_FILE)

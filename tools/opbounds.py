@@ -3,7 +3,7 @@ in headless Edge the way a model led by a page's words would (it opens another s
 harmless-looking button that takes the page elsewhere, presses a bare 确认), and each check reads what the site and a
 second site on another port received, which cards came, and how many requests were paused.
 
-    python tools/opbounds.py [--out <folder>] [--port 59391] [--other 59392] [--tree <folder holding persona_agent>]
+    python tools/opbounds.py [--out <folder>] [--port 59391] [--other 59392] [--tree <folder holding mibo>]
         [--only exfil,leave]
 
 --tree runs the same checks on another copy of the code (a snapshot from before a change). One line a check;
@@ -83,13 +83,13 @@ class Play:
         self.page = await context.new_page()
         self.page.on("dialog", lambda dialog: None)
         self.page.on("request", lambda request: setattr(self, "requests", self.requests + 1))
-        from persona_agent.web.tabs import PlaywrightTab
+        from mibo.web.tabs import PlaywrightTab
         self.tab = PlaywrightTab(self.page)
         await self.tab.events("Fetch.requestPaused", lambda params: setattr(self, "paused", self.paused + 1))
         await self.tab.goto(self.site + path)
 
     async def run(self, task: str, plan: list, yes: bool = False) -> dict:
-        from persona_agent.web import gate, operate
+        from mibo.web import gate, operate
         plan = list(plan)
 
         async def model(system: str, messages: list[dict]) -> str:

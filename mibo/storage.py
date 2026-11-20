@@ -1,0 +1,422 @@
+"""Crash-conscious primitives for the runtime's plain files: one process per
+root, locked appends, durable atomic replacement, private permissions, and
+JSONL replay that quarantines invalid rows without deleting them.
+"""
+from __future__ import annotations
+
+import errno
+import json
+import logging
+import os
+import shutil
+import tempfile
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, TypeVar
+
+logger = logging.getLogger("agent.storage")
+
+PRIVATE_FILE_MODE = 0o600
+DEFAULT_LOCK_TIMEOUT_SEC = 30.0
+DEFAULT_WARNING_BYTES = 50_000_000
+
+_T = TypeVar("_T")
+
+
+def dated_copy(path: str | Path) -> Path:
+    """Copy `path` (a `.bak`) beside itself under a name that carries the
+    time, which no later backup overwrites: `x.bak` -> `x.20261115-123456.bak`."""
+    path = Path(path)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    stem = path.name[:-len(path.suffix)] if path.suffix else path.name
+    dated = path.with_name(f"{stem}.{stamp}{path.suffix}")
+    n = 1
+    while dated.exists():
+        n += 1
+        dated = path.with_name(f"{stem}.{stamp}-{n}{path.suffix}")
+    shutil.copy2(path, dated)
+    return dated
+
+
+def num(value, kind=float):
+    """`value` as a number; 0 for anything that is not one."""
+    try:
+        return kind(value or 0)
+    except (TypeError, ValueError):
+        return kind(0)
+
+
+def file_stamp(path: str | Path) -> tuple[int, int]:
+    """(size, mtime_ns) of ``path``; (0, 0) when it cannot be stat'ed."""
+    try:
+        stat = Path(path).stat()
+        return stat.st_size, stat.st_mtime_ns
+    except OSError:
+        return 0, 0
+
+
+def warning_bytes(env_name: str, override: int | None = None,
+                  default: int = DEFAULT_WARNING_BYTES) -> int:
+    """Ledger size at which health reporting warns: ``override``, else ``env_name``."""
+    if override is not None:
+        return max(0, int(override))
+    try:
+        return max(0, int(os.getenv(env_name, str(default))))
+    except ValueError:
+        return default
+
+
+class LockUnavailable(RuntimeError):
+    """Raised when a file lock cannot be acquired within its timeout."""
+
+
+def _set_private_permissions(path: Path) -> None:
+    try:
+        os.chmod(path, PRIVATE_FILE_MODE)
+    except OSError:
+        pass  # Windows ACLs do not map to POSIX mode bits
+
+
+def _sync_directory(directory: Path) -> None:
+    """Persist a directory entry update where the platform supports it."""
+    if os.name == "nt" or not hasattr(os, "O_DIRECTORY"):
+        return
+    fd = -1
+    try:
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        os.fsync(fd)
+    except OSError:
+        pass  # some filesystems reject directory fsync
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+class FileLock:
+    """Cross-platform advisory exclusive lock backed by a sidecar file."""
+
+    def __init__(self, path: str | Path, *, timeout: float | None = None):
+        self.path = Path(path)
+        self.timeout = timeout
+        self._fd = -1
+
+    def acquire(self) -> "FileLock":
+        if self._fd >= 0:
+            return self
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, PRIVATE_FILE_MODE)
+        _set_private_permissions(self.path)
+        deadline = (
+            None if self.timeout is None
+            else time.monotonic() + max(0.0, float(self.timeout))
+        )
+        while True:
+            try:
+                self._try_lock(fd)
+                self._fd = fd
+                return self
+            except OSError as exc:
+                if not self._is_busy(exc):
+                    os.close(fd)
+                    raise
+                if deadline is not None and time.monotonic() >= deadline:
+                    os.close(fd)
+                    raise LockUnavailable(
+                        f"lock already held: {self.path}") from exc
+                time.sleep(0.02)
+
+    @staticmethod
+    def _is_busy(exc: OSError) -> bool:
+        return exc.errno in (
+            errno.EACCES, errno.EAGAIN, errno.EDEADLK,
+            getattr(errno, "EWOULDBLOCK", errno.EAGAIN),
+        )
+
+    @staticmethod
+    def _try_lock(fd: int) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            if os.fstat(fd).st_size == 0:
+                os.write(fd, b"\0")
+                os.fsync(fd)
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    @staticmethod
+    def _unlock(fd: int) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fd, fcntl.LOCK_UN)
+
+    def release(self) -> None:
+        if self._fd < 0:
+            return
+        fd, self._fd = self._fd, -1
+        try:
+            self._unlock(fd)
+        finally:
+            os.close(fd)
+
+    def __enter__(self) -> "FileLock":
+        return self.acquire()
+
+    def __exit__(self, *_exc) -> None:
+        self.release()
+
+
+ALREADY_RUNNING = (
+    "another Mibo is already running from {home}; stop that one first, "
+    "or give this one its own folder with --home DIR (or AGENT_HOME)")
+
+
+class RuntimeInstanceLock(FileLock):
+    """Non-blocking single-holder lock for one deployment root: AGENT_HOME,
+    not the runtime dir, which two processes could set apart."""
+
+    def __init__(self, deployment_root: str | Path):
+        deployment_root = Path(deployment_root)
+        super().__init__(
+            deployment_root / ".mibo.instance.lock", timeout=0.0)
+
+
+def append_lock_path(path: str | Path) -> Path:
+    path = Path(path)
+    return path.with_name(f".{path.name}.append.lock")
+
+
+def append_lock(path: str | Path, *,
+                timeout: float | None = DEFAULT_LOCK_TIMEOUT_SEC) -> FileLock:
+    return FileLock(append_lock_path(path), timeout=timeout)
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    offset = 0
+    while offset < len(data):
+        offset += os.write(fd, data[offset:])
+
+
+def append_jsonl_unlocked(path: str | Path, row: dict) -> int:
+    """Append one complete JSON object; caller must hold ``append_lock(path)``."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps(
+        row, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+    existed = path.exists()
+    # O_BINARY: in text mode Windows would write CRLF.
+    fd = os.open(
+        path,
+        os.O_RDWR | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0),
+        PRIVATE_FILE_MODE)
+    try:
+        _set_private_permissions(path)
+        size = os.fstat(fd).st_size
+        if size:
+            os.lseek(fd, -1, os.SEEK_END)
+            if os.read(fd, 1) != b"\n":
+                _write_all(fd, b"\n")
+        _write_all(fd, payload)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if not existed:
+        _sync_directory(path.parent)
+    return len(payload)
+
+
+def append_jsonl(path: str | Path, row: dict, *,
+                 lock_timeout: float | None = DEFAULT_LOCK_TIMEOUT_SEC) -> int:
+    """Serialize and durably append one JSONL row under a process lock."""
+    with append_lock(path, timeout=lock_timeout):
+        return append_jsonl_unlocked(path, row)
+
+
+def append_jsonl_rotating(path: str | Path, row: dict, *, max_bytes: int,
+                          lock_timeout: float | None = DEFAULT_LOCK_TIMEOUT_SEC) -> int:
+    """Locked append that first moves ``path`` aside to ``<path>.old`` past ``max_bytes``."""
+    path = Path(path)
+    with append_lock(path, timeout=lock_timeout):
+        try:
+            if path.exists() and path.stat().st_size > max_bytes:
+                old = path.with_suffix(path.suffix + ".old")
+                if old.exists():
+                    old.unlink()
+                path.replace(old)
+        except OSError as exc:
+            logger.warning("log rotation failed for %s: %s", path, exc)
+        return append_jsonl_unlocked(path, row)
+
+
+_WINDOWS = os.name == "nt"
+
+
+def replace(source: str | Path, target: str | Path) -> None:
+    """os.replace that waits out a reader. On Windows a file someone has open
+    for an instant cannot be replaced, and the page reads .env on every poll."""
+    for attempt in range(20):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if not _WINDOWS or attempt == 19:
+                raise
+            time.sleep(0.05)
+
+
+def atomic_write_text(path: str | Path, text: str, *,
+                      encoding: str = "utf-8", fsync: bool = True) -> None:
+    """Durably replace ``path`` through a same-directory temporary file.
+    ``fsync=False`` stays atomic but skips the disk wait; only for state that
+    can be rebuilt, never a ledger or a lineage."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        try:
+            os.fchmod(fd, PRIVATE_FILE_MODE)
+        except (AttributeError, OSError):
+            pass
+        with os.fdopen(fd, "w", encoding=encoding, newline="\n") as handle:
+            fd = -1
+            handle.write(text)
+            handle.flush()
+            if fsync:
+                os.fsync(handle.fileno())
+        replace(tmp, path)
+        _set_private_permissions(path)
+        if fsync:
+            _sync_directory(path.parent)
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def load_rebuildable_json(path: str | Path,
+                          parse: Callable[[object], _T]) -> _T | None:
+    """``parse(data)`` for a JSON state file written with ``fsync=False``;
+    None when the file is absent or does not load.
+
+    Only for connector_handles.json, which skips fsync, so a power cut can
+    leave it empty or cut off, and the next messages rebuild what it held. A file that is not JSON, or whose shape
+    ``parse`` rejects (ValueError, LookupError, TypeError, AttributeError),
+    is moved aside as ``<name>.corrupt``, replacing an older one, with one
+    warning, and the caller starts empty. Never for a file written with
+    fsync (memory, settings): damage there must stop with
+    an error, not be started over.
+    """
+    path = Path(path)
+    try:
+        blob = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    try:
+        return parse(json.loads(blob.decode("utf-8")))
+    except (ValueError, LookupError, TypeError, AttributeError) as exc:
+        reason = type(exc).__name__
+    aside = path.with_name(path.name + ".corrupt")
+    try:
+        os.replace(path, aside)
+        kept = f"moved aside as {aside.name}"
+    except OSError as exc:
+        kept = f"could not be moved aside ({exc})"
+    logger.warning("%s does not load (%s): %s, starting empty",
+                   path, reason, kept)
+    return None
+
+
+@dataclass(frozen=True)
+class QuarantinedRow:
+    """An invalid row excluded from replay while remaining in the source log."""
+
+    line_number: int
+    reason: str
+
+
+@dataclass(frozen=True)
+class ValidatedJsonl:
+    rows: list[dict]
+    quarantined: list[QuarantinedRow]
+
+
+def read_validated_jsonl(
+    path: str | Path,
+    validate: Callable[[dict], str | None],
+) -> ValidatedJsonl:
+    """Valid JSON-object rows; invalid ones are skipped and reported, never
+    removed from the file."""
+    path = Path(path)
+    try:
+        lines = path.read_bytes().splitlines()
+    except OSError:
+        return ValidatedJsonl([], [])
+    rows: list[dict] = []
+    quarantined: list[QuarantinedRow] = []
+    for line_number, raw in enumerate(lines, 1):
+        if not raw.strip():
+            continue
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            quarantined.append(QuarantinedRow(line_number, "invalid utf-8"))
+            continue
+        try:
+            row = json.loads(text)
+        except json.JSONDecodeError:
+            quarantined.append(QuarantinedRow(line_number, "invalid json"))
+            continue
+        if not isinstance(row, dict):
+            quarantined.append(
+                QuarantinedRow(line_number, "row is not an object"))
+            continue
+        try:
+            reason = validate(row)
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            reason = f"validation failed: {type(exc).__name__}"
+        if reason:
+            quarantined.append(QuarantinedRow(line_number, reason))
+            continue
+        rows.append(row)
+    return ValidatedJsonl(rows, quarantined)
+
+
+def append_only_health(
+    path: str | Path,
+    *,
+    warning_bytes: int,
+    quarantined_rows: int = 0,
+) -> dict:
+    """Return non-destructive size/integrity metadata for health reporting."""
+    path = Path(path)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
+    threshold = max(0, int(warning_bytes))
+    warning = threshold > 0 and size >= threshold
+    return {
+        "path": str(path),
+        "size_bytes": size,
+        "warning_bytes": threshold,
+        "size_warning": warning,
+        "quarantined_rows": max(0, int(quarantined_rows)),
+        "append_only": True,
+        "truncated": False,
+    }

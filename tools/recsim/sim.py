@@ -31,9 +31,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from persona_agent import life, pacing, person as person_rows, profile, recommend, situation, taste  # noqa: E402
-from persona_agent.library import Library  # noqa: E402
-from persona_agent.panels import feed  # noqa: E402
+from mibo import life, pacing, person as person_rows, profile, recommend, situation, taste  # noqa: E402
+from mibo.library import Library  # noqa: E402
+from mibo.panels import feed  # noqa: E402
 from llm import env_values  # noqa: E402
 from people import DAY, PEOPLE, OFFERED, WORK, Person, activity, top  # noqa: E402
 from people2 import FRESH, Fresh  # noqa: E402

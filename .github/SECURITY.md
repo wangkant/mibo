@@ -5,9 +5,9 @@
 Please report vulnerabilities privately, not in a public issue.
 
 Use GitHub's private vulnerability reporting. Open the
-[Security tab of wangkant/personagent](https://github.com/wangkant/personagent/security),
+[Security tab of wangkant/mibo](https://github.com/wangkant/mibo/security),
 choose "Report a vulnerability", and describe what you found. Include the
-version (`personagent --version`), how you installed it, which connector you
+version (`mibo --version`), how you installed it, which connector you
 use, and the smallest set of steps that reproduces the problem. Do not
 include real API keys, tokens or chat logs.
 
@@ -47,7 +47,7 @@ of them is a vulnerability.
 - **The SSRF guard.** Every fetch of a link, share card or image goes
   through one guard. It allows public addresses only, checks every address
   a name resolves to, and checks redirects at each hop.
-- **The local page.** `personagent start` serves it on 127.0.0.1 only. Its
+- **The local page.** `mibo start` serves it on 127.0.0.1 only. Its
   API requires the token in the link the command opens, which is new on
   each run. It refuses a host other than `localhost`, `127.0.0.1` or `::1`,
   an `Origin` other than the page's own, and forwarding headers. It sends a
@@ -55,11 +55,11 @@ of them is a vulnerability.
 - **The Activity API.** The agent service serves no page. `GET /` answers
   a plain-text note, and the JSON API under `/api/dashboard/` feeds the
   local page's Activity view. Every call needs the
-  `X-Personagent-Dashboard-Token` header with the token stored owner-only
+  `X-Mibo-Dashboard-Token` header with the token stored owner-only
   in `<runtime>/dashboard.token`, which the service creates when it starts.
   No link, query string or cookie carries the token. `CONNECTOR_TOKEN` does
   not open the API. A request that a browser marks as cross-site or
-  same-site is refused. Changes need a POST with `X-Personagent-Dashboard:
+  same-site is refused. Changes need a POST with `X-Mibo-Dashboard:
   1`, `Content-Type: application/json` and, when an `Origin` is sent, the
   service's own origin. Responses carry a strict content security policy,
   never include a value whose name ends in `_KEY`, `_TOKEN`, `_SECRET` or
@@ -92,6 +92,6 @@ of them is a vulnerability.
 Read the guide's [privacy section](../docs/guide.md#privacy-and-consent)
 for what to keep private.
 
-personagent asks PyPI whether a newer release exists at most once a day.
+mibo asks PyPI whether a newer release exists at most once a day.
 The request carries only the version number. Set
 `UPDATE_CHECK_ENABLED=false` in `.env` to turn the check off.

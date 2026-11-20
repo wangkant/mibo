@@ -20,9 +20,9 @@ from unittest.mock import patch
 
 import pytest
 
-from persona_agent.agent import Agent
-from persona_agent.ingestion import ContentIngestion, safe_fetch_url
-from persona_agent.llm import ModelCalls
+from mibo.agent import Agent
+from mibo.ingestion import ContentIngestion, safe_fetch_url
+from mibo.llm import ModelCalls
 
 from helpers import check, isolated_agent
 
@@ -236,7 +236,7 @@ async def test_dns_resolution_is_pinned_once() -> None:
         return resolutions.pop(0)
 
     agent._http = fake_factory
-    with patch("persona_agent.ingestion.socket.getaddrinfo", fake_getaddrinfo):
+    with patch("mibo.ingestion.socket.getaddrinfo", fake_getaddrinfo):
         got = await agent._fetch_image_bytes("https://rebind.example/image")
 
     transport = kwargs_seen[0].get("transport") if kwargs_seen else None
@@ -259,7 +259,7 @@ async def test_dns_resolution_obeys_timeout(caplog) -> None:
         ]
 
     try:
-        with patch("persona_agent.ingestion.socket.getaddrinfo", stuck_getaddrinfo), \
+        with patch("mibo.ingestion.socket.getaddrinfo", stuck_getaddrinfo), \
                 caplog.at_level(logging.WARNING, logger="agent"):
             result = await safe_fetch_url(
                 "https://slow-dns.example/image",
@@ -338,8 +338,8 @@ def test_a_fetched_url_is_logged_as_its_host_only(caplog) -> None:
     import asyncio
     import logging
 
-    from persona_agent import ingestion
-    from persona_agent.ingestion import _url_for_log
+    from mibo import ingestion
+    from mibo.ingestion import _url_for_log
 
     shown = _url_for_log(TELEGRAM_FILE_URL)
     check("url log: the host is kept", "api.telegram.org" in shown, shown)
@@ -381,7 +381,7 @@ def test_a_fetched_url_is_logged_as_its_host_only(caplog) -> None:
     ("2606:4700::1111", False),
 ])
 def test_every_non_global_address_is_internal(address, internal) -> None:
-    from persona_agent.ingestion import _is_internal_ip
+    from mibo.ingestion import _is_internal_ip
 
     check(f"ssrf: {address} internal={internal}",
           _is_internal_ip(address) is internal)
@@ -465,7 +465,7 @@ class VisionHarness(Harness, ModelCalls):
 @pytest.fixture
 def sleeps(monkeypatch) -> list:
     """Backoff delays the vision paths asked for; nothing actually waits."""
-    from persona_agent import ingestion
+    from mibo import ingestion
 
     delays: list = []
 

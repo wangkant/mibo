@@ -1,192 +1,70 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/wangkant/personagent/main/assets/personagent-cover.webp" alt="personagent" width="100%">
-</p>
+# Mibo
 
-<h3 align="center">像人一样的智能体，可连接你使用的所有平台。<br>它拥有自己的性格与记忆，从与人的交流中学习，并自行判断何时发言。</h3>
+一个住在桌面上的伙伴：一个角色，与你对话、记住你、每次为你带来一件值得看的内容，并可代你在网页、其他程序和文件中操作；每一次操作都先由你在卡片上确认。
 
-<p align="center">
-  <a href="https://pypi.org/project/personagent/"><img src="https://img.shields.io/pypi/v/personagent?style=flat-square&label=PyPI&labelColor=24292f&color=0969da&cacheSeconds=3600" alt="PyPI"></a>
-  <a href="https://github.com/wangkant/personagent/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/wangkant/personagent/ci.yml?branch=main&style=flat-square&label=CI&labelColor=24292f" alt="CI"></a>
+<p>
+  <a href="https://github.com/wangkant/mibo/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI&labelColor=24292f" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.14-0969da?style=flat-square&labelColor=24292f" alt="Python 3.10–3.14"></a>
-  <a href="https://github.com/wangkant/personagent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square&labelColor=24292f" alt="License: Apache 2.0"></a>
+  <a href="https://github.com/wangkant/mibo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square&labelColor=24292f" alt="许可证：Apache 2.0"></a>
 </p>
 
-<p align="center"><a href="https://github.com/wangkant/personagent/blob/main/README.md">English</a> · <strong>简体中文</strong> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.zh-TW.md">繁體中文</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ja.md">日本語</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ko.md">한국어</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.es.md">Español</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.fr.md">Français</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.de.md">Deutsch</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.pt-BR.md">Português</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ru.md">Русский</a></p>
+[English](README.md) · **简体中文**
 
-personagent 在你自己的电脑上运行，保存的所有内容都留在本机。它可在你使用的各处运行：QQ、微信、Telegram、Discord 及另外十八个平台的群聊与私聊，本机的窗口，以及 Claude Code、Codex 等编程助手。角色可选用现成的，也可自行编写；接入任意兼容 OpenAI 接口的模型即可使用。
+Mibo 运行在你自己的电脑上，使用你自己的模型服务，所保存的内容都在本机的一个文件夹中。目前优先支持 Windows 10 和 11。它尚未发布：暂无安装包可供下载，需从本仓库运行。
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/wangkant/personagent/main/docs/welcome.zh-CN.jpg" alt="本地页面中的「连接平台」：可扫码连接或填写几项即可连接的平台、已折叠的高级平台，以及可接入的编程助手" width="960">
-</p>
+## 功能
 
-<p align="center"><em>「连接平台」与设置、聊天位于同一个本地页面中。</em></p>
+- **对话。** 一个有自己语气的角色，既在窗口中，也以桌面上的小形象出现。可选用内置角色，也可自行编写。模型由你提供：任何兼容 OpenAI 对话接口的服务，使用你自己的密钥。
+- **记忆。** 你告诉它的事以带日期的事实和计划保存，可在“设置 › 记忆”中查看、修改或删除。在对话中说“记住……”“忘掉……”同样有效。证件号、银行卡号、密码和验证码不予保存。
+- **每次推荐一件内容。** 它在后台读取公开来源，并根据你对所展示内容的实际反应了解你的偏好：以停留时长为准，仅点开不代表喜欢。每张卡片都说明推荐原因，可选择“不感兴趣”并注明原因，也可撤销；展示过的内容均可在“推荐记录”中找回。推荐频率和免打扰时段由你设定。
+- **以访客身份外出浏览。** 只读取公开网页，不登录任何账号，遵守 robots.txt；你让它查找某件事时，它会告知查找结果。
+- **内置浏览器，对话在网页旁。** 在对话中提出要求，它即代你操作网页。发送、发布、上传文件、下载以及前往其他网站，均须你确认。它报告的结果会与网页上的实际变化核对。
+- **操作其他程序**（Windows）。按“开始”菜单中的名称查找程序，操作前先征得同意，你正在使用键盘鼠标时会等待，一项任务最多可跨三个程序完成。
+- **命令与文件，仅限你授权的文件夹。** 每条命令在运行前都会被解析；需要你同意时，以通俗的文字说明其作用。删除的文件进入回收站，每一轮的文件改动可在回复下方撤销。
+- **技能与连接器。** 技能是带有 `SKILL.md` 的文件夹，可来自经过审核的技能市场，也可自行添加。MCP 服务器一键连接，在浏览器中完成登录，令牌保存在系统的凭据存储中。
+- **定时任务**，以及可检索的**以往对话**。
+- **十种界面语言**：English、简体中文、繁體中文、日本語、한국어、Español、Français、Deutsch、Português (Brasil)、Русский。
 
-## 主要特点
+## 不会做的事
 
-<table>
-<tr>
-<td width="220" valign="top"><strong>拥有自己的性格</strong></td>
-<td valign="top">
-提供七种现成性格。其中三个是社区中早已流行的形象：DeepSeek 鲸鱼娘、GPT 娘（白龙）和 Claude 娘，立绘会眨眼、思考和说话。<br>
-人设可随时改写，角色已学到的内容将保留。<br>
-可导入 Tavern 角色卡（一个文件即可），也可用一两句话描述角色，由模型起草人设；自己的角色可保存为角色卡，便于分享。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>像人一样说话</strong></td>
-<td valign="top">
-它像人在聊天时那样写字：用对话所用的语言，句子短而平实，不列清单、不加标题、不说客服套话，不知道的事会直说。<br>
-在多数平台上，回复会分成几条短消息，条与条之间留出打字的间隔；Telegram、Discord 和 Matrix 还会同步显示输入状态。<br>
-它会收集大家发过的表情包并在合适时使用；深夜里除非被叫到，一般不参与对话。<br>
-开启后，它会在长时间无人说话时主动发起话题，也会回头跟进大家提过的安排。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>有记忆</strong></td>
-<td valign="top">
-每个聊天都有独立的记忆：重新启动后仍在的近期消息、此前对话的摘要、带日期的事件，以及关于成员的事实，均由它自行保持更新。<br>
-它记住的全部内容都列在「动态」中，其中任何一项都可以删除或恢复。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>只采纳可靠的纠正</strong></td>
-<td valign="top">
-纠正所教的内容（例如群里对健身房的称呼）会应用于该聊天此后的每一条回复。<br>
-恶意干扰者和旁观者都无法教坏角色。<br>
-反应无法确定的改动由角色自行判断并记录理由，任何内容都无需他人批准。<br>
-每一处改动均有记录，且均可撤回。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>懂得何时保持沉默</strong></td>
-<td valign="top">
-在群聊中，被点名时即回复；无人点名时，由模型判断真人此时是否会接话。<br>
-有人连续刷屏时，只回复一条。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>连接你的所有平台</strong></td>
-<td valign="top">
-二十二个聊天平台均可在同一页面中连接，用手机扫码一次或填写几项即可；其中多数同时支持群聊与私聊。<br>
-新连接的平台只回复你批准过的对话：陌生人会收到一个简短的代码，由你在页面上批准；点击「这是我」还可将自己设为管理员。<br>
-同一个智能体也在本机窗口中与你对话，并可接入 Claude Code、Codex 和 DeepSeek Harness。<br>
-任何可填写 OpenAI 兼容地址的软件（如 Open WebUI、SillyTavern）都可以与同一个角色对话。<br>
-其他平台可通过 AstrBot、Koishi 或 Matrix 桥接接入，也可自行编写连接器。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>适配你现有的条件</strong></td>
-<td valign="top">
-可使用任意兼容 OpenAI 接口的模型：OpenRouter 的免费模型、付费服务，或用 Ollama 在本机运行的模型。<br>
-一行命令即可安装，自带 Python，电脑上无需预装任何软件。页面支持中文、英文及其他八种语言；在浏览器中用 OpenRouter 账号登录，或填写一个模型 Key，即可开始聊天；本机已在运行 Ollama 或 LM Studio 时点击一次即可。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>使用你提供的工具</strong></td>
-<td valign="top">
-粘贴 MCP 服务器说明文档中的配置片段，角色即可通过该服务器的工具查询信息或执行操作：每条回复至多使用一个工具，并仍以自己的语气作答。<br>
-每个工具都可单独开关，并可选择谁能触发：仅限你本人，或角色回复的任何人。
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>在需要的地方运行</strong></td>
-<td valign="top">
-既可在自己的电脑上以窗口运行，也可在服务器、NAS 或 Docker 中运行，并通过 `personagent service install` 保持常驻。<br>
-设置页面密码后，可在手机或其他电脑上登录并打开同一个页面。
-</td>
-</tr>
-</table>
+- 不读取、不输入密码、支付信息或验证码。登录始终由你本人完成。
+- 付款、购买、删除以及任何涉及账号安全的操作，每次都会询问，不提供“始终允许”。
+- 无人值守时不会自行运行，除非你设置了定时任务。定时任务只读取内容；超出你对该任务授权范围的操作，会留作按钮等你确认。
+- 你的登录状态和 Cookie 不会离开本机。模型密钥只发送给你选择的模型服务。
 
-也可以在聊天中让它记住或忘记指定内容（小夏是默认角色的名字）：`小夏，记住 阿杰不吃辣`、`小夏 忘掉 不吃辣`（[记忆命令](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#教导角色)）。保存哪些内容、保存多久，见使用手册的[记忆](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#记忆)一节。
+## 运行
 
-## 快速开始
-
-无需预先安装任何软件，在终端中粘贴一行命令即可。
-
-Windows（PowerShell）：
-
-```powershell
-irm https://raw.githubusercontent.com/wangkant/personagent/main/install.ps1 | iex
-```
-
-macOS 和 Linux：
-
-```sh
-curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.sh | sh
-```
-
-安装程序自带 Python，安装完成后自动打开 personagent；在 Windows 上还会在桌面添加图标。PyPI 或 GitHub 访问不畅时，安装程序会自动改用中国大陆的镜像。再次运行同一条命令即可更新。
-
-如已安装 Python 3.10 或更高版本，也可以运行 `python -m pip install personagent`，再运行 `personagent`；如已安装 [uv](https://docs.astral.sh/uv/)，可直接运行 `uvx personagent`，无需单独安装。
-
-在 Windows 上，personagent 会在独立窗口中打开；在 macOS 和 Linux 上则在浏览器中打开。点击「通过 OpenRouter 登录」并在浏览器中批准，或填写模型 API Key 后点击「验证并开始聊天」。默认选中的是 OpenRouter 免费模型：使用它同样需要账号或 Key，但不收费。`personagent demo` 无需 Key，会播放三段预先编写的场景。[简明入门](https://github.com/wangkant/personagent/blob/main/docs/start.zh-CN.md)逐屏介绍了页面的各个部分。
-
-personagent 本身免费。费用支付给你选择的模型服务，按其价格计算。一条消息可能产生不止一次模型请求：除回复本身外，角色有时还会判断是否在群里发言、评估回复得到的反应，或整理记忆。OpenRouter 的免费模型每天限 50 次请求，部分免费服务商会保留收到的内容；Ollama 在你自己的电脑上运行模型，无需 Key。
-
-## 连接你的平台
-
-在本地页面中打开「连接平台」：
-
-| 页面分组 | 平台 | 需要准备 |
-|---|---|---|
-| 扫码连接 | QQ、个人微信 | 手机。微信机器人仅支持一对一聊天 |
-| 填写几项 | Telegram、Discord、Matrix、Twitch、IRC、Zulip、VK、Stoat、KOOK、飞书、钉钉、Slack、企业微信智能机器人、Mattermost、Misskey | 从平台后台复制，页面会说明需要复制哪几项 |
-| 高级 | 企业微信应用、微信公众号、QQ（Webhook）、OneBot v11（NapCat）、Satori | 公网地址，或本机的其他软件 |
-
-已连接的平台在每次启动 personagent 时都会自动连接。扫码连接的平台，以及 Telegram、Discord、Matrix、Twitch、IRC、Zulip、VK 和 Stoat 由 personagent 直接连接；其余平台通过 personagent 在后台下载并运行的 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 接入。在没有显示器的服务器上，可在终端中运行 `personagent connect <平台>` 连接上述十个平台中的任意一个，操作步骤和核验方式与页面相同；运行 `personagent up` 即可在不打开浏览器的情况下全部启动。各平台的设置方法见[使用手册](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#接入聊天平台)；从零开始接入 QQ 请参阅[部署教程](https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-CN.md)。
-
-其余软件可通过同一页面中的「其他软件」接入：开启后，将地址、密钥和模型名称填入任何可填写 OpenAI 兼容地址的软件，该软件即可与你的角色对话，记忆与其他平台相同。详见[使用手册](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#其他软件)；在终端中运行 `personagent connect api` 效果相同。
-
-如果你已在运行 AstrBot，personagent 可以接在其后，仅作为智能体运行：请参阅[你自己运行的桥接](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#你自己运行的桥接)。
-
-## 在服务器上运行
-
-```sh
-personagent page password --random   # 生成并显示页面密码
-PAGE_HOST=0.0.0.0 personagent up      # 启动服务、已连接的平台和页面（端口 8090）
-personagent service install           # 重启后自动运行（Linux、macOS）
-```
-
-在任意设备上打开 `http://<服务器地址>:8090/`，使用页面密码登录。未设置密码时，页面拒绝在本机以外的地址上监听。明文 HTTP 会让途经的网络看到密码，因此在家庭网络之外请使用 SSH 隧道、Tailscale 或带 HTTPS 的反向代理。使用 Docker 时，在仓库的克隆中运行 `docker compose up -d` 即可构建并启动，`docker compose logs` 会显示首次启动时生成的密码；镜像随每次发版发布到 `ghcr.io/wangkant/personagent`。各步骤详见[部署指南](https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-CN.md#在服务器nas-或-docker-中运行)。
-
-## 编程助手
-
-**由编程助手代为安装。** 将下面这句话发送给能在你电脑上运行命令的 AI 编程助手。模型 Key 由你自己在本地页面中填写，不经过编程助手。
-
-```text
-读 https://raw.githubusercontent.com/wangkant/personagent/main/docs/setup-for-agents.md ，然后帮我把 personagent 装好并设置好
-```
-
-**编写代码时与角色对话。** Claude Code、Codex 和 DeepSeek Harness（`dsh`）均可连接你的角色，聊天和记忆与本地页面共用同一份：
+需要 Python 3.10 至 3.14。
 
 ```bash
-personagent connect claude-code
-personagent connect codex
-personagent connect dsh
+git clone https://github.com/wangkant/mibo
+cd mibo
+python -m pip install -e .
+mibo
 ```
 
-`--remove` 可将其移除；也可以在页面「连接平台」的「编程助手」中接入或移除。权限设置，以及让角色在一轮结束时发表一句评论的 `--react`，请参阅[使用手册](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#编程助手)。
+`mibo` 会打开窗口并引导完成首次设置：语言、角色、模型密钥、关注的话题。Windows 使用系统自带的 WebView2（Windows 10 和 11 均已包含）。在 macOS 和 Linux 上，请使用 `python -m pip install -e ".[app]"` 安装窗口组件；操作其他程序和内置浏览器目前仅支持 Windows。
 
-## 更新与卸载
+Mibo 保存的所有内容都在一个文件夹中：默认为 `~/mibo`，也可通过 `mibo --home DIR` 指定。
 
-PyPI 上发布新版本时，页面会显示提示及相应的更新命令。如使用 pip 安装，更新命令为 `python -m pip install -U personagent`。对于大多数安装方式，页面「应用」视图中的「更新并重新打开」可代为执行更新。设置、角色、已学到的内容和已连接的平台均会保留。如需卸载，请按照使用手册中的[卸载 personagent](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#卸载-personagent)操作。
+## 开发
 
-## 隐私
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+ruff check . --select F401,F811,F821,F841
+```
 
-personagent 保存的所有数据都位于你本机的一个主目录中。你选择的模型服务商可以看到角色所回复的对话；personagent 每天向 pypi.org 查询一次是否有新版本（设置 `UPDATE_CHECK_ENABLED=false` 可关闭）。将角色接入真人聊天之前，请告知对方这是机器人，并征得其同意；哪些内容会发送至何处，[使用手册](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md#隐私与知情同意)中均有列出。
+CI 在 Linux（Python 3.10 至 3.14）和 Windows 上运行测试，并构建安装包后在干净环境中安装。测量脚本位于 `tools/`：`tools/recsim` 为推荐模拟用户，`tools/opbench.py` 与 `tools/optruth.py` 在练习站点上检验网页操作，`tools/copy_check.py` 检查中文界面文字是否为书面语。参见[贡献指南](.github/CONTRIBUTING.md)。
 
-## 文档
+## 当前状态
 
-- [使用手册](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-CN.md)：设置、连接器、教导角色、「动态」视图和故障排查。
-- [部署指南](https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-CN.md)：实际运行所需了解的事项、费用，以及机器人不发言时的排查方法。
-- [连接器协议](https://github.com/wangkant/personagent/blob/main/docs/connectors.zh-CN.md)：供自行编写连接器的开发者参阅。
-- [更新日志](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md)（英文） · [贡献指南](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md)（英文） · [安全策略](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md)（英文） · [免责声明](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.zh-CN.md)
+项目仍在建设中。已知且尚未修复的问题：
+
+- 记忆的后台写入在验收测试中尚未达到被替换代码的水平。
+- 在 Windows 上，页面自带的“最大化”按钮无法使窗口最大化；关闭窗口后进程可能仍未退出。
+- 本说明仅有两种语言，界面有十种。
 
 ## 许可证
 
-personagent 以 [Apache License 2.0](https://github.com/wangkant/personagent/blob/main/LICENSE) 发布，© 2026 Qiankang (Kant) Wang：可免费使用、修改和分享，包括用于商业目的。`integrations/` 下的连接器采用 MIT 许可。1.4.0 及更早的版本以 MIT 许可发布，1.4.1 至 1.5.0 以 PolyForm Noncommercial License 1.0.0 发布。三张角色立绘采用 CC BY-NC-SA 4.0 许可，不可用于商业目的，署名见 [persona_agent/static/characters/LICENSE.md](https://github.com/wangkant/personagent/blob/main/persona_agent/static/characters/LICENSE.md)。
-
-## 致谢
-
-- 其他聊天平台的接入依托 [AstrBot](https://github.com/AstrBotDevs/AstrBot)、[NapCat](https://github.com/NapNeko/NapCatQQ)、[Koishi](https://koishi.chat) 与 [satori-python](https://github.com/RF-Tar-Railt/satori-python)、[matrix-nio](https://github.com/matrix-nio/matrix-nio) 与 [mautrix 桥接](https://docs.mau.fi/bridges/)；微信连接依据腾讯的 [openclaw-weixin 协议说明](https://github.com/Tencent/openclaw-weixin/blob/main/docs/protocol.md)。
-- 从反应中学习借鉴了 [Self-Feeding Chatbot](https://arxiv.org/abs/1901.05415)、[Alexa self-learning](https://arxiv.org/abs/1911.02557) 和 [BlenderBot 3x](https://arxiv.org/abs/2306.04707)；世界书参考了 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 的 World Info。
+[Apache License 2.0](LICENSE)。改编自其他项目的代码保留其原许可证（见 [NOTICE](NOTICE)）；角色立绘采用 CC BY-NC-SA 4.0（[其许可证](mibo/static/characters/LICENSE.md)）。另见[免责声明](docs/DISCLAIMER.zh-CN.md)。

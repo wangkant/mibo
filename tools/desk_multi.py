@@ -1,4 +1,4 @@
-"""Measure one errand across programs, the clipboard paste, and the checks around them (persona_agent/desk).
+"""Measure one errand across programs, the clipboard paste, and the checks around them (mibo/desk).
 
     python tools/desk_multi.py --home DIR [--tree DIR] [--only done,across,paste,sight] [--model M] [--out FILE]
 
@@ -141,7 +141,7 @@ class Bench:
         self.home = Path(args.home).resolve()
         self.home.mkdir(parents=True, exist_ok=True)
         sys.path.insert(0, str(Path(args.tree).resolve() if args.tree else Path(__file__).resolve().parents[1]))
-        from persona_agent.desk import grants, hands, operate, panel, strip, win32
+        from mibo.desk import grants, hands, operate, panel, strip, win32
         self.g, self.hands_mod, self.operate, self.panel, self.strip_mod, self.win32 = (
             grants, hands, operate, panel, strip, win32)
         win32.dpi_aware()
@@ -471,7 +471,7 @@ def sight(b: Bench) -> dict:
         else:
             card = b.on(b.hands_mod.base64_jpeg, hands.view)
         sent = b.on(hands.see, "see_look", {})
-        from persona_agent.see import frame as fr
+        from mibo.see import frame as fr
         frame = fr.unpack(sent["frame"])
         shown = Image.open(io.BytesIO(base64.b64decode(card))).convert("RGB")
         small = frame.image.copy()
@@ -490,7 +490,7 @@ def sight(b: Bench) -> dict:
         out["card"] = {"card size": shown.size, "sent size": small.size, "card black share": black(shown),
                        "sent black share": black(small), "mean difference": diff}
         # A click by picture on 下一步 while the person moves the mouse for 4 s, then while they keep on for 14 s.
-        from persona_agent.desk import uia
+        from mibo.desk import uia
         A = uia.automation()
         for name, seconds in (("busy 4s", 4), ("busy 14s", 14)):
             b.on(hands.see, "see_look", {})

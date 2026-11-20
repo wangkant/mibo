@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent import home as homes
-from persona_agent import setup_wizard as sw
-from persona_agent.config_env import DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL
-from persona_agent.prompts import _TEMPLATE_RULE_RE
+from mibo import home as homes
+from mibo import setup_wizard as sw
+from mibo.config_env import DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL
+from mibo.prompts import _TEMPLATE_RULE_RE
 
 from helpers import check
 
@@ -243,7 +243,7 @@ def test_the_next_steps_fit_this_machine(monkeypatch, tmp_path) -> None:
     if homes.is_checkout():
         lines = launcher.shown("run")
         check("checkout: from the checkout, with its .venv python",
-              lines[0].startswith("cd ") and lines[1].endswith("-m persona_agent run")
+              lines[0].startswith("cd ") and lines[1].endswith("-m mibo run")
               and not Path(lines[1].split(" -m")[0]).is_absolute(), repr(lines))
         check("checkout: the chat runs from the checkout", launcher.cwd() == str(homes.CHECKOUT))
     elsewhere = sw.Launcher(python=launcher.python, home=tmp_path)

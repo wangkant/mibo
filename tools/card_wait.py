@@ -90,7 +90,7 @@ class Page:
         request = urllib.request.Request(self.base + path, method="GET" if body is None else "POST",
                                          data=None if body is None else json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json",
-                                                  "X-Personagent-Setup-Token": self.token})
+                                                  "X-Mibo-Setup-Token": self.token})
         with self.opener.open(request, timeout=timeout) as answer:
             return json.loads(answer.read().decode() or "{}")
 
@@ -207,7 +207,7 @@ def main() -> int:
     # The page's address and token are written anew at each start.
     (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
     threading.Thread(target=stand_in, args=(model_port, work), daemon=True).start()
-    app = subprocess.Popen([sys.executable, "-c", "import sys; from persona_agent import welcome; "
+    app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
                            env={**os.environ, "AGENT_HOME": str(home)}, cwd=Path(__file__).resolve().parents[1],
                            stdout=open(home.parent / "app.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)

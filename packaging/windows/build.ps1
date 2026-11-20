@@ -1,5 +1,5 @@
-# Builds dist\personagent-<version>-setup.exe from a clean checkout:
-# a venv of its own here (.venv), personagent and PyInstaller in it, the
+# Builds dist\mibo-<version>-setup.exe from a clean checkout:
+# a venv of its own here (.venv), mibo and PyInstaller in it, the
 # frozen folder (PyInstaller), then the installer (Inno Setup 6).
 #   powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
 # -Python names the interpreter for the venv (default: python on PATH).
@@ -21,14 +21,14 @@ $version = (Select-String -Path (Join-Path $root "pyproject.toml") -Pattern '^ve
 
 if (-not (Test-Path $py)) { Run $Python -m venv $venv }
 Run $py -m pip install --quiet --upgrade pip
-# Installed, not editable: the wheel's persona_agent/_bundled is what the build reads.
+# Installed, not editable: the wheel's mibo/_bundled is what the build reads.
 # app brings nothing more on Windows; web is Playwright, which drives the browser already there.
 Run $py -m pip install --quiet --upgrade "$root[app,web]" "pyinstaller>=6.10,<7"
 
 Push-Location $here
 try {
     # Outside the checkout, so the installed copy is the one frozen.
-    Run $py -m PyInstaller --noconfirm --clean --distpath (Join-Path $here "dist") --workpath (Join-Path $here "build") personagent.spec
+    Run $py -m PyInstaller --noconfirm --clean --distpath (Join-Path $here "dist") --workpath (Join-Path $here "build") mibo.spec
 
     $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
     foreach ($folder in "$env:LOCALAPPDATA\Programs\Inno Setup 6", "${env:ProgramFiles(x86)}\Inno Setup 6", "$env:ProgramFiles\Inno Setup 6") {
@@ -45,8 +45,8 @@ try {
         }
     }
     # Not quiet: ISCC's warnings (an unknown message name, say) only show here.
-    Run $iscc "/DAppVersion=$version" personagent.iss
+    Run $iscc "/DAppVersion=$version" mibo.iss
 } finally {
     Pop-Location
 }
-Write-Host "dist\personagent-$version-setup.exe"
+Write-Host "dist\mibo-$version-setup.exe"

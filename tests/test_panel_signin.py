@@ -16,11 +16,11 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from fastapi.testclient import TestClient
 
-from persona_agent import openrouter_signin as osr
-from persona_agent import setup_wizard as sw
-from persona_agent import welcome
-from persona_agent.panels import models as model_panel
-from persona_agent.panels import signin
+from mibo import openrouter_signin as osr
+from mibo import setup_wizard as sw
+from mibo import welcome
+from mibo.panels import models as model_panel
+from mibo.panels import signin
 
 HEADERS = {welcome.TOKEN_HEADER: "token"}
 PORT = 18911
@@ -330,7 +330,7 @@ def test_a_second_press_replaces_the_first(page, openrouter) -> None:
 
 
 def test_a_name_that_is_no_page_language_gets_english() -> None:
-    from persona_agent.panels import signin
+    from mibo.panels import signin
 
     assert "Signed in with OpenRouter" in signin.page("xx", "") and '<html lang="en">' in signin.page("xx", "")
 

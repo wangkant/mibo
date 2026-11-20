@@ -33,13 +33,13 @@ sys.path.insert(0, str(HERE))
 
 from tasks import TASKS  # noqa: E402
 
-from persona_agent.llm import thinking_off  # noqa: E402
-from persona_agent.web import gate, operate  # noqa: E402
-from persona_agent.web.pageops import fold  # noqa: E402
-from persona_agent.web.tabs import PlaywrightTab  # noqa: E402
+from mibo.llm import thinking_off  # noqa: E402
+from mibo.web import gate, operate  # noqa: E402
+from mibo.web.pageops import fold  # noqa: E402
+from mibo.web.tabs import PlaywrightTab  # noqa: E402
 
 # The product files this run was made with (others edit them): a short hash of each, as imported.
-CODE = {f: __import__("hashlib").sha1((REPO / "persona_agent" / "web" / f).read_bytes()).hexdigest()[:10]
+CODE = {f: __import__("hashlib").sha1((REPO / "mibo" / "web" / f).read_bytes()).hexdigest()[:10]
         for f in ("operate.py", "pageops.py", "gate.py")}
 DATA = REPO.parent / "ref" / "datasets" / "miniwob" / "src" / "miniwob" / "html"
 EPISODE_MS = 600_000

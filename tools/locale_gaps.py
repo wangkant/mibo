@@ -1,4 +1,4 @@
-"""What each catalog in persona_agent/locales/ gets wrong against English's: a
+"""What each catalog in mibo/locales/ gets wrong against English's: a
 missing or extra key, a slot ({name}, %s) lost or added, a plural form the
 language needs, or text in the wrong script.
 
@@ -14,8 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from persona_agent import i18n  # noqa: E402
-from persona_agent.chatlangs import CODES  # noqa: E402
+from mibo import i18n  # noqa: E402
+from mibo.chatlangs import CODES  # noqa: E402
 
 PLURAL = re.compile(r"_(zero|one|two|few|many|other)$")
 SLOT = re.compile(r"\{\w+\}|%\(\w+\)[sdr]|%[sdr]")

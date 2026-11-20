@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from persona_agent.library import Library  # noqa: E402
+from mibo.library import Library  # noqa: E402
 from people import SUBJECTS  # noqa: E402
 from llm import Model  # noqa: E402
 
@@ -116,9 +116,9 @@ async def census(runtime: Path) -> None:
     (catalog._fetch, then kept as _keep keeps them), whatever the weights would draw: what the catalogue
     can bring at all.
     No model is called. One line per source: how many it brought, or its error."""
-    from persona_agent import situation
-    from persona_agent.library import Library, item_id
-    from persona_agent.sources import base, catalog
+    from mibo import situation
+    from mibo.library import Library, item_id
+    from mibo.sources import base, catalog
     sources = [s for s in catalog.all_sources([]).values() if s.group != "own"]
     library = Library(runtime)
     known = {it.id for it in library.items()}

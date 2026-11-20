@@ -1,192 +1,70 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/wangkant/personagent/main/assets/personagent-cover.webp" alt="personagent" width="100%">
-</p>
+# Mibo
 
-<h3 align="center">An agent that behaves like a person, on every platform you use.<br>It has a character of its own, remembers, learns from the people it talks to, and judges for itself when to speak.</h3>
+A companion that lives on your desktop: one character that talks with you, remembers you, brings you one thing worth your time, and can act for you on the web, in other programs and in your files, each time behind a card you approve.
 
-<p align="center">
-  <a href="https://pypi.org/project/personagent/"><img src="https://img.shields.io/pypi/v/personagent?style=flat-square&label=PyPI&labelColor=24292f&color=0969da&cacheSeconds=3600" alt="PyPI"></a>
-  <a href="https://github.com/wangkant/personagent/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/wangkant/personagent/ci.yml?branch=main&style=flat-square&label=CI&labelColor=24292f" alt="CI"></a>
+<p>
+  <a href="https://github.com/wangkant/mibo/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI&labelColor=24292f" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.14-0969da?style=flat-square&labelColor=24292f" alt="Python 3.10–3.14"></a>
-  <a href="https://github.com/wangkant/personagent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square&labelColor=24292f" alt="License: Apache 2.0"></a>
+  <a href="https://github.com/wangkant/mibo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-0969da?style=flat-square&labelColor=24292f" alt="License: Apache 2.0"></a>
 </p>
 
-<p align="center"><strong>English</strong> · <a href="https://github.com/wangkant/personagent/blob/main/README.zh-CN.md">简体中文</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.zh-TW.md">繁體中文</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ja.md">日本語</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ko.md">한국어</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.es.md">Español</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.fr.md">Français</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.de.md">Deutsch</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.pt-BR.md">Português</a> · <a href="https://github.com/wangkant/personagent/blob/main/docs/readme/README.ru.md">Русский</a></p>
+**English** · [简体中文](README.zh-CN.md)
 
-personagent runs on your own computer and keeps everything it stores there. It works wherever you do: in group chats and private chats on QQ, WeChat, Telegram, Discord and eighteen more platforms, in a window on your computer, and inside coding assistants such as Claude Code and Codex. You pick or write its character, and it runs on any OpenAI-compatible model.
+Mibo runs on your own computer, with a model you bring, and keeps what it stores in one folder there. It is built for Windows 10 and 11 first. It is not released yet: there is no installer to download, and it runs from this repository.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/wangkant/personagent/main/docs/welcome.jpg" alt="The Connect apps view of the local page: the platforms that connect by scanning a code or by pasting a few values, the advanced platforms collapsed, and the coding assistants it can join" width="960">
-</p>
+## What it does
 
-<p align="center"><em>Connect apps, in the same local page as setup and the character chat.</em></p>
+- **Talks with you.** One character with a voice of its own, in a window and as a small figure on the desktop. Pick one of the characters that ship with it or write your own. The model is yours: any service that speaks the OpenAI chat API, with your key.
+- **Remembers you.** What you tell it is kept as dated facts and plans, shown under Settings › Memory, where each one can be changed or removed. Saying "remember…" or "forget…" works in the chat. ID numbers, card numbers, passwords and codes are refused.
+- **Brings you one thing at a time.** It reads public sources in the background and learns what you care for from what you do with what it shows: how long you stayed counts, an open alone does not. Each card says why it is shown, takes a "not interested" with a reason and an undo, and everything shown can be found again. Pace and quiet hours are yours to set.
+- **Goes out on the web as a visitor.** It reads public pages, signed in to nothing, keeps to robots.txt, and tells you what it found when you ask it to look something up.
+- **A browser of its own, with the chat beside the page.** Ask in the chat and it works the page for you. Sending, posting, uploading a file, a download and leaving for another site each wait for your press. What it reports is checked against what changed on the page.
+- **Works in other programs** (Windows). It finds a program by the name Start gives it, asks before it touches it, waits while your hands are on the keyboard, and can carry an errand across up to three programs.
+- **Commands and files, in the folders you grant.** Every command is read before it runs and shown in plain words when it needs your yes. Deletes go to the Recycle Bin, and a turn's file changes can be undone from under the reply.
+- **Skills and connectors.** Skills are folders with a `SKILL.md`, from a market of reviewed sources or your own. MCP servers connect with one press, sign in through your browser, and keep their tokens in the system's credential store.
+- **Scheduled tasks, and a memory of past chats** it can search.
+- **Ten interface languages**: English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português (Brasil), Русский.
 
-## Why personagent
+## What it will not do
 
-<table>
-<tr>
-<td width="220" valign="top"><strong>It has a character of its own.</strong></td>
-<td valign="top">
-Seven ready personalities. Three are characters the community already draws: the DeepSeek whale girl, the GPT dragon girl and the Claude lady, with portraits that blink, think and talk.<br>
-Rewrite the persona whenever you like. What the character learned is kept.<br>
-Bring in a Tavern character card as one file, or describe a character in a sentence and have the persona drafted for you. Your own character saves as a card to share.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It talks like a person.</strong></td>
-<td valign="top">
-It writes the way people write in a chat: short, plain sentences in the language of the conversation, with no lists, headings or assistant phrases, and it says so when it does not know something.<br>
-On most platforms a reply comes as a few short messages with a pause for typing between them, and Telegram, Discord and Matrix show the typing sign meanwhile.<br>
-It picks up the stickers people send and uses them where they fit, and at night it mostly stays out of the talk unless called.<br>
-If you turn it on, it starts a conversation after a long silence and comes back to plans people mentioned.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It remembers.</strong></td>
-<td valign="top">
-Each chat has its own memory: recent messages that survive a restart, a summary of earlier conversation, dated events and facts about people, which it keeps current by itself.<br>
-Everything it remembers is listed in the Activity view, where any item can be forgotten or brought back.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It learns from corrections that hold up.</strong></td>
-<td valign="top">
-What a correction teaches, like what the group calls the gym, carries into every later reply in that chat.<br>
-A troll or a bystander cannot retrain it.<br>
-Where reactions cannot settle a change, it decides itself and records why; nobody has to approve anything.<br>
-Every change is on record, and any of them can be rolled back.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It knows when to stay quiet.</strong></td>
-<td valign="top">
-In a group it answers when called. Otherwise a model judges whether a person would chime in.<br>
-A burst of messages gets one reply.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It connects to all your platforms.</strong></td>
-<td valign="top">
-Twenty-two chat platforms connect from one page, by a phone scan or a few pasted values. Most take both group chats and private chats.<br>
-A platform you connect answers only the chats you approve: a stranger gets a short code, and you approve it on the page, where **This is me** also makes you the admin.<br>
-The same agent answers in a window on your computer and inside Claude Code, Codex and DeepSeek Harness.<br>
-Any software that takes an OpenAI-compatible address, such as Open WebUI or SillyTavern, can talk to the same character.<br>
-Any other platform can be added through an AstrBot, Koishi or Matrix bridge, or a connector you write.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It works with what you have.</strong></td>
-<td valign="top">
-Any OpenAI-compatible model: OpenRouter's free models, a paid service, or one running on your own computer with Ollama.<br>
-One line installs it, with a Python of its own, on a computer that has nothing installed. The page is in English, Chinese or eight more languages, and signing in with OpenRouter in the browser, or one pasted model key, starts the chat; with Ollama or LM Studio already running, one click does.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It uses the tools you give it.</strong></td>
-<td valign="top">
-Paste the block from an MCP server's README, and the character can look things up or act through that server's tools, one for a reply, answering in its own voice.<br>
-Each tool has a switch and a choice of who may cause its use: you alone, or anyone the character answers.
-</td>
-</tr>
-<tr>
-<td width="220" valign="top"><strong>It runs where you need it.</strong></td>
-<td valign="top">
-On your own computer in a window, or on a server, a NAS or in Docker, kept running by `personagent service install`.<br>
-With a page password set, the same page opens from a phone or another computer, behind a sign-in.
-</td>
-</tr>
-</table>
+- It never reads or types a password, a payment detail or a verification code. Signing in is always yours to do.
+- Paying, buying, deleting and anything about an account's security ask every time, with no "always allow".
+- Nothing runs with nobody there unless you set it up as a scheduled task. Such a run reads; what it would do beyond what you allowed that task is left as a button for you.
+- Your sign-ins and cookies stay on this computer. Your model key is sent to the model service you chose and nowhere else.
 
-It also remembers and forgets when asked in chat (Nova is the default character's name): `Nova, remember Sam is vegetarian`, `Nova, forget vegetarian` ([memory commands](https://github.com/wangkant/personagent/blob/main/docs/guide.md#memory-commands)). What it keeps, and for how long, is in the [memory](https://github.com/wangkant/personagent/blob/main/docs/guide.md#memory) section of the guide.
+## Run it
 
-## Start here
-
-Nothing needs to be installed first. Paste one line into a terminal.
-
-Windows (PowerShell):
-
-```powershell
-irm https://raw.githubusercontent.com/wangkant/personagent/main/install.ps1 | iex
-```
-
-macOS and Linux:
-
-```sh
-curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.sh | sh
-```
-
-The installer brings its own Python, installs personagent and opens it; on Windows it also puts an icon on the desktop. Where PyPI or GitHub is slow to reach, it switches to mirrors in mainland China by itself. Running it again updates personagent.
-
-With Python 3.10 or later already installed, `python -m pip install personagent` and then `personagent` do the same, and with [uv](https://docs.astral.sh/uv/), `uvx personagent` runs it without a separate install step.
-
-It opens in a window of its own on Windows, and in your browser on macOS and Linux. Press **Sign in with OpenRouter** and approve in the browser, or paste a model API key and click **Verify & start chatting**. OpenRouter's free models are preselected; they still need an account or a key, which costs nothing. `personagent demo` plays three scripted scenes with no key at all. The [getting-started guide](https://github.com/wangkant/personagent/blob/main/docs/start.md) walks through the page screen by screen.
-
-personagent is free. You pay the model service you choose, at its own rates. One message can lead to more than one model request: besides the reply, the character at times decides whether to speak in a group, judges how a reply was received, or tidies its memory. OpenRouter's free models allow 50 requests a day, and some free providers keep what they receive; Ollama runs a model on your own computer with no key.
-
-## Connect your platforms
-
-Open **Connect apps** in the local page:
-
-| On the page | Apps | What you need |
-|---|---|---|
-| Scan to connect | QQ, personal WeChat | Your phone. WeChat bots get one-to-one chats only |
-| Paste a few values | Telegram, Discord, Matrix, Twitch, IRC, Zulip, VK, Stoat, KOOK, Feishu/Lark, DingTalk, Slack, WeCom AI bot, Mattermost, Misskey | Values from the app's console; the page says which |
-| Advanced | WeCom app, WeChat Official Account, QQ webhook, OneBot v11 (NapCat), Satori | A public address, or other software on this computer |
-
-Connected apps start again each time personagent starts. The scan-to-connect apps, Telegram, Discord, Matrix, Twitch, IRC, Zulip, VK and Stoat are connected by personagent itself; the rest go through an [AstrBot](https://github.com/AstrBotDevs/AstrBot) it downloads and runs in the background. On a server without a display, `personagent connect <platform>` connects any of those ten from the terminal, with the same steps and checks as the page, and `personagent up` starts everything without a browser. Setup for each app is in the [user guide](https://github.com/wangkant/personagent/blob/main/docs/guide.md#put-it-in-a-chat), and QQ from zero in the [Chinese deployment guide](https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-CN.md).
-
-For everything else there is **Other software** on the same page: switch it on, copy the address, the key and the model name into any app that takes an OpenAI-compatible address, and that app talks to your character, with the same memory as everywhere else. The [guide](https://github.com/wangkant/personagent/blob/main/docs/guide.md#other-software) has the details, and `personagent connect api` does the same from a terminal.
-
-Already running AstrBot? personagent can sit behind it as the agent: see [bridges you run yourself](https://github.com/wangkant/personagent/blob/main/docs/guide.md#bridges-you-run-yourself).
-
-## On a server
-
-```sh
-personagent page password --random   # prints a password for the page
-PAGE_HOST=0.0.0.0 personagent up      # the service, the platforms and the page on port 8090
-personagent service install           # keep it running after a reboot (Linux, macOS)
-```
-
-Open `http://<the server's address>:8090/` from any device and sign in with the page password. Without a password the page refuses to listen beyond the computer itself. Plain HTTP shows the password to the network it crosses, so beyond a home network use an SSH tunnel, Tailscale or a reverse proxy with HTTPS. In Docker, `docker compose up -d` in a clone of the repository builds and starts it, and `docker compose logs` shows the password made on the first start; images are published at `ghcr.io/wangkant/personagent` with each release. The [deployment guide](https://github.com/wangkant/personagent/blob/main/docs/deploy.md#on-a-server-a-nas-or-in-docker) has each step.
-
-## Coding agents
-
-**Let one set it up.** Give the line below to a coding agent that can run commands on your computer. You paste your model key into the local page yourself, so the key never passes through the agent.
-
-```text
-Read https://raw.githubusercontent.com/wangkant/personagent/main/docs/setup-for-agents.md and set up personagent for me.
-```
-
-**Talk to your character while you work.** Claude Code, Codex and DeepSeek Harness (`dsh`) can reach the character, with the same chat and memory as the local page:
+Python 3.10 to 3.14.
 
 ```bash
-personagent connect claude-code
-personagent connect codex
-personagent connect dsh
+git clone https://github.com/wangkant/mibo
+cd mibo
+python -m pip install -e .
+mibo
 ```
 
-`--remove` takes it out again, and **Coding assistants** under **Connect apps** does both from the page. The [guide](https://github.com/wangkant/personagent/blob/main/docs/guide.md#coding-agents) covers permissions and `--react`, which lets the character say a line when a turn ends.
+`mibo` opens the window and walks you through the first run: language, character, model key, what you care for. Windows uses the WebView2 that Windows 10 and 11 already have. On macOS and Linux install the window with `python -m pip install -e ".[app]"`; working in other programs and the browser of its own are Windows only for now.
 
-## Update and uninstall
+Everything Mibo keeps lives in one folder: `~/mibo`, or the folder you name with `mibo --home DIR`.
 
-When a newer version is on PyPI, the page shows a notice with the update command. With pip that is `python -m pip install -U personagent`. On most installations, **Update and reopen** in the page's App view runs it for you. Settings, character, what it learned and connected apps carry over. To remove it, follow [Removing personagent](https://github.com/wangkant/personagent/blob/main/docs/guide.md#removing-personagent) in the guide.
+## Develop
 
-## Privacy
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+ruff check . --select F401,F811,F821,F841
+```
 
-Everything personagent stores stays on your machine, in one home folder. The model provider you choose sees the conversations it answers, and once a day personagent asks pypi.org whether a newer version is out (`UPDATE_CHECK_ENABLED=false` stops that). Before you connect it to real people, tell them it is a bot and get their consent; the [guide](https://github.com/wangkant/personagent/blob/main/docs/guide.md#privacy-and-consent) lists what goes where.
+CI runs the suite on Linux (Python 3.10 to 3.14) and on Windows, builds the wheel and installs it clean. Measuring scripts live under `tools/`: `tools/recsim` simulates people for the recommender, `tools/opbench.py` and `tools/optruth.py` exercise page operation on a practice site, `tools/copy_check.py` keeps the Chinese interface text written rather than spoken. See [CONTRIBUTING](.github/CONTRIBUTING.md).
 
-## Documentation
+## Where it stands
 
-- [User guide](https://github.com/wangkant/personagent/blob/main/docs/guide.md): setup, connectors, teaching it, the Activity view, troubleshooting.
-- [Deployment guide](https://github.com/wangkant/personagent/blob/main/docs/deploy.md): running it for real, costs, and what to check when the bot goes quiet.
-- [Connector protocol](https://github.com/wangkant/personagent/blob/main/docs/connectors.md): for writing your own connector.
-- [Changelog](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [Contributing](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [Security policy](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [Disclaimer](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.md)
+It is under active construction. Known and not yet fixed:
+
+- Memory's background writer does not yet match the code it replaced on the acceptance run.
+- On Windows the page's own Maximize button does not maximise the window, and the process can outlive a closed window.
+- This README is in two languages; the interface is in ten.
 
 ## License
 
-personagent is licensed under the [Apache License 2.0](https://github.com/wangkant/personagent/blob/main/LICENSE) © 2026 Qiankang (Kant) Wang: free to use, change and share, for commercial purposes too. The connectors under `integrations/` are under the MIT License. Versions up to 1.4.0 were released under the MIT License, and versions 1.4.1 to 1.5.0 under the PolyForm Noncommercial License 1.0.0. The three character portraits are licensed under CC BY-NC-SA 4.0, which does not allow commercial use, with credits in [persona_agent/static/characters/LICENSE.md](https://github.com/wangkant/personagent/blob/main/persona_agent/static/characters/LICENSE.md).
-
-## Acknowledgements
-
-- Other chat platforms are reached through [AstrBot](https://github.com/AstrBotDevs/AstrBot), [NapCat](https://github.com/NapNeko/NapCatQQ), [Koishi](https://koishi.chat) with [satori-python](https://github.com/RF-Tar-Railt/satori-python), and [matrix-nio](https://github.com/matrix-nio/matrix-nio) with the [mautrix bridges](https://docs.mau.fi/bridges/); the WeChat connection follows Tencent's [openclaw-weixin protocol notes](https://github.com/Tencent/openclaw-weixin/blob/main/docs/protocol.md).
-- Learning from reactions draws on [Self-Feeding Chatbot](https://arxiv.org/abs/1901.05415), [Alexa self-learning](https://arxiv.org/abs/1911.02557) and [BlenderBot 3x](https://arxiv.org/abs/2306.04707); the lorebook follows [SillyTavern](https://github.com/SillyTavern/SillyTavern)'s World Info.
+[Apache License 2.0](LICENSE). Code adapted from other projects keeps its licence ([NOTICE](NOTICE)); the character portraits are CC BY-NC-SA 4.0 ([their licence](mibo/static/characters/LICENSE.md)). See also the [disclaimer](docs/DISCLAIMER.md).

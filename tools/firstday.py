@@ -41,7 +41,7 @@ class Page:
         data = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(self.base + path, data=data, method="POST" if data else "GET",
                                          headers={"Content-Type": "application/json",
-                                                  "x-personagent-setup-token": self.token})
+                                                  "x-mibo-setup-token": self.token})
         with self.opener.open(request, timeout=timeout) as answer:
             return json.loads(answer.read().decode() or "{}")
 
@@ -57,7 +57,7 @@ def main() -> None:
     args = parser.parse_args()
     home = args.home.resolve()
     topics = [t for t in args.topics.split(",") if t]
-    from persona_agent.panels import feed
+    from mibo.panels import feed
     matcher = feed.topic_matcher(topics)
 
     def bears(row: dict) -> bool:
@@ -66,7 +66,7 @@ def main() -> None:
 
     env = dict(os.environ, AGENT_HOME=str(home), PYTHONIOENCODING="utf-8")
     log = open(home / "firstday.app.log", "w", encoding="utf-8")
-    app = subprocess.Popen([sys.executable, "-c", "import sys; from persona_agent import welcome; "
+    app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{args.port}']))"],
                            cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT)
     report: dict = {"topics": topics}

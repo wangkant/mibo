@@ -2,7 +2,7 @@
 
     python tools/cardcheck/less.py <home> --subject games [--about topic] [--cards 12] [--undo] [--out file.json]
 
-Brings finds the way the card does until one is on `--subject` (a key of persona_agent/subjects.py, read
+Brings finds the way the card does until one is on `--subject` (a key of mibo/subjects.py, read
 from the find's own title and words), turns it down as the card's "Not interested" does with `--about`
 (thing: this one; topic: this kind of topic), then brings `--cards` more and counts how many are on that
 subject again. With `--undo` the no is taken back first (POST /api/feed/undo) and the same count is made.
@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from persona_agent import subjects  # noqa: E402
+from mibo import subjects  # noqa: E402
 from tools.cardcheck.another import App, ask, react  # noqa: E402
 
 

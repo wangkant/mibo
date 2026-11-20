@@ -10,10 +10,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from fastapi.testclient import TestClient
 
-from persona_agent import home as homes
-from persona_agent import setup_wizard as sw
-from persona_agent import welcome
-from persona_agent.panels import detect
+from mibo import home as homes
+from mibo import setup_wizard as sw
+from mibo import welcome
+from mibo.panels import detect
 
 HEADERS = {welcome.TOKEN_HEADER: "token"}
 

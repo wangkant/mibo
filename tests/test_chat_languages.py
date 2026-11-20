@@ -17,7 +17,7 @@ import re
 
 import pytest
 
-from persona_agent import chatlangs
+from mibo import chatlangs
 
 from helpers import check, isolated_agent
 

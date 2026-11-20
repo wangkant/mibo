@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from persona_agent import person, profile  # noqa: E402
+from mibo import person, profile  # noqa: E402
 
 TZ = timezone(timedelta(hours=-8))
 BUDGET = 2400

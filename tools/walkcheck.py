@@ -39,11 +39,11 @@ def main() -> None:
 
 
 async def walks(home: Path, count: int, topics: list[str], out: Path | None) -> None:
-    from persona_agent import roam, usage
-    from persona_agent.agent import Agent
-    from persona_agent.panels import feed
-    from persona_agent.paths import runtime_dir
-    from persona_agent.settings import AgentSettings
+    from mibo import roam, usage
+    from mibo.agent import Agent
+    from mibo.panels import feed
+    from mibo.paths import runtime_dir
+    from mibo.settings import AgentSettings
 
     calls: list[dict] = []
     add = usage.UsageBook.add

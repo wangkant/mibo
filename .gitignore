@@ -61,4 +61,4 @@ benchmark_runs/
 teacher_stats.json
 
 # Single-instance guard written at the deployment root
-.personagent.instance.lock
+.mibo.instance.lock

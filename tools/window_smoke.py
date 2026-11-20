@@ -3,7 +3,7 @@
     python tools/window_smoke.py [--home DIR]
 
 For the platforms tools/window_driver.py cannot reach (macOS, and Linux with
-`personagent[app]`), and for Windows too: it runs `personagent start` in this
+`mibo[app]`), and for Windows too: it runs `mibo start` in this
 process against a stand-in model, walks the first run, chats and opens
 Settings through the window's own JavaScript bridge, then closes the window. The exit status is the
 number of failed checks. Nothing leaves this machine.
@@ -39,18 +39,18 @@ SET = ("((selector, value) => { const e = document.querySelector(selector); e.va
        " e.dispatchEvent(new Event('change', {bubbles: true})); return true; })")
 # The model is connected through the page's own API: the bridge cannot wait for a promise.
 CONNECT = ("(body => { window.smokeConnected = null; fetch('/api/config', {method: 'POST', headers: {"
-           " 'Content-Type': 'application/json', 'X-Personagent-Setup-Token':"
-           " sessionStorage.getItem('personagent-setup-token') || ''}, body: JSON.stringify(body)})"
+           " 'Content-Type': 'application/json', 'X-Mibo-Setup-Token':"
+           " sessionStorage.getItem('mibo-setup-token') || ''}, body: JSON.stringify(body)})"
            ".then(r => r.json()).then(v => { window.smokeConnected = v; }); return true; })")
 SKIP = "(() => { const b = document.querySelector('#onboard-view .onboard-skip'); if (b && !b.disabled) b.click(); return true; })()"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--home", help="a scratch folder to use as the personagent home (default: a new temporary one)")
+    parser.add_argument("--home", help="a scratch folder to use as the mibo home (default: a new temporary one)")
     parser.add_argument("--offscreen", action="store_true", help="open the window off screen, for a desk someone is using")
     args = parser.parse_args(argv)
-    home = Path(args.home or tempfile.mkdtemp(prefix="personagent-window-")).resolve()
+    home = Path(args.home or tempfile.mkdtemp(prefix="mibo-window-")).resolve()
     home.mkdir(parents=True, exist_ok=True)
     for name in [k for k in os.environ if k.startswith(_SCRUBBED_PREFIXES)]:
         del os.environ[name]
@@ -63,8 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     sent_to_browser: list[str] = []
     webbrowser.open = lambda url, *a, **k: sent_to_browser.append(str(url)) or True
 
-    from persona_agent import welcome
-    from persona_agent import window as appwindow
+    from mibo import welcome
+    from mibo import window as appwindow
 
     if args.offscreen:
         import webview
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=walk, daemon=True).start()
     code = welcome.main([])
-    check("personagent start returned 0 once the window closed", code == 0, code)
+    check("mibo start returned 0 once the window closed", code == 0, code)
     failed = results.count(False)
     print(f"== {len(results) - failed} passed, {failed} failed", flush=True)
     return failed

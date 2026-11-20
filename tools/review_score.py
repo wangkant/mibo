@@ -1,4 +1,4 @@
-"""Scores the reviewer (persona_agent/review.py) on the labelled set tools/review_set.jsonl, on a real model.
+"""Scores the reviewer (mibo/review.py) on the labelled set tools/review_set.jsonl, on a real model.
 
     python tools/review_score.py --env <folder with .env> [--model <name>] [--out <folder>] [--only B-F-01,C-S-02]
                                  [--jobs 3]
@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-from persona_agent import review  # noqa: E402
+from mibo import review  # noqa: E402
 
 TRIES = 6
 

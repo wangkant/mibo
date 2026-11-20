@@ -34,7 +34,7 @@ def caller(home: Path):
             f"{parts.scheme}://{parts.netloc}/api/{path}", method="POST" if body is not None else "GET",
             data=None if body is None else json.dumps(body).encode(),
             headers={"Content-Type": "application/json",
-                     "x-personagent-setup-token": parts.fragment.partition("token=")[2]})
+                     "x-mibo-setup-token": parts.fragment.partition("token=")[2]})
         with opener.open(request, timeout=120) as answer:
             return json.loads(answer.read())
 

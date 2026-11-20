@@ -14,8 +14,8 @@ body:
     id: version
     attributes:
       label: Version
-      description: The output of `personagent --version`.
-      placeholder: personagent 1.0.0
+      description: The output of `mibo --version`.
+      placeholder: mibo 1.0.0
     validations:
       required: true
   - type: dropdown
@@ -25,7 +25,6 @@ body:
       options:
         - The Windows installer
         - The macOS app
-        - pip install personagent
         - git clone
         - Other
     validations:
@@ -52,5 +51,5 @@ body:
     id: logs
     attributes:
       label: Logs
-      description: The lines from `personagent run` around the problem.
+      description: The lines from `mibo run` around the problem.
       render: shell

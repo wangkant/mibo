@@ -186,7 +186,7 @@ if _ctl:
         for o in gc.get_objects():
             try:
                 c = type(o)
-                if agent is None and c.__name__ == "Agent" and c.__module__ == "persona_agent.agent":
+                if agent is None and c.__name__ == "Agent" and c.__module__ == "mibo.agent":
                     agent = o
                 elif loop is None and isinstance(o, asyncio.AbstractEventLoop) and o.is_running():
                     loop = o
@@ -198,7 +198,7 @@ if _ctl:
         while agent is None or loop is None:
             _real_sleep(0.5) if _clock else _time.sleep(0.5)
             agent, loop = _find()
-        from persona_agent import llm
+        from mibo import llm
         real_count = agent._count_usage
         def count(model, resp):
             try:
@@ -270,7 +270,7 @@ class Life:
         data = json.dumps(body, ensure_ascii=False).encode() if body is not None else None
         req = urllib.request.Request(f"{a.scheme}://{a.netloc}/api/{path}", data=data, method=method,
                                      headers={"Content-Type": "application/json",
-                                              "x-personagent-setup-token": a.fragment.partition("token=")[2]})
+                                              "x-mibo-setup-token": a.fragment.partition("token=")[2]})
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         try:
             with opener.open(req, timeout=timeout) as r:
@@ -285,7 +285,7 @@ class Life:
         (self.home / "runtime/desktop/welcome.json").unlink(missing_ok=True)
         log = open(self.out / "app.log", "ab")
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", "import sys; from persona_agent import welcome; "
+            [sys.executable, "-c", "import sys; from mibo import welcome; "
              f"sys.exit(welcome.main(['--no-browser','--port','{self.port}']))"],
             env=env, cwd=str(REPO), stdout=log, stderr=subprocess.STDOUT,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

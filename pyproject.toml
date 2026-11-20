@@ -3,19 +3,19 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "personagent"
+name = "mibo"
 version = "1.5.0"
-description = "An agent that behaves like a person, on every platform you use: it has a character of its own, remembers, learns from the people it talks to, and judges for itself when to speak."
+description = "A companion on your desktop: one character that talks with you, remembers you, brings you one thing worth your time, and acts for you on the web, in programs and in files, behind cards you approve."
 readme = "README.md"
 requires-python = ">=3.10"
 # Code adapted from MIT projects keeps their licence (NOTICE), and the three
 # character portraits are CC BY-NC-SA 4.0 (no commercial use).
 license = "Apache-2.0 AND MIT AND CC-BY-NC-SA-4.0"
-license-files = ["LICENSE", "NOTICE", "persona_agent/static/characters/LICENSE.md"]
+license-files = ["LICENSE", "NOTICE", "mibo/static/characters/LICENSE.md"]
 authors = [{ name = "Qiankang Wang" }]
 keywords = [
-    "llm", "agent", "persona", "chatbot", "group-chat", "memory", "onebot",
-    "prompt-engineering", "self-evolution", "few-shot", "rag",
+    "llm", "agent", "desktop", "companion", "persona", "memory", "recommender",
+    "browser-automation", "computer-use", "mcp", "skills",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -79,34 +79,34 @@ web = ["playwright>=1.49,<2"]
 dev = ["pytest>=8,<10", "ruff>=0.6,<1", "playwright>=1.49,<2"]
 
 [project.scripts]
-personagent = "persona_agent.cli:main"
+mibo = "mibo.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/wangkant/personagent"
-Issues = "https://github.com/wangkant/personagent/issues"
-Changelog = "https://github.com/wangkant/personagent/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/wangkant/personagent/blob/main/docs/guide.md"
+Homepage = "https://github.com/wangkant/mibo"
+Issues = "https://github.com/wangkant/mibo/issues"
+Changelog = "https://github.com/wangkant/mibo/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/wangkant/mibo#readme"
 
-# The checkout's shared files ship inside the package as persona_agent/_bundled,
+# The checkout's shared files ship inside the package as mibo/_bundled,
 # where home.resource() finds them in an installed copy.
 [tool.hatch.build.targets.sdist]
 # The version PyPI took for 1.2.1; hatchling defaults to a newer one.
 core-metadata-version = "2.4"
-only-include = ["persona_agent", "data", ".env.example"]
+only-include = ["mibo", "data", ".env.example"]
 
 [tool.hatch.build.targets.wheel]
 core-metadata-version = "2.4"
-only-include = ["persona_agent", "data"]
+only-include = ["mibo", "data"]
 # README illustrations: linked from published READMEs, read by nothing installed.
-exclude = ["persona_agent/static/*.webp"]
+exclude = ["mibo/static/*.webp"]
 # An editable install imports the checkout itself, which reads these files in place.
 dev-mode-dirs = ["."]
 
 [tool.hatch.build.targets.wheel.sources]
-"data" = "persona_agent/_bundled/data"
+"data" = "mibo/_bundled/data"
 
 [tool.hatch.build.targets.wheel.force-include]
-".env.example" = "persona_agent/_bundled/.env.example"
+".env.example" = "mibo/_bundled/.env.example"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

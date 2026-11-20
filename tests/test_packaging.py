@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import persona_agent
-from persona_agent import cli, home, paths
+import mibo
+from mibo import cli, home, paths
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,7 +19,7 @@ def _pyproject() -> str:
 
 def test_one_version_for_the_package_and_the_metadata() -> None:
     declared = re.search(r'^version = "([^"]+)"', _pyproject(), re.MULTILINE).group(1)
-    assert declared == persona_agent.__version__, (declared, persona_agent.__version__)
+    assert declared == mibo.__version__, (declared, mibo.__version__)
 
 
 def test_the_classifiers_match_a_stable_release() -> None:
@@ -71,15 +71,15 @@ def test_the_workflows_take_pytest_and_ruff_from_the_dev_extra() -> None:
 
 
 def test_the_wheel_bundles_the_shared_files_under_bundled() -> None:
-    """hatchling maps data/ and .env.example under persona_agent/_bundled,
+    """hatchling maps data/ and .env.example under mibo/_bundled,
     where home.resource() looks in an installed copy; CI installs the built
     wheel and reads them back."""
     text = _pyproject()
-    assert '"data" = "persona_agent/_bundled/data"' in text
-    assert '".env.example" = "persona_agent/_bundled/.env.example"' in text
+    assert '"data" = "mibo/_bundled/data"' in text
+    assert '".env.example" = "mibo/_bundled/.env.example"' in text
     wheel = re.search(r"^\[tool\.hatch\.build\.targets\.wheel\]\n(.*?)\n\n", text,
                       re.MULTILINE | re.DOTALL).group(1)
-    for included in ("persona_agent", "data"):
+    for included in ("mibo", "data"):
         assert f'"{included}"' in wheel, included
 
 
@@ -144,7 +144,7 @@ def test_the_cli_prints_its_version(capsys) -> None:
     with pytest.raises(SystemExit) as stop:
         cli.main(["--version"])
     assert stop.value.code == 0
-    assert capsys.readouterr().out.strip() == f"personagent {persona_agent.__version__}"
+    assert capsys.readouterr().out.strip() == f"mibo {mibo.__version__}"
 
 
 def test_the_subcommands_this_package_serves_resolve() -> None:
@@ -159,12 +159,12 @@ def test_release_notes_come_from_the_changelog_section_of_the_tag() -> None:
     notes = runpy.run_path(str(ROOT / "tools" / "release_notes.py"), run_name="notes_under_test")
     changelog = "\n".join([
         "# Changelog", "", "## [Unreleased]", "", "- next", "",
-        "## [1.0.0] - 2026-10-10", "", "### Added", "", "- `personagent` command", "",
+        "## [1.0.0] - 2026-10-10", "", "### Added", "", "- `mibo` command", "",
         "## [0.4.0] - 2026-09-24", "", "- older", "",
-        "[1.0.0]: https://github.com/wangkant/personagent/releases/tag/v1.0.0", ""])
+        "[1.0.0]: https://github.com/wangkant/mibo/releases/tag/v1.0.0", ""])
     assert notes["changelog_section"](changelog, "1.0.0") == (
-        "### Added\n\n- `personagent` command\n")
+        "### Added\n\n- `mibo` command\n")
     with pytest.raises(ValueError, match="no '## .2.0.0.' section"):
         notes["changelog_section"](changelog, "2.0.0")
-    assert notes["project_version"](_pyproject()) == persona_agent.__version__
+    assert notes["project_version"](_pyproject()) == mibo.__version__
     assert notes["main"](["v0.0.0-not-this"]) == 1

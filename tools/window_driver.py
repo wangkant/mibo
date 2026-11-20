@@ -1,6 +1,6 @@
 """Drive the local page inside the real app window, to check that what is on it works.
 
-Windows only: it needs the WebView2 window `personagent start` opens there.
+Windows only: it needs the WebView2 window `mibo start` opens there.
 
     import sys, pathlib
     sys.path.insert(0, r"<checkout>/tools")
@@ -41,8 +41,8 @@ VIEWS = ("[...document.querySelectorAll('section')].filter(s => !s.hidden && s.g
          ".map(s => s.id)")
 # The bridge cannot wait for a promise: the answer is left on the page.
 CONNECT = ("(body => { window.smokeConnected = null; fetch('/api/config', {method: 'POST', headers: {"
-           " 'Content-Type': 'application/json', 'X-Personagent-Setup-Token':"
-           " sessionStorage.getItem('personagent-setup-token') || ''}, body: JSON.stringify(body)})"
+           " 'Content-Type': 'application/json', 'X-Mibo-Setup-Token':"
+           " sessionStorage.getItem('mibo-setup-token') || ''}, body: JSON.stringify(body)})"
            ".then(r => r.json()).then(v => { window.smokeConnected = v; }); return true; })(%s)")
 
 
@@ -255,8 +255,8 @@ def run(home: Path, steps, *, out: Path | None = None, offscreen: bool = True, l
 
     import webview
 
-    from persona_agent import welcome
-    from persona_agent import window as appwindow
+    from mibo import welcome
+    from mibo import window as appwindow
 
     if offscreen:
         create = webview.create_window

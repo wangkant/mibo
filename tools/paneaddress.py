@@ -127,8 +127,8 @@ def window(home: Path, out: Path, site_port: int, model_port: int) -> tuple[int,
     import webview
     import window_driver
 
-    from persona_agent import window as appwindow
-    from persona_agent.welcome import save_app_settings
+    from mibo import window as appwindow
+    from mibo.welcome import save_app_settings
     save_app_settings(home / "runtime" / "desktop", toured=True, pet_shown=False)
     made = appwindow.AppWindow.__init__
 

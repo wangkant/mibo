@@ -37,8 +37,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE / "opsite"))
 
-from persona_agent.web import gate, operate  # noqa: E402
-from persona_agent.web.tabs import PlaywrightTab  # noqa: E402
+from mibo.web import gate, operate  # noqa: E402
+from mibo.web.tabs import PlaywrightTab  # noqa: E402
 
 STOP = {"do": "done", "success": False, "result": "(the script ended)"}
 

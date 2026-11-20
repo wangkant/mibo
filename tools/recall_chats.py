@@ -77,7 +77,7 @@ def api(home: Path):
                                      data=json.dumps(body).encode() if body is not None else None,
                                      method="POST" if body is not None else "GET",
                                      headers={"Content-Type": "application/json",
-                                              "x-personagent-setup-token": url.fragment.partition("token=")[2]})
+                                              "x-mibo-setup-token": url.fragment.partition("token=")[2]})
         with opener.open(req, timeout=300) as r:
             return json.loads(r.read().decode())
     return call
@@ -98,7 +98,7 @@ def run(home: Path) -> None:
 
 def found(home: Path, query: str, when: str = "") -> str:
     """What search_past_chats hands the model now, read from the home's files as the tool reads them."""
-    from persona_agent import chatlog, pastchats
+    from mibo import chatlog, pastchats
     log = chatlog.ChatLog(home / "runtime" / "log", 30)
     at = {"log": log, "convs": sorted(log.private_chats("browser")), "here": "", "in_view": set(),
           "tz": timezone(timedelta(hours=-8)), "lang": "zh", "desktop": home / "runtime" / "desktop"}

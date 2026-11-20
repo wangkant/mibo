@@ -1,4 +1,4 @@
-"""Measure, step by step, how accurately Mibo operates other programs (persona_agent/desk) with a real model.
+"""Measure, step by step, how accurately Mibo operates other programs (mibo/desk) with a real model.
 
     python tools/desk_measure.py --home DIR --model deepseek/deepseek-v4-flash [--sees] [--only calc,notepad]
                                  [--tasks C1,T5] [--tree DIR] [--script FILE] [--out FILE]
@@ -161,7 +161,7 @@ class Bench:
         self.task: dict = {}
         self.script: dict = json.loads(Path(args.script).read_text(encoding="utf-8")) if args.script else {}
         sys.path.insert(0, str(Path(args.tree).resolve() if args.tree else Path(__file__).resolve().parents[1]))
-        from persona_agent.desk import grants, hands, operate, panel, uia, win32
+        from mibo.desk import grants, hands, operate, panel, uia, win32
         self.g, self.hands_mod, self.operate, self.panel, self.uia, self.win32 = grants, hands, operate, panel, uia, win32
         win32.dpi_aware()
         grants.Grants(self.home / "runtime" / "desktop").set_on(True)

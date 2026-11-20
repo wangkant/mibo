@@ -14,9 +14,9 @@ import dataclasses
 import re
 from pathlib import Path
 
-from persona_agent.config_env import (DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL,
+from mibo.config_env import (DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL,
                                       vision_endpoint_from_env)
-from persona_agent.settings import AgentSettings
+from mibo.settings import AgentSettings
 
 from helpers import check
 
@@ -179,7 +179,7 @@ def test_from_env_takes_each_default_from_its_field(monkeypatch) -> None:
 
 
 def test_agent_lang_spellings_are_normalised() -> None:
-    from persona_agent.settings import normalize_lang
+    from mibo.settings import normalize_lang
 
     for raw, want in (("zh-CN", "zh"), ("zh_cn", "zh"), ("cn", "zh"),
                       ("Chinese", "zh"), (" ZH ", "zh"), ("en-US", "en"),
@@ -225,7 +225,7 @@ def test_the_agent_accepts_the_record_and_its_fields() -> None:
     import tempfile
     import os
 
-    from persona_agent.agent import Agent
+    from mibo.agent import Agent
 
     previous_home = os.environ.get("AGENT_HOME")
     with tempfile.TemporaryDirectory() as d:
@@ -257,7 +257,7 @@ def test_settings_named_in_log_messages_exist() -> None:
     known = set(re.findall(r"^#?\s*([A-Z][A-Z0-9_]*)=", env_example, re.MULTILINE))
     name = re.compile(r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]*[A-Z0-9]\b")
     unknown = []
-    for path in sorted((root / "persona_agent").glob("*.py")):
+    for path in sorted((root / "mibo").glob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and node.args
                     and isinstance(node.func, ast.Attribute)

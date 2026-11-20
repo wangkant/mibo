@@ -32,13 +32,13 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from persona_agent.skills import market  # noqa: E402
-from persona_agent.skills.store import (MAX_MEMBER, MAX_MEMBERS, MAX_UNPACKED, NAME, SKILL_FILE,  # noqa: E402
+from mibo.skills import market  # noqa: E402
+from mibo.skills.store import (MAX_MEMBER, MAX_MEMBERS, MAX_UNPACKED, NAME, SKILL_FILE,  # noqa: E402
                                         _front, _member_path)
 
 HERE = Path(__file__).resolve().parent
 OUT = ROOT / "data" / "market"
-AGENT = "skill-catalog-builder (+https://github.com/wangkant/personagent-desktop)"
+AGENT = "skill-catalog-builder (+https://github.com/wangkant/mibo)"
 CATEGORIES = ("documents", "writing", "research", "data", "design", "development", "productivity", "media",
               "learning", "life", "tools")
 # Folders that hold a project's tests or examples, never skills offered to people.

@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from persona_agent import taste
-from persona_agent.panels import feed
+from mibo import taste
+from mibo.panels import feed
 
 
 def week(at: float) -> str:

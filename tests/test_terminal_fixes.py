@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent import shortcut
-from persona_agent import setup_wizard as sw
+from mibo import shortcut
+from mibo import setup_wizard as sw
 
 from helpers import check
 

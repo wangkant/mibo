@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from persona_agent.agent import Agent
+from mibo.agent import Agent
 
 
 def check(name: str, cond, detail: str = "") -> None:

@@ -493,7 +493,7 @@ class App:
     def call(self, path: str, body: dict | None = None, timeout: float = 60):
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method="POST" if data else "GET",
-                                     headers={"Content-Type": "application/json", "x-personagent-setup-token": self.token})
+                                     headers={"Content-Type": "application/json", "x-mibo-setup-token": self.token})
         try:
             with self.opener.open(req, timeout=timeout) as r:
                 return json.loads(r.read().decode() or "{}")

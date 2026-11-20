@@ -24,8 +24,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE))
 
-from persona_agent import recommend  # noqa: E402
-from persona_agent.textproc import salvage_json_object, strip_json_fences  # noqa: E402
+from mibo import recommend  # noqa: E402
+from mibo.textproc import salvage_json_object, strip_json_fences  # noqa: E402
 from llm import Model  # noqa: E402
 import report  # noqa: E402
 

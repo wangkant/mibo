@@ -7,7 +7,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from persona_agent import ranking
+from mibo import ranking
 
 from helpers import check
 
@@ -28,7 +28,7 @@ def test_the_age_phrase_starts_from_when_a_fact_was_first_noted() -> None:
 
 
 def test_the_call_budget(tmp: Path) -> None:
-    from persona_agent import memstate
+    from mibo import memstate
 
     state = memstate.MemoryState(tmp / "memory_state.json")
     budget = memstate.CallBudget(state)

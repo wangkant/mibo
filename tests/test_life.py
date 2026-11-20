@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from persona_agent import life
-from persona_agent.library import KEPT, Item, Library
+from mibo import life
+from mibo.library import KEPT, Item, Library
 
 NOW = 1_800_000_000
 

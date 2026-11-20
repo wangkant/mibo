@@ -21,9 +21,9 @@ sys.path.insert(0, str(ROOT))
 from dotenv import dotenv_values
 from PIL import Image, ImageDraw
 
-from persona_agent.home import looks_like_home
-from persona_agent.library import Item, Library, item_id
-from persona_agent.roam import player_for
+from mibo.home import looks_like_home
+from mibo.library import Item, Library, item_id
+from mibo.roam import player_for
 
 HOUR = 3600
 
@@ -42,14 +42,14 @@ SAMPLES = [
      "When their home dries out they pull in their legs, lose nearly all their water and wait, "
      "sometimes for years, until water comes back.\n\n"
      "In that state they have lived through deep cold, strong heat and even a trip outside a spacecraft. "
-     "(Sample text written for personagent's feed seed.)",
+     "(Sample text written for mibo's feed seed.)",
      ((150, 120, 200), (230, 180, 220)), 9, True,
      "它们能干到几乎没有水，再等好几年醒过来。", "They dry out almost completely and wake up years later."),
     ("https://zh.wikipedia.org/wiki/酸种", "维基百科", "article", "酸种面包",
      "样例页面：用野生酵母做面包。",
      "酸种是面粉和水放在一起，让空气里的野生酵母和乳酸菌慢慢长起来的面种。\n\n"
      "每天喂一次新的面粉和水，过一周左右它就会冒泡、变酸，可以用来发面。\n\n"
-     "做出来的面包有一点酸味，外皮很脆。（这是 personagent 动态样例写的文字。）",
+     "做出来的面包有一点酸味，外皮很脆。（这是 mibo 动态样例写的文字。）",
      None, 20, False,
      "你上次说想学做面包，这个看起来不难。", "You said you wanted to bake bread. This one looks doable."),
     ("https://news.ycombinator.com/item?id=1", "Hacker News", "post", "A sample post: what are you building?",
@@ -59,7 +59,7 @@ SAMPLES = [
      "A sample page about towers that light the way for ships.",
      "A lighthouse is a tower with a strong lamp at the top that helps ships find their way at night.\n\n"
      "Each one flashes in its own pattern, so a sailor can tell which coast they are near.\n\n"
-     "Most now run on their own, with no keeper living in them. (Sample text written for personagent's feed seed.)",
+     "Most now run on their own, with no keeper living in them. (Sample text written for mibo's feed seed.)",
      ((40, 60, 110), (240, 200, 90)), 50, True,
      "每座灯塔闪的节奏都不一样，像在打招呼。", "Every lighthouse blinks its own rhythm, like a hello."),
 ]
@@ -93,7 +93,7 @@ def main() -> int:
     args = parser.parse_args()
     home = Path(args.home).expanduser().resolve()
     if not looks_like_home(home):
-        print(f"feed_seed: {home} is not a personagent home (no .env and persona.txt); nothing written.")
+        print(f"feed_seed: {home} is not a mibo home (no .env and persona.txt); nothing written.")
         return 2
     library = Library(runtime_of(home))
     now = int(time.time())

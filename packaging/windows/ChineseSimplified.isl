@@ -1,4 +1,4 @@
-﻿; Simplified Chinese for personagent's setup, read over compiler:Default.isl:
+﻿; Simplified Chinese for Mibo's setup, read over compiler:Default.isl:
 ; the pages, buttons and messages this setup and its uninstaller show.
 ; Anything not here stays English.
 
@@ -180,4 +180,4 @@ UninstallProgram=卸载 %1
 LaunchProgram=打开 %1
 AutoStartProgramGroupDescription=开机启动：
 AutoStartProgram=自动启动 %1
-StartAtSignIn=登录 Windows 时启动 personagent
+StartAtSignIn=登录 Windows 时启动 Mibo

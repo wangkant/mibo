@@ -1,4 +1,4 @@
-"""Two checks of working a window by picture (persona_agent/see), with no window and no model.
+"""Two checks of working a window by picture (mibo/see), with no window and no model.
 
     python tools/sight_check.py [--tree DIR]
 
@@ -121,7 +121,7 @@ def main() -> int:
     parser.add_argument("--tree", default="")
     args = parser.parse_args()
     sys.path.insert(0, str(Path(args.tree).resolve() if args.tree else Path(__file__).resolve().parents[1]))
-    from persona_agent.see import frame, profile, run, when
+    from mibo.see import frame, profile, run, when
     print(f"package: {Path(when.__file__).parents[1]}")
     rows = gate(when, profile)
     print("\n1. a window only a picture can work: the route, by model")

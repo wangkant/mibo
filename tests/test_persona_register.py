@@ -11,8 +11,8 @@ import itertools
 import json
 from pathlib import Path
 
-from persona_agent.agent import Agent
-from persona_agent.prompts import (
+from mibo.agent import Agent
+from mibo.prompts import (
     OWNER_TOOL_GUIDE,
     STYLE_KNOBS,
     PersonaStyle,

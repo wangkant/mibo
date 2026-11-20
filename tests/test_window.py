@@ -1,4 +1,4 @@
-"""The window `personagent start` opens instead of a browser tab, and the
+"""The window `mibo start` opens instead of a browser tab, and the
 shortcut that opens it. pywebview is stood in for: no window is drawn here."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from persona_agent import cli, shortcut, welcome, window
+from mibo import cli, shortcut, welcome, window
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
@@ -244,7 +244,7 @@ def test_ctrl_c_reaches_the_window_while_the_main_thread_is_elsewhere() -> None:
     assert signal.getsignal(signal.SIGINT) is before
 
 
-# -- `personagent start` --------------------------------------------------
+# -- `mibo start` --------------------------------------------------
 
 class _Server:
     """uvicorn's part: serve until told to exit."""
@@ -409,7 +409,7 @@ def test_a_second_start_asks_the_first_for_its_window(monkeypatch) -> None:
 
 
 def _held_start(home: Path, url: str = ""):
-    """The lock a running personagent holds, with the link it left."""
+    """The lock a running mibo holds, with the link it left."""
     info = home / "runtime" / "desktop" / "welcome.json"
     info.parent.mkdir(parents=True)
     if url:
@@ -457,7 +457,7 @@ def test_started_without_a_terminal_it_logs_and_says_refusals_in_a_dialog(
         lock.release()
         monkeypatch.undo()
     log.close()
-    assert said == ["personagent is starting. Try again in a moment."]
+    assert said == ["Mibo is starting. Try again in a moment."]
     written = earlier.read_text(encoding="utf-8")
     assert said[0] in written
     assert written.startswith("what the running one logged"), "its log is not this start's to empty"
@@ -471,7 +471,7 @@ def test_an_install_that_does_not_import_says_so_without_a_terminal(tmp_path, mo
     real = cli.importlib.import_module
 
     def missing(name, *args):
-        if name == "persona_agent.welcome":
+        if name == "mibo.welcome":
             raise ImportError("No module named 'fastapi'")
         return real(name, *args)
 
@@ -489,7 +489,7 @@ def test_an_install_that_does_not_import_says_so_without_a_terminal(tmp_path, mo
 
 
 def test_the_update_command_names_a_python_that_prints(tmp_path, monkeypatch) -> None:
-    from persona_agent import updates
+    from mibo import updates
 
     (tmp_path / "python.exe").write_bytes(b"")
     monkeypatch.setattr(sys, "executable", str(tmp_path / "pythonw.exe"))
@@ -542,7 +542,7 @@ def test_start_opens_the_window_when_it_can(tmp_path, monkeypatch, capsys,
     out = capsys.readouterr().out
     link = re.search(r"http://127\.0\.0\.1:\d+/#token=\S+", out).group(0)
     assert in_window == ([link] if windowed else [])
-    assert ("Close the personagent window to stop." in out) is windowed
+    assert ("Close the Mibo window to stop." in out) is windowed
     browser = not windowed and argv != ["--no-browser"]
     assert opened.wait(2 if browser else 0.2) is browser
     assert not (tmp_path / "runtime" / "desktop" / "welcome.json").exists()
@@ -555,9 +555,9 @@ def test_the_shortcut_runs_this_install_on_this_home_with_the_icon(tmp_path) -> 
     source = shortcut.script(home, folders=[tmp_path / "Desktop"])
     program, arguments = shortcut.target(home)
     assert program.parent == Path(sys.executable).parent
-    assert arguments == f'-m persona_agent start --home "{home}"'
+    assert arguments == f'-m mibo start --home "{home}"'
     assert "it''s home" in source, "a quote in a path stays inside its PowerShell string"
-    assert f"'{window.icon()}'" in source and "personagent.lnk" in source
+    assert f"'{window.icon()}'" in source and "Mibo.lnk" in source
     assert "GetFolderPath('Desktop')" in shortcut.script(home)
     removal = shortcut.script(home, remove=True, folders=[tmp_path])
     assert "Remove-Item" in removal and "CreateShortcut" not in removal
@@ -589,7 +589,7 @@ def test_windows_reads_a_link_in_a_folder_no_code_page_spells(tmp_path, monkeypa
     assert shortcut.status(home) == {"desktop": "off", "programs": "off", "startup": "off"}
     assert shortcut.run(shortcut.script(home)) == ""
     assert shortcut.status(home) == {"desktop": "on", "programs": "on", "startup": "off"}
-    assert not list(Path(os.environ.get("PUBLIC") or tmp_path).glob("personagent-*.lnk")), "no copy is left behind"
+    assert not list(Path(os.environ.get("PUBLIC") or tmp_path).glob("mibo-*.lnk")), "no copy is left behind"
 
 
 # -- the page's own chat ----------------------------------------------------

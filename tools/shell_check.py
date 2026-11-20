@@ -1,4 +1,4 @@
-"""Reads and sorts a set of commands the way the app does before running any (persona_agent/shell), and runs
+"""Reads and sorts a set of commands the way the app does before running any (mibo/shell), and runs
 the ones the app would run without asking, inside a folder this script makes.
 
     python tools/shell_check.py <empty scratch folder> [--run]
@@ -16,10 +16,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from persona_agent.shell import files as files_tool
-from persona_agent.shell import read as reading
-from persona_agent.shell import run as running
-from persona_agent.shell.grants import Grants
+from mibo.shell import files as files_tool
+from mibo.shell import read as reading
+from mibo.shell import run as running
+from mibo.shell.grants import Grants
 
 # (command, expected action)
 CASES = [

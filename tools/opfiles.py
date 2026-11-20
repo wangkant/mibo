@@ -36,7 +36,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from optruth import Play, click, done, typed  # noqa: E402
 
-from persona_agent.web import gate, operate  # noqa: E402
+from mibo.web import gate, operate  # noqa: E402
 
 
 class Files(Play):

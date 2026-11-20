@@ -143,7 +143,7 @@ def main() -> int:
     (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
     first = fixture(work)
     threading.Thread(target=stand_in, args=(model_port, work), daemon=True).start()
-    app = subprocess.Popen([sys.executable, "-c", "import sys; from persona_agent import welcome; "
+    app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
                            env={**os.environ, "AGENT_HOME": str(home), "SHELL_OPEN_DRY": "1"},
                            cwd=Path(__file__).resolve().parents[1],
@@ -166,7 +166,7 @@ def main() -> int:
         page("shell", {"add": str(work)})
         # The main chat, which the page opens on.
         chat = "main"
-        from persona_agent.shell.checkpoint import in_bin
+        from mibo.shell.checkpoint import in_bin
         names = {}
         for text in turns(work):
             done = turn(page, chat, f"{text} 整理一下")  # copy: voice

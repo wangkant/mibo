@@ -151,7 +151,7 @@ def main(argv: list[str]) -> int:
 
 def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Counter, out: Path,
           results: list[dict], pictures: bool) -> None:
-    from persona_agent.web import sites
+    from mibo.web import sites
 
     def api(path: str, body: dict | None = None) -> dict:
         url = json.loads((home / "runtime" / "desktop" / "welcome.json").read_text(encoding="utf-8"))["url"]
@@ -159,7 +159,7 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
         request = urllib.request.Request(base.rstrip("/") + "/api/" + path, method="GET" if body is None else "POST",
                                          data=None if body is None else json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json",
-                                                  "x-personagent-setup-token": token})
+                                                  "x-mibo-setup-token": token})
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=30) as answer:
             return json.loads(answer.read().decode())
 

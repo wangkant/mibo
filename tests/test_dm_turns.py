@@ -11,9 +11,9 @@ import asyncio
 import json
 from pathlib import Path
 
-from persona_agent import chatlangs
-from persona_agent.agent import Agent
-from persona_agent.dm import chat_key
+from mibo import chatlangs
+from mibo.agent import Agent
+from mibo.dm import chat_key
 
 from helpers import check, make_agent
 
@@ -52,7 +52,7 @@ async def test_a_turn_over_its_budget_ends_with_the_failure_line(tmp: Path, monk
     agent = make_agent(tmp)
     agent.llm_timeout_s = 0.02
     # No time for tools on top: the answer's own time is the whole budget here.
-    monkeypatch.setattr("persona_agent.search._TOOLS_WITHIN_S", 0.0)
+    monkeypatch.setattr("mibo.search._TOOLS_WITHIN_S", 0.0)
     cancelled: list = []
     answers = False
 

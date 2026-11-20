@@ -1,4 +1,4 @@
-"""Measure how Mibo finds and opens a program by the name a person uses for it (persona_agent/desk/names.py).
+"""Measure how Mibo finds and opens a program by the name a person uses for it (mibo/desk/names.py).
 
     python tools/desk_names.py                              the fixed cases on a recorded Start menu
     python tools/desk_names.py --here 微信/WeChat Word 飞书   what each name comes to on this computer
@@ -89,7 +89,7 @@ CASES = [
 
 
 def fixed() -> int:
-    from persona_agent.desk import names
+    from mibo.desk import names
     apps = [names.App(*row) for row in START]
     windows = [names.Window(i + 1, *row) for i, row in enumerate(OPEN)]
     by_hwnd = {w.hwnd: w for w in windows}
@@ -120,7 +120,7 @@ def _said(found) -> str:
 
 
 def here(asked: list[str]) -> int:
-    from persona_agent.desk import names
+    from mibo.desk import names
     began = time.perf_counter()
     apps = names.apps()
     read_s = time.perf_counter() - began
@@ -147,7 +147,7 @@ def open_one(name: str, home: Path) -> int:
     """Through panel.Desk, as a chat task would: the card, the start from Start's entry, the grant, a look."""
     from types import SimpleNamespace
 
-    from persona_agent.desk import grants as g, panel, win32
+    from mibo.desk import grants as g, panel, win32
     win32.dpi_aware()
     desktop = home / "runtime" / "desktop"
     g.Grants(desktop).set_on(True)

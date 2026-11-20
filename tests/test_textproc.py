@@ -7,7 +7,7 @@ Run from the repo root:
 """
 from __future__ import annotations
 
-from persona_agent.textproc import (
+from mibo.textproc import (
     ReplyStyle,
     TextProcessing as TP,
     _as_protocol_object,
@@ -196,7 +196,7 @@ def test_the_parser_reads_past_keys_a_model_adds() -> None:
 def test_drift_logging_is_bounded_and_a_missing_reply_is_said(caplog) -> None:
     import logging
 
-    from persona_agent import textproc
+    from mibo import textproc
 
     model = "drift-model"
     with caplog.at_level(logging.WARNING, logger="agent"):

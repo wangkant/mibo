@@ -28,7 +28,7 @@ SERVERS = {"mcpServers": {"time": {"command": "uvx", "args": ["mcp-server-time"]
 def call(base: str, token: str, path: str, body: dict | None = None, timeout: float = 600) -> dict:
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(f"{base}/api/{path}", data=data, method="POST" if data else "GET",
-                                     headers={"Content-Type": "application/json", "x-personagent-setup-token": token})
+                                     headers={"Content-Type": "application/json", "x-mibo-setup-token": token})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(request, timeout=timeout) as answer:
@@ -76,7 +76,7 @@ def main() -> int:
     env = {**os.environ, "AGENT_HOME": str(home), "USERPROFILE": str(user), "HOME": str(user),
            "APPDATA": str(user / "AppData" / "Roaming"), "LOCALAPPDATA": str(user / "AppData" / "Local"),
            "PATH": path}
-    app = subprocess.Popen([sys.executable, "-c", "import sys; from persona_agent import welcome; "
+    app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser', '--port', '{a.port}']))"],
                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     report: dict = {}

@@ -6,7 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from persona_agent.prompts import render_persona_template
+from mibo.prompts import render_persona_template
 
 from helpers import check, make_agent
 
@@ -52,7 +52,7 @@ def test_a_persona_file_copied_from_the_template_reaches_the_model_filled(
 
 
 def test_a_users_persona_is_cut_only_at_a_template_note(tmp: Path, monkeypatch) -> None:
-    from persona_agent import setup_wizard as sw
+    from mibo import setup_wizard as sw
 
     for own in ("I'm Mira.\n===\nMy notes live in persona.txt, my diary elsewhere.",
                 "I'm Mira.\n---\nThe template I started from is long gone.\n\n"

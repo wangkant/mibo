@@ -38,7 +38,7 @@ def main() -> None:
                                          data=json.dumps(body).encode() if body is not None else None,
                                          method="POST" if body is not None else "GET",
                                          headers={"Content-Type": "application/json",
-                                                  "x-personagent-setup-token": token})
+                                                  "x-mibo-setup-token": token})
         with opener.open(request, timeout=60) as answer:
             return json.loads(answer.read().decode())
 

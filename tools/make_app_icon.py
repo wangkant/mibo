@@ -2,7 +2,7 @@
 
     python tools/make_app_icon.py
 
-Writes persona_agent/static/app.ico (Windows) and app.png (GTK and Qt).
+Writes mibo/static/app.ico (Windows) and app.png (GTK and Qt).
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-STATIC = Path(__file__).resolve().parents[1] / "persona_agent" / "static"
+STATIC = Path(__file__).resolve().parents[1] / "mibo" / "static"
 INK, PAPER = (29, 27, 24, 255), (246, 244, 240, 255)
 CANVAS = 1024
 ICO_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)

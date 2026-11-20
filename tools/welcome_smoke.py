@@ -21,14 +21,14 @@ from package_smoke import FakeModel, REPLY, _env
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--personagent", required=True)
+    parser.add_argument("--mibo", required=True)
     args = parser.parse_args(argv)
     model = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)
     threading.Thread(target=model.serve_forever, daemon=True).start()
     process = None
     try:
-        with tempfile.TemporaryDirectory(prefix="personagent-welcome-") as temporary:
-            command = [shutil.which(args.personagent) or os.path.abspath(args.personagent), "--home", str(Path(temporary) / "home"),
+        with tempfile.TemporaryDirectory(prefix="mibo-welcome-") as temporary:
+            command = [shutil.which(args.mibo) or os.path.abspath(args.mibo), "--home", str(Path(temporary) / "home"),
                        "start", "--no-browser"]
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                        text=True, encoding="utf-8", errors="replace", env=_env())
@@ -60,7 +60,7 @@ def main(argv=None) -> int:
             def request(path, payload=None):
                 data = None if payload is None else json.dumps(payload).encode()
                 req = urllib.request.Request(base + path, data=data, headers={
-                    "Content-Type": "application/json", "X-Personagent-Setup-Token": token})
+                    "Content-Type": "application/json", "X-Mibo-Setup-Token": token})
                 with opener.open(req, timeout=45) as response:
                     return json.loads(response.read())
 

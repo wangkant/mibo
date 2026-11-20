@@ -5,8 +5,8 @@ import warnings
 
 import pytest
 
-from persona_agent import life, players, welcome
-from persona_agent.library import Item, Library
+from mibo import life, players, welcome
+from mibo.library import Item, Library
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")

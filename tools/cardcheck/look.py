@@ -25,7 +25,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-ASSETS = Path(__file__).resolve().parents[2] / "persona_agent" / "static" / "welcome"
+ASSETS = Path(__file__).resolve().parents[2] / "mibo" / "static" / "welcome"
 PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="/assets/card.css"><link rel="stylesheet" href="/assets/petux.css">
 <style>html,body{margin:0;height:100%;background:#e9eaee}body.dark{background:#17171a}
@@ -85,7 +85,7 @@ def card(out: Path, item: dict, lang: str, dark: bool) -> None:
         page.goto("http://card.test/")
         if dark:
             page.evaluate("document.body.classList.add('dark')")
-        page.evaluate("code => localStorage.setItem('personagent-page-language', code)", lang)
+        page.evaluate("code => localStorage.setItem('mibo-page-language', code)", lang)
         page.reload()
         if dark:
             page.evaluate("document.body.classList.add('dark')")

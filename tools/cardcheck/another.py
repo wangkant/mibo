@@ -38,7 +38,7 @@ class App:
         request = urllib.request.Request(
             self.base + path, data=None if body is None else json.dumps(body).encode(),
             method="GET" if body is None else "POST",
-            headers={"Content-Type": "application/json", "x-personagent-setup-token": self.token})
+            headers={"Content-Type": "application/json", "x-mibo-setup-token": self.token})
         try:
             with self.opener.open(request, timeout=60) as answer:
                 return json.loads(answer.read().decode() or "null")

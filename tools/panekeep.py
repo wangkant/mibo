@@ -182,8 +182,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     import window_driver
 
-    from persona_agent import window as appwindow
-    from persona_agent.welcome import save_app_settings
+    from mibo import window as appwindow
+    from mibo.welcome import save_app_settings
     desktop = home / "runtime" / "desktop"
     desktop.mkdir(parents=True, exist_ok=True)
     save_app_settings(desktop, toured=True, pet_shown=False)

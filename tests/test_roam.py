@@ -10,13 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent import installed_browser as web
-from persona_agent import profile, today
-from persona_agent import roam as roam_mod
-from persona_agent.library import PICTURE_MAX_BYTES, Library
-from persona_agent.settings import AgentSettings
-from persona_agent.textproc import _WEB_DESC_CLOSE
-from persona_agent.web import sites
+from mibo import installed_browser as web
+from mibo import profile, today
+from mibo import roam as roam_mod
+from mibo.library import PICTURE_MAX_BYTES, Library
+from mibo.settings import AgentSettings
+from mibo.textproc import _WEB_DESC_CLOSE
+from mibo.web import sites
 
 from roam_standin import Recorder, Site
 

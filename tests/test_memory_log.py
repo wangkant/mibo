@@ -11,7 +11,7 @@ import json
 import time
 from pathlib import Path
 
-from persona_agent import chatlog
+from mibo import chatlog
 
 from helpers import check
 
@@ -118,7 +118,7 @@ def test_refs_are_read_defensively() -> None:
 # ---- the agent's log ---------------------------------------------------------
 
 def test_a_backup_never_holds_the_log(tmp: Path) -> None:
-    from persona_agent.panels import desk
+    from mibo.panels import desk
     home = tmp / "home"
     (home / "runtime" / "log").mkdir(parents=True)
     (home / "runtime" / "log" / "x.jsonl").write_text(json.dumps(row(1, "hi")), encoding="utf-8")

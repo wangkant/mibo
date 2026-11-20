@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1] / "persona_agent"
+ROOT = Path(__file__).resolve().parents[1] / "mibo"
 # Where interface text lives; prompts and persona files are the character's voice.
 PLACES = ("static/welcome", "panels", "web", "desk", "shell", "see", "skills", "review.py", "browsed.py", "browser.py",
           "window.py", "pacing.py", "endpoints.py", "abilities.py", "spend.py", "snip.py")
@@ -40,7 +40,7 @@ SPOKEN = (
     r"这台电脑", r"这(?:张|条|项|一栏)", r"这个(?:网站|程序|文件夹|网页|窗口)", r"(?:聊天|文件夹|浏览器|记事本|记录|设置|程序)里", r"这里|那里",
     r"收回", r"(?<![更修])改(?:名|账号|设置)", r"停在了|运行了|做了一次", r"做事|要做的事",
     # The product's name, and no Latin word glued to Chinese.
-    r"觅波|覓波", r"(?i)personagent", r"(?:Mibo|OpenRouter|DeepSeek|Windows|PowerShell)[一-鿿]|[一-鿿](?:Mibo|OpenRouter|DeepSeek|Windows|PowerShell)",
+    r"觅波|覓波", r"(?:Mibo|OpenRouter|DeepSeek|Windows|PowerShell)[一-鿿]|[一-鿿](?:Mibo|OpenRouter|DeepSeek|Windows|PowerShell)",
 )
 CATALOG = ROOT / "locales" / "zh.json"
 # Catalog keys the character or the person says, and the namespaces of the command line, which is not interface text here.

@@ -27,7 +27,7 @@ def call(path, body=None):
     req = urllib.request.Request(f"{address.scheme}://{address.netloc}/api/{path}",
                                  data=json.dumps(body).encode() if body is not None else None,
                                  method="POST" if body is not None else "GET",
-                                 headers={"Content-Type": "application/json", "x-personagent-setup-token": token})
+                                 headers={"Content-Type": "application/json", "x-mibo-setup-token": token})
     with opener.open(req, timeout=240) as r:
         return json.loads(r.read().decode())
 

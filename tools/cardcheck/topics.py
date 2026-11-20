@@ -21,9 +21,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "recsim"))
 
-from persona_agent import recommend, subjects, taste  # noqa: E402
-from persona_agent.library import Library  # noqa: E402
-from persona_agent.panels import feed  # noqa: E402
+from mibo import recommend, subjects, taste  # noqa: E402
+from mibo.library import Library  # noqa: E402
+from mibo.panels import feed  # noqa: E402
 from subjects_check import TO  # noqa: E402
 
 

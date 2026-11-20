@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from helpers import isolated_agent
-from persona_agent import storage, usage
+from mibo import storage, usage
 
 
 class _Resp:

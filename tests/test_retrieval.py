@@ -12,7 +12,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from persona_agent.agent import Agent
+from mibo.agent import Agent
 
 from helpers import check, isolated_agent
 

@@ -8,7 +8,7 @@ from helpers import check
 
 def test_numeric_config_parser_is_bounded() -> None:
     """The package's one numeric reader enforces the bounds every setting gets."""
-    from persona_agent.config_env import env_int
+    from mibo.config_env import env_int
 
     def parser(name, raw, default, **kw):
         return env_int(name, default, env={name: raw}, **kw)
@@ -31,7 +31,7 @@ def test_every_setting_the_code_reads_is_in_the_template() -> None:
     # `tools/` too: the tools read settings the operator puts in `.env`.
     root = Path(__file__).resolve().parents[1]
     sources = [
-        *sorted((root / "persona_agent").glob("*.py")),
+        *sorted((root / "mibo").glob("*.py")),
         *sorted((root / "tools").glob("*.py")),
     ]
 

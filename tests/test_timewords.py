@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from persona_agent import chatlangs, ranking, timewords
+from mibo import chatlangs, ranking, timewords
 
 from helpers import check
 

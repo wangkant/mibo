@@ -15,9 +15,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from persona_agent import mcp_hub, mcp_offer, mcp_tools, search
-from persona_agent.mcp_client import Connection, McpError
-from persona_agent.textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN
+from mibo import mcp_hub, mcp_offer, mcp_tools, search
+from mibo.mcp_client import Connection, McpError
+from mibo.textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN
 
 import mcp_standin
 
@@ -69,7 +69,7 @@ async def test_the_client_speaks_streamable_http(tmp: Path, options) -> None:
 
 async def test_failures_are_precise(tmp: Path) -> None:
     with pytest.raises(McpError) as caught:
-        await _open({"command": "no-such-program-personagent-test"}, tmp, 10)
+        await _open({"command": "no-such-program-mibo-test"}, tmp, 10)
     assert caught.value.code == "not_found"
     with pytest.raises(McpError) as caught:
         await _open({**STDIO, "args": [STANDIN, "--die"]}, tmp, 20)
@@ -121,7 +121,7 @@ async def test_the_client_talks_to_the_official_sdk(tmp: Path) -> None:
 
 
 async def test_a_server_program_never_sees_the_apps_secrets(tmp: Path, monkeypatch) -> None:
-    from persona_agent import home as homes
+    from mibo import home as homes
 
     monkeypatch.setenv("LLM_API_KEY", "sk-model-secret")
     monkeypatch.setenv("CONNECTOR_TOKEN", "connector-secret")
@@ -168,7 +168,7 @@ def test_what_cannot_run_is_refused_by_name(text: str, code: str) -> None:
 
 
 def _env_writer(home: Path):
-    from persona_agent import secretstore
+    from mibo import secretstore
     return lambda values: secretstore.put_many(home, values)
 
 
@@ -182,7 +182,7 @@ def test_secrets_go_to_the_credential_store_and_only_their_own_names_are_filled(
     assert "sk-secret-value" not in written and "hdr-secret" not in written
     env = (tmp / ".env").read_text(encoding="utf-8")
     assert "sk-secret-value" not in env and "hdr-secret" not in env
-    from persona_agent import secretstore
+    from mibo import secretstore
     held = {k: secretstore.get(tmp, k) for k in ("MIBO_MCP_A_API_KEY", "MIBO_MCP_B_H_AUTHORIZATION")}
     assert held == {"MIBO_MCP_A_API_KEY": "sk-secret-value", "MIBO_MCP_B_H_AUTHORIZATION": "Bearer hdr-secret"}
     spec, missing = mcp_tools.expand(mcp_tools.load_config(tmp)["mcpServers"]["a"], held)

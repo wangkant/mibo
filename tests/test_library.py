@@ -1,7 +1,7 @@
 """What the character has seen, kept for the home page and the days."""
 from __future__ import annotations
 
-from persona_agent.library import KEPT, Item, Library, item_id
+from mibo.library import KEPT, Item, Library, item_id
 
 NOW = 1_800_000_000
 

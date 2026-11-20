@@ -11,9 +11,9 @@ from pathlib import Path
 
 import unicodedata
 
-from persona_agent.agent import Agent
-from persona_agent.prompt import _TURN_CONTEXT_OPEN
-from persona_agent.textproc import (
+from mibo.agent import Agent
+from mibo.prompt import _TURN_CONTEXT_OPEN
+from mibo.textproc import (
     _RESERVED_DEFAULT_IGNORABLES,
     _OWN_CHAT_INPUT_RULES,
     _USER_DATA_CLOSE,

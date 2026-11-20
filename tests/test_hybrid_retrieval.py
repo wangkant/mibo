@@ -14,11 +14,11 @@ from pathlib import Path
 
 import httpx
 
-from persona_agent import embeddings, ranking
-from persona_agent.agent import Agent
-from persona_agent.endpoints import embedding_endpoint, embeddings_url
-from persona_agent.llm import _PooledHTTP
-from persona_agent.textproc import _focus_tokens
+from mibo import embeddings, ranking
+from mibo.agent import Agent
+from mibo.endpoints import embedding_endpoint, embeddings_url
+from mibo.llm import _PooledHTTP
+from mibo.textproc import _focus_tokens
 
 from helpers import check, isolated_agent
 

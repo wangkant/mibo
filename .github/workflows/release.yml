@@ -55,8 +55,8 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/wheelenv"
           "$RUNNER_TEMP/wheelenv/bin/python" -m pip install --quiet dist/*.whl
-          VERSION=$("$RUNNER_TEMP/wheelenv/bin/python" -c "import persona_agent; print(persona_agent.__version__)")
-          python tools/package_smoke.py --personagent "$RUNNER_TEMP/wheelenv/bin/personagent" --version "$VERSION"
+          VERSION=$("$RUNNER_TEMP/wheelenv/bin/python" -c "import mibo; print(mibo.__version__)")
+          python tools/package_smoke.py --mibo "$RUNNER_TEMP/wheelenv/bin/mibo" --version "$VERSION"
       - name: Upload the distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -93,11 +93,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-installer
-          path: dist/personagent-*-setup.exe
+          path: dist/mibo-*-setup.exe
           if-no-files-found: error
 
   macos-app:
-    # The same PyInstaller spec makes personagent.app, put in a .dmg beside a
+    # The same PyInstaller spec makes mibo.app, put in a .dmg beside a
     # link to /Applications. The runner is Apple silicon, so the app is arm64.
     # It is unsigned: Gatekeeper asks the person to open it with right-click >
     # Open. Signing would need a Developer ID Application certificate (imported
@@ -119,27 +119,27 @@ jobs:
           python-version: "3.12"
       - name: Freeze the app
         # Installed, not editable, and frozen from outside the checkout: the
-        # wheel's persona_agent/_bundled is what the spec reads.
+        # wheel's mibo/_bundled is what the spec reads.
         run: |
           python -m venv "$RUNNER_TEMP/appenv"
           "$RUNNER_TEMP/appenv/bin/python" -m pip install --quiet ".[app,web]" "pyinstaller>=6.10,<7"
           cd packaging/windows
           "$RUNNER_TEMP/appenv/bin/python" -m PyInstaller --noconfirm --clean \
-            --distpath "$RUNNER_TEMP/frozen" --workpath "$RUNNER_TEMP/work" personagent.spec
-          test -x "$RUNNER_TEMP/frozen/personagent.app/Contents/MacOS/personagent"
+            --distpath "$RUNNER_TEMP/frozen" --workpath "$RUNNER_TEMP/work" mibo.spec
+          test -x "$RUNNER_TEMP/frozen/mibo.app/Contents/MacOS/mibo"
       - name: Put it in a disk image
         run: |
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
           mkdir -p "$RUNNER_TEMP/dmg" dist
-          cp -R "$RUNNER_TEMP/frozen/personagent.app" "$RUNNER_TEMP/dmg/"
+          cp -R "$RUNNER_TEMP/frozen/mibo.app" "$RUNNER_TEMP/dmg/"
           ln -s /Applications "$RUNNER_TEMP/dmg/Applications"
-          hdiutil create -volname personagent -srcfolder "$RUNNER_TEMP/dmg" -ov -format UDZO \
-            "dist/personagent-$VERSION-macos-arm64.dmg"
+          hdiutil create -volname mibo -srcfolder "$RUNNER_TEMP/dmg" -ov -format UDZO \
+            "dist/mibo-$VERSION-macos-arm64.dmg"
       - name: Upload the disk image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-app
-          path: dist/personagent-*-macos-arm64.dmg
+          path: dist/mibo-*-macos-arm64.dmg
           if-no-files-found: error
 
   pypi:
@@ -149,7 +149,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: pypi
-      url: https://pypi.org/project/personagent/
+      url: https://pypi.org/project/mibo/
     permissions:
       id-token: write
     steps:
@@ -195,5 +195,5 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/* apps/* \
             --verify-tag \
-            --title "personagent ${GITHUB_REF_NAME#v}" \
+            --title "mibo ${GITHUB_REF_NAME#v}" \
             --notes-file notes/release-notes.md

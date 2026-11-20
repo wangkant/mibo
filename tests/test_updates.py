@@ -8,7 +8,7 @@ import time
 import httpx
 import pytest
 
-from persona_agent import __version__, updates, welcome
+from mibo import __version__, updates, welcome
 
 
 def _no_network(url, **kw):
@@ -64,7 +64,7 @@ def test_a_check_remembers_the_answer_and_a_failure_keeps_the_last_one(tmp_path,
     url, kw = asked[0]
     assert url == updates.LATEST_URL
     # Only the version travels: no key, no home, nothing from .env.
-    assert kw["headers"] == {"User-Agent": f"personagent/{__version__}"}
+    assert kw["headers"] == {"User-Agent": f"mibo/{__version__}"}
     found = updates.notice(tmp_path)
     assert found["version"] == "99.0.0"
     assert found["url"].endswith("/releases/tag/v99.0.0")

@@ -9,8 +9,8 @@ import os
 from fastapi.testclient import TestClient
 import pytest
 
-from persona_agent import setup_wizard as sw
-from persona_agent import welcome
+from mibo import setup_wizard as sw
+from mibo import welcome
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
@@ -167,7 +167,7 @@ def test_a_failed_message_is_kept_unanswered_and_can_be_sent_again(monkeypatch, 
     finally:
         again.close()
     # The character never had that turn.
-    from persona_agent import dm
+    from mibo import dm
     assert dm._page_turns(workspace._history_path, workspace._main.conversation) == []
     _replying(monkeypatch, workspace, [{"type": "text", "text": "here"}])
     answer = asyncio.run(workspace.chat("hi", retry=1))

@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from persona_agent import mcp_tools, welcome
+from mibo import mcp_tools, welcome
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
@@ -66,7 +66,7 @@ def test_a_pasted_block_or_command_adds_servers_and_secrets_stay_home(client, wo
     assert servers["remote"]["values"] == [{"kind": "headers", "name": "Authorization", "set": True}]
     saved = mcp_tools.config_path(workspace.home).read_text(encoding="utf-8")
     assert "env-secret" not in saved and "env-secret" not in workspace.env.read_text(encoding="utf-8")
-    from persona_agent import secretstore
+    from mibo import secretstore
     assert secretstore.get(workspace.home, "MIBO_MCP_STAND_API_KEY") == "env-secret"
     assert post(client, {"add": f'"{sys.executable}" "{STANDIN}"', "name": "stand"}).json() == \
         {"error": "tools_name_taken"}
@@ -82,7 +82,7 @@ def test_allowing_the_start_takes_the_apps_own_page(client, workspace):
     welcome_window = type("W", (), {"is_own_page": staticmethod(lambda key: key == "own")})()
     client.app.state.window = welcome_window
     assert post(client, {"start": "stand", "answer": "once"}).json() == {"error": "local_only"}
-    allowed = client.post("/api/mcp", headers={**HEADERS, "X-Personagent-Window": "own"},
+    allowed = client.post("/api/mcp", headers={**HEADERS, "X-Mibo-Window": "own"},
                           json={"start": "stand", "answer": "once"})
     assert allowed.status_code == 200
     row = _until(client, "stand", "connected", "failed")
@@ -101,7 +101,7 @@ def test_allowing_the_start_takes_the_apps_own_page(client, workspace):
 
 
 def test_every_section_string_is_in_english_and_chinese_and_every_code_is_named():
-    from persona_agent.panels import tools
+    from mibo.panels import tools
 
     source = (welcome.ASSETS / "setup" / "tools.js").read_text(encoding="utf-8")
     zh, en = source.split("\n    en: {\n")

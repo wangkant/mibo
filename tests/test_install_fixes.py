@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from dotenv import dotenv_values
 
-from persona_agent import setup_wizard as sw
+from mibo import setup_wizard as sw
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,11 +47,11 @@ def test_a_plain_value_is_written_bare() -> None:
 def test_a_command_names_a_home_the_bare_command_would_not_find(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("AGENT_HOME", raising=False)
     monkeypatch.setattr(sw.homes, "is_checkout", lambda *a: False)
-    monkeypatch.setattr(sw.homes, "default_home", lambda: tmp_path / "personagent")
+    monkeypatch.setattr(sw.homes, "default_home", lambda: tmp_path / "mibo")
     cwd_home = sw.Launcher(python="python", home=tmp_path / "somewhere")
     assert "--home" in " ".join(cwd_home.shown("demo"))
     assert "--home" in " ".join(cwd_home.argv("chat"))
-    usual = sw.Launcher(python="python", home=tmp_path / "personagent")
+    usual = sw.Launcher(python="python", home=tmp_path / "mibo")
     assert "--home" not in " ".join(usual.shown("demo"))
 
 

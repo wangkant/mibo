@@ -7,9 +7,9 @@ from pathlib import Path
 
 import httpx
 
-from persona_agent.agent import Agent
-from persona_agent.endpoints import adapt_rejected_payload
-from persona_agent.textproc import TextProcessing
+from mibo.agent import Agent
+from mibo.endpoints import adapt_rejected_payload
+from mibo.textproc import TextProcessing
 
 from helpers import check, isolated_agent
 
@@ -1064,7 +1064,7 @@ def test_a_call_that_cannot_ask_goes_by_what_is_known_of_the_endpoint() -> None:
     """The doctor's probes run once and keep no memory, so they cannot learn
     from a refusal: they send `thinking` only where it is known to be taken,
     and an unknown endpoint is left alone."""
-    from persona_agent.llm import known_to_take_thinking, thinking_off
+    from mibo.llm import known_to_take_thinking, thinking_off
 
     def switched(model: str, url: str) -> dict:
         payload = {"model": model, "temperature": 0.3}
@@ -1104,8 +1104,8 @@ def test_a_call_that_cannot_ask_goes_by_what_is_known_of_the_endpoint() -> None:
 def test_k2s_one_temperature_is_given_only_to_a_caller_that_asks() -> None:
     """One function holds the rule. `textproc.apply_k2_quirks`, the older
     switch, had no caller left but its own tests and would have drifted."""
-    from persona_agent import textproc
-    from persona_agent.llm import thinking_off
+    from mibo import textproc
+    from mibo.llm import thinking_off
 
     check("the older switch is gone", not hasattr(textproc, "apply_k2_quirks"))
     moonshot = "https://api.moonshot.cn/v1/chat/completions"
@@ -1231,7 +1231,7 @@ async def test_a_hanging_main_model_hands_the_turn_to_the_backup(tmp: Path) -> N
 
 async def test_each_answers_usage_is_counted_per_model_and_day(tmp: Path) -> None:
     """Nothing showed what the character spends; the account is the user's."""
-    from persona_agent import usage
+    from mibo import usage
 
     agent = _two_model_agent(tmp)
     http = _ByModel(
@@ -1267,7 +1267,7 @@ async def test_each_answers_usage_is_counted_per_model_and_day(tmp: Path) -> Non
 
 async def test_each_request_is_counted_under_what_it_was_for(tmp: Path) -> None:
     """Ten messages showed as 21 requests with no way to tell why."""
-    from persona_agent import llm, usage
+    from mibo import llm, usage
 
     agent = _two_model_agent(tmp)
     agent._http = _ByModel(primary=_ok("a"), fallback=_ok("b"))
@@ -1287,7 +1287,7 @@ async def test_each_request_is_counted_under_what_it_was_for(tmp: Path) -> None:
 def test_a_usage_file_from_before_purposes_still_loads(tmp: Path) -> None:
     import json
 
-    from persona_agent import usage
+    from mibo import usage
 
     now = time.time()
     path = tmp / usage.USAGE_FILE
@@ -1302,7 +1302,7 @@ def test_a_usage_file_from_before_purposes_still_loads(tmp: Path) -> None:
 
 
 def test_the_tally_is_written_at_most_once_a_minute(tmp: Path) -> None:
-    from persona_agent import usage
+    from mibo import usage
 
     book = usage.UsageBook(tmp / usage.USAGE_FILE)
     book.add("m", {"prompt_tokens": 5}, 1000.0)

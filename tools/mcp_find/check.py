@@ -21,7 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from persona_agent import mcp_hub, mcp_tools as mt  # noqa: E402
+from mibo import mcp_hub, mcp_tools as mt  # noqa: E402
 
 # A query and the tools that answer it ("server/tool").
 ZH = [

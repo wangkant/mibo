@@ -15,13 +15,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from persona_agent import paths, storage
+from mibo import paths, storage
 
 from helpers import check
 
 
 def _append_worker(path: str, worker: int, count: int) -> None:
-    from persona_agent.storage import append_jsonl
+    from mibo.storage import append_jsonl
 
     for index in range(count):
         append_jsonl(Path(path), {"worker": worker, "index": index})
@@ -283,7 +283,7 @@ def test_a_rebuildable_loader_hides_only_a_bad_file(
 
 def test_a_replace_waits_out_a_reader_on_windows(tmp_path, monkeypatch) -> None:
     """The page reads .env on every poll; Windows refuses to replace an open file."""
-    from persona_agent import storage
+    from mibo import storage
 
     target = tmp_path / ".env"
     target.write_text("old", encoding="utf-8")

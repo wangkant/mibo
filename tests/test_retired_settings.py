@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-from persona_agent import cli
+from mibo import cli
 
 ROOT = Path(__file__).resolve().parents[1]
 OLD_ENV = (

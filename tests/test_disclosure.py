@@ -12,8 +12,8 @@ import json
 import re
 from pathlib import Path
 
-from persona_agent.agent import Agent
-from persona_agent.prompts import _HONEST_ANSWER
+from mibo.agent import Agent
+from mibo.prompts import _HONEST_ANSWER
 
 from helpers import check, isolated_agent
 

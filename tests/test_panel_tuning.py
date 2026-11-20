@@ -4,9 +4,9 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 import pytest
 
-from persona_agent import setup_wizard as sw
-from persona_agent import welcome
-from persona_agent.panels import tuning
+from mibo import setup_wizard as sw
+from mibo import welcome
+from mibo.panels import tuning
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

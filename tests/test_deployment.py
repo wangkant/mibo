@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-from persona_agent.endpoints import chat_completions_url
+from mibo.endpoints import chat_completions_url
 
 
 class DeploymentTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class DeploymentTests(unittest.TestCase):
                          "https://example.org/proxy/v1/chat/completions")
 
     def test_a_vendor_version_root_gets_only_chat_completions(self):
-        from persona_agent.endpoints import embeddings_url
+        from mibo.endpoints import embeddings_url
         cases = {
             "https://open.bigmodel.cn/api/paas/v4":
                 "https://open.bigmodel.cn/api/paas/v4/chat/completions",

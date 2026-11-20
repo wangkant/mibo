@@ -46,7 +46,7 @@ body:
     id: persona
     attributes:
       label: The persona
-      description: The part of `persona.txt` that bears on this, or say you use one of the ready characters from `personagent init`.
+      description: The part of `persona.txt` that bears on this, or say you use one of the ready characters from `mibo init`.
   - type: input
     id: model
     attributes:
@@ -59,13 +59,13 @@ body:
     id: version
     attributes:
       label: Version
-      description: The output of `personagent --version`.
-      placeholder: personagent 1.0.0
+      description: The output of `mibo --version`.
+      placeholder: mibo 1.0.0
     validations:
       required: true
   - type: textarea
     id: why
     attributes:
       label: What `/why` or the Activity view said (optional)
-      description: In `personagent chat`, `/why` explains the last reply. The local page's Activity view shows why it spoke or stayed quiet.
+      description: In `mibo chat`, `/why` explains the last reply. The local page's Activity view shows why it spoke or stayed quiet.
       render: shell

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from persona_agent import agent as agent_module
+from mibo import agent as agent_module
 
 from helpers import check, isolated_agent
 

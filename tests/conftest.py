@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from persona_agent import agent as _agent
-from persona_agent import home as _home
-from persona_agent import paths as _paths
-from persona_agent.shell import run as _shell_run
+from mibo import agent as _agent
+from mibo import home as _home
+from mibo import paths as _paths
+from mibo.shell import run as _shell_run
 
 
 @pytest.fixture(autouse=True)
