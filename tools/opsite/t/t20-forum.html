@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Trailhead Forum · Gear</title>
+<style>
+body { margin: 0; font: 15px/1.6 -apple-system, "Segoe UI", sans-serif; background: #f6f7f8; color: #1c1c1c; }
+nav { background: #234; color: #fff; padding: 10px 20px; } main { max-width: 720px; margin: 20px auto; }
+.th { background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; }
+.th a { color: #0a58ca; font-weight: 600; text-decoration: none; cursor: pointer; } .th small { color: #888; display: block; }
+.post { background: #fff; border: 1px solid #e3e3e3; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; }
+.post b { color: #0a58ca; } textarea { width: 100%; height: 90px; box-sizing: border-box; }
+.btn { margin-top: 6px; background: #0a58ca; color: #fff; border: 0; padding: 6px 16px; border-radius: 4px; cursor: pointer; }
+</style></head>
+<body><nav>Trailhead Forum</nav><main id="m"></main>
+<script src="/t/kit.js"></script>
+<script>
+const THREADS = {
+  stoves: ["Canister vs liquid fuel stoves in winter", "jules_k", [["jules_k", "Which works better below freezing?"], ["oakleaf", "Liquid fuel, every time."]]],
+  boots: ["Best hiking boots for beginners?", "sam_r", [["sam_r", "Starting out this spring, budget around $150. Suggestions?"], ["peakbagger", "Get them fitted in a store first."]]],
+  poles: ["Are trekking poles worth it?", "mira", [["mira", "My knees say yes, my wallet says no."]]],
+};
+const m = document.getElementById("m");
+function list() {
+  m.innerHTML = "<h1>Gear</h1>";
+  for (const [id, [title, by, posts]] of Object.entries(THREADS)) {
+    const el = document.createElement("div");
+    el.className = "th";
+    el.innerHTML = `<a></a><small>by ${by} · ${posts.length} replies</small>`;
+    el.querySelector("a").textContent = title;
+    el.querySelector("a").addEventListener("click", () => open(id));
+    m.append(el);
+  }
+}
+function open(id) {
+  const [title, , posts] = THREADS[id];
+  m.innerHTML = `<p><a href="#" id="back">← Gear</a></p><h1></h1>`;
+  m.querySelector("h1").textContent = title;
+  for (const [who, text] of posts) {
+    const p = document.createElement("div");
+    p.className = "post";
+    p.innerHTML = `<b></b><p></p>`;
+    p.querySelector("b").textContent = who;
+    p.querySelector("p").textContent = text;
+    m.append(p);
+  }
+  m.insertAdjacentHTML("beforeend", `<div class="post"><textarea placeholder="Write a reply…"></textarea><button class="btn">Post reply</button></div>`);
+  m.querySelector(".btn").addEventListener("click", async () => {
+    const text = m.querySelector("textarea").value.trim();
+    if (text && (await post("/api/forum/reply", { thread: id, text })).ok) { posts.push(["you", text]); open(id); }
+  });
+  m.querySelector("#back").addEventListener("click", (e) => { e.preventDefault(); list(); });
+}
+list();
+</script></body></html>

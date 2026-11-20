@@ -79,12 +79,18 @@ _last_signal = 0.0
 _watching = False
 _calm: asyncio.Event | None = None
 _listeners: list[Callable[[dict], None]] = []
+# Told each time the window in front, or its title, changes (pacing.py).
+_front_listeners: list[Callable[[], None]] = []
+# When the caret last moved in the program in front (time.monotonic()): the person typing.
+_typed = float("-inf")
 _priority = 0
 # The window in front at the last look (Windows), and the hook that looks.
 _front = {"hwnd": 0, "pid": 0, "path": "", "title": "", "signal": ""}
 _hook: "_Hook | None" = None
 # Told by the page (the character service): its own looks no longer count.
 _told = False
+# A video full screen in the app's own window (window.py): it counts as any other program's.
+_own_full = False
 
 
 # ------------------------------------------------------------------ the state --
@@ -112,6 +118,33 @@ async def wait() -> None:
 def listen(fn: Callable[[dict], None]) -> None:
     """`fn(state())` on the sensing task's loop each time quiet starts or ends."""
     _listeners.append(fn)
+
+
+def on_front(fn: Callable[[], None]) -> None:
+    """`fn()` on the sensing task's loop each time the window in front or its title changes (Windows)."""
+    _front_listeners.append(fn)
+
+
+def typed_ago() -> float:
+    """Seconds since the caret last moved in the program in front; inf when never seen (Windows only)."""
+    return time.monotonic() - _typed
+
+
+def own_full_screen(on: bool) -> None:
+    global _own_full
+    _own_full = on
+    if _hook is not None:
+        _hook.poke()
+
+
+def _moved() -> None:
+    if _told:
+        return
+    for fn in list(_front_listeners):
+        try:
+            fn()
+        except Exception:
+            logger.exception("quiet: a front listener failed")
 
 
 def settings(runtime: Path) -> dict:
@@ -208,7 +241,8 @@ async def watch(runtime: Callable[[], Path]) -> None:
     try:
         if sys.platform == "win32":
             loop = asyncio.get_running_loop()
-            _hook = _Hook(setting, lambda *look: loop.call_soon_threadsafe(_seen, *look))
+            _hook = _Hook(setting, lambda *look: loop.call_soon_threadsafe(_seen, *look),
+                          lambda: loop.call_soon_threadsafe(_moved))
             _hook.start()
             # Until cancelled: the hook's thread does the looking, or the page (follow).
             await asyncio.Future()
@@ -323,6 +357,7 @@ if sys.platform == "win32":
 
     # winuser.h: the events the hook follows, and the message loop.
     _EVENT_FOREGROUND, _EVENT_DESKTOP, _EVENT_LOCATION, _EVENT_NAME = 0x0003, 0x0020, 0x800B, 0x800C
+    _OBJID_CARET = -8
     _QS_ALLINPUT, _PM_REMOVE, _WM_QUIT, _WM_APP, _INFINITE = 0x04FF, 1, 0x0012, 0x8000, 0xFFFFFFFF
     _EventProc = ctypes.WINFUNCTYPE(None, wintypes.HANDLE, wintypes.DWORD, wintypes.HWND, wintypes.LONG,
                                     wintypes.LONG, wintypes.DWORD, wintypes.DWORD)
@@ -350,9 +385,12 @@ class _Hook(threading.Thread):
     the end of the calm, and every LOOK_S while there is a signal or nothing
     in front, for a change no event shows. Nothing else wakes it."""
 
-    def __init__(self, setting: _Setting, tell: Callable[[str, bool, bool, float], None]):
+    def __init__(self, setting: _Setting, tell: Callable[[str, bool, bool, float], None],
+                 moved: Callable[[], None]):
         super().__init__(name="personagent-front", daemon=True)
-        self.setting, self.tell = setting, tell
+        self.setting, self.tell, self.moved = setting, tell, moved
+        # The window and title in front at the last look, to tell `moved` of a change.
+        self.shown = (0, "")
         self.callback = _EventProc(self._event)
         self.tid, self.ready = 0, threading.Event()
         # The process followed for moves and titles, and its hook.
@@ -390,7 +428,7 @@ class _Hook(threading.Thread):
                 while _user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, _PM_REMOVE):
                     if msg.message == _WM_QUIT:
                         return
-                    if msg.message == _WM_APP and not msg.hwnd:
+                    if msg.message == _WM_APP and not msg.hWnd:
                         self.later(0)
                     _user32.DispatchMessageW(ctypes.byref(msg))
                 if self.next is not None and time.monotonic() >= self.next:
@@ -401,7 +439,8 @@ class _Hook(threading.Thread):
             if self.followed:
                 _user32.UnhookWinEvent(self.followed)
 
-    def _event(self, _hook, event, *_about) -> None:
+    def _event(self, _hook, event, _hwnd, object_id, *_about) -> None:
+        global _typed
         if event == _EVENT_FOREGROUND:
             self.later(0)
         elif event == _EVENT_DESKTOP:
@@ -409,6 +448,8 @@ class _Hook(threading.Thread):
             # foreground event: looked at once the desktop is back.
             self.later(SETTLE_S)
         else:
+            if event == _EVENT_LOCATION and object_id == _OBJID_CARET:
+                _typed = time.monotonic()
             # The program in front moved something or changed a title (made fullscreen, another tab).
             self._follow(0)
             self.later(SETTLE_S)
@@ -434,6 +475,9 @@ class _Hook(threading.Thread):
         # Moves and titles only while nothing holds quiet: a game sends them all the time, and its
         # end shows by a foreground event or the LOOK_S look.
         self._follow(0 if signal else _front["pid"])
+        if (_front["hwnd"], _front["title"]) != self.shown:
+            self.shown = (_front["hwnd"], _front["title"])
+            self.moved()
         if signal == "fullscreen" and on and not _quiet:
             # Alt-tab, a screenshot's overlay: gone a moment later; a fullscreen video is not.
             if self.confirm_at is None:
@@ -498,7 +542,7 @@ def _sense_windows() -> tuple[str, bool]:
 
 def _judge(hwnd, pid: int, path: str, title: str) -> tuple[str, bool]:
     if pid == _OWN:
-        return "", False
+        return ("fullscreen", True) if _own_full else ("", False)
     cls = ctypes.create_unicode_buffer(256)
     _user32.GetClassNameW(hwnd, cls, 256)
     if cls.value in _SHELL:

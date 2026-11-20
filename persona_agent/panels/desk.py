@@ -1,5 +1,9 @@
-"""The desk panel: desktop icon, start at sign-in, where the data is, backups,
-and starting over."""
+"""The desk panel: start at sign-in, and the home as one archive: back it up,
+restore it, or reset it.
+
+A restore or a reset is done by the next start, before anything of it opens
+the home's files: the page leaves the request in PENDING and the app starts
+itself again (welcome.relaunch, apply_pending)."""
 from __future__ import annotations
 
 import asyncio
@@ -17,39 +21,36 @@ from pathlib import Path
 from dotenv import dotenv_values
 from fastapi import Request
 
-from .. import __version__, autostart, langs, shortcut, usage
-from .. import connections as conn
+from .. import __version__, autostart
 from .. import setup_wizard as sw
-from ..astrbot_install import AstrBotInstallation
-from ..direct import base as direct_base
-from ..storage import LockUnavailable, RuntimeInstanceLock
+from ..storage import atomic_write_text
 
 ERRORS: frozenset[str] = frozenset({
-    "desk_unsupported", "desk_uvx", "desk_shortcut_failed", "desk_invalid_place",
-    "desk_missing", "desk_open_failed", "desk_backup_failed", "desk_invalid_backup",
-    "desk_restore_failed", "desk_restore_undone", "desk_runtime_elsewhere", "desk_reset_failed",
-    "desk_service_elsewhere"})
+    "desk_unsupported", "desk_shortcut_failed", "desk_invalid_place", "desk_missing",
+    "desk_open_failed", "desk_backup_failed", "desk_invalid_backup"})
 
-# Places the page may open; nothing from a request is ever a path.
-PLACES = ("home", "persona", "logs", "memory", "stickers", "data")
+# Where an archive may be written and found; nothing from a request is ever a path.
 TARGETS = ("desktop", "documents", "backups")
 # "desktop;documents" in place of the real folders, for tests and trial runs.
-DIRS_ENV = "PERSONAGENT_USER_DIRS"
-PREFIX = "personagent-backup-"
-BACKUP_NAME = re.compile(r"personagent-backup-[0-9A-Za-z_-]{1,64}\.zip")
-MANIFEST = "personagent-backup.json"
-# A backup's own layout; runtime/ and stickers/ map to wherever this home keeps them.
-SINGLE_FILES = (".env", "persona.txt", "persona.card.json", "platforms/direct.json",
-                "platforms/astrbot/data/cmd_config.json")
-# Rebuilt by the service, or only meaningful to the process that wrote it.
-SKIP_NAMES = {"dashboard.token", "gateway_nonces.json", "__pycache__"}
-SKIP_SUFFIXES = (".lock", ".tmp", ".pyc", ".part")
-# What "forget" leaves in the runtime folder: the sticker library and the
-# record of model use (the person's check on their bill) are not memory.
-HELD_WAIT_S = 10.0
-KEEP_ON_FORGET = {"stickers.json", "unknown_stickers.jsonl", "dashboard.token", usage.USAGE_FILE,
-                  usage.PAGE_USAGE_FILE}
-SERVICES = ("agent", "astrbot", "direct")
+DIRS_ENV = "MIBO_USER_DIRS"
+PREFIX = "mibo-backup-"
+BACKUP_NAME = re.compile(r"mibo-backup-[0-9A-Za-z_-]{1,64}\.zip")
+MANIFEST = "mibo-backup.json"
+# Never in an archive: the archives themselves, the built-in browser's own storage (its sign-ins
+# hold only on this computer), the walks' throwaway profile, and the chat record, which a forget
+# must reach in full.
+LEFT_OUT = ("backups", "runtime/desktop/webview", "runtime/visitor", "runtime/log")
+# Nor what means something only to the app that is running: its link and token, locks, logs and
+# half-written files.
+LEFT_OUT_NAMES = frozenset({"welcome.json", "__pycache__"})
+LEFT_OUT_SUFFIXES = (".lock", ".tmp", ".part", ".pyc", ".log")
+# A setting that holds a key, a token or a password: blank in an archive made without secrets.
+SECRET = re.compile(r"(_KEY|_TOKEN|_SECRET)$|PASSWORD|^MIBO_MCP_")
+# What the next start does ({"restore": path} or {"reset": true}), and what a restore came to.
+PENDING = ("runtime", "desktop", "pending.json")
+RESTORED = ("runtime", "desktop", "restored.json")
+# What a reset leaves besides the archives: what the start doing it holds open.
+HELD = frozenset({"runtime/desktop/welcome.lock", "runtime/desktop/app.log"})
 MAX_MEMBERS = 50_000
 MAX_UNPACKED = 4 * 1024 ** 3
 
@@ -88,171 +89,204 @@ def _size(path: Path) -> int:
         return 0
 
 
+def _left_out(member: str) -> bool:
+    parts = member.split("/")
+    return (any(member == p or member.startswith(p + "/") for p in LEFT_OUT)
+            or bool(LEFT_OUT_NAMES & set(parts)) or parts[-1].endswith(LEFT_OUT_SUFFIXES))
+
+
+def members(home: Path) -> list[tuple[Path, str]]:
+    """(file on disk, name in the archive) for everything an archive of `home` holds."""
+    found = []
+    for folder, dirs, files in os.walk(home):
+        base = Path(folder).relative_to(home).as_posix()
+        prefix = "" if base == "." else base + "/"
+        dirs[:] = [d for d in dirs if not _left_out(prefix + d)]
+        for name in files:
+            path = Path(folder) / name
+            if not path.is_symlink() and not _left_out(prefix + name):
+                found.append((path, prefix + name))
+    return sorted(found, key=lambda pair: pair[1])
+
+
+def _without_secrets(text: str) -> str:
+    lines = []
+    for line in text.splitlines(keepends=True):
+        name, equals, _ = line.partition("=")
+        name = name.strip().removeprefix("export ").strip()
+        lines.append(f"{name}=\n" if equals and not line.lstrip().startswith("#") and SECRET.search(name) else line)
+    return "".join(lines)
+
+
+def write(home: Path, folder: Path, secrets: bool, tag: str = "") -> Path:
+    """One archive of `home` in `folder`; its keys and tokens only when `secrets`."""
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path, n = folder / f"{PREFIX}{stamp}{tag}.zip", 1
+    while path.exists():
+        n += 1
+        path = folder / f"{PREFIX}{stamp}{tag}-{n}.zip"
+    partial = path.with_suffix(".zip.part")
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(MANIFEST, json.dumps({"version": __version__, "created": int(time.time()),
+                                                   "secrets": secrets}))
+            for source, member in members(home):
+                try:
+                    if member == ".env" and not secrets:
+                        archive.writestr(member, _without_secrets(source.read_text(encoding="utf-8-sig")))
+                    else:
+                        archive.write(source, member)
+                except FileNotFoundError:
+                    # Replaced mid-walk by an atomic write; nothing to copy.
+                    continue
+        partial.replace(path)
+    except OSError:
+        # The folder itself may be what is wrong, so tidying up can fail too.
+        with contextlib.suppress(OSError):
+            partial.unlink()
+        raise ValueError("desk_backup_failed") from None
+    return path
+
+
+def check(path: Path) -> tuple[list[zipfile.ZipInfo], dict]:
+    """The members an archive puts back and its manifest; ValueError if it is not one of ours."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            manifest = json.loads(archive.read(MANIFEST))
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+        raise ValueError("desk_invalid_backup") from None
+    if (not isinstance(manifest, dict) or len(infos) > MAX_MEMBERS
+            or sum(i.file_size for i in infos) > MAX_UNPACKED):
+        raise ValueError("desk_invalid_backup")
+    plan = []
+    for info in infos:
+        name = info.filename
+        if info.is_dir() or name == MANIFEST:
+            continue
+        if ("\\" in name or name.startswith("/") or ":" in name
+                or any(p in ("", ".", "..") for p in name.split("/")) or _left_out(name)):
+            raise ValueError("desk_invalid_backup")
+        plan.append(info)
+    return plan, manifest
+
+
+def _unpack(home: Path, path: Path, plan: list[zipfile.ZipInfo], kept: dict) -> None:
+    """The home as the archive has it; `kept` fills the keys an archive without secrets left blank."""
+    for source, _ in members(home):
+        source.unlink()
+    for folder, _, _ in os.walk(home, topdown=False):
+        if folder != str(home) and not _left_out(Path(folder).relative_to(home).as_posix()):
+            # Only the ones the archive's members left empty go.
+            with contextlib.suppress(OSError):
+                Path(folder).rmdir()
+    with zipfile.ZipFile(path) as archive:
+        for info in plan:
+            target = home.joinpath(*info.filename.split("/"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(info) as source, open(target, "wb") as out:
+                shutil.copyfileobj(source, out)
+    restored = dotenv_values(home / ".env") if (home / ".env").is_file() else {}
+    missing = {k: v for k, v in kept.items() if not restored.get(k)}
+    if missing:
+        sw.write_env(home / ".env", missing)
+
+
+def _restore(home: Path, path: Path) -> str:
+    """Put the archive back, the present kept in backups/ first; '' or what went wrong."""
+    try:
+        plan, manifest = check(path)
+        safety = write(home, home / "backups", True, "-before-restore")
+    except ValueError as error:
+        return str(error)
+    env = home / ".env"
+    present = dotenv_values(env) if env.is_file() else {}
+    kept = {} if manifest.get("secrets") else {k: v for k, v in present.items() if v and SECRET.search(k)}
+    try:
+        _unpack(home, path, plan, kept)
+    except (OSError, zipfile.BadZipFile):
+        try:
+            _unpack(home, safety, check(safety)[0], {})
+        except (OSError, ValueError, zipfile.BadZipFile):
+            return "desk_restore_failed"
+        return "desk_restore_undone"
+    return ""
+
+
+def _reset(home: Path) -> None:
+    """Everything of the home but its archives, as before the first run."""
+    for folder, _, files in os.walk(home, topdown=False):
+        here = Path(folder)
+        if here.relative_to(home).parts[:1] == ("backups",):
+            continue
+        for name in files:
+            if (here / name).relative_to(home).as_posix() not in HELD:
+                (here / name).unlink()
+        if here != home:
+            # A folder still holding what this start keeps open stays.
+            with contextlib.suppress(OSError):
+                here.rmdir()
+
+
+def apply_pending(home: Path) -> None:
+    """The restore or reset the page asked for, before this start opens anything of the home."""
+    pending = home.joinpath(*PENDING)
+    asked = sw._read_json(pending)
+    if not asked:
+        return
+    pending.unlink()
+    if asked.get("reset"):
+        _reset(home)
+    elif isinstance(asked.get("restore"), str):
+        error = _restore(home, Path(asked["restore"]))
+        atomic_write_text(home.joinpath(*RESTORED), json.dumps({"error": error}))
+
+
 class Desk:
-    def __init__(self, workspace, closers: list | None = None):
+    def __init__(self, workspace):
         self.workspace = workspace
         self.home: Path = workspace.home
-        # The panels' own children (the practice group), stopped with the services.
-        self.closers = closers if closers is not None else []
 
-    # ---- where things are
+    # ---- start at sign-in
 
-    def runtime(self) -> Path:
-        # Read the way the service's own process reads it: .env over this process.
-        configured = dotenv_values(self.home / ".env").get("AGENT_RUNTIME_DIR")
-        if configured is None:
-            configured = os.environ.get("AGENT_RUNTIME_DIR", "")
-        path = Path(str(configured or "").strip() or "runtime").expanduser()
-        path = (path if path.is_absolute() else self.home / path).resolve()
-        if path == self.home or not path.is_relative_to(self.home):
-            raise ValueError("desk_runtime_elsewhere")
-        return path
+    def shortcuts(self) -> dict:
+        if not autostart.supported():
+            return {"login_supported": False, "login": "off"}
+        try:
+            return {"login_supported": True, "login": autostart.status(self.home)}
+        except (RuntimeError, ValueError):
+            raise ValueError("desk_shortcut_failed") from None
 
-    def _roots(self) -> dict[str, Path]:
-        return {"data": self.home / "data", "runtime": self.runtime(), "stickers": self.home / "stickers"}
+    def set_login(self, on: bool) -> dict:
+        if not autostart.supported():
+            raise ValueError("desk_unsupported")
+        if autostart.set_login(self.home, on):
+            raise ValueError("desk_shortcut_failed")
+        # The person chose: the first start's default no longer applies.
+        autostart.remember(self.home)
+        return self.shortcuts()
 
-    def place(self, name: str) -> Path:
-        if name not in PLACES:
-            raise ValueError("desk_invalid_place")
-        if name == "memory":
-            return self.runtime()
-        return {"home": self.home, "persona": self.home / "persona.txt",
-                "logs": self.home / "runtime" / "desktop", "stickers": self.home / "stickers",
-                "data": self.home / "data"}[name]
+    # ---- the archive
 
     def target(self, name: str) -> Path | None:
         if name not in TARGETS:
             raise ValueError("desk_invalid_place")
         return self.home / "backups" if name == "backups" else _known_folder(name)
 
-    def overview(self) -> dict:
-        places = []
-        for name in PLACES:
-            try:
-                places.append({"id": name, "exists": self.place(name).exists()})
-            except ValueError:
-                continue
-        targets = [{"id": name, "path": str(path)} for name in TARGETS
-                   if (path := self.target(name)) is not None]
-        return {"home": str(self.home), "places": places, "targets": targets, "backups": self.backups()}
-
-    def open(self, name: str) -> dict:
-        path = self.place(name)
-        if name in ("logs", "stickers", "data", "memory"):
-            # A folder the person is about to put files into may not exist yet.
-            path.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
-            raise ValueError("desk_missing")
-        try:
-            open_path(path)
-        except OSError:
-            raise ValueError("desk_open_failed") from None
-        return {"ok": True}
-
-    # ---- shortcuts
-
-    def shortcuts(self) -> dict:
-        """`supported`: the icon and start at sign-in (Windows); `login_supported`:
-        start at sign-in, which macOS has too."""
-        if not autostart.supported():
-            return {"supported": False, "login_supported": False, "uvx": False, "icon": "off", "login": "off"}
-        if not shortcut.WINDOWS:
-            return {"supported": False, "login_supported": True, "uvx": langs.under_uvx(), "icon": "off",
-                    "login": autostart.status(self.home)}
-        try:
-            found = shortcut.status(self.home)
-        except (RuntimeError, ValueError):
-            raise ValueError("desk_shortcut_failed") from None
-        icon = [found[k] for k in shortcut.ICON]
-        return {"supported": True, "login_supported": True, "uvx": langs.under_uvx(),
-                "icon": "on" if all(s == "on" for s in icon) else
-                        "off" if all(s == "off" for s in icon) else "other",
-                "login": found["startup"]}
-
-    def set_shortcut(self, which: str, on: bool) -> dict:
-        if which not in ("icon", "login"):
-            raise ValueError("desk_invalid_place")
-        if not (shortcut.WINDOWS or which == "login" and autostart.supported()):
-            raise ValueError("desk_unsupported")
-        # uvx's copy is temporary; the installer's build is not.
-        if on and langs.under_uvx():
-            raise ValueError("desk_uvx")
-        if which == "login":
-            failed = autostart.set_login(self.home, on)
-            if not failed:
-                # The person chose: the first start's default no longer applies.
-                autostart.remember(self.home)
-        else:
-            try:
-                failed = shortcut.run(shortcut.script(self.home, remove=not on, kinds=shortcut.ICON))
-            except ValueError:
-                failed = "redirected folders"
-        if failed:
-            raise ValueError("desk_shortcut_failed")
-        return self.shortcuts()
-
-    # ---- backups
-
-    def _busy(self) -> bool:
-        future = self.workspace._future
-        return future is not None and not future.done()
-
-    def _members(self) -> list[tuple[Path, str]]:
-        """(file on disk, name in the zip) for everything a backup holds."""
-        found: list[tuple[Path, str]] = []
-        for name in SINGLE_FILES:
-            path = self.home / name
-            if path.is_file():
-                found.append((path, name))
-        logs = (self.home / "runtime" / "desktop").resolve()
-        for label, root in self._roots().items():
-            if not root.is_dir():
-                continue
-            for path in sorted(root.rglob("*")):
-                if not path.is_file() or path.is_symlink():
-                    continue
-                relative = path.relative_to(root)
-                if (path.resolve().is_relative_to(logs) or SKIP_NAMES & set(relative.parts)
-                        or path.name.endswith(SKIP_SUFFIXES)):
-                    continue
-                # The practice room is a throwaway copy.
-                # The chat log is never copied: a forget must reach every line of it.
-                if label == "runtime" and relative.parts[0] in ("trial", "log"):
-                    continue
-                found.append((path, f"{label}/{relative.as_posix()}"))
-        return found
-
-    def _write_backup(self, folder: Path, tag: str = "") -> Path:
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        path, n = folder / f"{PREFIX}{stamp}{tag}.zip", 1
-        while path.exists():
-            n += 1
-            path = folder / f"{PREFIX}{stamp}{tag}-{n}.zip"
-        partial = path.with_suffix(".zip.part")
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr(MANIFEST, json.dumps({"version": __version__, "created": int(time.time())}))
-                for source, member in self._members():
-                    try:
-                        archive.write(source, member)
-                    except FileNotFoundError:
-                        # Replaced mid-walk by an atomic write; nothing to copy.
-                        continue
-            partial.replace(path)
-        except OSError:
-            # The folder itself may be what is wrong, so tidying up can fail too.
-            with contextlib.suppress(OSError):
-                partial.unlink()
-            raise ValueError("desk_backup_failed") from None
-        return path
-
-    def backup(self, to: str) -> dict:
-        folder = self.target(to)
+    def _folder(self, name: str) -> Path:
+        folder = self.target(name)
         if folder is None:
             raise ValueError("desk_missing")
-        path = self._write_backup(folder)
-        return {"path": str(path), "name": path.name, "size": _size(path), "backups": self.backups()}
+        return folder
+
+    def data(self) -> dict:
+        restored = self.home.joinpath(*RESTORED)
+        told = sw._read_json(restored)
+        restored.unlink(missing_ok=True)
+        return {"targets": [{"id": name, "path": str(path)} for name in TARGETS
+                            if (path := self.target(name)) is not None],
+                "backups": self.backups(), "restored": told or None}
 
     def backups(self) -> list[dict]:
         found = []
@@ -266,146 +300,21 @@ class Desk:
                                   "when": int(path.stat().st_mtime)})
         return sorted(found, key=lambda item: -item["when"])[:20]
 
-    def _destination(self, member: str) -> Path | None:
-        """Where a member of a backup goes in this home; None if it may not."""
-        if "\\" in member or member.startswith("/") or ":" in member:
-            return None
-        parts = member.split("/")
-        if any(p in ("", ".", "..") for p in parts):
-            return None
-        if member in SINGLE_FILES:
-            return self.home / member
-        roots = self._roots()
-        if parts[0] not in roots or len(parts) < 2:
-            return None
-        root = roots[parts[0]].resolve()
-        path = root.joinpath(*parts[1:]).resolve()
-        # Logs and the app's own records are never in a backup.
-        if path.is_relative_to((self.home / "runtime" / "desktop").resolve()):
-            return None
-        return path if path.is_relative_to(root) and path != root else None
+    def backup(self, to: str, secrets: bool) -> dict:
+        path = write(self.home, self._folder(to), secrets)
+        return {"path": str(path), "name": path.name, "size": _size(path), "backups": self.backups()}
 
-    def _check(self, path: Path) -> list[tuple[zipfile.ZipInfo, Path]]:
+    def open(self, place: str) -> dict:
+        folder = self._folder(place)
+        folder.mkdir(parents=True, exist_ok=True)
         try:
-            with zipfile.ZipFile(path) as archive:
-                infos = archive.infolist()
-        except (OSError, zipfile.BadZipFile):
-            raise ValueError("desk_invalid_backup") from None
-        if (MANIFEST not in {i.filename for i in infos} or len(infos) > MAX_MEMBERS
-                or sum(i.file_size for i in infos) > MAX_UNPACKED):
-            raise ValueError("desk_invalid_backup")
-        plan = []
-        for info in infos:
-            if info.is_dir() or info.filename == MANIFEST:
-                continue
-            target = self._destination(info.filename)
-            if target is None:
-                raise ValueError("desk_invalid_backup")
-            plan.append((info, target))
-        return plan
+            open_path(folder)
+        except OSError:
+            raise ValueError("desk_open_failed") from None
+        return {"ok": True}
 
-    def _stop(self) -> set[str]:
-        """Stop the panels' children and every service before files change;
-        the services that were running."""
-        services = self.workspace.services
-        was = {name for name in SERVICES if services.running(name)}
-        for stop in list(self.closers):
-            try:
-                stop()
-            except Exception:
-                pass
-        services.close()
-        return was
-
-    def _start_again(self, was: set[str]) -> None:
-        """Bring back exactly the services that ran before, in the background."""
-        if not was or not self.workspace.config().get("LLM_API_KEY"):
-            return
-
-        def start() -> None:
-            services = self.workspace.services
-            for name in SERVICES:
-                if name not in was:
-                    continue
-                try:
-                    if name == "agent":
-                        services.start_agent()
-                    elif name == "astrbot":
-                        if conn.connected(AstrBotInstallation(self.home).root / "data"):
-                            self.workspace._connect_plugin()
-                            services.start_astrbot()
-                    else:
-                        services.start_direct()
-                except Exception:
-                    continue  # the page shows what is not running
-        try:
-            self.workspace._future = self.workspace.worker.submit(start)
-        except RuntimeError:
-            pass  # the app is closing
-
-    @contextlib.contextmanager
-    def _held(self):
-        # Held while files change: a service started elsewhere, or starting now, cannot load them.
-        lock = RuntimeInstanceLock(self.home)
-        # The service this page just stopped lets go of the lock a moment after
-        # its launcher has ended: wait for that before blaming another process.
-        deadline = time.monotonic() + HELD_WAIT_S
-        while True:
-            try:
-                lock.acquire()
-                break
-            except LockUnavailable:
-                if time.monotonic() >= deadline:
-                    raise ValueError("desk_service_elsewhere") from None
-                time.sleep(0.2)
-        try:
-            yield
-        finally:
-            lock.release()
-
-    def _while_stopped(self, tag: str, work, *, restart: bool = True) -> Path:
-        """Stop everything, save a safety backup, run work(runtime, safety); the backup's path.
-        What ran is started again afterwards, and always after a failure."""
-        runtime = self.runtime()  # before anything stops or is deleted
-        with self.workspace._lock:
-            if self._busy():
-                raise ValueError("busy")
-            was = self._stop()
-            done = False
-            try:
-                with self._held():
-                    safety = self._write_backup(self.home / "backups", tag)
-                    work(runtime, safety)
-                done = True
-                self.workspace.reset_all_chats()
-            finally:
-                if restart or not done:
-                    self._start_again(was)
-        return safety
-
-    def _clear_runtime(self, runtime: Path, keep: set[str]) -> None:
-        logs = (self.home / "runtime" / "desktop").resolve()
-        if not runtime.is_dir():
-            return
-        for path in runtime.iterdir():
-            if path.resolve() == logs or path.name in keep:
-                continue
-            if path.is_dir() and not path.is_symlink():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
-
-    def _unpack(self, path: Path, plan, runtime: Path) -> None:
-        # A backup never holds the chat record, so a restore has none to put back:
-        # the one on disk stays rather than being lost with nothing to replace it.
-        self._clear_runtime(runtime, keep={"log"})
-        if (self.home / "stickers").is_dir():
-            shutil.rmtree(self.home / "stickers")
-        with zipfile.ZipFile(path) as archive:
-            for info, target in plan:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(info) as source, open(target, "wb") as out:
-                    shutil.copyfileobj(source, out)
+    def _ask(self, request: dict) -> None:
+        atomic_write_text(self.home.joinpath(*PENDING), json.dumps(request))
 
     def restore(self, place: str, name: str) -> dict:
         folder = self.target(place) if place in TARGETS else None
@@ -414,58 +323,24 @@ class Desk:
         path = folder / name
         if not path.is_file():
             raise ValueError("desk_missing")
-        plan = self._check(path)
+        check(path)
+        self._ask({"restore": str(path)})
+        return {"restarting": True}
 
-        def work(runtime: Path, safety: Path) -> None:
-            # Planned now: the restored .env may name another runtime folder.
-            back = self._check(safety)
-            try:
-                self._unpack(path, plan, runtime)
-            except (OSError, zipfile.BadZipFile):
-                try:
-                    self._unpack(safety, back, runtime)
-                except (OSError, zipfile.BadZipFile):
-                    raise ValueError("desk_restore_failed") from None
-                raise ValueError("desk_restore_undone") from None
-        safety = self._while_stopped("-before-restore", work)
-        return {"files": len(plan), "safety": str(safety), "backups": self.backups()}
-
-    # ---- starting over
-
-    def forget(self) -> dict:
-        def work(runtime: Path, safety: Path) -> None:
-            try:
-                self._clear_runtime(runtime, keep=KEEP_ON_FORGET)
-            except OSError:
-                raise ValueError("desk_reset_failed") from None
-        safety = self._while_stopped("-before-forget", work)
-        return {"safety": str(safety), "backups": self.backups()}
-
-    def reset(self) -> dict:
-        def work(runtime: Path, safety: Path) -> None:
-            try:
-                data = AstrBotInstallation(self.home).root / "data"
-                for kind in conn.connected(data):
-                    conn.remove_entry(data, kind)
-                    sw.write_astrbot_config(data, conn.scope(sw.read_astrbot_config(data), kind, allow=False))
-                direct_base.credentials_path(self.home).unlink(missing_ok=True)
-                direct_base.status_path(self.home).unlink(missing_ok=True)
-                for name in (".env", "persona.txt", "persona.card.json"):
-                    (self.home / name).unlink(missing_ok=True)
-                self._clear_runtime(runtime, keep=set())
-            except (OSError, ValueError):
-                raise ValueError("desk_reset_failed") from None
-        # Nothing is set up afterwards, so nothing starts again.
-        safety = self._while_stopped("-before-reset", work, restart=False)
-        return {"safety": str(safety), "backups": self.backups()}
+    def reset(self, backup_to: str, secrets: bool) -> dict:
+        saved = str(write(self.home, self._folder(backup_to), secrets)) if backup_to else ""
+        self._ask({"reset": True})
+        return {"restarting": True, "path": saved}
 
 
 def mount(app, workspace, body) -> None:
-    desk = Desk(workspace, app.state.closers)
+    desk = Desk(workspace)
 
-    @app.get("/api/desk")
-    async def overview():
-        return await asyncio.to_thread(desk.overview)
+    async def start_again() -> None:
+        # As Quit does, with a new start waiting to take the home over (welcome.relaunch).
+        await asyncio.to_thread(app.state.relaunch)
+        await asyncio.to_thread(workspace.close)
+        app.state.shutdown()
 
     @app.get("/api/desk/shortcuts")
     async def shortcuts():
@@ -474,35 +349,33 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/desk/shortcut")
     async def set_shortcut(request: Request):
         payload = await body(request)
-        return await asyncio.to_thread(desk.set_shortcut, str(payload.get("which") or ""),
-                                       payload.get("on") is True)
+        return await asyncio.to_thread(desk.set_login, payload.get("on") is True)
+
+    @app.get("/api/desk/data")
+    async def data():
+        return await asyncio.to_thread(desk.data)
+
+    @app.post("/api/desk/backup")
+    async def backup(request: Request):
+        payload = await body(request)
+        return await asyncio.to_thread(desk.backup, str(payload.get("to") or ""), payload.get("secrets") is True)
 
     @app.post("/api/desk/open")
     async def open_place(request: Request):
         payload = await body(request)
         return await asyncio.to_thread(desk.open, str(payload.get("place") or ""))
 
-    @app.post("/api/desk/backup")
-    async def backup(request: Request):
-        payload = await body(request)
-        return await asyncio.to_thread(desk.backup, str(payload.get("to") or ""))
-
     @app.post("/api/desk/restore")
     async def restore(request: Request):
         payload = await body(request)
-        # The chat lock keeps the page's chat from starting the character mid-way.
-        async with workspace._chat_lock:
-            return await asyncio.to_thread(desk.restore, str(payload.get("place") or ""),
-                                           str(payload.get("name") or ""))
-
-    @app.post("/api/desk/forget")
-    async def forget(request: Request):
-        await body(request)
-        async with workspace._chat_lock:
-            return await asyncio.to_thread(desk.forget)
+        done = await asyncio.to_thread(desk.restore, str(payload.get("place") or ""), str(payload.get("name") or ""))
+        await start_again()
+        return done
 
     @app.post("/api/desk/reset")
     async def reset(request: Request):
-        await body(request)
-        async with workspace._chat_lock:
-            return await asyncio.to_thread(desk.reset)
+        payload = await body(request)
+        done = await asyncio.to_thread(desk.reset, str(payload.get("backupTo") or ""),
+                                       payload.get("secrets") is True)
+        await start_again()
+        return done

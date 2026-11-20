@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>周日徒步约吗？ - 户外论坛</title>
+<style>
+body { margin: 0; font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f0f3ef; }
+main { max-width: 700px; margin: 20px auto; }
+.r { background: #fff; border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; }
+.r h4 { margin: 0 0 4px; color: #3a6; }
+.reply-btn { font-size: 13px; color: #3a6; cursor: pointer; }
+</style></head>
+<body><main>
+<h1>周日徒步约吗？</h1>
+<div class="r"><h4>Dave</h4><p>周日想去龙井村那条线，有人一起吗？</p><span class="reply-btn" data-to="Dave">回复</span></div>
+<div class="r"><h4>Carol</h4><p>我可以！周六还是周日？</p><span class="reply-btn" data-to="Carol">回复</span></div>
+<div class="r"><h4>Erin</h4><p>周日下雨的话还去吗？</p><span class="reply-btn" data-to="Erin">回复</span></div>
+<div id="slot"></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// The reply box is a web component: its text box and button live in an open shadow root.
+class ReplyBox extends HTMLElement {
+  connectedCallback() {
+    const root = this.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>textarea{width:100%;height:70px;box-sizing:border-box}button{margin-top:6px;background:#3a6;color:#fff;border:0;padding:5px 16px;border-radius:4px}</style>
+      <textarea placeholder="写下你的回复"></textarea><button>回复</button><p></p>`;
+    root.querySelector("button").addEventListener("click", async () => {
+      const text = root.querySelector("textarea").value.trim();
+      if (text && (await post("/api/reply", { to: this.getAttribute("to"), text })).ok) {
+        root.querySelector("p").textContent = "已回复 " + this.getAttribute("to");
+        root.querySelector("textarea").value = "";
+      }
+    });
+  }
+}
+customElements.define("reply-box", ReplyBox);
+for (const b of document.querySelectorAll(".reply-btn")) {
+  b.addEventListener("click", () => {
+    const slot = document.getElementById("slot");
+    slot.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "r";
+    const h = document.createElement("h3");
+    h.textContent = "回复 " + b.dataset.to;
+    const box = document.createElement("reply-box");
+    box.setAttribute("to", b.dataset.to);
+    card.append(h, box);
+    slot.append(card);
+  });
+}
+</script></body></html>

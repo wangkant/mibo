@@ -1,5 +1,5 @@
 """What the model calls use, per model and day, from each answer's `usage`:
-kept in a small file beside the memory file that the page and `doctor` read."""
+kept in a small file beside the memory file that the page reads."""
 from __future__ import annotations
 
 import json
@@ -19,7 +19,10 @@ WEEK_DAYS = 7
 WRITE_EVERY_S = 60.0
 TOKENS = ("prompt_tokens", "completion_tokens", "cached_tokens")
 # What a call was for; anything else counts as "other".
-PURPOSES = ("reply", "gate", "search", "tools", "learning", "memory", "check", "persona", "other")
+PURPOSES = ("reply", "gate", "search", "tools", "learning", "memory", "check", "persona", "operate",
+            "roam", "recommend", "proactive", "other")
+# Per-purpose token splits kept beside the call counts (spend.py reads them).
+SPLITS = ("purposes", "in_by", "out_by")
 
 
 def purpose_of(label) -> str:
@@ -77,6 +80,9 @@ class UsageBook:
             purposes = row["purposes"] = {}
         label = purpose_of(purpose)
         purposes[label] = _count(purposes.get(label)) + 1
+        for split, name in (("in_by", "prompt_tokens"), ("out_by", "completion_tokens")):
+            tokens = row[split] = row[split] if isinstance(row.get(split), dict) else {}
+            tokens[label] = _count(tokens.get(label)) + _count(usage.get(name))
         row["prompt_tokens"] = _count(row.get("prompt_tokens")) + _count(usage.get("prompt_tokens"))
         row["completion_tokens"] = (_count(row.get("completion_tokens"))
                                     + _count(usage.get("completion_tokens")))
@@ -187,8 +193,8 @@ def merged(*books: dict) -> dict:
             for model, row in models.items():
                 into = out.setdefault(day, {}).setdefault(model, {})
                 for key, value in row.items():
-                    if key == "purposes" and isinstance(value, dict):
-                        mine = into.setdefault("purposes", {})
+                    if key in SPLITS and isinstance(value, dict):
+                        mine = into.setdefault(key, {})
                         for label, n in value.items():
                             mine[label] = _count(mine.get(label)) + _count(n)
                     elif not isinstance(value, (dict, list, str)):

@@ -55,7 +55,7 @@ def env_float(
 
 
 #: The UTC offsets in use, in hours: PERSONA_TZ_OFFSET_HOURS outside this is
-#: refused by preflight and replaced by the default at run time.
+#: replaced by the default at run time.
 TZ_OFFSET_RANGE = (-12.0, 14.0)
 
 
@@ -101,8 +101,8 @@ def vision_endpoint_from_env(env=None) -> tuple[str, str]:
 def env_str(name: str, default: str = "", *, strip: bool = False, env=None) -> str:
     """One string setting, with ``os.getenv`` semantics.
 
-    Empty is not unset: ``LLM_MODEL=`` stays "" so ``preflight.WANTED`` can
-    report it. ``strip=True`` is for identifiers (a model name, a language tag).
+    Empty is not unset: ``LLM_MODEL=`` stays "". ``strip=True`` is for
+    identifiers (a model name, a language tag).
     """
     source = os.environ if env is None else env
     raw = source.get(name)

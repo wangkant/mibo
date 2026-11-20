@@ -4,127 +4,16 @@
 // makes one view per chat. The column reads quietly: the character's words without bubbles,
 // its face, name and time once at the start of each run; the person's words in soft bubbles.
 window.paChat = (() => {
-  const WORDS = {
-    zh: {
-      someone: "你的角色",
-      newChat: "新对话",
-      placeholder: "回复 {name}…",
-      placeholderEmpty: "和 {name} 说点什么…",
-      send: "发送",
-      hint: "Enter 发送 · Shift + Enter 换行",
-      greet: {
-        night: "夜深了，想聊点什么？",
-        morning: "早上好，想聊点什么？",
-        noon: "中午好，想聊点什么？",
-        afternoon: "下午好，想聊点什么？",
-        evening: "晚上好，想聊点什么？",
-      },
-      emptyText: "这里只用于聊天，角色带回的内容在主对话中。",
-      emptyMain: "{name}外出发现你可能喜欢的内容时，会发到这里。你也可以直接聊天。",
-      ideas: ["你今天出门看到了什么？", "帮我理一理明天要做的事", "给我推荐点轻松的东西"],
-      ideasPlain: ["陪我随便聊聊", "帮我理一理明天要做的事", "有个问题想请教你"],
-      offTitle: "还没有连接模型",
-      offText: "设置模型密钥后，{name}就能和你聊天。",
-      unreachable: "无法连接到模型服务。请检查密钥和网络。",
-      settings: "打开设置",
-      retry: "重新发送",
-      unanswered: "未送达",
-      typing: "{name}正在输入",
-      picture: "{name}发来的图片",
-      pictureGone: "图片已不存在",
-      wait: "请等待当前回复完成后再发送。",
-      loadFailed: "无法读取聊天记录。请稍后重试。",
-      reload: "重试",
-      trimmed: "更早的消息未保留",
-      today: "今天",
-      yesterday: "昨天",
-      week: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
-      reply: "回复",
-      replyTo: "回复：{title}",
-      cancelReply: "取消回复",
-      like: "喜欢",
-      liked: "已喜欢",
-      open: "在浏览器打开",
-      more: "更多",
-      skip: "不感兴趣",
-      less: "少看此来源",
-      play: "播放",
-      collapse: "收起",
-      skipped: "已收起，以后将减少此类内容。",
-      lessDone: "以后将减少此来源的内容。",
-      key_required: "还没有设置模型密钥。",
-      chat_failed: "模型没有回应。可能是密钥失效、额度用完或网络不通。",
-      agent_failed: "角色服务未能启动。请稍后重试。",
-      invalid_message: "消息过长。请分几次发送。",
-      network: "无法连接到本机的 personagent，它可能已退出。",
-      generic: "发送失败。请重试。",
-    },
-    en: {
-      someone: "your character",
-      newChat: "New chat",
-      placeholder: "Reply to {name}…",
-      placeholderEmpty: "Say something to {name}…",
-      send: "Send",
-      hint: "Enter to send · Shift + Enter for a new line",
-      greet: {
-        night: "Up late? What's on your mind?",
-        morning: "Good morning. What's on your mind?",
-        noon: "Good afternoon. What's on your mind?",
-        afternoon: "Good afternoon. What's on your mind?",
-        evening: "Good evening. What's on your mind?",
-      },
-      emptyText: "Just talk here. What it brings back goes to the main chat.",
-      emptyMain: "When {name} comes across something you might like, it sends it here. You can talk here too.",
-      ideas: ["What did you see out today?", "Help me sort out tomorrow", "Show me something light"],
-      ideasPlain: ["Just chat with me for a bit", "Help me sort out tomorrow", "I have a question for you"],
-      offTitle: "No model connected yet",
-      offText: "Set a model key and {name} can start talking with you.",
-      unreachable: "The model service cannot be reached. Check the key and the network.",
-      settings: "Open settings",
-      retry: "Send again",
-      unanswered: "Not delivered",
-      typing: "{name} is typing",
-      picture: "A picture from {name}",
-      pictureGone: "This picture is no longer here",
-      wait: "Wait for this reply to finish first.",
-      loadFailed: "The chat could not be loaded. Try again in a moment.",
-      reload: "Try again",
-      trimmed: "Earlier messages were not kept",
-      today: "Today",
-      yesterday: "Yesterday",
-      week: null,
-      reply: "Reply",
-      replyTo: "Replying to: {title}",
-      cancelReply: "Cancel reply",
-      like: "Like",
-      liked: "Liked",
-      open: "Open in browser",
-      more: "More",
-      skip: "Not interested",
-      less: "Less from this source",
-      play: "Play",
-      collapse: "Collapse",
-      skipped: "Folded away. It will bring back less like this.",
-      lessDone: "Got it. Less from this source from now on.",
-      key_required: "No model key is set yet.",
-      chat_failed: "The model did not answer. The key may be invalid or out of credit, or the network is down.",
-      agent_failed: "The character's service did not start. Try again in a moment.",
-      invalid_message: "This message is too long. Send it in parts.",
-      network: "personagent on this computer cannot be reached. It may have quit.",
-      generic: "Not sent. Try again.",
-    },
-  };
   const MAIN = "main";
   // Failures that the settings page can fix get a way there.
-  const SETTINGS_FIXES = new Set(["key_required", "chat_failed"]);
-  // A reply arrives the way a person sends it: one message at a time, each after
-  // about the time it takes to type, with the typing mark in between.
-  const TYPING = { perChar: 120, pause: 350, most: 2400, whole: 8000 };
+  const SETTINGS_FIXES = new Set(["key_required", "chat_failed", "model_no_balance"]);
   // What the character sends on its own is looked for this often while the chat is on screen; in
   // the app's own window it is looked for when the window says a chat changed ("pa-chats"), and
   // only now and then besides.
   const POLL_MS = 3000;
   const TOLD_POLL_MS = 60000;
+  // Past the service's own turn budget (three minutes) a reply is not coming: the wait ends.
+  const TURN_MS = 200000;
   // The box grows with the text up to this height, then scrolls.
   const INPUT_MAX = 220;
   // Closer to the end than this, the chat counts as read to the end and stays there as it grows.
@@ -133,10 +22,24 @@ window.paChat = (() => {
   const TITLE_CLIP = 40;
   // The character's messages further apart than this start a new run, with its name and time again.
   const RUN_GAP_MS = 10 * 60 * 1000;
+  // What a message can carry (welcome.py checks it again): at most `most` things. A picture of at
+  // most `picked` bytes, sent as picked when it is within `side` pixels and `picture` bytes, else
+  // drawn smaller as WebP until it is; a text file of at most `file` bytes, by its extension.
+  const ATTACH = { most: 4, picked: 20 * 1024 * 1024, picture: 1000000, side: 1600, file: 512 * 1024 };
+  const PICTURE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+  const TEXT_KINDS = new Set(
+    ("txt text md markdown rst csv tsv json jsonl yaml yml toml ini cfg conf log xml html htm " +
+      "css scss js mjs cjs ts tsx jsx vue py ipynb java kt kts scala go rs c h cc cpp hpp cs m mm " +
+      "swift rb php pl lua r sql sh bash zsh ps1 bat cmd tex bib srt vtt diff patch").split(" "),
+  );
   const SVG = "http://www.w3.org/2000/svg";
   // Lucide-style strokes.
   const I = {
+    window: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/>',
+    terminal: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 10 3 2-3 2"/><path d="M13 15h4"/>',
+    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+    stop: '<rect x="5" y="5" width="14" height="14" rx="2.5"/>',
     reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
     heart:
       '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/>',
@@ -150,8 +53,11 @@ window.paChat = (() => {
     globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
     shrink: '<path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
     skip: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
     less: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
+    raise: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/>',
+    seen: '<path d="M20 6 9 17l-5-5"/>',
     alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
     talk: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>',
     calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
@@ -244,6 +150,17 @@ window.paChat = (() => {
     node.title = label;
     return node;
   }
+  // The head of a card that asks the person: an icon, what is asked, and one faint line under it.
+  function cardHead(paths, title, meta = "") {
+    const head = el("div", "op-card-head");
+    const tile = el("span", "op-card-icon");
+    tile.append(svg(paths));
+    const words = el("div", "op-card-words");
+    words.append(el("p", "op-card-title", title));
+    if (meta) words.append(el("p", "op-card-meta", meta));
+    head.append(tile, words);
+    return head;
+  }
   const motion = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
   // An ISO time, or epoch seconds (remarks keep those) or milliseconds.
   const when = (at) => {
@@ -261,6 +178,51 @@ window.paChat = (() => {
       return "";
     }
   };
+  const extOf = (name) => (/\.([^.]+)$/.exec(name)?.[1] || "").toLowerCase();
+  function sizeOf(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    return bytes < 1048576 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+  const base64Of = (blob) =>
+    new Promise((done, fail) => {
+      const reader = new FileReader();
+      reader.onload = () => done(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => fail(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  // A picture as it is sent: as picked when small enough, else drawn smaller as WebP.
+  async function sendable(file) {
+    const bitmap = await createImageBitmap(file);
+    try {
+      let scale = Math.min(1, ATTACH.side / Math.max(bitmap.width, bitmap.height));
+      if (scale === 1 && file.size <= ATTACH.picture) return file;
+      for (;;) {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise((done) => canvas.toBlob(done, "image/webp", 0.85));
+        if (blob.size <= ATTACH.picture) return blob;
+        scale *= 0.75;
+      }
+    } finally {
+      bitmap.close();
+    }
+  }
+  // Whether a file's bytes read as text, as welcome.py reads them: UTF-8, UTF-16 with its mark, or GB18030.
+  function readsAsText(buffer) {
+    const bytes = new Uint8Array(buffer);
+    if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return true;
+    for (const label of ["utf-8", "gb18030"]) {
+      try {
+        return !new TextDecoder(label, { fatal: true }).decode(bytes).includes("\0");
+      } catch {
+        // Not this one: the next.
+      }
+    }
+    return false;
+  }
+
   // A video's length as a player shows it.
   function clock(seconds) {
     const s = Math.round(seconds);
@@ -280,20 +242,34 @@ window.paChat = (() => {
 
   function create(id, ctx, hooks) {
     const main = id === MAIN;
-    const words = () => WORDS[ctx.lang];
-    const locale = () => (ctx.lang === "zh" ? "zh-CN" : "en");
+    const words = () => paI18n.words("chat");
+    const locale = () => paI18n.locale;
     // As the shell last read it, so a new chat can be typed in at once; read again on show.
     let state = ctx.state;
     let seen = 0,
       tag = "",
       sending = false,
+      // The typing row of the reply being waited for.
+      waiting = null,
+      // Ends the wait for that reply (the stop button, or past TURN_MS), and the stop's own request.
+      cut = null,
+      stopping = null,
+      // The wait's own limit, drawn out while the character works in the browser; the card it waits on.
+      turnLimit = null,
+      // The cards answered beside the page this chat has a line for.
+      noted = new Set(),
+      shellCard = null,
+      deskCard = null,
       polling = false,
       pollTimer = null,
-      epoch = 0,
       loaded = false,
       atEnd = true,
       title = "",
-      replying = null;
+      replying = null,
+      // What rides on the next message: { key, kind, file, size, url, data } each, data once it is ready.
+      attached = [],
+      attachKey = 0,
+      dragDepth = 0;
     // Where the thread was last drawn to: the day, and the character's open run of messages.
     let lastDay = "",
       run = null;
@@ -306,12 +282,19 @@ window.paChat = (() => {
     const settingsButton = (className = "pa-btn pa-btn-secondary pa-btn-sm") =>
       button(className, say("settings"), () => ctx.go("setup/model"));
     const visible = () => root.isConnected && !root.closest("[hidden]") && !document.hidden;
+    // A reply under way keeps asking out of sight too: a card it waits on stays (cardwait.py) and is there when
+    // they come back, and the wait for the reply goes on.
+    const asking = () => root.isConnected && (sending || visible());
     const history = (after) =>
       ctx.api(`chat/history?chat=${encodeURIComponent(id)}${after === undefined ? "" : `&after=${after}`}`);
     const blob = (path) => {
       if (!blobs.has(path)) blobs.set(path, ctx.picture(path));
       return blobs.get(path);
     };
+    // What the link cards and the steps above a reply take from the chat (linkcard.js, activity.js).
+    const links = { api: ctx.api, picture: blob, link: (url, className) => linkNode(url, className),
+      findCard: (card) => findCard(card), grew: () => keepEnd(), goOn: (text) => !sending && send(text), go: ctx.go };
+    const linkCards = (text, skip = "") => window.paLinks.cards(window.paLinks.urls(text, [skip]), links);
 
     // ---- The page: the thread, or the empty and not-set-up states, and the composer
     const root = el("div", `chat ${main ? "chat-main" : "chat-plain"}`);
@@ -349,19 +332,62 @@ window.paChat = (() => {
     parts.banner = el("div", "chat-banner");
     parts.banner.setAttribute("role", "status");
     parts.banner.hidden = true;
+    // A file that could not be added, and why: until the next thing is added or it is closed.
+    parts.refused = el("div", "chat-refused");
+    parts.refused.setAttribute("role", "alert");
+    parts.refused.hidden = true;
     parts.form = el("form", "chat-composer");
     parts.quote = el("div", "chat-composer-quote");
     parts.quote.hidden = true;
+    // What is attached, above the text.
+    parts.tray = el("div", "chat-tray");
+    parts.tray.hidden = true;
     parts.input = el("textarea", "chat-input");
     parts.input.rows = 2;
     const tools = el("div", "chat-tools");
+    parts.picker = el("input");
+    parts.picker.type = "file";
+    parts.picker.multiple = true;
+    parts.picker.hidden = true;
+    parts.picker.accept = [...PICTURE_TYPES, ...[...TEXT_KINDS].map((kind) => `.${kind}`)].join(",");
+    parts.picker.addEventListener("change", () => {
+      attach([...parts.picker.files]);
+      parts.picker.value = "";
+    });
+    // "+": a menu of what can go with a message and what to ask for (plus.js).
+    let held = "";
+    const plus = window.paPlus.create({
+      ctx, main, input: parts.input,
+      name: () => displayName(),
+      configured: () => Boolean(state?.configured),
+      pick: () => parts.picker.click(),
+      attach, refuse, flash, attachItem,
+      refresh: () => poll(),
+      quote(text) {
+        const block = `${text.trim().split(/\r?\n/).map((line) => `> ${line}`).join("\n")}\n\n`;
+        const at = parts.input.selectionStart ?? parts.input.value.length;
+        parts.input.setRangeText(block, at, parts.input.selectionEnd ?? at, "end");
+        grow();
+        parts.input.focus();
+      },
+      placeholder(text) {
+        held = text;
+        parts.input.placeholder = text || say(parts.empty.hidden ? "placeholder" : "placeholderEmpty");
+      },
+    });
+    parts.plus = plus.button;
+    // Beside it, the model's short name, its thinking level and the usage (modelbar.js).
+    const bar = window.paModelBar.create({
+      ctx, flash,
+      pictures: () => Boolean(parts.messages.querySelector(".me-att .pic")),
+      tools: () => Boolean(parts.messages.querySelector(".act, .me-choice")),
+    });
     parts.send = el("button", "chat-send");
     parts.send.type = "submit";
-    parts.send.append(svg(I.up));
-    tools.append(parts.send);
-    parts.form.append(parts.quote, parts.input, tools);
+    tools.append(parts.plus, bar.node, plus.chips, parts.picker, parts.send);
+    parts.form.append(parts.quote, parts.tray, parts.input, tools);
     parts.hint = el("p", "chat-hint");
-    parts.compose.append(parts.banner, parts.form, parts.hint);
+    parts.compose.append(parts.banner, parts.refused, parts.form, parts.hint);
     // A click on the box's padding still puts the caret in the text.
     parts.form.addEventListener("mousedown", (event) => {
       if (event.target === parts.form || event.target === tools) {
@@ -373,7 +399,41 @@ window.paChat = (() => {
     const dockCol = el("div", "chat-col");
     parts.dock.append(dockCol);
     dockCol.append(parts.compose);
-    root.append(parts.scroll, parts.empty, parts.off, parts.dock);
+    // Files dragged over the chat: a frame saying they can be let go here.
+    parts.dropZone = el("div", "chat-drop");
+    root.append(parts.scroll, parts.empty, parts.off, parts.dock, parts.dropZone);
+
+    const carriesFiles = (event) => Boolean(state?.configured) && [...(event.dataTransfer?.types || [])].includes("Files");
+    root.addEventListener("dragenter", (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      dragDepth += 1;
+      root.classList.add("dropping");
+    });
+    root.addEventListener("dragover", (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    });
+    root.addEventListener("dragleave", (event) => {
+      if (!carriesFiles(event)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (!dragDepth) root.classList.remove("dropping");
+    });
+    root.addEventListener("drop", (event) => {
+      if (!carriesFiles(event)) return;
+      event.preventDefault();
+      dragDepth = 0;
+      root.classList.remove("dropping");
+      attach([...event.dataTransfer.files]);
+    });
+    // A picture pasted from the clipboard; text that comes with it is pasted as text instead.
+    parts.input.addEventListener("paste", (event) => {
+      const files = [...event.clipboardData.files];
+      if (!files.length || event.clipboardData.types.includes("text/plain")) return;
+      event.preventDefault();
+      attach(files);
+    });
 
     parts.input.addEventListener("input", grow);
     parts.input.addEventListener("keydown", (event) => {
@@ -381,19 +441,24 @@ window.paChat = (() => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         submit();
+      } else if (event.key === "Escape" && sending) {
+        event.stopPropagation();
+        stopReply("stopped");
       } else if (event.key === "Escape" && replying) {
         event.stopPropagation();
         setReply(null);
       }
     });
+    // Enter sends from the box itself: a submit here is the button, which stops a reply on its way.
     parts.form.addEventListener("submit", (event) => {
       event.preventDefault();
-      submit();
+      if (sending) stopReply("stopped");
+      else submit();
     });
     // The page's own listeners, taken off again when the chat is deleted.
     const listeners = {
       visibilitychange: () => {
-        if (document.hidden) clearTimeout(pollTimer);
+        if (!asking()) clearTimeout(pollTimer);
         else if (visible()) poll();
       },
       // A look under way may have asked before this change: one more once it is done.
@@ -424,7 +489,9 @@ window.paChat = (() => {
     function renderText() {
       root.lang = locale();
       parts.greet.textContent = greeting();
-      parts.emptyText.textContent = say(main ? "emptyMain" : "emptyText");
+      // A plain chat needs no words of its own: the greeting and the ideas say it.
+      parts.emptyText.hidden = !main;
+      parts.emptyText.textContent = main ? say("emptyMain") : "";
       // The main chat's ideas may point at its outings; a plain chat's do not.
       const icons = IDEA_ICONS[main ? "main" : "plain"];
       parts.ideas.replaceChildren(
@@ -440,10 +507,13 @@ window.paChat = (() => {
       );
       parts.input.placeholder = say(parts.empty.hidden ? "placeholder" : "placeholderEmpty");
       parts.input.setAttribute("aria-label", say("send"));
-      parts.send.setAttribute("aria-label", say("send"));
-      parts.send.title = say("send");
+      parts.send.setAttribute("aria-label", say(sending ? "stop" : "send"));
+      parts.send.title = say(sending ? "stop" : "send");
+      plus.render();
+      bar.render();
+      parts.dropZone.textContent = say("dropHere");
+      paintTray();
       for (const name of parts.messages.querySelectorAll(".ai-name")) name.textContent = displayName();
-      if (!parts.hint.classList.contains("flash")) parts.hint.textContent = say("hint");
       paintQuote();
     }
 
@@ -467,7 +537,7 @@ window.paChat = (() => {
       if (parts.compose.parentNode !== place) place.append(parts.compose);
       parts.dock.hidden = !configured || empty;
       parts.compose.classList.toggle("in-empty", empty);
-      parts.input.placeholder = say(empty ? "placeholderEmpty" : "placeholder");
+      parts.input.placeholder = held || say(empty ? "placeholderEmpty" : "placeholder");
       parts.banner.replaceChildren();
       parts.banner.hidden = !(configured && state.modelUnreachable);
       if (!parts.banner.hidden)
@@ -475,8 +545,16 @@ window.paChat = (() => {
           settingsButton("pa-btn pa-btn-link chat-banner-link"));
       syncSend();
     }
+    // While a reply is on its way the send button is the stop button.
     function syncSend() {
-      parts.send.disabled = !state?.configured || sending || !parts.input.value.trim();
+      if (parts.send.classList.contains("stopping") !== sending || !parts.send.firstChild) {
+        parts.send.classList.toggle("stopping", sending);
+        parts.send.replaceChildren(svg(sending ? I.stop : I.up));
+        parts.send.setAttribute("aria-label", say(sending ? "stop" : "send"));
+        parts.send.title = say(sending ? "stop" : "send");
+      }
+      parts.send.disabled = !sending && (!state?.configured || !(parts.input.value.trim() || attached.length) ||
+        attached.some((item) => !item.data));
     }
     function grow() {
       parts.input.style.height = "auto";
@@ -490,6 +568,8 @@ window.paChat = (() => {
     }
     // Something above grew after it was drawn: the end stays in sight only if it was.
     const keepEnd = () => atEnd && toBottom();
+    // The same when the thread's own box changes size: the window, the chat set beside a page, the box growing.
+    new ResizeObserver(keepEnd).observe(parts.scroll);
 
     // ---- The thread's frame: days, and the character's runs
     function dayLabel(time) {
@@ -499,12 +579,12 @@ window.paChat = (() => {
       const year = date.getFullYear() !== new Date().getFullYear();
       const day = words().week
         ? `${year ? `${date.getFullYear()}年` : ""}${date.getMonth() + 1}月${date.getDate()}日 ${words().week[date.getDay()]}`
-        : date.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
+        : date.toLocaleDateString(locale(), { weekday: "short", month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
       const near = back === 0 ? words().today : back === 1 ? words().yesterday : "";
       return near ? `${near} · ${day}` : day;
     }
     const timeOf = (time) =>
-      new Date(time).toLocaleTimeString(locale(), ctx.lang === "zh" ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : { hour: "numeric", minute: "2-digit" });
+      new Date(time).toLocaleTimeString(locale(), paI18n.lang === "en" ? { hour: "numeric", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
     // A new day gets its line before its first message.
     function separate(time) {
       if (!time || dayKey(time) === lastDay) return;
@@ -549,11 +629,11 @@ window.paChat = (() => {
 
     // ---- Messages
     const isRemark = (item) => item.remark === true || item.kind === "remark";
-    async function showPicture(holder, name) {
+    async function showPicture(holder, name, alt = say("picture")) {
       try {
-        const url = await blob(`/api/chat/picture/${encodeURIComponent(name)}`);
+        const url = name.startsWith("blob:") ? name : await blob(`/api/chat/picture/${encodeURIComponent(name)}`);
         const image = el("img");
-        image.alt = say("picture");
+        image.alt = alt;
         image.addEventListener("load", keepEnd, { once: true });
         image.src = url;
         holder.classList.remove("loading", "pa-shimmer");
@@ -574,10 +654,280 @@ window.paChat = (() => {
       }
       return holder;
     }
+    // What the person attached, above their words: pictures as they are, files as chips that open.
+    function attachedNode(list) {
+      const box = el("div", "me-att");
+      for (const item of list) {
+        if (item.kind === "picture") {
+          const holder = el("div", "pic loading pa-shimmer");
+          showPicture(holder, item.url || item.name, say("myPicture"));
+          box.append(holder);
+          continue;
+        }
+        // A page from the app's browser opens the way every link opens.
+        if (item.kind === "page") {
+          const link = window.paPlus.pageChip(item, "a");
+          link.href = item.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          box.append(link);
+          continue;
+        }
+        const node = el("div", "att-sent");
+        // Stored ones open: those of a message still on its way have no name yet.
+        const head = item.name ? button("att att-file", "", () => showFile(node, head, item.name)) : el("div", "att att-file");
+        head.append(fileWords(item));
+        if (item.name) {
+          head.setAttribute("aria-expanded", "false");
+          head.setAttribute("aria-label", `${say("showFile")}: ${item.file}`);
+        }
+        node.append(head);
+        box.append(node);
+      }
+      return box;
+    }
+    function fileWords(item) {
+      const icon = el("span", "att-icon");
+      icon.append(svg(I.file));
+      const words = el("span", "att-words");
+      const size = el("span", "att-size", sizeOf(item.size));
+      if (item.clipped) {
+        size.textContent += ` · ${say("clipped")}`;
+        size.title = say("clippedTip");
+      }
+      words.append(el("span", "att-name", item.file), size);
+      const frag = document.createDocumentFragment();
+      frag.append(icon, words);
+      return frag;
+    }
+    async function showFile(node, head, name) {
+      const open = head.getAttribute("aria-expanded") !== "true";
+      head.setAttribute("aria-expanded", String(open));
+      node.querySelector(".att-text")?.remove();
+      if (!open) return;
+      const text = el("pre", "att-text pa-shimmer");
+      node.append(text);
+      try {
+        text.textContent = await ctx.attachedText(`/api/chat/file/${encodeURIComponent(name)}`);
+      } catch {
+        text.classList.add("gone");
+        text.textContent = say("fileGone");
+      }
+      text.classList.remove("pa-shimmer");
+    }
     // A thing brought with no sentence of its own is said by its title: not twice.
     function saysTitle(text, card) {
       const words = String(text || "").replace(/[…\s.]+$/, "");
       return !words || (card.title || "").startsWith(words) || text === card.url;
+    }
+    // A link in the character's words, opened the way every link in the app opens.
+    function linkNode(url, className = "say-link") {
+      const link = el("a", className, url);
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      return link;
+    }
+    // `text` into `node`, its web addresses as links.
+    function linked(node, text) {
+      let at = 0;
+      for (const match of text.matchAll(/https?:\/\/[^\s<>"'，。！？；）】」]+/g)) {
+        const url = match[0].replace(/[.,;:!?)\]]+$/, "");
+        node.append(text.slice(at, match.index), window.paLinks.inline(url, links));
+        at = match.index + url.length;
+      }
+      node.append(text.slice(at));
+      return node;
+    }
+    // A fenced code block, drawn as code with a button that copies it.
+    function codeNode(lang, code) {
+      const box = el("div", "code");
+      const head = el("div", "code-head");
+      const copy = button("code-copy", say("copy"), async () => {
+        try {
+          await navigator.clipboard.writeText(code);
+          copy.textContent = say("copied");
+          setTimeout(() => (copy.textContent = say("copy")), 1500);
+        } catch {
+          // The code is still there to select by hand.
+        }
+      });
+      head.append(el("span", "code-lang", lang), copy);
+      const pre = el("pre");
+      pre.append(el("code", "", code));
+      box.append(head, pre);
+      return box;
+    }
+    // The character's words are Markdown. Blocks: paragraphs, headings, lists, quotes, tables, rules and
+    // fenced code. Inside them: code spans, links, bold, italic and struck text. All of it is drawn as text
+    // nodes, so a tag in a reply shows as written; a picture is a link and is never loaded. Underscores,
+    // backslashes and an asterisk beside a space or inside a word stay as written (__init__, C:\Users,
+    // 2 * 3, x**2).
+    const FENCE = /^(\s*)(`{3,}|~{3,})[ \t]*([^`\s]*)[^`]*$/;
+    const HEADING = /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
+    const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
+    const QUOTE = /^ {0,3}>[ \t]?/;
+    const ITEM = /^(\s*)([-*+•]|\d{1,9}[.)])[ \t]+(.*)$/;
+    const TABLE_RULE = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/;
+    const INLINE = new RegExp(
+      [
+        /(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/,
+        /!?\[([^\]\n]+)\]\((https?:\/\/[^\s()]*(?:\([^\s()]*\)[^\s()]*)*)(?:[ \t]+"[^"\n]*")?\)/,
+        /<(https?:\/\/[^\s<>]+)>/,
+        /https?:\/\/[^\s<>"'，。！？；）】」]+/,
+        /(?<![A-Za-z0-9*])\*\*(?=[^\s*])([^\n]*?[^\s*])\*\*(?![A-Za-z0-9*])/,
+        /~~(?=\S)([^\n]*?\S)~~/,
+        /(?<![A-Za-z0-9*])\*(?=[^\s*])([^\n*]*?[^\s*])\*(?![A-Za-z0-9*])/,
+      ]
+        .map((part) => part.source)
+        .join("|"),
+      "g",
+    );
+    function inlineInto(node, text) {
+      let at = 0;
+      for (const match of text.matchAll(INLINE)) {
+        const [whole, ticks, code, label, target, pointed, strong, struck, em] = match;
+        node.append(text.slice(at, match.index));
+        at = match.index + whole.length;
+        if (ticks) node.append(el("code", "", code.replace(/^ ([\s\S]*) $/, "$1")));
+        else if (target) {
+          const link = linkNode(target);
+          link.textContent = label;
+          link.title = target;
+          node.append(link);
+        } else if (pointed) node.append(window.paLinks.inline(pointed, links));
+        else if (strong !== undefined) node.append(inlineInto(el("strong"), strong));
+        else if (struck !== undefined) node.append(inlineInto(el("del"), struck));
+        else if (em !== undefined) node.append(inlineInto(el("em"), em));
+        else {
+          // A bare address, without the sentence's punctuation after it.
+          const url = whole.replace(/[.,;:!?)\]*]+$/, "");
+          node.append(window.paLinks.inline(url, links), whole.slice(url.length));
+        }
+      }
+      node.append(text.slice(at));
+      return node;
+    }
+    // The cells of a table row: cut at the bars outside code spans, the outer bars dropped.
+    function cellsOf(line) {
+      const row = line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "");
+      const cells = [];
+      let cell = "";
+      let code = false;
+      for (let n = 0; n < row.length; n += 1) {
+        if (row[n] === "\\" && row[n + 1] === "|") {
+          cell += "|";
+          n += 1;
+        } else if (row[n] === "|" && !code) {
+          cells.push(cell.trim());
+          cell = "";
+        } else {
+          if (row[n] === "`") code = !code;
+          cell += row[n];
+        }
+      }
+      cells.push(cell.trim());
+      return cells;
+    }
+    const tableAt = (lines, n) =>
+      lines[n].includes("|") && TABLE_RULE.test(lines[n + 1] || "") && cellsOf(lines[n]).length === cellsOf(lines[n + 1]).length;
+    // A table from lines[n] on; the line after it.
+    function tableInto(node, lines, n) {
+      const sides = cellsOf(lines[n + 1]).map((rule) => (!rule.endsWith(":") ? "" : rule.startsWith(":") ? "center" : "right"));
+      const table = el("table");
+      const row = (cells, tag) => {
+        const line = el("tr");
+        sides.forEach((side, column) => {
+          const cell = inlineInto(el(tag), cells[column] || "");
+          if (side) cell.style.textAlign = side;
+          line.append(cell);
+        });
+        return line;
+      };
+      table.createTHead().append(row(cellsOf(lines[n]), "th"));
+      const body = table.createTBody();
+      let end = n + 2;
+      for (; end < lines.length && lines[end].includes("|"); end += 1) body.append(row(cellsOf(lines[end]), "td"));
+      const box = el("div", "say-table");
+      box.append(table);
+      node.append(box);
+      return end;
+    }
+    // A list from lines[n] on: the items at its indent, each with the lines indented under it; the line after it.
+    function listInto(node, lines, n) {
+      const [, indent, mark] = lines[n].match(ITEM);
+      const ordered = /\d/.test(mark);
+      const list = el(ordered ? "ol" : "ul");
+      if (ordered) list.start = parseInt(mark, 10);
+      const under = (line) => line.search(/\S/) >= indent.length + 2;
+      while (n < lines.length) {
+        const item = lines[n].match(ITEM);
+        if (!item || Math.abs(item[1].length - indent.length) > 1 || /\d/.test(item[2]) !== ordered) break;
+        const inner = [item[3]];
+        const width = item[1].length + item[2].length + 1;
+        for (n += 1; n < lines.length; n += 1) {
+          // A blank line stays in the item only when what follows it is still under the item.
+          const next = lines[n].trim() ? lines[n] : lines.slice(n).find((line) => line.trim()) || "";
+          if (!under(next)) break;
+          inner.push(lines[n].replace(new RegExp(`^\\s{0,${width}}`), ""));
+        }
+        const li = blocksInto(el("li"), inner);
+        // An item of one paragraph is its words alone.
+        if (li.children.length === 1 && li.firstChild.tagName === "P") li.replaceChildren(...li.firstChild.childNodes);
+        list.append(li);
+        while (n < lines.length && !lines[n].trim() && ITEM.test(lines.slice(n).find((line) => line.trim()) || "")) n += 1;
+      }
+      node.append(list);
+      return n;
+    }
+    const startsBlock = (lines, n) =>
+      FENCE.test(lines[n]) || HEADING.test(lines[n]) || RULE.test(lines[n]) || QUOTE.test(lines[n]) || ITEM.test(lines[n]) || tableAt(lines, n);
+    function blocksInto(node, lines) {
+      for (let n = 0; n < lines.length; ) {
+        const line = lines[n];
+        const fence = line.match(FENCE);
+        const heading = line.match(HEADING);
+        if (!line.trim()) n += 1;
+        else if (fence) {
+          const close = new RegExp(`^\\s*${fence[2][0]}{${fence[2].length},}\\s*$`);
+          let end = n + 1;
+          while (end < lines.length && !close.test(lines[end])) end += 1;
+          const dent = new RegExp(`^\\s{0,${fence[1].length}}`);
+          node.append(codeNode(fence[3], lines.slice(n + 1, end).map((inner) => inner.replace(dent, "")).join("\n")));
+          n = end + 1;
+        } else if (heading) {
+          node.append(inlineInto(el(`h${Math.min(6, heading[1].length + 2)}`), heading[2]));
+          n += 1;
+        } else if (RULE.test(line)) {
+          node.append(el("hr"));
+          n += 1;
+        } else if (tableAt(lines, n)) n = tableInto(node, lines, n);
+        else if (QUOTE.test(line)) {
+          let end = n;
+          while (end < lines.length && QUOTE.test(lines[end])) end += 1;
+          node.append(blocksInto(el("blockquote"), lines.slice(n, end).map((inner) => inner.replace(QUOTE, ""))));
+          n = end;
+        } else if (ITEM.test(line)) n = listInto(node, lines, n);
+        else {
+          let end = n + 1;
+          while (end < lines.length && lines[end].trim() && !startsBlock(lines, end)) end += 1;
+          node.append(inlineInto(el("p"), lines.slice(n, end).join("\n")));
+          n = end;
+        }
+      }
+      return node;
+    }
+    // The character's words, drawn (see above).
+    function sayNode(text) {
+      return blocksInto(el("div", "say rich"), String(text || "").split("\n"));
+    }
+    // The words with the lines their link cards say taken out; fenced code keeps every line.
+    function wordsOf(text) {
+      return String(text || "")
+        .split(/^([ \t]*```[^\n]*\n[\s\S]*?(?:\n[ \t]*```[ \t]*$|(?![\s\S])))/m)
+        .map((part, n) => (n % 2 ? part : window.paLinks.bare(part)))
+        .filter(Boolean)
+        .join("\n");
     }
     // `loading`: drawn as part of a whole history, which reports to the shell once at its end.
     function showMessage(item, arrived = false, loading = false) {
@@ -586,16 +936,21 @@ window.paChat = (() => {
       let node;
       if (item.role === "user") {
         node = el("section", "me");
+        if (item.attachments?.length) node.append(attachedNode(item.attachments));
         const bubble = el("div", "bubble");
         if (item.quote) {
           bubble.classList.add("has-quote");
           bubble.append(quoteNode(item.quote));
         }
         if (item.picture !== undefined) bubble.append(pictureNode(item));
-        else bubble.append(el("span", "bubble-text", item.text));
-        node.append(bubble);
+        else if (item.text) bubble.append(linked(el("span", "bubble-text"), item.text));
+        // Attachments alone need no empty bubble under them.
+        if (bubble.firstChild) node.append(bubble);
+        const sent = item.picture === undefined && linkCards(item.text);
+        if (sent) node.append(sent);
+        if (item.choices?.length) node.append(plus.sent(item.choices));
         parts.messages.append(node);
-        if (item.failed) failed(node, item.failed, item.text, item.seq, item.quote);
+        if (item.failed) failed(node, item.failed, item.text, item.seq, item.quote, item.attachments || [], item.choices || []);
       } else if (isRemark(item)) {
         // A passing remark: no face, quieter, on the text's edge.
         node = el("p", "aside");
@@ -609,13 +964,35 @@ window.paChat = (() => {
       } else {
         const body = botRun(time);
         node = el("div", "line");
+        // What it did for the reply, above its words (activity.js): above the first of them when it said several.
+        const did = window.paActivity.summary(item, links);
+        const first = did && body.querySelector(":scope > .line:not(.typing)");
+        if (first) first.before(did);
+        else if (did) node.append(did);
+        // A line that is only an address is said by its card.
+        const words = wordsOf(item.text);
         if (item.picture !== undefined) node.append(pictureNode(item));
-        else if (!(item.card && saysTitle(item.text, item.card))) node.append(el("p", "say", item.text));
+        else if (!(item.card && saysTitle(item.text, item.card)) && words) node.append(sayNode(words));
+        // Each card answered beside the page while it worked in it: one line, kept with the reply.
+        for (const step of item.trace || []) {
+          if (step.tool === "operate" && step.confirmed) for (const line of step.confirmed.split("\n")) node.append(el("p", "op-note", line));
+        }
+        const cards = item.picture === undefined && linkCards(item.text, item.card?.url);
+        if (cards) node.append(cards);
+        const from = window.paActivity.sources(item.sources, links);
+        if (from) node.append(from);
+        // The files the reply changed, with 撤销这次的改动 (activity.js).
+        const changed = window.paActivity.changes(item, links);
+        if (changed) node.append(changed);
+        // Under the answer to a memory command, the way to Settings › Memory (welcome.py marks its last line).
+        if (item.manage) node.append(button("pa-btn pa-btn-link chat-manage", say("manageMemory"), () => ctx.go("setup/memory")));
         if (item.card) {
           node.classList.add("has-find");
           node.append(findCard(item.card));
           if (item.card.id) node.dataset.item = item.card.id;
         }
+        // A scheduled task's mark, what the reply did to tasks, and what a run left for them (schedulechat.js).
+        window.paScheduleChat.decorate(node, item, (text) => !sending && send(text));
         body.append(node);
       }
       node.dataset.seq = item.seq || "";
@@ -650,20 +1027,24 @@ window.paChat = (() => {
       return node;
     }
     // Under a message that went unanswered: why, and a way to send it again.
-    function failed(mine, code, text, retrySeq = null, quote = null) {
+    function failed(mine, code, text, retrySeq = null, quote = null, files = [], choices = []) {
+      // Stopped by the person: said quietly, with only the way to send it again.
+      const quiet = code === "stopped";
       mine.classList.add("unanswered");
+      mine.classList.toggle("stopped", quiet);
       const mark = el("small", "msg-mark");
-      mark.append(svg(I.alert), el("span", "", say("unanswered")));
+      if (quiet) mark.append(el("span", "", say("stopped")));
+      else mark.append(svg(I.alert), el("span", "", say("unanswered")));
       mine.append(mark);
-      const note = el("div", "notice");
-      note.append(el("p", "", say(code)));
+      const note = el("div", quiet ? "notice quiet" : "notice");
+      if (!quiet) note.append(bar.problem(code) || el("p", "", say(code)));
       const actions = el("div", "notice-actions");
       actions.append(
         button("pa-btn pa-btn-secondary pa-btn-sm", say("retry"), () => {
           if (sending) return;
           note.remove();
           mine.remove();
-          send(text, retrySeq, quote);
+          send(text, retrySeq, quote, files, choices);
         }),
       );
       if (SETTINGS_FIXES.has(code)) actions.append(settingsButton("pa-btn pa-btn-ghost pa-btn-sm"));
@@ -678,44 +1059,18 @@ window.paChat = (() => {
       dots.setAttribute("role", "status");
       dots.setAttribute("aria-label", say("typing"));
       dots.append(el("i"), el("i"), el("i"));
-      node.append(dots);
+      // While a reply is on its way: what the character is looking up for it.
+      node.append(dots, el("span", "doing"));
       body.append(node);
       keepEnd();
       return node;
     }
-    function typingTime(item) {
-      if (item.picture !== undefined) return 700;
-      if (isRemark(item)) return 0;
-      const length = Array.from(item.text || "").length;
-      return Math.min(TYPING.most, length * TYPING.perChar + TYPING.pause);
+    // What came, shown at once and in order.
+    function reveal(items) {
+      for (const item of items) if (!(item.seq && item.seq <= seen)) showMessage(item, item.role !== "user");
     }
-    // `spent`: how long the first message has already been waited for.
-    async function reveal(items, spent = 0) {
-      const mine = epoch;
-      let left = TYPING.whole;
-      for (const item of items) {
-        if (item.seq && item.seq <= seen) continue;
-        if (item.role === "user") {
-          showMessage(item);
-          continue;
-        }
-        // A memory command's answer is a record, not talk: it comes whole at once.
-        const time = item.command ? 0 : Math.min(left, Math.max(0, typingTime(item) - spent));
-        spent = 0;
-        if (time > 0) {
-          const typing = typingRow();
-          await new Promise((done) => setTimeout(done, time));
-          unline(typing);
-          left -= time;
-          if (mine !== epoch) return;
-          if (item.seq && item.seq <= seen) continue;
-        }
-        showMessage(item, true);
-      }
-    }
-    // A reply still arriving stops; what it had not shown comes with the next look.
+    // The marks of a reply being waited for go.
     function stopReveal() {
-      epoch += 1;
       for (const node of parts.messages.querySelectorAll(".line.typing")) unline(node);
     }
     function showHistory(value) {
@@ -748,7 +1103,7 @@ window.paChat = (() => {
     // ---- A thing it brought: a 16:10 cover beside a body laid to its height, a fixed foot
     function findCard(card) {
       const node = el("article", "find");
-      if (card.skipped) return folded(node, card.skipped === "hide_source" ? "lessDone" : "skipped");
+      if (card.skipped) return folded(node, card);
       const site = String(card.site || "").replace(/^www\./, "") || hostOf(card.url);
       const video = card.kind === "video" && card.embed;
       const cover = video ? el("div", "cover") : original(card, "cover");
@@ -792,6 +1147,7 @@ window.paChat = (() => {
       icon.append(svg(siteIcon(card)));
       top.append(icon, el("span", "src", site));
       if (card.author && card.author !== site) top.append(el("span", "dot", "·"), el("span", "by", card.author));
+      if (card.why) top.append(whyChip(card));
       const heading = el("h3");
       const link = original(card, "find-title");
       link.textContent = card.title || site;
@@ -902,7 +1258,41 @@ window.paChat = (() => {
       if (card.id) row.append(moreMenu(card, node));
       return row;
     }
-    // Not interested, less from the source: kept a click away behind ⋯.
+    // Why this one (recommend.Why), beside the site: a press offers more or less of what it names, the
+    // lean Settings shows too; a press on the one already set takes it back.
+    function whyChip(card) {
+      const why = card.why;
+      if (!why.key) return el("span", "find-why", why.text);
+      const wrap = el("span", "find-more-wrap find-why-wrap");
+      const menu = el("div", "find-menu");
+      menu.setAttribute("role", "menu");
+      const chip = button("find-why", why.text, () => {
+        const open = !wrap.classList.contains("open");
+        closeMenus();
+        wrap.classList.toggle("open", open);
+        chip.setAttribute("aria-expanded", String(open));
+        if (open) menu.querySelector("button").focus();
+      });
+      chip.setAttribute("aria-haspopup", "menu");
+      chip.setAttribute("aria-expanded", "false");
+      const choice = (to, paths, text) => {
+        const node = button("", "", () => {
+          closeMenus();
+          why.lean = why.lean === to ? null : to;
+          for (const other of menu.children) other.setAttribute("aria-checked", String(other === node && why.lean === to));
+          ctx.api("feed/lean", { key: why.key, to: why.lean }).catch(() => {});
+        });
+        node.setAttribute("role", "menuitemradio");
+        node.setAttribute("aria-checked", String(why.lean === to));
+        node.append(svg(paths), el("span", "", text));
+        return node;
+      };
+      menu.append(choice(1, I.raise, say("leanMore")), choice(-1, I.less, say("leanLess")));
+      wrap.append(chip, menu);
+      return wrap;
+    }
+    // Not interested, behind ⋯, with what it was about: this one, its kind of topic, its source, or
+    // seen already (which says nothing of their taste).
     function moreMenu(card, node) {
       const wrap = el("span", "find-more-wrap");
       const menu = el("div", "find-menu");
@@ -917,7 +1307,9 @@ window.paChat = (() => {
         return choice;
       };
       menu.append(item(I.skip, say("skip"), "skip"));
+      if (card.topic) menu.append(item(I.less, say("lessTopic", card.topic.name), "topic"));
       if (card.source) menu.append(item(I.less, say("less"), "hide_source"));
+      menu.append(item(I.seen, say("known"), "known"));
       const more = iconButton("icon-btn", I.more, say("more"), () => {
         const open = !wrap.classList.contains("open");
         closeMenus();
@@ -943,16 +1335,30 @@ window.paChat = (() => {
       like.setAttribute("aria-label", say(liked ? "liked" : "like"));
       like.title = say(liked ? "liked" : "like");
     }
-    function folded(node, key) {
+    // The one line a card turned down folds to: what the no was, and the way to take it back.
+    function folded(node, card) {
+      const key = { topic: "topicDone", hide_source: "lessDone", known: "knownDone" }[card.skipped] || "skipped";
       const note = el("div", "find-folded-line");
-      note.append(svg(I.skip), el("span", "", say(key)));
+      const undo = button("find-undo", say("undo"), async () => {
+        undo.disabled = true;
+        try {
+          await ctx.api("feed/undo", { id: card.id });
+        } catch {
+          // Not taken back: the line stays, to be tried again.
+          undo.disabled = false;
+          return;
+        }
+        card.skipped = "";
+        node.replaceWith(findCard(card));
+      });
+      note.append(svg(I.skip), el("span", "", say(key, card.topic?.name)), undo);
       node.className = "find folded";
       node.style.height = "";
       node.replaceChildren(note);
       return node;
     }
-    // Not for me, or less from where it came: the card folds down to one quiet line,
-    // so the chat below it does not jump.
+    // Not for me, in the way `kind` says (skip: this one; topic; hide_source; known: seen already): the
+    // card folds down to one quiet line, so the chat below it does not jump.
     async function fold(card, node, kind) {
       // A video playing on it stops here, and how long it ran is told.
       node.querySelector(".player")?.remove();
@@ -961,17 +1367,25 @@ window.paChat = (() => {
       void node.offsetHeight;
       node.classList.add("folding");
       node.style.height = "44px";
-      setTimeout(() => folded(node, kind === "skip" ? "skipped" : "lessDone"), motion() === "auto" ? 0 : 260);
+      card.skipped = kind;
+      setTimeout(() => card.skipped && folded(node, card), motion() === "auto" ? 0 : 260);
+      const sent =
+        kind === "known"
+          ? reaction(card, "end", { end: "known" })
+          : kind === "hide_source"
+            ? reaction(card, kind)
+            : reaction(card, "skip", { said: kind === "topic" ? { about: "topic", key: card.topic.key } : { about: "thing" } });
       try {
-        await ctx.api("feed/react", reaction(card, kind));
+        await ctx.api("feed/react", sent);
       } catch {
         // Not recorded: the card comes back as it was.
+        card.skipped = "";
         setTimeout(() => node.replaceWith(findCard(card)), 300);
       }
     }
     // What the feed learns from: where the card is (its place in the batch it came in) and the ranking's slot.
     function reaction(card, action, more = {}) {
-      return { id: card.id, action, surface: "chat", rank: card.rank ?? 0, slot: card.slot || "", ...more };
+      return { id: card.id, action, surface: card.surface || "chat", rank: card.rank ?? 0, slot: card.slot || "", ...more };
     }
     function react(card, kind, more, how) {
       // Opening still works when the note does not arrive; nothing to undo.
@@ -1015,6 +1429,97 @@ window.paChat = (() => {
       }));
     }
 
+    // ---- Attaching: picked with +, pasted, or dropped on the chat
+    function attach(files) {
+      if (!state?.configured || !files.length) return;
+      refuse("");
+      for (const file of files) {
+        if (attached.length >= ATTACH.most) {
+          refuse(say("refusedMany"));
+          break;
+        }
+        const kind = PICTURE_TYPES.has(file.type) ? "picture" : "file";
+        const item = { key: ++attachKey, kind, file: file.name || "image.png", size: file.size, url: "", data: "" };
+        const why =
+          kind === "picture"
+            ? file.size > ATTACH.picked && "refusedPictureSize"
+            : !TEXT_KINDS.has(extOf(item.file))
+              ? "refusedType"
+              : file.size > ATTACH.file && "refusedFileSize";
+        if (why) {
+          refuse(say(why).replace("{file}", item.file));
+          continue;
+        }
+        attached.push(item);
+        (async () => {
+          if (kind === "file") {
+            if (!readsAsText(await file.arrayBuffer())) throw new Error("unreadable");
+            item.data = await base64Of(file);
+            return;
+          }
+          const picture = await sendable(file);
+          item.size = picture.size;
+          item.data = await base64Of(picture);
+          item.url = URL.createObjectURL(picture);
+        })()
+          .catch(() => {
+            unattach(item);
+            refuse(say(kind === "picture" ? "refusedPicture" : "refusedUnreadable").replace("{file}", item.file));
+          })
+          .finally(paintTray);
+      }
+      paintTray();
+      parts.input.focus();
+    }
+    function unattach(item) {
+      attached = attached.filter((other) => other !== item);
+      if (item.url && item.kind !== "page") URL.revokeObjectURL(item.url);
+      paintTray();
+    }
+    // Something "+" adds that is no file: a page from the app's browser ({ kind: "page", url, title }).
+    function attachItem(item) {
+      refuse("");
+      if (attached.length >= ATTACH.most) return refuse(say("refusedMany"));
+      attached.push({ ...item, key: ++attachKey, file: item.title || item.url, data: item.kind });
+      paintTray();
+      parts.input.focus();
+    }
+    function paintTray() {
+      parts.tray.hidden = !attached.length;
+      parts.form.classList.toggle("has-tray", attached.length > 0);
+      const chips = attached.map((item) => {
+        const chip = el("div", `att att-${item.kind}${item.data ? "" : " pa-shimmer"}`);
+        chip.title = item.file;
+        if (item.kind === "picture") {
+          if (item.url) {
+            const image = el("img");
+            image.alt = item.file;
+            image.src = item.url;
+            chip.append(image);
+          }
+        } else if (item.kind === "page") {
+          chip.className = "att att-file att-page";
+          chip.append(...window.paPlus.pageChip(item).childNodes);
+        } else chip.append(fileWords(item));
+        chip.append(iconButton("att-x", I.x, say("remove").replace("{file}", item.file), () => {
+          unattach(item);
+          parts.input.focus();
+        }));
+        return chip;
+      });
+      const row = el("div", "chat-tray-row");
+      row.append(...chips);
+      parts.tray.replaceChildren(row);
+      syncSend();
+    }
+    function refuse(text) {
+      parts.refused.hidden = !text;
+      parts.refused.replaceChildren();
+      if (text)
+        parts.refused.append(svg(I.alert), el("span", "chat-refused-text", text),
+          iconButton("chat-quote-x", I.x, say("dismiss"), () => refuse("")));
+    }
+
     // ---- Sending
     function submit() {
       if (sending) {
@@ -1023,34 +1528,64 @@ window.paChat = (() => {
         return;
       }
       const text = parts.input.value;
-      if (!text.trim() || !state?.configured) return;
+      // A subject for its next walk goes there, not into the chat.
+      if (plus.wonder(text)) {
+        parts.input.value = "";
+        grow();
+        return;
+      }
+      if (!(text.trim() || attached.length) || !state?.configured || attached.some((item) => !item.data)) return;
+      if (!bar.allow(submit)) return;
       const quote = replying;
+      const files = attached;
+      attached = [];
+      refuse("");
       parts.input.value = "";
       setReply(null);
       grow();
-      send(text, null, quote);
+      paintTray();
+      // Beside a page in the app's browser, the page it is about goes with it (browse.js).
+      send(text, null, quote, files, [...plus.take(), ...bar.take(), ...(window.paBeside?.take() || [])]);
     }
-    async function send(text, retrySeq = null, quote = null) {
+    async function send(text, retrySeq = null, quote = null, files = [], choices = []) {
       sending = true;
       syncSend();
       // What the character was sending on its own comes back in order with the answer.
       stopReveal();
-      const mine = showMessage({ role: "user", text, quote, at: new Date().toISOString() });
+      const mine = showMessage({ role: "user", text, quote, attachments: files, choices, at: new Date().toISOString() });
       renderSetup();
       const typing = typingRow();
-      const asked = performance.now();
+      // The looks for what it sends on its own say meanwhile what it is looking up.
+      waiting = typing;
+      cut = new AbortController();
+      turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+      poll();
       // The first message of a plain chat names it: shown at once, and as kept once the list is read again.
-      if (!main && !title) hooks.changed(id, Array.from(text.trim().replace(/\s+/g, " ")).slice(0, TITLE_CLIP).join(""));
+      const naming = text.trim() || files.find((item) => item.kind === "file")?.file || "";
+      if (!main && !title && naming) hooks.changed(id, Array.from(naming.replace(/\s+/g, " ")).slice(0, TITLE_CLIP).join(""));
       try {
-        const value = await ctx.api("chat", { text, after: seen, retry: retrySeq, chat: id, reply_to: quote?.id || "" });
+        // A message sent again after a reload has only its stored attachments: the chat sends those again.
+        const attachments = files.filter((item) => item.data).map(({ kind, file, data, url }) =>
+          kind === "page" ? { kind, url, title: file } : { kind, name: file, data });
+        const value = await ctx.api("chat", { text, after: seen, retry: retrySeq, chat: id, reply_to: quote?.id || "", attachments, choices },
+          { signal: cut.signal });
+        for (const item of files) if (item.url) URL.revokeObjectURL(item.url);
         // The chat as recorded: anything sent meanwhile, this message and the reply.
         mine.remove();
         unline(typing);
         if (value.forgotLines || value.chat !== tag) showHistory(value.forgotLines ? value : await history());
-        else await reveal(value.messages, performance.now() - asked);
+        else reveal(value.messages);
       } catch (error) {
         unline(typing);
         if (lost(error)) return;
+        const why = cut.signal.aborted ? String(cut.signal.reason) : "";
+        // The service marks the message stopped once its reply has ended; a page process that hangs is not waited for.
+        if (why) await Promise.race([stopping, new Promise((done) => setTimeout(done, 5000))]);
+        // Stopped: the words go back in the box, to edit and send again.
+        if (why === "stopped" && !parts.input.value) {
+          parts.input.value = text;
+          grow();
+        }
         // A message the chat kept unanswered shows as kept, so it can be sent again after a reload too.
         let kept = null;
         try {
@@ -1060,15 +1595,202 @@ window.paChat = (() => {
         }
         const last = kept?.messages.at(-1);
         if (last && last.role === "user" && last.failed && last.text === text) showHistory(kept);
-        else failed(mine, error instanceof TypeError ? "network" : error.message, text, retrySeq, quote);
+        else failed(mine, why || (error instanceof TypeError ? "network" : error.message), text, retrySeq, quote, files, choices);
         if (error.message === "chat_failed") refreshState();
       } finally {
+        clearTimeout(turnLimit);
+        showCard(null);
+        showShellCard(null);
+        showDeskCard(null);
+        window.paToolCard.show(null, null);
+        window.paSkillOffer.show(null, null);
+        cut = stopping = null;
+        hooks.doing("");
         sending = false;
+        waiting = null;
         syncSend();
         if (visible()) parts.input.focus();
         if (!main) hooks.changed();
         poll();
+        bar.refresh();
       }
+    }
+    // Something with an effect outside (web/gate.py) waits on the person's press in the column beside the page
+    // (browse.js), which only this window's page can give: here the waiting row says so, and once it is answered
+    // one line keeps what was decided.
+    function showCard(card, answered = null) {
+      if (!waiting) return;
+      const label = waiting.querySelector(".doing");
+      if (card && label) label.textContent = say("opWaitingPage");
+      if (!answered || noted.has(answered.id)) return;
+      noted.add(answered.id);
+      waiting.before(el("p", "op-note", answered.said));
+      keepEnd();
+    }
+    // A card before a command runs on this computer (shell/panel.py): what it will do in the app's own words, the
+    // real list of files for a delete, the exact command under a fold; or a card asking for a folder. Only a press
+    // here answers it, never words typed in the chat. The card that turns a switched-off ability on (turnon.py) is
+    // drawn here too, with the words it carries.
+    function showShellCard(card, place = "shell/card") {
+      if (shellCard && (!card || shellCard.dataset.id !== card.id)) {
+        if (!shellCard.classList.contains("answered")) shellCard.remove();
+        shellCard = null;
+      }
+      if (!card || shellCard || !waiting) return;
+      const said = card[ctx.lang] || card.en;
+      const folder = card.type === "folder";
+      const own = card.type === "turn_on";
+      const node = el("div", "op-card shell-card");
+      node.dataset.id = card.id;
+      node.append(folder ? cardHead(I.folder, said.title, card.folder)
+        : own ? cardHead(card.feature === "programs" ? I.window : I.terminal, said.title)
+        : cardHead(I.terminal, said.title, say("shellAsk")));
+      const lines = el("ul", "shell-card-lines");
+      for (const line of said.lines || []) lines.append(el("li", "", line));
+      if (lines.childElementCount) node.append(lines);
+      // An edit's whole difference, indentation kept (activity.js).
+      if (card.diff) node.append(window.paActivity.diff(card.diff));
+      if (!folder && !own) {
+        const facts = el("dl", "op-card-facts");
+        facts.append(el("dt", "", say("shellWhere")), el("dd", "", card.cwd));
+        node.append(facts);
+        const fold = el("details", "shell-card-command");
+        fold.append(el("summary", "", say("shellCommand")), el("pre", "", card.command));
+        node.append(fold);
+      }
+      // `how`: {read: true} grants a folder read only, {other: true} asks the character for another way.
+      const answer = async (yes, how = {}) => {
+        for (const b of node.querySelectorAll("button")) b.disabled = true;
+        node.classList.add("answered");
+        const told = el("p", "op-card-told", own ? (yes ? said.on : said.off)
+          : say(how.read ? "folderReadAllowed" : how.other ? "shellOtherAsked"
+            : folder ? (yes ? "folderAllowed" : "folderDenied") : (yes ? "shellAllowed" : "shellDenied")));
+        node.append(told);
+        try {
+          const response = await fetch(`/api/${place}`, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json",
+              "X-Personagent-Setup-Token": sessionStorage.getItem("personagent-setup-token") || "",
+              "X-Personagent-Window": sessionStorage.getItem("personagent-frame") || "" },
+            body: JSON.stringify({ id: card.id, yes, ...how }),
+          });
+          if (!(await response.json().catch(() => ({}))).ok) told.textContent = say("opGone");
+        } catch {
+          told.textContent = say("opGone");
+        }
+      };
+      const buttons = el("div", "op-card-buttons");
+      if (folder && card.choices?.includes("read")) {
+        // Read only, or sort in it too (WorkBuddy's 问一问 / 做一做); the narrower first.
+        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("folderRead"), () => answer(true, { read: true })),
+          button("pa-btn pa-btn-secondary pa-btn-sm", say("folderWrite"), () => answer(true)));
+      } else if (card.other_way) {
+        // What the command does cannot be told first: asking for another way leads, not reading the command.
+        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("shellOtherWay"), () => answer(false, { other: true })),
+          button("pa-btn pa-btn-secondary pa-btn-sm", say("shellYes"), () => answer(true)));
+      } else {
+        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", own ? said.yes : say(folder ? "folderYes" : "shellYes"), () => answer(true)));
+      }
+      buttons.append(button("pa-btn pa-btn-ghost pa-btn-sm", own ? said.no : say(folder ? "folderNo" : "shellNo"), () => answer(false)));
+      node.append(buttons);
+      waiting.after(node);
+      shellCard = node;
+      const label = waiting.querySelector(".doing");
+      if (label) label.textContent = say("opWaiting");
+      keepEnd();
+    }
+    // A card from a task in another program (desk/panel.py): may the character use this program (this once,
+    // always, or no; one grant covers looking and operating), or may it do this one thing with an effect outside, shown
+    // with the program, the window, the control, the exact text or the files, and the window's picture. Only a
+    // press here answers it, never words typed in the chat.
+    function showDeskCard(card) {
+      if (deskCard && (!card || deskCard.dataset.id !== card.id)) {
+        if (!deskCard.classList.contains("answered")) deskCard.remove();
+        deskCard = null;
+      }
+      if (!card || deskCard || !waiting) return;
+      const grant = card.type === "desk_grant";
+      // A grant, and the card that asks to send a window's pictures: this once, always, or no.
+      const three = (card.choices || []).includes("always");
+      const node = el("div", "op-card desk-card");
+      node.dataset.id = card.id;
+      const facts = el("dl", "op-card-facts");
+      const fact = (key, value, className = "") => {
+        if (value) facts.append(el("dt", "", say(key)), el("dd", className, value));
+      };
+      if (grant) {
+        // Who asks for what, the program's publisher and file under it, and the request it is for.
+        const head = cardHead(I.window, card.text, [card.signer, (card.exe || "").split(/[\\/]/).pop()].filter(Boolean).join(" · "));
+        const meta = head.querySelector(".op-card-meta");
+        if (meta) meta.title = card.exe || "";
+        node.append(head);
+        if (card.task) node.append(el("p", "op-card-quote", card.task));
+      } else if (String(card.type).startsWith("see_") && (card.text || card.said)) {
+        // Working the window by its picture (see/): the app's own sentence, and the picture with the spot ringed.
+        node.append(cardHead(I.window, card.said || card.text, card.window));
+        if (card.said && card.text) node.append(el("p", "op-card-quote", card.text));
+        if (card.picture) {
+          const shot = el("img", "op-card-shot");
+          shot.src = `data:image/jpeg;base64,${card.picture}`;
+          shot.alt = "";
+          node.append(shot);
+        }
+      } else {
+        const kind = words().deskKinds[card.kind] || card.kind;
+        node.append(cardHead(I.window, say("deskAsk").replace("{program}", card.program).replace("{kind}", kind), card.window));
+        fact("deskTarget", card.target);
+        fact(card.kind === "file" && card.files?.length ? "deskNewName" : "deskText", card.text, "op-card-text");
+        fact("deskFiles", (card.files || []).join("\n"), "op-card-text");
+        node.append(facts);
+        if (card.picture) {
+          const shot = el("img", "op-card-shot");
+          shot.src = `data:image/jpeg;base64,${card.picture}`;
+          shot.alt = "";
+          node.append(shot);
+        }
+      }
+      const answer = async (value) => {
+        for (const b of node.querySelectorAll("button, input")) b.disabled = true;
+        node.classList.add("answered");
+        const told = el("p", "op-card-told", say(three ? { once: "deskOnceDone", always: "deskAlwaysDone", no: grant ? "deskNoDone" : "deskRefused" }[value]
+          : (value ? "deskDone" : "deskRefused")));
+        node.append(told);
+        try {
+          const response = await fetch("/api/programs/card", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json",
+              "X-Personagent-Setup-Token": sessionStorage.getItem("personagent-setup-token") || "",
+              "X-Personagent-Window": sessionStorage.getItem("personagent-frame") || "" },
+            body: JSON.stringify(three ? { id: card.id, answer: value } : { id: card.id, yes: value }),
+          });
+          if (!(await response.json().catch(() => ({}))).ok) told.textContent = say("opGone");
+        } catch {
+          told.textContent = say("opGone");
+        }
+      };
+      const buttons = el("div", "op-card-buttons");
+      if (three) {
+        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("deskOnce"), () => answer("once")),
+          button("pa-btn pa-btn-secondary pa-btn-sm", say("deskAlways"), () => answer("always")),
+          button("pa-btn pa-btn-ghost pa-btn-sm", say("deskNo"), () => answer("no")));
+      } else {
+        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("opYes"), () => answer(true)),
+          button("pa-btn pa-btn-ghost pa-btn-sm", say("opNo"), () => answer(false)));
+      }
+      node.append(buttons);
+      waiting.after(node);
+      deskCard = node;
+      const label = waiting.querySelector(".doing");
+      if (label) label.textContent = say("opWaiting");
+      keepEnd();
+    }
+    // The stop button, Esc, or the wait running past TURN_MS: the service cancels the reply, the page stops waiting.
+    function stopReply(why) {
+      if (!cut || cut.signal.aborted) return;
+      stopping = ctx.api("chat/stop", { chat: id, why }).catch(() => null);
+      cut.abort(why);
     }
     let flashTimer = null;
     function flash(text) {
@@ -1077,15 +1799,61 @@ window.paChat = (() => {
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => {
         parts.hint.classList.remove("flash");
-        parts.hint.textContent = say("hint");
+        parts.hint.textContent = "";
       }, 2500);
     }
 
     // ---- Looking for what the character sent on its own
     async function poll() {
       clearTimeout(pollTimer);
-      if (!visible() || !state?.configured) return;
-      if (!sending && !polling) {
+      if (!asking() || !state?.configured) return;
+      if (sending && waiting) {
+        try {
+          const step = (await history(seen)).doing;
+          const line = window.paActivity.live(waiting, step);
+          // Working in the browser takes its time, and may wait on the person's press.
+          if (step?.tool === "operate" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            const asked = await ctx.api("browser/confirm");
+            showCard(asked.card, asked.answered);
+          }
+          // A command may wait on the person's press too (shell/panel.py).
+          if (step?.tool === "shell" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            showShellCard((await ctx.api("shell/card")).card);
+          }
+          // A switched-off ability asks to be turned on (turnon.py), with the same card.
+          if (step?.tool === "turn_on" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            showShellCard((await ctx.api("turnon/card")).card, "turnon/card");
+          }
+          // A task in another program may wait on the person's press as well (desk/panel.py).
+          if (step?.tool === "desk" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            showDeskCard((await ctx.api("programs/card")).card);
+          }
+          // One of the person's MCP servers may wait on the person's press too (toolcard.js, mcp_hub.py).
+          if (step?.tool === "mcp" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            window.paToolCard.show(waiting, (await ctx.api("mcp/card")).card, keepEnd);
+          }
+          // A skill from the market offered before the reply waits on the person's press (skilloffer.js).
+          if (step?.tool === "skill_offer" && sending) {
+            clearTimeout(turnLimit);
+            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+            window.paSkillOffer.show(waiting, (await ctx.api("skills/offer")).card, keepEnd);
+          }
+          // The sidebar's line under the character's name says it too (app.js).
+          if (sending) hooks.doing(line);
+        } catch {
+          // The waiting row keeps its dots.
+        }
+      } else if (!sending && !polling) {
         polling = true;
         try {
           const value = await history(seen);
@@ -1093,7 +1861,7 @@ window.paChat = (() => {
           if (!sending) {
             const was = parts.empty.hidden;
             if (value.chat !== tag) showHistory(await history());
-            else await reveal(value.messages.filter((item) => item.seq > seen));
+            else reveal(value.messages.filter((item) => item.seq > seen));
             if (was !== parts.empty.hidden || !parts.empty.hidden) renderSetup();
           }
         } catch (error) {
@@ -1104,7 +1872,7 @@ window.paChat = (() => {
         }
       }
       clearTimeout(pollTimer);
-      if (visible()) pollTimer = setTimeout(poll, ctx.told ? TOLD_POLL_MS : POLL_MS);
+      if (asking()) pollTimer = setTimeout(poll, ctx.told && !sending ? TOLD_POLL_MS : POLL_MS);
     }
 
     async function refreshState() {
@@ -1113,6 +1881,7 @@ window.paChat = (() => {
       } catch {
         // Kept as it was: a failed send says what went wrong.
       }
+      bar.refresh();
       // A notice above the composer takes room: the newest message stays in sight.
       const end = atEnd;
       renderText();
@@ -1204,11 +1973,16 @@ window.paChat = (() => {
       focus() {
         if (state?.configured) parts.input.focus();
       },
+      // A find drawn as this chat draws one, for the 推荐记录 list (finds.js): its reply goes to this chat.
+      findCard: (card) => findCard(card),
       drop() {
         clearTimeout(pollTimer);
         for (const [type, run] of Object.entries(listeners)) document.removeEventListener(type, run);
+        plus.drop();
+        bar.drop();
         root.remove();
         for (const url of blobs.values()) url.then((value) => URL.revokeObjectURL(value)).catch(() => {});
+        for (const item of attached) if (item.url) URL.revokeObjectURL(item.url);
       },
     };
   }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>购物车 - 喵喵宠物店</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f5f5f5; }
+main { max-width: 720px; margin: 24px auto; background: #fff; border-radius: 8px; padding: 16px 22px; }
+.it { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #eee; }
+.it .nm { flex: 1; } .qty { display: flex; align-items: center; }
+.qty button { width: 28px; height: 28px; border: 1px solid #ddd; background: #fafafa; cursor: pointer; }
+.qty input { width: 44px; height: 26px; text-align: center; border: 1px solid #ddd; border-left: 0; border-right: 0; }
+.sum { text-align: right; margin-top: 14px; font-size: 16px; } .sum b { color: #e4393c; }
+.go { display: inline-block; margin-top: 10px; background: #e4393c; color: #fff; padding: 8px 28px; border-radius: 4px; text-decoration: none; }
+</style></head>
+<body><main>
+<h2>购物车</h2>
+<div id="items"></div>
+<div class="sum">合计：<b id="total"></b><br><a class="go" href="/t/t17-checkout.html">去结算</a></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const ITEMS = [["scratcher", "瓦楞纸猫抓板", 39], ["mug", "陶瓷猫碗", 25]];
+let cart = {};
+async function load() {
+  cart = (await (await fetch("/api/state")).json()).cart;
+  draw();
+}
+function draw() {
+  const box = document.getElementById("items");
+  box.innerHTML = "";
+  let total = 0;
+  for (const [id, name, price] of ITEMS) {
+    const n = cart[id] || 0;
+    total += n * price;
+    const el = document.createElement("div");
+    el.className = "it";
+    el.innerHTML = `<span class="nm"></span><span>¥${price.toFixed(2)}</span>
+      <div class="qty"><button aria-label="减少">−</button><input type="number" min="1" value="${n}" aria-label="数量"><button aria-label="增加">+</button></div>`;
+    el.querySelector(".nm").textContent = name;
+    const [minus, plus] = el.querySelectorAll("button"), input = el.querySelector("input");
+    const set = async (q) => { if (q >= 1) { cart = (await post("/api/cart", { item: id, qty: q })).cart; draw(); } };
+    minus.addEventListener("click", () => set(n - 1));
+    plus.addEventListener("click", () => set(n + 1));
+    input.addEventListener("change", () => set(Number(input.value)));
+    box.append(el);
+  }
+  document.getElementById("total").textContent = "¥" + total.toFixed(2);
+}
+load();
+</script></body></html>

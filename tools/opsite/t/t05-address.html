@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>收货偏好设置</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f5f5f5; }
+.box { max-width: 520px; margin: 30px auto; background: #fff; padding: 20px 24px; border-radius: 8px; }
+.field { margin: 14px 0; } .lab { color: #666; margin-bottom: 4px; }
+.sel { position: relative; width: 260px; }
+.sel .cur { border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px; cursor: pointer; background: #fff; }
+.sel .cur::after { content: "▾"; float: right; color: #999; }
+.sel .opts { position: absolute; top: 36px; left: 0; right: 0; background: #fff; border: 1px solid #ccc; border-radius: 4px;
+  max-height: 180px; overflow-y: auto; z-index: 5; box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+.sel .opt { padding: 6px 10px; cursor: pointer; } .sel .opt:hover { background: #f0f6ff; }
+input[type=text] { width: 260px; padding: 6px; }
+.save { background: #e4393c; color: #fff; border: 0; padding: 8px 26px; border-radius: 4px; cursor: pointer; }
+.msg { color: #2a8; }
+</style></head>
+<body>
+<div class="box">
+  <h2>收货偏好</h2>
+  <div class="field"><div class="lab">收货人</div><input type="text" id="name" value="小乐"></div>
+  <div class="field"><div class="lab">所在城市</div>
+    <div class="sel" id="city"><div class="cur" id="cur">杭州</div><div class="opts" id="opts" hidden></div></div></div>
+  <div class="field"><div class="lab">详细地址</div><input type="text" id="addr" value="文三路 100 号"></div>
+  <div class="save" id="save">保存</div>
+  <p class="msg" id="msg"></p>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+const CITIES = ["北京", "上海", "广州", "深圳", "杭州", "南京", "苏州", "武汉", "成都", "重庆", "西安", "长沙", "青岛", "厦门"];
+const opts = document.getElementById("opts"), cur = document.getElementById("cur");
+for (const c of CITIES) {
+  const o = document.createElement("div");
+  o.className = "opt";
+  o.textContent = c;
+  o.addEventListener("click", (e) => { e.stopPropagation(); cur.textContent = c; opts.hidden = true; });
+  opts.append(o);
+}
+cur.addEventListener("click", (e) => { e.stopPropagation(); opts.hidden = !opts.hidden; });
+document.addEventListener("click", () => { opts.hidden = true; });
+document.getElementById("save").addEventListener("click", async () => {
+  if ((await post("/api/address", { name: document.getElementById("name").value, city: cur.textContent,
+    addr: document.getElementById("addr").value })).ok) document.getElementById("msg").textContent = "已保存";
+});
+</script></body></html>

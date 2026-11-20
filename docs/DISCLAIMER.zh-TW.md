@@ -12,7 +12,7 @@ personagent 有兩種方式接入聊天平台。QQ 官方機器人、個人微�
 - **開放網路上的獨立帳號。** 在 Matrix、Twitch 和 IRC 上，機器人是你為其另外建立的一般帳號，personagent 使用該網路公開文件中的介面：在機器人帳號所在的伺服器上使用 Matrix Client-Server API；使用 Twitch API，並由角色的帳號為你註冊的開發者應用程式核准登入；使用透過 TLS 連線的 IRC 協定及機器人自己的暱稱。該伺服器、Twitch 和各 IRC 網路的條款均適用，各聊天室和頻道的規則同樣適用。部分網路要求機器人加入前須取得許可，例如 Libera.Chat 規定，AI 機器人加入頻道前須取得該頻道管理員的明確許可。
 - **非官方用戶端**以一般使用者帳號登入，再由軟體代為操作。平台不認可此種做法，條款中可能明令禁止，帳號可能因此遭到限制、凍結乃至永久停權。這類方式包括：
   - **透過 NapCat、LLOneBot、Lagrange 或其他 OneBot 實作接入 QQ**，即進階選項中的 OneBot v11。使用 QQ 官方機器人則完全不需要它們。騰訊不認可這些實作，從雲端伺服器或境外 IP 登入時風險最高。
-  - **透過 mautrix 橋接接入 WhatsApp、Signal、Messenger、Instagram、Google Messages 等**，即 Matrix 聯結器的接入方式。橋接程式是這些網路的非官方用戶端，其中部分網路的條款對自動傳送訊息另有規定。詳見 [Matrix 聯結器的說明](../integrations/matrix/README.zh-TW.md#各網路的條款)。
+  - **透過 mautrix 橋接接入 WhatsApp、Signal、Messenger、Instagram、Google Messages 等**，即 Matrix 聯結器的接入方式。橋接程式是這些網路的非官方用戶端，其中部分網路的條款對自動傳送訊息另有規定。
   - 其他任何以真人帳號登入的方式。
 
 如果使用其中任何一種，請準備一個**專用且遺失亦無妨的次要帳號**，不要使用主要帳號；條件允許時，請在家用網路中執行，不要部署在雲端伺服器上。接入每個網路之前，請詳閱其現行條款。personagent 的作者，以及與它搭配使用的第三方專案（AstrBot、NapCat、Koishi、mautrix 等）的維護者，均不對帳號遺失或受限承擔責任。

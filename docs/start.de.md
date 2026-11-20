@@ -33,9 +33,7 @@ Unter Windows öffnet sich die Seite in einem eigenen Fenster. Unter macOS und L
 
 Ein Programmierassistent kann die Einrichtung für Sie übernehmen: Bitten Sie ihn, [setup-for-agents.md](setup-for-agents.md) zu lesen und personagent einzurichten.
 
-Unter Windows können Sie auch das Quellcode-ZIP herunterladen, entpacken und `start.bat` doppelklicken. Das Skript legt im Ordner eine eigene Python-Umgebung an, wobei es zuerst Python herunterlädt, falls auf dem Computer keines vorhanden ist, und öffnet dieselbe Seite. Beim ersten Start legt es außerdem ein personagent-Symbol auf Ihrem Desktop und im Startmenü an.
-
-Um personagent aus einem Klon zu starten, richten Sie eine eigene virtuelle Umgebung ein: `python -m venv .venv`, dann `.venv/bin/python -m pip install -e .` und `.venv/bin/python -m persona_agent`. Unter Windows lautet der Interpreter `.venv\Scripts\python.exe`; alternativ doppelklicken Sie `start.bat`.
+Um personagent aus einem Klon zu starten, richten Sie eine eigene virtuelle Umgebung ein: `python -m venv .venv`, dann `.venv/bin/python -m pip install -e .` und `.venv/bin/python -m persona_agent`. Unter Windows lautet der Interpreter `.venv\Scripts\python.exe`.
 
 ## Anmelden und chatten
 

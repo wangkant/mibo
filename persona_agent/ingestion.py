@@ -1,4 +1,4 @@
-"""Content understanding: links, share cards, images, OCR and sticker aesthetics.
+"""Content understanding: the links and pictures in a message.
 
 All network egress goes through the SSRF guard; third-party URLs are untrusted."""
 
@@ -10,9 +10,7 @@ import functools
 import hashlib
 import io
 import ipaddress
-import json
 import logging
-import os
 import re
 import socket
 import ssl
@@ -21,7 +19,6 @@ import warnings
 import zlib
 from contextvars import ContextVar
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode, urlsplit
 
@@ -29,21 +26,17 @@ import httpcore
 import httpx
 from httpcore._backends.auto import AutoBackend
 
-from . import quiet
 from .config_env import env_int
-from .connector import current_sink
-from .textproc import (_detect_image_mime, _truncate_framed,
-                       salvage_json_object, strip_json_fences)
+from .textproc import (_detect_image_mime)
 
 logger = logging.getLogger("agent")
 
 # Hard ceiling on any image the bot decodes or forwards.
 VISION_MAX_IMAGE_BYTES = env_int("VISION_MAX_IMAGE_BYTES", 5_000_000, minimum=1)
 
-# Where a caption call leaves the image it downloaded, for a caller that asked
-# (`_describe_image_keeping`); unset, nothing outlives the call.
-_kept_download: ContextVar[Optional[list]] = ContextVar(
-    "kept_download", default=None)
+# True while the person's message is read: a picture in it is their own, read out whole for
+# the reply (VISION_READ_PROMPT), not named in a few words.
+reads_own_pictures: ContextVar[bool] = ContextVar("reads_own_pictures", default=False)
 
 MAX_URL_LENGTH = 4096
 MAX_HTML_WIRE_BYTES = 128 * 1024
@@ -394,37 +387,6 @@ async def safe_fetch_url(
     return None
 
 
-def _resolve_jailed_file_url(url: str, allowed_dir: str) -> Path | None:
-    """Resolve a ``file://`` image URL inside QQ_ONEBOT_IMAGE_DIR, or None
-    (also for a non-file or one over VISION_MAX_IMAGE_BYTES)."""
-    from urllib.parse import urlparse, unquote
-
-    local = unquote(urlparse(url).path)
-    # "/C:/x" is how a Windows file:// URL parses; drop the slash for Path().
-    if len(local) > 3 and local[0] == "/" and local[2] == ":":
-        local = local[1:]
-    try:
-        path = Path(local).resolve()
-    except Exception:
-        return None
-    allowed = (allowed_dir or "").strip()
-    if not allowed:
-        logger.warning(
-            "[Agent] refusing file:// because QQ_ONEBOT_IMAGE_DIR is unset")
-        return None
-    try:
-        allowed_path = Path(allowed).resolve(strict=True)
-        if not path.is_relative_to(allowed_path):
-            logger.warning(
-                "[Agent] refusing file:// outside QQ_ONEBOT_IMAGE_DIR: %s", path)
-            return None
-        if not path.is_file() or path.stat().st_size > VISION_MAX_IMAGE_BYTES:
-            return None
-    except (OSError, ValueError):
-        return None
-    return path
-
-
 class ContentIngestion:
     """Mixed into Agent; see agent.py."""
 
@@ -479,32 +441,14 @@ class ContentIngestion:
         "6. Don't prefix with \"this image / the picture shows / in the image\" — just say it."
     )
 
-    # The auto-tagger sees only a sticker's context; this looks at its pixels.
-    VISION_AESTHETIC_PROMPT = (
-        "Judge whether the visual aesthetic of this reaction sticker fits the kind "
-        "of taste a **clean modern internet-savvy user** would actually post — vs. "
-        "looking like content from an older family-group / chain-message subculture.\n"
-        "**Output one JSON line only: {\"tacky\": true|false, \"reason\": \"≤6 words\"}**\n"
-        "\n"
-        "tacky=true (doesn't fit, should ban) criteria:\n"
-        "- Older family-group / chain-message style: floral-script greetings (good morning / happy weekend / good fortune) + sparkle effects + roses / dancing cartoons\n"
-        "- Loud printed fonts on saturated color blocks / low-resolution outlined stickers\n"
-        "- Low-effort short-video-platform memes, visually crude\n"
-        "- 2010s subculture aesthetic / heavy-filter photo-editor style\n"
-        "- Stale cute style: crudely-rendered cartoon bears/dogs + hard subtitles\n"
-        "- Anything that screams 'you'd only see this in a family-group chat'\n"
-        "\n"
-        "tacky=false (OK to send) criteria:\n"
-        "- Clean modern design / classic doge / well-made sticker pack / film or TV screenshots / variety-show screencaps\n"
-        "- Cartoon characters but with polished visuals / clean color blocks / minimal text\n"
-        "- Real-person / celebrity / anime screencaps / contemporary popular memes\n"
-        "- Widely-recognized modern memes (doge family, dancing cat, sobbing cat, etc.)\n"
-        "\n"
-        "When in doubt, return false (better to keep one through than to mis-ban a good one). Only ban what's obviously dated/crude at a glance."
+    # A picture the person sent in their own chat: the reply model answers from this alone.
+    VISION_READ_PROMPT = (
+        "Someone sent this picture to their assistant and will ask about it. The assistant "
+        "cannot see it and answers from what you write.\n"
+        "1. Copy all the text and numbers in it exactly as written, in reading order; a table row by row.\n"
+        "2. Then say in a sentence or two what it shows (a screenshot of what, a photo of what).\n"
+        "3. If you can't make it out, reply \"can't see\". Never invent anything."
     )
-
-    # Bump when VISION_AESTHETIC_PROMPT changes, so every entry is re-judged.
-    VISUAL_AESTHETIC_VERSION = 1
 
     # A caption containing any of these means the model couldn't see the image.
     _VISION_REJECT_TOKENS = (
@@ -520,11 +464,11 @@ class ContentIngestion:
     )
 
     async def _fetch_image_bytes(self, url: str) -> bytes | None:
-        """Image bytes from a base64://, jailed file:// or SSRF-guarded http(s) URL."""
+        """Image bytes from a base64:// or SSRF-guarded http(s) URL."""
         if not url:
             return None
         if url.startswith("base64://"):
-            # A connector image with no URL arrives inline.
+            # A picture the person attached arrives inline.
             encoded = url[len("base64://"):]
             max_encoded = ((VISION_MAX_IMAGE_BYTES + 2) // 3) * 4 + 4
             if len(encoded) > max_encoded:
@@ -538,21 +482,6 @@ class ContentIngestion:
             if len(data) > VISION_MAX_IMAGE_BYTES or not _detect_image_mime(data):
                 return None
             return data
-        if url.startswith("file://"):
-            path = _resolve_jailed_file_url(
-                url, os.getenv("QQ_ONEBOT_IMAGE_DIR", ""))
-            if path is None:
-                return None
-            local = str(path)
-            try:
-                with path.open("rb") as fh:
-                    data = fh.read(VISION_MAX_IMAGE_BYTES + 1)
-            except OSError as e:
-                logger.debug("[Agent] file:// read failed (%s): %s", local, e)
-                return None
-            if len(data) > VISION_MAX_IMAGE_BYTES or not _detect_image_mime(data):
-                return None
-            return data
         if len(url) > MAX_URL_LENGTH:
             logger.warning("[Agent] image URL exceeds length limit")
             return None
@@ -560,54 +489,6 @@ class ContentIngestion:
         return await self._safe_get_bytes(
             url, timeout=15, headers={"User-Agent": "Mozilla/5.0"},
             max_bytes=VISION_MAX_IMAGE_BYTES)
-
-    async def _steal_image_async(
-        self,
-        url: str,
-        sender_uid: str,
-        group_id: str,
-        downloaded: bytes | None = None,
-    ) -> None:
-        """Background download + steal + maybe-tag. Fire-and-forget.
-        `downloaded`: the image, when the caption call already fetched it."""
-        img_bytes = downloaded or await self._fetch_image_bytes(url)
-        if not img_bytes:
-            return
-        ctx_lines = self._sticker_context_lines(group_id)
-        md5 = await self.stickers.steal(
-            image_bytes=img_bytes,
-            url=url,
-            src_user=sender_uid,
-            src_group=group_id,
-            context_before=ctx_lines,
-        )
-        if md5:
-            await self.stickers.maybe_tag(md5)
-
-    async def _record_sticker_context(self, md5: str, group_id: str, sender_uid: str) -> None:
-        """Log another context sighting for a known sticker, without a download."""
-        if not md5 or not group_id:
-            return
-        entry = self.stickers.lookup_by_md5(md5)
-        if not entry:
-            return
-        filename = self.stickers._md5_index.get(md5)
-        if not filename:
-            return
-        entry["use_count"] = entry.get("use_count", 0) + 1
-        ctx = self._sticker_context_lines(group_id)
-        self.stickers._append_context(filename, sender_uid, ctx)
-
-    def _sticker_context_lines(self, group_id: str, n: int = 6) -> list[str]:
-        """Recent buffer lines as 'name: text' for sticker context, minus the bot."""
-        buf = list(self.buffers.get(group_id, []))
-        out: list[str] = []
-        for m in buf[-n:]:
-            if not m.get("user_id"):
-                continue
-            out.append(f"{m.get('name','?')}: "
-                       f"{_truncate_framed(m.get('text', ''), 80)}")
-        return out
 
     @staticmethod
     def _format_bili_line(info: dict, title_fallback: str = "") -> str:
@@ -624,68 +505,6 @@ class ContentIngestion:
         elif desc:
             line += f", description: {desc}"
         return line
-
-    async def _describe_share(self, raw_json: str) -> str:
-        """A share-card JSON segment as a line the LLM can read: Bilibili shares
-        resolved, others via their URL or the card's own title and desc."""
-        try:
-            outer = json.loads(raw_json)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            return ""
-        if not isinstance(outer, dict):
-            return ""
-
-        # Every field is sender-controlled and any JSON type; non-strings count
-        # as absent, so a crafted card degrades instead of dropping the message.
-        def _text(v) -> str:
-            return v if isinstance(v, str) else ""
-
-        prompt = _text(outer.get("prompt"))
-        meta = outer.get("meta") or {}
-        if not isinstance(meta, dict):
-            meta = {}
-        detail = (
-            meta.get("detail_1")
-            or meta.get("news")
-            or meta.get("music")
-            or meta.get("video")
-            or {}
-        )
-        if not isinstance(detail, dict):
-            return prompt[:80]
-
-        title_field = _text(detail.get("title"))
-        desc_field = _text(detail.get("desc"))
-        url = (
-            _text(detail.get("qqdocurl"))
-            or _text(detail.get("jumpUrl"))
-            or _text(detail.get("url"))
-        )
-
-        is_bili = (
-            "哔哩哔哩" in prompt
-            or "哔哩哔哩" in title_field
-            or "bilibili" in url.lower()
-            or "b23.tv" in url.lower()
-        )
-        if is_bili:
-            info = await self._fetch_bili_info(url)
-            if info:
-                return self._format_bili_line(info, title_fallback=desc_field)
-            return f"[bilibili-video] \"{desc_field}\"" if desc_field else "[bilibili-video]"
-
-        # Other cards are thin; their jump URL often has richer OG metadata.
-        if url:
-            url_info = await self._describe_url(url)
-            if url_info and url_info != "[link]":
-                src = (prompt or "").strip()
-                if src and src not in url_info:
-                    return f"{src} {url_info}"
-                return url_info
-
-        if title_field and desc_field:
-            return f"[share|{title_field}] {desc_field[:120]}"
-        return f"[share|{title_field or 'unknown'}]"
 
     async def _fetch_bili_info(self, url: str) -> dict:
         """Bilibili title/uploader/desc (and AI summary) for a share URL, via
@@ -1059,10 +878,14 @@ class ContentIngestion:
             url.encode("utf-8", errors="replace"),
         ).hexdigest()
 
-    def _accept_vision_caption(self, url: str, text: str, provider: str) -> str:
-        # Truncated, not rejected: a long caption is still useful.
-        text = (text or "").strip()[:150]
-        hit = next((t for t in self._VISION_REJECT_TOKENS if t in text), "")
+    def _accept_vision_caption(self, url: str, text: str, provider: str, *, whole: bool = False) -> str:
+        """A caption kept: a sticker's cut to 150 characters and dropped when it says it saw
+        nothing; `whole`, the reading of a person's own picture as the model wrote it."""
+        text = (text or "").strip()
+        hit = ""
+        if not whole:
+            text = text[:150]
+            hit = next((t for t in self._VISION_REJECT_TOKENS if t in text), "")
         if text and len(text) >= 4 and not hit:
             self.image_caption_cache[self._image_cache_key(url)] = text
             self._gc_image_cache()
@@ -1182,74 +1005,6 @@ class ContentIngestion:
                 .get("message", {})
                 .get("content", "") or "")
 
-    async def _judge_sticker_aesthetic(self, img_bytes: bytes) -> bool | None:
-        """Whether the vision model finds a sticker tacky: True, False, or None
-        when no verdict came back (the entry is left untouched)."""
-        try:
-            if not img_bytes or len(img_bytes) < 200 or len(img_bytes) > 5_000_000:
-                return None
-            mime = _detect_image_mime(img_bytes)
-            if mime not in ("image/png", "image/jpeg", "image/gif", "image/webp"):
-                return None
-            data_url = await self._vision_data_url(img_bytes, mime)
-            if not data_url:
-                return None
-            # Long 429 backoff: the recheck is a startup burst and free tiers
-            # rate-limit hard, so without it most verdicts come back None.
-            r, _ = await self._vision_post(
-                self.VISION_AESTHETIC_PROMPT, data_url, max_tokens=60,
-                temperature=0, attempts=4, retryable=frozenset({429}),
-                backoff=3.0, retry_errors=False)
-            if r is None or r.status_code != 200:
-                return None
-            raw = self._vision_text(r).strip()
-            data = salvage_json_object(strip_json_fences(raw))
-            if data is None or "tacky" not in data:
-                return None
-            return bool(data.get("tacky"))
-        except Exception as e:
-            logger.debug("[Agent] sticker aesthetic judge failed: %s: %s",
-                         type(e).__name__, e)
-            return None
-
-    async def visual_recheck_aesthetic_all(self, limit: int = 200) -> int:
-        """Demote visually tacky stickers to persona_fit=false; the text recheck
-        sees only meaning, not style. Version-gated per entry, and a no-op
-        without a configured vision model, so a default install uploads nothing."""
-        if not self._vision_configured():
-            return 0
-        todo = [
-            (fn, v) for fn, v in self.stickers.entries.items()
-            if v.get("auto_tagged")
-            and v.get("persona_fit") is not False
-            and v.get("_visual_aesthetic_version", 0) < self.VISUAL_AESTHETIC_VERSION
-        ][:limit]
-        if not todo:
-            return 0
-        marked = 0
-        for fn, v in todo:
-            file_path = self.stickers.dir / fn
-            if not file_path.exists():
-                continue
-            await quiet.wait()
-            img_bytes = file_path.read_bytes()
-            tacky = await self._judge_sticker_aesthetic(img_bytes)
-            if tacky is not None:
-                v["_visual_aesthetic_version"] = self.VISUAL_AESTHETIC_VERSION
-            if tacky is True:
-                v["persona_fit"] = False
-                marked += 1
-                logger.info("[stickers] visual-aesthetic ban %s: meaning=%r",
-                            fn, v.get("meaning", ""))
-            # Pacing for tight free-tier vision rate limits.
-            await asyncio.sleep(5.0)
-        # Forced: the version stamps record a paid call per sticker, and a
-        # throttled write would lose them to a crash.
-        self.stickers._save(force=True)
-        logger.info("[Agent] visual aesthetic recheck: scanned=%d banned=%d",
-                    len(todo), marked)
-        return marked
-
     async def _describe_image_vision(self, url: str) -> str | None:
         """Caption an image through the OpenAI-compatible vision endpoint. None
         means the call failed and may succeed later; "" means no usable caption."""
@@ -1257,9 +1012,6 @@ class ContentIngestion:
             img_bytes = await self._fetch_image_bytes(url)
             if not img_bytes:
                 return None
-            kept = _kept_download.get()
-            if kept is not None:
-                kept.append(img_bytes)
             if len(img_bytes) < 200:
                 logger.debug("[Agent] vision: image too small (%d bytes), skipping", len(img_bytes))
                 return ""
@@ -1271,21 +1023,20 @@ class ContentIngestion:
                 logger.debug("[Agent] vision: unknown image magic %s",
                              img_bytes[:12].hex())
                 return ""
-            # Vision endpoints commonly reject these; the caller falls back to OCR.
-            if mime == "image/heic":
-                logger.info("[Agent] vision: skip HEIC/HEIF, fallback to OCR")
-                return ""
-            if mime == "image/avif":
-                logger.info("[Agent] vision: skip AVIF, fallback to OCR")
+            # Vision endpoints commonly reject these.
+            if mime in ("image/heic", "image/avif"):
+                logger.info("[Agent] vision: skip %s", mime)
                 return ""
             data_url = await self._vision_data_url(img_bytes, mime)
             if not data_url:
-                logger.info("[Agent] vision: skip GIF (first-frame extract failed), fallback to OCR")
+                logger.info("[Agent] vision: skip GIF (first-frame extract failed)")
                 return ""
             # Retry throttling, 5xx and timeouts. A 400 is mostly a model that
             # cannot read images, and _post_chat already resends one naming a field.
+            reading = reads_own_pictures.get()
             r, last_exc = await self._vision_post(
-                self.VISION_PROMPT, data_url, max_tokens=120, temperature=0.3,
+                self.VISION_READ_PROMPT if reading else self.VISION_PROMPT, data_url,
+                max_tokens=1500 if reading else 120, temperature=0.3,
                 attempts=3, retryable=frozenset({429, 500, 502, 503, 504}),
                 backoff=1.0, retry_errors=True)
             if r is None or r.status_code != 200:
@@ -1293,98 +1044,22 @@ class ContentIngestion:
                                r.status_code if r else 0,
                                (r.text if r else "")[:200], last_exc)
                 return None
-            return self._accept_vision_caption(url, self._vision_text(r), "api")
+            return self._accept_vision_caption(url, self._vision_text(r), "api", whole=reading)
         except Exception as e:
             logger.debug("[Agent] vision failed: %s: %s",
                          type(e).__name__, e)
             return None
 
-    async def _describe_image_keeping(self, url: str) -> tuple[str, bytes | None]:
-        """`_describe_image`, plus the image itself when captioning downloaded
-        it, so the sticker path does not fetch it a second time."""
-        kept: list = []
-        token = _kept_download.set(kept)
-        try:
-            desc = await self._describe_image(url)
-        finally:
-            _kept_download.reset(token)
-        return desc, kept[0] if kept else None
-
     async def _describe_image(self, url: str) -> str:
-        """Vision caption, else OCR; garbage OCR (short fragments) is dropped."""
+        """A picture in words, from the vision model; "" without one or when it could not tell."""
         if not url:
             return ""
         cache_key = self._image_cache_key(url)
         if cache_key in self.image_caption_cache:
             return self.image_caption_cache[cache_key]
-
-        caption = ""
-        if self._vision_configured():
-            caption = await self._describe_image_vision(url)
-        vision_failed = caption is None
-        if caption:
-            return caption
-
-        # OCR is QQ-only: NapCat can't fetch a connector image's URL.
-        if current_sink.get() is not None:
+        if not self._vision_configured():
             return ""
-
-        ocr_text = await self._ocr_image(url)
-        # A failed vision call means "not now": what OCR cached under the same
-        # key would answer for this image from here on, so it is not kept.
-        if vision_failed:
-            self.image_caption_cache.pop(cache_key, None)
-        if ocr_text and len(ocr_text) >= 4:
-            tokens = ocr_text.split()
-            avg_token_len = sum(len(t) for t in tokens) / max(len(tokens), 1)
-            if avg_token_len >= 2:
-                return ocr_text
-        # Both channels answered and neither read anything: cache the miss.
-        if cache_key in self.image_caption_cache:
-            self.image_caption_cache[cache_key] = ""
-            self._gc_image_cache()
-        return ""
+        return await self._describe_image_vision(url) or ""
 
     def _gc_image_cache(self) -> None:
         _cap_cache(self.image_caption_cache)
-
-    async def _ocr_image(self, url: str) -> str:
-        """Text from NapCat's /ocr_image, or "".
-
-        A delegated fetch with no SSRF controls of its own, reached exactly when
-        the direct fetch refused a URL, so it is gated here (public http(s) only)."""
-        if not url or not self.qq_onebot_url:
-            return ""
-        if not url.lower().startswith(("http://", "https://")):
-            logger.warning("[Agent] refusing non-HTTP OCR delegation: %s",
-                           _url_for_log(url))
-            return ""
-        if await _resolve_public_target(url) is None:
-            logger.warning("[Agent] refusing OCR delegation for internal/"
-                           "unresolvable url: %s", _url_for_log(url))
-            return ""
-        cache_key = self._image_cache_key(url)
-        if cache_key in self.image_caption_cache:
-            return self.image_caption_cache[cache_key]
-        try:
-            async with self._local_http(timeout=15) as client:
-                r = await client.post(
-                    f"{self.qq_onebot_url}/ocr_image",
-                    json={"image": url},
-                )
-                r.raise_for_status()
-                data = r.json()
-                items = data.get("data") or []
-                text = " ".join(
-                    it.get("text", "") for it in items if it.get("text")
-                ).strip()[:120]
-        except Exception as e:
-            logger.warning("[Agent] NapCat OCR failed (%s): %s: %s",
-                           _url_for_log(url), type(e).__name__,
-                           str(e) or "(no message)")
-            return ""
-        self.image_caption_cache[cache_key] = text
-        self._gc_image_cache()
-        logger.info("[Agent] OCR (%s): %s", _url_for_log(url),
-                    text[:60] or "(no text)")
-        return text

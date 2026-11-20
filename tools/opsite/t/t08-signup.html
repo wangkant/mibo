@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>冬季编程营 · 报名</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f7f7fb; }
+.wiz { max-width: 560px; margin: 30px auto; background: #fff; padding: 22px 28px; border-radius: 10px; }
+.steps { display: flex; gap: 8px; margin-bottom: 14px; color: #aaa; } .steps .on { color: #5b4bdb; font-weight: 700; }
+label { display: block; margin: 12px 0 4px; } input[type=text], input[type=email], input[type=tel] { width: 100%; padding: 7px; box-sizing: border-box; }
+.err { color: #d33; font-size: 12px; min-height: 16px; }
+input[aria-invalid=true] { border: 1px solid #d33; }
+.plans label { display: flex; gap: 8px; border: 1px solid #ddd; border-radius: 8px; padding: 10px; cursor: pointer; }
+.btns { margin-top: 18px; display: flex; gap: 10px; }
+.btns button { padding: 8px 22px; border-radius: 6px; border: 1px solid #5b4bdb; background: #fff; color: #5b4bdb; }
+.btns button.main { background: #5b4bdb; color: #fff; }
+dl { display: grid; grid-template-columns: 90px 1fr; } dt { color: #888; }
+.done { color: #2a8; }
+</style></head>
+<body>
+<div class="wiz">
+  <h2>冬季编程营报名</h2>
+  <div class="steps"><span id="s1">1 基本信息</span><span>›</span><span id="s2">2 选择班级</span><span>›</span><span id="s3">3 确认提交</span></div>
+  <section id="p1">
+    <label for="name">姓名</label><input type="text" id="name"><div class="err" id="e-name"></div>
+    <label for="email">邮箱</label><input type="email" id="email"><div class="err" id="e-email"></div>
+    <label for="email2">再次输入邮箱</label><input type="email" id="email2"><div class="err" id="e-email2"></div>
+    <label for="phone">手机号</label><input type="tel" id="phone"><div class="err" id="e-phone"></div>
+    <label for="city">所在城市</label><input type="text" id="city"><div class="err" id="e-city"></div>
+    <div class="btns"><button class="main" id="n1">下一步</button></div>
+  </section>
+  <section id="p2" hidden>
+    <div class="plans">
+      <label><input type="radio" name="plan" value="basic"> 基础班 · 每周两次 · ¥1200</label>
+      <label><input type="radio" name="plan" value="advanced"> 进阶班 · 每周三次 · ¥1800</label>
+    </div>
+    <div class="err" id="e-plan"></div>
+    <div class="btns"><button id="b2">上一步</button><button class="main" id="n2">下一步</button></div>
+  </section>
+  <section id="p3" hidden>
+    <dl id="sum"></dl>
+    <div class="btns"><button id="b3">上一步</button><button class="main" id="go">提交报名</button></div>
+  </section>
+  <p class="done" id="done"></p>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+function show(n) {
+  for (const i of [1, 2, 3]) { $("p" + i).hidden = i !== n; $("s" + i).className = i === n ? "on" : ""; }
+}
+show(1);
+function err(id, text) { $("e-" + id).textContent = text; if ($(id)) $(id).setAttribute("aria-invalid", text ? "true" : "false"); return !text; }
+$("n1").addEventListener("click", () => {
+  const v = (id) => $(id).value.trim();
+  let ok = err("name", v("name") ? "" : "请填写姓名");
+  ok = err("email", /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v("email")) ? "" : "邮箱格式不正确") && ok;
+  ok = err("email2", v("email2") === v("email") && v("email2") ? "" : "两次输入的邮箱不一致") && ok;
+  ok = err("phone", /^1\d{10}$/.test(v("phone")) ? "" : "请输入 11 位手机号") && ok;
+  ok = err("city", v("city") ? "" : "请填写所在城市") && ok;
+  if (ok) show(2);
+});
+$("b2").addEventListener("click", () => show(1));
+$("n2").addEventListener("click", () => {
+  const p = document.querySelector("input[name=plan]:checked");
+  $("e-plan").textContent = p ? "" : "请选择一个班级";
+  if (!p) return;
+  $("sum").innerHTML = "";
+  for (const [k, id] of [["姓名", "name"], ["邮箱", "email"], ["手机", "phone"], ["城市", "city"]]) $("sum").insertAdjacentHTML("beforeend", `<dt>${k}</dt><dd>${$(id).value}</dd>`);
+  $("sum").insertAdjacentHTML("beforeend", `<dt>班级</dt><dd>${p.value === "advanced" ? "进阶班" : "基础班"}</dd>`);
+  show(3);
+});
+$("b3").addEventListener("click", () => show(2));
+$("go").addEventListener("click", async () => {
+  const body = { name: $("name").value.trim(), email: $("email").value.trim(), phone: $("phone").value.trim(),
+    city: $("city").value.trim(), plan: document.querySelector("input[name=plan]:checked").value };
+  if ((await post("/api/signup", body)).ok) { $("done").textContent = "报名成功！确认邮件已发送到 " + body.email; $("p3").hidden = true; }
+});
+</script></body></html>

@@ -1,0 +1,173 @@
+/* The composer's "+" menu (plus.js): the sidebar's menu (app.css .side-menu), opening upward from the
+   button, three small headings with thin rules between them; the choices for a message as chips beside it. */
+.plus-wrap {
+  position: relative;
+  flex: none;
+}
+.chat .plus-wrap.open .chat-attach {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.side-menu.plus-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -2px;
+  z-index: 30;
+  width: 264px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: default;
+}
+.side-menu.plus-menu.down {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+.plus-head {
+  padding: 8px var(--pa-s2) 4px;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+  line-height: 16px;
+}
+.plus-rule {
+  height: 1px;
+  margin: var(--pa-s1) calc(-1 * var(--pa-s1));
+  background: var(--pa-line);
+}
+.side-menu-item.plus-item {
+  height: auto;
+  min-height: 34px;
+  gap: 10px;
+  padding: 6px var(--pa-s2);
+  white-space: normal;
+}
+.plus-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.plus-label,
+.plus-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plus-label {
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.plus-item:hover .plus-label,
+.plus-item:focus-visible .plus-label {
+  color: var(--pa-ink);
+}
+.plus-hint {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+/* A choice that is on: its check at the row's end; an entry that leads on: its chevron. */
+.plus-item.on svg:last-child {
+  color: var(--pa-accent);
+  stroke-width: 2.25;
+}
+.plus-item.more svg:last-child {
+  width: 14px;
+  height: 14px;
+  color: var(--pa-faint);
+}
+.plus-back .plus-label {
+  color: var(--pa-muted);
+}
+
+/* Chosen for this message: beside the "+", one row, never wrapping. */
+.plus-chips {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.plus-chips[hidden] {
+  display: none;
+}
+.plus-chip {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-sunken);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  white-space: nowrap;
+}
+.plus-chip > .i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--pa-muted);
+}
+.plus-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat .plus-chip-x {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--pa-faint);
+}
+.plus-chip-x:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.plus-chip-x .i {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
+}
+
+/* A page attached or sent: a chip like a file's, its site under its title. */
+.att-page .att-name {
+  max-width: 180px;
+}
+a.att-page {
+  text-decoration: none;
+}
+a.att-page:hover {
+  border-color: var(--pa-line-strong);
+}
+
+/* What a sent message asked for, quietly under its bubble. */
+.me-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  margin-top: 6px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.me-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.me-choice .i {
+  width: 13px;
+  height: 13px;
+}

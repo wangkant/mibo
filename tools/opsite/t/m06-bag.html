@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>布衣小铺 - 购物袋</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #fbfaf7; }
+main { max-width: 640px; margin: 20px auto; background: #fff; padding: 18px 24px; border-radius: 10px; }
+.row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+</style></head>
+<body><main><h2>购物袋</h2><div id="rows"></div><p id="sum"></p><button id="pay" type="button">去结算</button></main>
+<script src="/t/kit.js"></script>
+<script>
+// What the bag holds comes from the site (a pair of socks is already in it); shipping is 12 under 199.
+fetch("/api/state").then((r) => r.json()).then(({ bag }) => {
+  const PRICES = { tee: 59, hood: 169, crew: 139, pants: 99, coat: 299, sock: 29 };
+  const NAMES = { tee: "纯棉圆领T恤", hood: "加绒连帽卫衣", crew: "圆领卫衣", pants: "束脚运动裤", coat: "轻薄羽绒服", sock: "中筒袜三双装" };
+  let goods = 0;
+  for (const b of bag) {
+    goods += PRICES[b.item];
+    document.getElementById("rows").insertAdjacentHTML("beforeend", `<div class="row"><span>${NAMES[b.item]} ${b.color || ""} ${b.size || ""}</span><span>¥${PRICES[b.item]}</span></div>`);
+  }
+  const ship = goods >= 199 ? 0 : 12;
+  document.getElementById("sum").textContent = `商品 ¥${goods}，运费 ¥${ship}，合计 ¥${goods + ship}`;
+});
+</script></body></html>

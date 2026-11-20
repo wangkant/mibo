@@ -357,13 +357,25 @@ def _mic_on() -> bool:
         return False
 
 
+def _windows_idle() -> float:
+    import ctypes
+    from ctypes import wintypes
+
+    from . import quiet
+
+    class LASTINPUTINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+    last = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO), 0)
+    quiet._user32.GetLastInputInfo(ctypes.byref(last))
+    return ((quiet._kernel32.GetTickCount() - last.dwTime) & 0xFFFFFFFF) / 1000
+
+
 def _windows(ignore) -> Sample:
     """The window in front as quiet's hook last saw it (it looks each time the
     front changes), the microphone as its watcher last read it, and the idle
     time: the one thing read here."""
-    import ctypes
     import threading
-    from ctypes import wintypes
 
     from . import quiet
 
@@ -371,13 +383,7 @@ def _windows(ignore) -> Sample:
         _mic["watched"] = True
         threading.Thread(target=_watch_mic, name="personagent-mic", daemon=True).start()
 
-    class LASTINPUTINFO(ctypes.Structure):
-        _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
-
-    last = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO), 0)
-    quiet._user32.GetLastInputInfo(ctypes.byref(last))
-    idle = ((quiet._kernel32.GetTickCount() - last.dwTime) & 0xFFFFFFFF) / 1000
-
+    idle = _windows_idle()
     seen = quiet.front()
     if not seen["hwnd"] or seen["pid"] == os.getpid():
         # Nothing in front, or the app's own window or the pet.
@@ -398,17 +404,30 @@ def _run(*command: str) -> str:
     return subprocess.run(command, capture_output=True, text=True, timeout=10, check=False).stdout
 
 
+def _mac_idle() -> float:
+    found = re.search(r'"HIDIdleTime" = (\d+)', _run("ioreg", "-r", "-c", "IOHIDSystem", "-d", "1"))
+    return int(found[1]) / 1e9 if found else 0.0
+
+
 def _mac(ignore) -> Sample:
     from . import quiet
 
-    found = re.search(r'"HIDIdleTime" = (\d+)', _run("ioreg", "-r", "-c", "IOHIDSystem", "-d", "1"))
-    idle = int(found[1]) / 1e9 if found else 0.0
+    idle = _mac_idle()
     info = _run("lsappinfo", "info", _run("lsappinfo", "front").strip())
     name, pid = re.search(r'^"(.*?)" ASN:', info, re.MULTILINE), re.search(r"\bpid = (\d+)", info)
     if not name or (pid and int(pid[1]) == os.getpid()) or _ignored(name[1], ignore):
         return Sample("none", idle, False)
     kind = classify(name[1], "")
     return Sample(kind, idle, kind != "none" and quiet.sense()[0] != "")
+
+
+def idle() -> float:
+    """Seconds since the last key or mouse input, and nothing else."""
+    if sys.platform == "win32":
+        return _windows_idle()
+    if sys.platform == "darwin":
+        return _mac_idle()
+    return 0.0
 
 
 def sense(ignore=()) -> Sample:

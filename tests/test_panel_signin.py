@@ -3,6 +3,7 @@ attempt, the callback's admission rules, the terminal's code flow, and the
 models the saved service lists."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -129,7 +130,7 @@ def page(tmp_path, monkeypatch, openrouter):
 def _start(client, **form) -> dict:
     answer = client.post("/api/signin/start", headers=HEADERS, json={
         "provider": "openrouter", "pageLang": form.pop("pageLang", "en"),
-        "form": {"model": "openrouter/free", "name": "Mira", "character": "warm-listener",
+        "form": {"model": "openrouter/free", "name": "Mira", "character": "mibo",
                  "lang": "en", **form}})
     assert answer.status_code == 200, answer.text
     return answer.json()
@@ -150,8 +151,7 @@ def test_the_challenge_is_rfc_7636_s256() -> None:
     query = parse_qs(urlsplit(osr.authorize_url(verifier, callback="http://localhost:1/cb", state="s")).query)
     assert query["code_challenge_method"] == ["S256"] and query["callback_url"] == ["http://localhost:1/cb"]
     assert query["code_challenge"] == [osr.challenge(verifier)] and query["state"] == ["s"]
-    assert verifier not in osr.authorize_url(verifier)
-    assert "callback_url" not in parse_qs(urlsplit(osr.authorize_url(verifier)).query)
+    assert verifier not in osr.authorize_url(verifier, callback="http://localhost:1/cb", state="s")
 
 
 def test_signing_in_saves_the_form_with_the_new_key_and_never_shows_it(page, openrouter) -> None:
@@ -168,8 +168,8 @@ def test_signing_in_saves_the_form_with_the_new_key_and_never_shows_it(page, ope
     back = openrouter.approve(started["url"])
     done = _back(client, {"code": back["code"], "state": back["state"]})
     assert done.status_code == 200 and "已通过 OpenRouter 登录" in done.text
-    assert 'href="/assets/welcome.css"' in done.text
-    assert client.get("/api/signin", headers=HEADERS).json() == {"state": "done", "error": "", "url": "", "byCode": False}
+    assert 'href="/assets/signin.css"' in done.text
+    assert client.get("/api/signin", headers=HEADERS).json() == {"state": "done", "error": "", "url": ""}
     assert sw.env_get(workspace.home / ".env", "LLM_API_KEY") == KEY
     assert sw.env_get(workspace.home / ".env", "LLM_BASE_URL") == "https://openrouter.ai/api/v1"
     assert sw.env_get(workspace.home / ".env", "PERSONA_NAME") == "Juno"
@@ -222,7 +222,7 @@ def test_an_exchange_that_fails_says_why(page, openrouter, status, error) -> Non
     openrouter.exchange_status = status
     answer = _back(client, {"code": back["code"], "state": back["state"]})
     assert answer.status_code == 400
-    assert client.get("/api/signin", headers=HEADERS).json() == {"state": "failed", "error": error, "url": "", "byCode": False}
+    assert client.get("/api/signin", headers=HEADERS).json() == {"state": "failed", "error": error, "url": ""}
     assert not (workspace.home / ".env").exists()
 
 
@@ -305,27 +305,6 @@ def test_another_device_cannot_end_the_attempt_with_a_borrowed_host(page, openro
     assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
 
 
-def test_a_device_the_page_treats_as_remote_is_refused_even_from_loopback(tmp_path, openrouter,
-                                                                          monkeypatch) -> None:
-    from persona_agent import pageaccess
-    for name in pageaccess.SETTINGS:
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(signin, "open_browser", lambda url: True)
-    sw.write_env(tmp_path / ".env", {"PAGE_PASSWORD": pageaccess.hash_password("plum-orchard-41-lantern")})
-    workspace = welcome.Workspace(tmp_path)
-    try:
-        app = welcome.create_app(tmp_path, "token", workspace=workspace, gate=pageaccess.Gate(tmp_path))
-        with TestClient(app, base_url=f"http://127.0.0.1:{PORT}", client=("127.0.0.1", 50000)) as here:
-            _start(here)
-            # Through a proxy on this computer: another device, whatever the Host says.
-            assert _back(here, {}, **{"x-real-ip": "203.0.113.5", "via": "1.1 proxy",
-                                      "x-forwarded-proto": "https", "x-forwarded-for": "203.0.113.5"}
-                         ).status_code == 403
-            assert here.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
-    finally:
-        workspace.close()
-
-
 def test_the_state_binds_the_callback_to_its_attempt_once(page, openrouter) -> None:
     client = page["client"]
     back = openrouter.approve(_start(client)["url"])
@@ -350,134 +329,11 @@ def test_a_second_press_replaces_the_first(page, openrouter) -> None:
     assert _back(client, {"code": back["code"], "state": back["state"]}).status_code == 200
 
 
-def test_the_callback_answers_in_the_page_s_language(page, openrouter, monkeypatch) -> None:
+def test_a_name_that_is_no_page_language_gets_english() -> None:
     from persona_agent.panels import signin
 
-    client = page["client"]
-    monkeypatch.setattr(signin, "_catalog", lambda lang: {"signin_page_title_ok": "<b>サインイン</b>完了"}
-                        if lang == "ja" else {})
-    back = openrouter.approve(_start(client, pageLang="ja")["url"])
-    done = _back(client, {"code": back["code"], "state": back["state"]})
-    # The catalog's sentence, escaped; a sentence it lacks stays English.
-    assert "&lt;b&gt;サインイン&lt;/b&gt;完了" in done.text and '<html lang="ja">' in done.text
-    assert "You can close this tab" in done.text
-    assert "<script" not in done.text
-
-
-def test_a_language_without_a_catalog_and_a_name_that_is_no_language_get_english() -> None:
-    from persona_agent.panels import signin
-
-    assert signin._catalog("../../secrets") == {}
-    assert signin._catalog("xx") == {}
     assert "Signed in with OpenRouter" in signin.page("xx", "") and '<html lang="en">' in signin.page("xx", "")
 
-
-def test_every_page_language_has_the_callback_page_s_sentences() -> None:
-    from persona_agent import langs
-    from persona_agent.panels import signin
-
-    for code in langs.CODES:
-        if code in ("en", "zh"):
-            continue
-        catalog = signin._catalog(code)
-        missing = [key for key in signin.PAGE_TEXT if not catalog.get("signin_page_" + key)]
-        assert not missing, (code, missing)
-
-
-def test_from_another_device_the_code_is_pasted_and_no_browser_opens_here(page, openrouter) -> None:
-    client, flow = page["client"], page["app"].state.signin
-    started = flow.start({"provider": "openrouter", "form": {"model": "openrouter/free", "name": "Mira",
-                                                             "character": "warm-listener", "lang": "en"}},
-                         PORT, remote=True)
-    # Nothing opens on the server, and OpenRouter is asked to show the code instead of sending it here.
-    assert started["byCode"] is True and started["opened"] is False and page["opened"] == []
-    assert "callback_url" not in started["url"] and "state=" not in started["url"]
-    code = openrouter.approve(started["url"])["code"]
-    # The callback finishes no such attempt, even with its code.
-    assert _back(client, {"code": code}).status_code == 400
-    for bad in ("", "two words", "x" * 2000):
-        refused = client.post("/api/signin/code", headers=HEADERS, json={"code": bad})
-        assert refused.status_code == 400 and refused.json() == {"error": "signin_code_invalid"}
-    done = client.post("/api/signin/code", headers=HEADERS, json={"code": code})
-    assert done.status_code == 200 and done.json()["state"] == "done"
-    assert sw.env_get(page["workspace"].home / ".env", "LLM_API_KEY") == KEY
-    # Used once.
-    again = client.post("/api/signin/code", headers=HEADERS, json={"code": code})
-    assert again.status_code == 400 and again.json() == {"error": "signin_link_invalid"}
-
-
-def test_a_code_is_taken_only_by_an_attempt_that_waits_for_one(page, openrouter) -> None:
-    client = page["client"]
-    assert client.post("/api/signin/code", headers=HEADERS, json={"code": "abc"}).json() == {
-        "error": "signin_link_invalid"}
-    _start(client)
-    # An attempt that waits for the browser to come back takes no pasted code.
-    assert client.post("/api/signin/code", headers=HEADERS, json={"code": "abc"}).json() == {
-        "error": "signin_link_invalid"}
-
-
-def test_a_pasted_code_openrouter_refuses_says_so(page) -> None:
-    client, flow = page["client"], page["app"].state.signin
-    flow.start({"provider": "openrouter", "form": {}}, PORT, remote=True)
-    answer = client.post("/api/signin/code", headers=HEADERS, json={"code": "made-up-code"})
-    assert answer.status_code == 200 and answer.json()["state"] == "failed"
-    assert answer.json()["error"] == "signin_code_rejected"
-
-
-# ---- the terminal
-
-def test_the_terminal_signs_in_with_the_code_the_page_shows(monkeypatch, capsys, openrouter) -> None:
-    sw.set_lang("en")
-    answers = []
-
-    def code(prompt=""):
-        out = capsys.readouterr().out
-        url = next(line.strip() for line in out.splitlines() if openrouter.base in line)
-        assert "callback_url" not in url
-        answers.append(prompt)
-        return openrouter.approve(url)["code"]
-    monkeypatch.setattr("builtins.input", code)
-    assert sw.sign_in_openrouter() == KEY
-    assert "Signed in" in capsys.readouterr().out and len(answers) == 1
-
-
-def test_the_terminal_falls_back_to_a_pasted_key(monkeypatch, capsys, openrouter) -> None:
-    sw.set_lang("en")
-    replies = iter(["", "", "n", "sk-pasted-1234567890"])
-    monkeypatch.setattr("builtins.input", lambda prompt="": next(replies))
-    monkeypatch.setattr(sw, "_read_secret", lambda prompt: next(replies))
-    provider = sw.provider_named("openrouter")
-    current = {"LLM_API_KEY": "", "LLM_BASE_URL": "", "LLM_MODEL": ""}
-    assert sw._ask_key(provider, current, False) == "sk-pasted-1234567890"
-
-    # A code OpenRouter refuses says so, then the paste follows.
-    replies = iter(["y", "made-up-code", "n", "sk-pasted-1234567890"])
-    assert sw._ask_key(provider, current, False) == "sk-pasted-1234567890"
-    out = capsys.readouterr().out
-    assert "did not accept the code" in out and "Paste a key instead" in out
-
-
-def test_a_saved_key_or_another_service_is_not_offered_the_sign_in(monkeypatch) -> None:
-    sw.set_lang("en")
-    asked = []
-    monkeypatch.setattr("builtins.input", lambda prompt="": asked.append(prompt) or "")
-    current = {"LLM_API_KEY": "sk-saved-1234567890", "LLM_BASE_URL": "https://openrouter.ai/api/v1",
-               "LLM_MODEL": "openrouter/free"}
-    monkeypatch.setattr(sw, "_read_secret", lambda prompt: "")
-    assert sw._ask_key(sw.provider_named("openrouter"), current, True) == "sk-saved-1234567890"
-    monkeypatch.setattr(sw, "_read_secret", lambda prompt: "sk-ds-1234567890")
-    sw._ask_key(sw.provider_named("deepseek"), {**current, "LLM_API_KEY": ""}, False)
-    assert not any("Sign in" in prompt for prompt in asked)
-
-
-def test_no_input_never_signs_in(tmp_path, monkeypatch, openrouter) -> None:
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    monkeypatch.setattr("builtins.input", lambda *_: pytest.fail("asked a question"))
-    monkeypatch.setenv("MY_KEY", "sk-from-env-123456")
-    monkeypatch.setattr(sw, "probe_key", lambda *a, **k: sw.Probe("", 200))
-    monkeypatch.setattr(sw.subprocess, "call", lambda *a, **k: 0)
-    sw.main(["--no-input", "--provider", "openrouter", "--key-env", "MY_KEY", "--lang", "en"])
-    assert not openrouter.seen
 
 
 # ---- the models a saved service lists
@@ -487,14 +343,16 @@ def listing(tmp_path, monkeypatch, openrouter):
     model_panel._cache.clear()
     base = openrouter.base + "/api/v1"
     monkeypatch.setattr(sw, "PROVIDERS", tuple(
-        sw.Provider(p.key, p.name, base if p.key == "openrouter" else p.base_url, p.model, p.key_url, p.note)
+        sw.Provider(p.key, base if p.key == "openrouter" else p.base_url, p.model, p.key_url)
         for p in sw.PROVIDERS))
     workspace = welcome.Workspace(tmp_path)
-    app = welcome.create_app(tmp_path, "token", workspace=workspace)
-    with TestClient(app, base_url="http://127.0.0.1") as client:
-        yield client, workspace, base
+    yield workspace, base
     workspace.close()
     model_panel._cache.clear()
+
+
+def _listed(workspace) -> dict:
+    return asyncio.run(model_panel.listing(workspace))
 
 
 def _save(workspace, base: str) -> None:
@@ -502,8 +360,8 @@ def _save(workspace, base: str) -> None:
 
 
 def test_the_listing_marks_the_free_models_and_keeps_the_key_on_the_server(listing, openrouter) -> None:
-    client, workspace, base = listing
-    assert client.get("/api/models", headers=HEADERS).json() == {"baseUrl": "", "models": None}
+    workspace, base = listing
+    assert _listed(workspace) == {"baseUrl": "", "models": None}
     _save(workspace, base)
     openrouter.listing = {"data": [
         {"id": "z-ai/glm-4.7", "pricing": {"prompt": "0.0000004", "completion": "0.0000015"}},
@@ -511,55 +369,46 @@ def test_the_listing_marks_the_free_models_and_keeps_the_key_on_the_server(listi
         {"id": "qwen/qwen3", "pricing": {"prompt": "0", "completion": "0"}},
         {"id": "openai/text-embedding-3", "pricing": {"prompt": "0", "completion": "0"}},
         {"id": ""}, {"name": "no id"}, "junk", {"id": "z-ai/glm-4.7"}]}
-    answer = client.get("/api/models", headers=HEADERS)
-    assert answer.json() == {"baseUrl": base, "models": [
+    answer = _listed(workspace)
+    assert answer == {"baseUrl": base, "models": [
         {"id": "meta/llama:free", "free": True}, {"id": "openrouter/free", "free": True},
         {"id": "qwen/qwen3", "free": True}, {"id": "z-ai/glm-4.7", "free": False}]}
-    assert KEY not in answer.text
+    assert KEY not in json.dumps(answer)
     assert ("models", f"Bearer {KEY}") in openrouter.seen
     # Read once, then kept for a while.
-    client.get("/api/models", headers=HEADERS)
+    _listed(workspace)
     assert len([kind for kind, _ in openrouter.seen if kind == "models"]) == 1
-    assert client.get("/api/models").status_code == 403
 
 
 def test_a_service_without_a_listing_leaves_the_field_as_it_is(listing, openrouter, monkeypatch) -> None:
-    client, workspace, _base = listing
+    workspace, _base = listing
     sw.write_env(workspace.home / ".env", {"LLM_BASE_URL": openrouter.base + "/other/v1", "LLM_API_KEY": KEY,
                                            "LLM_MODEL": "m"})
-    assert client.get("/api/models", headers=HEADERS).json()["models"] is None
+    assert _listed(workspace)["models"] is None
     model_panel._cache.clear()
     _save(workspace, openrouter.base + "/api/v1")
     openrouter.listing = {"object": "list", "data": "none"}
-    assert client.get("/api/models", headers=HEADERS).json()["models"] is None
+    assert _listed(workspace)["models"] is None
 
 
 def test_a_slow_or_huge_listing_is_given_up(listing, openrouter, monkeypatch) -> None:
-    client, workspace, base = listing
+    workspace, base = listing
     _save(workspace, base)
     monkeypatch.setattr(model_panel, "TIMEOUT_S", 0.3)
     openrouter.listing = {"data": [{"id": "a"}]}
     openrouter.listing_delay = 1.0
     started = time.monotonic()
-    assert client.get("/api/models", headers=HEADERS).json()["models"] is None
+    assert _listed(workspace)["models"] is None
     assert time.monotonic() - started < 3
     model_panel._cache.clear()
     openrouter.listing_delay = 0
     openrouter.listing = {"data": [{"id": f"vendor/model-{i}", "description": "x" * 400} for i in range(3000)]}
     monkeypatch.setattr(model_panel, "MAX_BYTES", 100_000)
-    assert client.get("/api/models", headers=HEADERS).json()["models"] is None
+    assert _listed(workspace)["models"] is None
     model_panel._cache.clear()
     monkeypatch.setattr(model_panel, "MAX_BYTES", 16 * 1024 * 1024)
     monkeypatch.setattr(model_panel, "MAX_MODELS", 1000)
-    models = client.get("/api/models", headers=HEADERS).json()["models"]
+    models = _listed(workspace)["models"]
     # Hundreds of models arrive whole, up to the cap.
     assert len(models) == 1001 and models[0] == {"id": "openrouter/free", "free": True}
 
-
-def test_the_page_s_sentences_and_routes() -> None:
-    for name in ("signin", "models"):
-        assert name in welcome.PANELS
-    script = (welcome.ASSETS / "panels" / "signin.js").read_text(encoding="utf-8")
-    # The key never passes through the page's script.
-    assert "apiKey" not in script and "LLM_API_KEY" not in script
-    assert "openrouter.ai/keys" in script and "need no credit" in script

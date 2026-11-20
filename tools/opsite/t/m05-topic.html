@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>户外驿站 - 帖子</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #eef1ec; }
+main { max-width: 760px; margin: 20px auto; background: #fff; padding: 16px 22px; border-radius: 8px; }
+.floor { border-bottom: 1px solid #eee; padding: 10px 0; } .floor b { color: #2c5d2c; }
+textarea { width: 100%; height: 80px; box-sizing: border-box; padding: 6px; }
+</style></head>
+<body><main>
+<h2 id="title"></h2><div id="floors"></div>
+<h3>回复本帖</h3><textarea id="reply" aria-label="回复内容"></textarea><p><button id="go" type="button">发表回复</button></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const NAMES = { gear: "新手露营装备清单（2026 版）", site: "华东露营地推荐", rain: "雨天露营怎么防潮", food: "露营做饭有哪些简单菜",
+  kids: "带娃露营注意事项", gear2: "露营装备二手转让", night: "露营夜里太冷怎么办", car: "自驾露营路线分享" };
+const t = new URLSearchParams(location.search).get("t") || "gear";
+document.getElementById("title").textContent = NAMES[t] || "帖子不存在";
+const floors = [["楼主", "整理了一份清单，欢迎补充。"], ["阿木", "收藏了"], ["小溪", "防潮垫很重要"]];
+const draw = () => { document.getElementById("floors").innerHTML = floors.map((f, i) => `<div class="floor"><b>${f[0]}</b> · ${i + 1} 楼<br>${f[1].replace(/</g, "&lt;")}</div>`).join(""); };
+draw();
+document.getElementById("go").onclick = async () => {
+  const text = document.getElementById("reply").value.trim();
+  if (text && (await post("/api/bbs/reply", { thread: t, text })).ok) { floors.push(["我", text]); draw(); document.getElementById("reply").value = ""; }
+};
+</script></body></html>

@@ -1,6 +1,6 @@
 """The languages people may chat in, for the few things the agent says or
-reads without the model: memory commands, their replies, the learned
-summary and the line sent when a model call fails.
+reads without the model: memory commands, their replies and the line
+sent when a model call fails.
 
 The prompts and the bundled data are English or Chinese whatever AGENT_LANG
 says. A spec here only decides how a memory command in its language is read and
@@ -19,30 +19,7 @@ CODES = ("en", "zh", "zh-TW", "ja", "ko", "es", "fr", "de", "pt-BR", "ru")
 
 #: Keys every `Spec.replies` carries, and the placeholders in each.
 REPLY_KEYS = ("remember_what", "not_instructions", "noted", "forget_what",
-              "nothing_to_forget", "forgotten", "empty", "recall_head",
-              "said", "about", "from", "approval_dm", "approval_group")
-
-#: Keys of `Spec.learned_text` (the "what have you learned" summary) and the
-#: fields each must use. English builds its own, with plurals, in views.py.
-LEARNED_FIELDS = {
-    "head": ("memories", "examples", "fixes", "voice", "admin"),
-    "score": ("score",),
-    "pair": ("was", "better"),
-    "someone_else": (),
-    "someone": (),
-    "retry": ("who",),
-    "self_review": (),
-    "self_eval": (),
-    "corrected": ("who",),
-    "missed": ("who",),
-    "liked": ("who",),
-    "by_me": (),
-    "by_person": (),
-    "passed": ("events", "strong"),
-    "why": ("steps",),
-    "sep": (),
-}
-
+              "nothing_to_forget", "forgotten", "empty", "recall_head", "secret")
 
 @dataclass(frozen=True)
 class Spec:
@@ -51,11 +28,10 @@ class Spec:
     code: str
     # -- memory commands, read right after the persona's name -------------
     #: The keyword of each command. remember and forget take what follows
-    #: as the note or the query; recall and learned are the whole message.
+    #: as the note or the query; recall is the whole message.
     remember: str
     forget: str
     recall: str
-    learned: str
     #: Allowed between the name and the command: a vocative particle
     #: ("노바야", "ノヴァちゃん").
     vocative: str = ""
@@ -86,34 +62,21 @@ class Spec:
     everything: frozenset = frozenset()
     #: The saver talking about themself, so the note is about them.
     first_person: str = ""
+    # -- the app's own chat with its one person (person.py) -------------------
+    #: "Don't keep this", anywhere in a message: the turn keeps nothing.
+    unsaid: str = ""
+    #: "Forget what I just said": a forget that names nothing.
+    forget_that: str = ""
+    #: Fillers allowed before a command there ("算了，", "okay").
+    lead_in: str = ""
+    #: Headings of the "what do you remember" listing: about them, likes,
+    #: dislikes, lately, plans, how to treat them.
+    kinds: tuple = ()
     # -- what the agent says ---------------------------------------------------
-    #: One tuple of variants per `REPLY_KEYS` entry; "about" and "from" take
-    #: {name}, "approval_dm" {code}. Plain chat text: the character policy checks them like replies.
+    #: One tuple of variants per `REPLY_KEYS` entry.
     replies: dict = field(default_factory=dict)
     #: Sent when a model call fails on a direct question.
     failure_excuses: tuple = ()
-    #: The learned summary, per `LEARNED_FIELDS`; empty for English.
-    learned_text: dict = field(default_factory=dict)
-    # -- what the agent must not send -------------------------------------------
-    # Every language's entries are read together: a reply's language is not
-    # known before it is checked.
-    #: "I am" opening a self-introduction, with an optional article and a
-    #: denial ("no soy") excluded. English and Chinese are in textproc.py.
-    self_id: str = ""
-    #: A maker named as such: "creado por", "が開発" (before or after the name).
-    made_by: str = ""
-    #: A bare "from" that names a maker only right after the name ("von").
-    from_maker: str = ""
-    #: What must follow "I am <name>" for it to be a claim, where word order
-    #: lets the name be an object ("私はChatGPTを使う"): a copula, a comma.
-    name_end: str = ""
-    #: The maker comes before `made_by` and the copula ends the clause
-    #: ("OpenAIが開発したAIです"), so a made-by claim needs that copula.
-    maker_first: bool = False
-    #: Protocol labels a model leaks as "Label: ...", one alternation.
-    leak_labels: str = ""
-    #: An assistant's refusal or "hope this helps", never a person's chat.
-    assistant_tells: str = ""
     # -- telling Latin-script languages apart -----------------------------------
     #: Common short words of this language.
     stopwords: frozenset = frozenset()

@@ -1,0 +1,601 @@
+/* Settings › 连接: the sites signed in to in Mibo's browser (sites.js). The places-* rules come
+   first: the root, rows, pills, buttons, switches and the panel the section draws with. */
+.places-root {
+  --places-ok: var(--pa-green600);
+  --places-ok-soft: color-mix(in srgb, var(--pa-green600) 9%, var(--pa-surface));
+  --places-ok-line: color-mix(in srgb, var(--pa-green600) 26%, var(--pa-surface));
+  --places-ring-error: 0 0 0 3px color-mix(in srgb, var(--pa-error) 17%, transparent);
+  /* A mark on a solid green, red or accent: white in light, dark in dark. */
+  --places-on-solid: var(--pa-on-accent);
+  container-type: inline-size;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+.places-root *,
+.places-root *::before,
+.places-root *::after {
+  box-sizing: border-box;
+}
+.places-root [hidden] {
+  display: none !important;
+}
+.places-root p,
+.places-root h1,
+.places-root h2,
+.places-root h3,
+.places-root ol {
+  margin: 0;
+}
+.places-root :focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+.places-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.places-services {
+  display: flex;
+  flex-direction: column;
+  background: var(--pa-surface);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  box-shadow: var(--pa-shadow-1);
+  overflow: hidden;
+}
+.places-service {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  padding-right: var(--pa-s4);
+}
+.places-service + .places-service {
+  border-top: 1px solid var(--pa-line);
+}
+.places-service-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 14px var(--pa-s4);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.places-service:has(.places-service-main:hover:not(:disabled)) {
+  background: var(--pa-hover);
+}
+.places-service-main:disabled {
+  cursor: default;
+}
+.places-service-words {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.places-service-name {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+}
+.places-service-line {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.places-service[data-state="problem"] .places-service-line,
+.places-service[data-state="broken"] .places-service-line {
+  color: var(--pa-error);
+}
+.places-service[data-state="soon"] .places-service-main {
+  opacity: 0.62;
+}
+.places-service > .places-btn {
+  min-width: 64px;
+}
+.places-btn-quiet {
+  border-color: var(--pa-line-strong);
+  color: var(--pa-muted);
+}
+.places-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-n100);
+  color: var(--pa-n600);
+}
+.places-mark-text {
+  font: 750 13px/1 var(--pa-font-display);
+  letter-spacing: 0.02em;
+}
+.places-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-n100);
+  color: var(--pa-n600);
+  font-size: var(--pa-fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.places-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+}
+.places-service[data-state="on"] .places-pill {
+  background: var(--places-ok-soft);
+  color: var(--places-ok);
+}
+.places-service[data-state="on"] .places-pill::before {
+  opacity: 1;
+}
+.places-service[data-state="problem"] .places-pill,
+.places-service[data-state="broken"] .places-pill {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+.places-service[data-state="soon"] .places-pill,
+.places-service[data-state="paused"] .places-pill {
+  background: var(--pa-amber50);
+  color: var(--pa-amber700);
+}
+.places-service[data-state="pending"] .places-pill {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent);
+}
+.places-sheet {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 48px));
+  padding: 0;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-pop);
+  overflow: hidden;
+}
+.places-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+.places-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+.places-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  padding: var(--pa-s5) var(--pa-s5) var(--pa-s3);
+}
+.places-sheet-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--pa-ink);
+  font: 650 var(--pa-fs-xl) / var(--pa-lh-tight) var(--pa-font-display);
+}
+.places-sheet-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: none;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+.places-sheet-close:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.places-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s4);
+  padding: var(--pa-s5);
+}
+.places-sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  padding: var(--pa-s3) var(--pa-s5);
+  border-top: 1px solid var(--pa-line);
+  background: var(--pa-n25);
+}
+.places-gap {
+  flex: 1;
+}
+.places-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--pa-s4);
+  border: 1px solid transparent;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-text);
+  font: inherit;
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background var(--pa-t-fast),
+    border-color var(--pa-t-fast),
+    color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast),
+    transform var(--pa-t-fast);
+}
+.places-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+}
+.places-btn:disabled {
+  cursor: not-allowed;
+}
+.places-btn-sm {
+  height: 30px;
+  padding: 0 var(--pa-s3);
+  font-size: var(--pa-fs-sm);
+}
+.places-btn-sm .places-icon {
+  width: 14px;
+  height: 14px;
+}
+.places-btn-primary {
+  background: var(--pa-accent);
+  color: var(--pa-on-accent);
+  box-shadow: var(--pa-shadow-raise);
+}
+.places-btn-primary:hover:not(:disabled) {
+  background: var(--pa-accent-hover);
+}
+.places-btn-secondary {
+  background: var(--pa-surface);
+  border-color: var(--pa-line-strong);
+  box-shadow: var(--pa-shadow-raise);
+}
+.places-btn-secondary:hover:not(:disabled) {
+  background: var(--pa-sunken);
+  border-color: var(--pa-n300);
+  color: var(--pa-ink);
+}
+.places-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--pa-red200);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+  font-size: var(--pa-fs-sm);
+  animation: places-rise var(--pa-t) var(--pa-ease);
+}
+.places-alert-mark {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--pa-error);
+  color: var(--places-on-solid);
+  font: 700 11px/17px var(--pa-font);
+  text-align: center;
+}
+.places-empty {
+  padding: 14px 16px;
+  border: 1px dashed var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-sm);
+  text-align: center;
+}
+.places-switch {
+  flex: none;
+  position: relative;
+  appearance: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-n300);
+  cursor: pointer;
+  transition: background var(--pa-t);
+}
+.places-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 20, 24, 0.2);
+  transition: transform var(--pa-t) var(--pa-ease);
+}
+.places-switch:hover {
+  background: var(--pa-n400);
+}
+.places-switch:checked {
+  background: var(--pa-accent);
+}
+.places-switch:checked:hover {
+  background: var(--pa-accent-hover);
+}
+.places-switch:checked::after {
+  transform: translateX(14px);
+}
+.places-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+  font-size: var(--pa-fs-md);
+  box-shadow: inset 0 1px 1px #1c1b1905;
+  outline: none;
+  transition:
+    border-color var(--pa-t-fast),
+    box-shadow var(--pa-t-fast);
+}
+.places-input::placeholder {
+  color: var(--pa-placeholder);
+}
+.places-input:hover:not(:focus) {
+  border-color: var(--pa-n300);
+}
+.places-input:focus,
+.places-input:focus-visible {
+  border-color: var(--pa-a500);
+  box-shadow: var(--pa-ring);
+  outline: none;
+}
+.places-input[aria-invalid="true"] {
+  border-color: var(--pa-error);
+}
+.places-input[aria-invalid="true"]:focus {
+  box-shadow: var(--places-ring-error);
+}
+.places-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pa-s2);
+}
+@container (max-width: 440px) {
+  .places-service .places-pill {
+    display: none;
+  }
+  .places-service-main {
+    gap: 12px;
+  }
+}
+.sites {
+  display: grid;
+  gap: var(--pa-s3);
+  margin-top: var(--pa-s5);
+}
+.sites-head,
+.sites-kept-head {
+  display: grid;
+  gap: 4px;
+}
+.sites-title {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+}
+.sites-about,
+.sites-faint {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.sites-faint {
+  color: var(--pa-faint);
+}
+
+/* A site's own icon, as the browser kept it, on the plain grey tile; else its first letter. */
+.sites-mark {
+  overflow: hidden;
+}
+.sites-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.sites-row[data-state="off"] .places-pill {
+  background: var(--pa-n50);
+  color: var(--pa-faint);
+}
+
+.sites-add {
+  display: flex;
+  gap: var(--pa-s2);
+}
+.sites-add .places-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sites-kept {
+  display: grid;
+  gap: var(--pa-s3);
+  margin-top: var(--pa-s4);
+}
+.sites-kept-row {
+  padding: 12px var(--pa-s4);
+}
+.sites-kept-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+}
+.sites-kept-none {
+  margin: 0;
+}
+
+/* One site's panel: its state, then the choices, each a line of words and a switch. */
+.sites-sheet .places-mark {
+  width: 32px;
+  height: 32px;
+}
+.sites-sheet-body {
+  display: grid;
+  gap: var(--pa-s4);
+}
+.sites-sheet-state {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+}
+.sites-sheet-state[data-state="in"] .places-pill {
+  background: var(--places-ok-soft);
+  color: var(--places-ok);
+}
+.sites-choices {
+  display: grid;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+}
+.sites-choices-title {
+  padding: 10px var(--pa-s4) 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 600;
+}
+.sites-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  padding: 12px var(--pa-s4);
+  cursor: pointer;
+}
+.sites-choice + .sites-choice {
+  border-top: 1px solid var(--pa-line);
+}
+.sites-choice-words {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.sites-choice-name {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.sites-choice-help {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.sites-choice-warn {
+  color: var(--pa-amber700);
+}
+
+/* The head: the title and its line, with 登录网站 beside them. */
+.sites-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--pa-s3);
+}
+.sites-head-words {
+  display: grid;
+  gap: 4px;
+}
+.sites-wait {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.sites-empty {
+  margin: 0;
+}
+.sites-fresh {
+  padding: 10px var(--pa-s4);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+}
+
+/* 登录网站: the well-known sites by their own marks, in a grid; any other address under them. */
+.sites-picker .places-sheet-body {
+  display: grid;
+  gap: var(--pa-s3);
+}
+.sites-pick-label {
+  padding: 0;
+}
+.sites-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--pa-s2);
+}
+.sites-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface, transparent);
+  color: var(--pa-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sites-pick:hover {
+  background: var(--pa-n50);
+}
+.sites-pick:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sites-pick .places-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+.sites-pick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

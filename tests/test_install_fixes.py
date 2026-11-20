@@ -1,7 +1,6 @@
 """Setup and install edge cases: .env quoting, provider switches, AstrBot entries, commands."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -10,13 +9,6 @@ from dotenv import dotenv_values
 from persona_agent import setup_wizard as sw
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(autouse=True)
-def _english():
-    sw.set_lang("en")
-    yield
-    sw.set_lang("en")
 
 
 @pytest.mark.parametrize("value", [
@@ -50,64 +42,6 @@ def test_no_value_can_write_a_line_of_its_own(tmp_path: Path) -> None:
 def test_a_plain_value_is_written_bare() -> None:
     assert sw.set_env_values("", {"A": "https://api.example.com/v1", "B": "C:\\x\\y"}) \
         == "A=https://api.example.com/v1\nB=C:\\x\\y"
-
-
-def test_a_name_with_a_hash_reaches_the_agent_whole(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    args = sw.init_parser("init").parse_args(["--no-input", "--name", "Zed #1", "--lang", "en"])
-    assert sw.apply_flags(tmp_path, args) == "Zed #1"
-    assert dotenv_values(tmp_path / ".env")["PERSONA_NAME"] == "Zed #1"
-    assert "Your name is Zed #1." in (tmp_path / "persona.txt").read_text(encoding="utf-8")
-
-
-def test_init_without_a_terminal_or_flags_exits_nonzero(monkeypatch, tmp_path: Path, capsys) -> None:
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    monkeypatch.setattr("builtins.input", lambda *_: pytest.fail("asked a question"))
-    assert sw.main([]) == 2
-    capsys.readouterr()
-    assert sw.main(["--no-input"]) == 0, "asking for no questions is a choice"
-    assert sw.main(["--name", "Mika"]) == 0, "flags configured it"
-
-
-def test_switching_provider_does_not_carry_the_old_key(monkeypatch, tmp_path: Path, capsys) -> None:
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    monkeypatch.setenv("NEW_KEY", "sk-new")
-    parse = sw.init_parser("init").parse_args
-    sw.apply_flags(tmp_path, parse(["--no-input", "--lang", "en", "--provider", "deepseek"]))
-    sw.write_env(tmp_path / ".env", {"LLM_API_KEY": "sk-old"})
-
-    sw.apply_flags(tmp_path, parse(["--no-input", "--lang", "en", "--provider", "deepseek"]))
-    assert sw.env_get(tmp_path / ".env", "LLM_API_KEY") == "sk-old", "same service keeps its key"
-
-    capsys.readouterr()
-    sw.apply_flags(tmp_path, parse(["--no-input", "--lang", "en", "--provider", "openai"]))
-    assert sw.env_get(tmp_path / ".env", "LLM_API_KEY") == ""
-    assert "cleared" in capsys.readouterr().out
-
-    sw.write_env(tmp_path / ".env", {"LLM_API_KEY": "sk-old"})
-    sw.apply_flags(tmp_path, parse(["--no-input", "--lang", "en", "--provider", "deepseek", "--key-env", "NEW_KEY"]))
-    assert sw.env_get(tmp_path / ".env", "LLM_API_KEY") == "sk-new"
-
-
-def test_an_existing_platform_entry_keeps_its_own_settings(tmp_path: Path) -> None:
-    data = tmp_path / "data"
-    data.mkdir()
-    cfg = data / "cmd_config.json"
-    mine = {"id": "telegram", "type": "telegram", "enable": False, "telegram_token": "old",
-            "telegram_api_base_url": "https://tg.proxy.example/bot", "start_message": "hi"}
-    other = {"id": "qq", "type": "aiocqhttp", "enable": True}
-    cfg.write_text(json.dumps({"platform": [mine, other]}), encoding="utf-8")
-
-    sw.write_astrbot_platform(data, sw.astrbot_platform_entry("telegram", {"telegram_token": "new"}))
-    platforms = json.loads(cfg.read_text(encoding="utf-8"))["platform"]
-    assert [p["id"] for p in platforms] == ["telegram", "qq"], "order is kept"
-    assert platforms[0]["telegram_token"] == "new" and platforms[0]["enable"] is True
-    assert platforms[0]["telegram_api_base_url"] == "https://tg.proxy.example/bot"
-    assert platforms[0]["start_message"] == "hi"
-
-    sw.write_astrbot_platform(data, sw.astrbot_platform_entry("discord", {"discord_token": "d"}))
-    assert [p["id"] for p in json.loads(cfg.read_text(encoding="utf-8"))["platform"]] \
-        == ["telegram", "qq", "discord"]
 
 
 def test_a_command_names_a_home_the_bare_command_would_not_find(monkeypatch, tmp_path: Path) -> None:

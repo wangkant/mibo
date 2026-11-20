@@ -1,16 +1,11 @@
-"""Tests for decision.py: which mode a group turn runs in, and when pacing
-skips it. Both are pure, so the rules are checked here without an agent;
-tests/test_connector.py drives them through the real one."""
+"""Tests for decision.py: what becomes of a draft."""
 from __future__ import annotations
 
-import random
 from pathlib import Path
 
 import pytest
 
-from persona_agent import chat, decision
-from persona_agent.access import ADMIN_MODE
-from persona_agent.textproc import SLEEP_PASS_PROB, SUB_TRIGGER_PASS_PROB
+from persona_agent import decision
 
 from helpers import check, isolated_agent
 
@@ -20,99 +15,9 @@ PASS_ROWS = [("PASS", True), ("pass.", True), (" PASS ", True), ("**PASS**", Tru
              ("Pass, not for me", False), ("pass the salt", False)]
 
 
-def mode(**kw) -> tuple[str, str]:
-    base = dict(addressed=False, is_admin=False, sticky_admin=None,
-                in_followup=False, counter=0, trigger_count=30,
-                never_replied=False)
-    base.update(kw)
-    return decision.choose_group_mode(**base)
-
-
-def test_a_call_wins_over_everything_else() -> None:
-    check("an @ or a name-call is called", mode(addressed=True)[0] == "called")
-    check("the admin calling is the admin's mode",
-          mode(addressed=True, is_admin=True)[0] == ADMIN_MODE)
-    check("a call beats a pending sticky call and the followup window",
-          mode(addressed=True, sticky_admin=True, in_followup=True,
-               counter=99) == ("called", "addressed"))
-
-
-def test_a_sticky_call_keeps_its_callers_register() -> None:
-    check("a sticky call from a member is called",
-          mode(sticky_admin=False) == ("called", decision.STICKY_CALL))
-    check("a sticky call from the admin is the admin's mode",
-          mode(sticky_admin=True) == (ADMIN_MODE, decision.STICKY_CALL))
-    check("uncalled admin chatter is not the admin's mode",
-          mode(is_admin=True)[0] == "")
-
-
-def test_the_spontaneous_modes_follow_the_counters() -> None:
-    check("inside the followup window", mode(in_followup=True)[0] == "followup")
-    check("at the trigger count", mode(counter=30)[0] == "judge")
-    check("below it, silence", mode(counter=29) == ("", "below the trigger count"))
-    check("a group never replied to gets a lower first threshold",
-          mode(counter=10, never_replied=True) == ("judge", "first appearance"))
-    check("that threshold is a third of the count once the count is large",
-          mode(counter=19, trigger_count=60, never_replied=True)[0] == ""
-          and mode(counter=20, trigger_count=60, never_replied=True)[0] == "judge")
-    check("but never below ten (a third of 24 would be 8)",
-          mode(counter=9, trigger_count=24, never_replied=True)[0] == ""
-          and mode(counter=10, trigger_count=24, never_replied=True)
-          == ("judge", "first appearance"))
-
-
-def test_pacing_skips_only_spontaneous_turns(monkeypatch) -> None:
-    monkeypatch.setattr(random, "random", lambda: 0.0)
-    for asked in ("called", ADMIN_MODE):
-        check(f"{asked} is never skipped",
-              decision.pacing_skip(asked, first_appearance=False, sleep_hour=True) == "")
-    check("the first appearance is never skipped",
-          decision.pacing_skip("judge", first_appearance=True, sleep_hour=True) == "")
-    check("night skips followup and judge",
-          decision.pacing_skip("followup", first_appearance=False, sleep_hour=True)
-          == decision.SLEEP_WINDOW)
-    check("by day a judge turn can still be skipped",
-          decision.pacing_skip("judge", first_appearance=False, sleep_hour=False)
-          == "spontaneous skip")
-    check("by day a followup never is",
-          decision.pacing_skip("followup", first_appearance=False, sleep_hour=False) == "")
-
-
-def test_pacing_draws_at_the_configured_odds(monkeypatch) -> None:
-    draws = iter([SLEEP_PASS_PROB + 0.01, SUB_TRIGGER_PASS_PROB - 0.01])
-    monkeypatch.setattr(random, "random", lambda: next(draws))
-    check("a night draw above the odds goes on to the judge draw, which skips",
-          decision.pacing_skip("judge", first_appearance=False, sleep_hour=True)
-          == "spontaneous skip")
-    monkeypatch.setattr(random, "random", lambda: 0.99)
-    check("draws above both odds speak",
-          decision.pacing_skip("judge", first_appearance=False, sleep_hour=True) == "")
-
-
 @pytest.mark.parametrize("raw,is_pass", PASS_ROWS)
 def test_only_the_bare_word_pass_is_a_pass(tmp: Path, raw: str, is_pass: bool) -> None:
     agent = isolated_agent(tmp)
     final = agent._final_reply(raw, log_ctx="test")
     check(f"{raw!r} is {'a PASS' if is_pass else 'sent'}",
           final.verdict == (decision.PASS if is_pass else decision.SEND), repr(final))
-
-
-@pytest.mark.parametrize("raw,is_pass", PASS_ROWS)
-async def test_the_practice_chat_reads_pass_the_same_way(tmp: Path, raw: str,
-                                                         is_pass: bool) -> None:
-    agent = isolated_agent(tmp, react_learn_enabled=False)
-    trial = chat.Trial(agent, conv="g1")
-    turn = trial._commit_group(
-        chat.Turn(speaker="Ann", uid="7", text="hi", mode="called", conv="g1"),
-        raw, "chat", "", [])
-    check(f"{raw!r} is {'a PASS' if is_pass else 'sent'} in the practice chat",
-          (turn.quiet == "pass") == is_pass and bool(turn.reply) != is_pass,
-          repr(turn))
-    probe_agent = isolated_agent(tmp / "probe", react_learn_enabled=False)
-
-    async def think(conv, mode, text="", caller_override=None):
-        return raw, "chat", ""
-    probe_agent._think = think
-    probe = await chat.Trial(probe_agent, conv="g1").probe("Ann", "7", "hi")
-    check(f"{raw!r} is {'a PASS' if is_pass else 'an answer'} in a probe",
-          (probe.quiet == "pass") == is_pass, repr(probe))

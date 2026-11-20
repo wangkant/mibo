@@ -27,7 +27,7 @@
     {"text": "Nova, guard the door while I grab snacks", "kind": null},
     {"text": "Nova, eliminate the boss first", "kind": null},
     {"text": "Nova, ¿qué recuerdas?", "kind": "recall"},
-    {"text": "Nova qué has aprendido", "kind": "learned"},
+    {"text": "Nova qué has aprendido", "kind": null},
     {"text": "Nova, borra la pizarra", "kind": null}
   ],
   "first_person": [

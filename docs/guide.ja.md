@@ -36,10 +36,9 @@ personagent
 |---|---|
 | インストールせずに実行 | `uvx personagent`（[uv](https://docs.astral.sh/uv/) の機能で、Python も自動的に取得します） |
 | 常設の `personagent` コマンド | `uv tool install personagent` または `pipx install personagent` |
-| Windows、ソース ZIP から | 展開して `start.bat` をダブルクリック |
 | クローンから | `git clone https://github.com/wangkant/personagent.git`、`cd personagent`、`python -m venv .venv`、続けて `.venv/bin/python -m pip install -e .` と `.venv/bin/python -m persona_agent`（Windows では `.venv\Scripts\python.exe`） |
 
-personagent は Python 3.10–3.14 で動きます。`start.bat` は `.venv` を作り、依存パッケージをインストールして同じページを開きます。初回は、デスクトップとスタートメニューに personagent のアイコンも置きます。`pyproject.toml` の依存リストが変わると、そのたびに再インストールします。
+personagent は Python 3.10–3.14 で動きます。
 
 **personagent フォルダー**には、設定（`.env`）、キャラクター（`persona.txt`）、学習内容（`runtime/`）、チャットプラットフォーム（`platforms/`）が入ります。`platforms/` には管理下の AstrBot と、personagent が直接連携するプラットフォームの認証情報を保存する `direct.json` があります。personagent は次のうち最初に当てはまるフォルダーを使います。
 
@@ -176,11 +175,9 @@ PyPI に新しい personagent があると、チャットビューに、pip、uv
 | `personagent tools` | [MCP サーバーのツール](#ツール)：`list`、`add`、`remove`、`check`、`call`、`set` |
 | `personagent mcp` | コーディングアシスタントが起動する MCP サーバー。自分で実行するものではありません |
 | `personagent doctor` | セットアップと、依存するすべてのサービスを確認します |
-| `personagent learned` | 学習した内容とまだ観察中の内容を表示し、必要に応じて介入できます |
 | `personagent memory` | 記憶している内容を一覧にし、項目を削除または復元します |
 | `personagent access` | [承認待ちの新しいチャット](#返信する相手新しいチャットの承認)を一覧にし、コードで承認または拒否します（`approve`、`admin`、`decline`、`undo`、`policy <platform> approve\|open`） |
 | `personagent eval` | 発言、ペルソナ、学習、記憶を測定します |
-| `personagent character` | [キャラクターカードを取り込む](#キャラクターカードと下書き)（`import FILE`）、キャラクターをカードとして保存する（`export FILE.png` または `.json`）、説明から作成したペルソナの下書きを表示する（`draft "..."`） |
 
 すべてのコマンドは `--help` を受け付けます。
 
@@ -401,8 +398,6 @@ LINE は提供していません。AstrBot が LINE のコールバックをダ�
 |---|---|
 | すでに動かしている [AstrBot](https://docs.astrbot.app) | そのプラットフォーム |
 | [NapCat](https://github.com/NapNeko/NapCatQQ)（OneBot v11）、AstrBot 経由 | 個人の QQ アカウントでの QQ |
-| [Koishi](https://koishi.chat) またはほかの Satori サーバー、[Satori コネクター](../integrations/satori/README.ja.md)経由 | そのサーバーがログインしている先 |
-| [Matrix](../integrations/matrix/README.ja.md)、mautrix ブリッジ経由 | Matrix のルーム、WhatsApp、Signal、Messenger、Instagram、Google Messages |
 
 それ以外のものは、メッセージごとに署名付き HTTP リクエストを 1 回受け取る[コネクタープロトコル](connectors.ja.md)でつなげます。複数のコネクターが 1 つの personagent に同時につながれます。本番運用については[デプロイガイド](deploy.ja.md)を参照してください。
 
@@ -847,12 +842,6 @@ personagent eval --suite all --lang zh --repeat 5
 
 `--rejudge REPORT` は残したレポートの返信を、今設定している `BENCH_JUDGE_MODEL` で、テスト対象のモデルを呼ばずに再判定し、結果を元のレポートの横に書きます。返信、ベースライン、昇格ポリシーの動作はそのままです。
 
-方法とすべてのレポートを含む最新の結果は [evals/2026-10-18](evals/2026-10-18/README.ja.md) にあります。レポートを読むときの注意をいくつか挙げます。
-
-- `speak` では、見逃しの多くは名前が映画館や子犬のような別のものを指す行か、誰かがそれの発言を別の人に伝える行です。名前は呼びかけと数えられ、モデルがそれを覆すことはめったにありません。
-- `persona` では、分割は判定役が 2 回とも先（または後）に来た返信を選んだことを意味します。公開している判定は Claude Opus 5.5 のものです。`personagent eval` の外でバッチで判定し、各レポートの `rejudged` フィールドに記録されています。各組の `earlier` フィールドには最初の判定役 Claude Haiku 5.5 の判定が残っています。
-- `learning` では、ポリシーの行と確認の行は別の問いに答えます。ポリシーの行は、ルールが正しい訂正を昇格したかを問います。確認の行は、昇格した訂正が後の返信を変えたかを問います。`not_promoted` の確認の行はノイズの基準です。プロンプトが何も変わっていないからです。
-
 ## 仕組み
 
 ![アーキテクチャ：グループチャットのメッセージは判断、プロンプト構築、モデル、チェックを通り、返信はコネクターを通って戻る。ボットが黙るなら何も送らない。反応は判定されて証拠ログに入り、昇格が認めたものだけがプロンプトの読む例に届く](persona_llm_agent_architecture.svg)
@@ -961,8 +950,8 @@ personagent フォルダーの主なファイルとフォルダーの内容は�
 
 personagent 1.5.0 は PyPI にあります。CI は Linux の Python 3.10–3.14 と Windows の Python 3.12 でテストを実行します。さらに CI のジョブがパッケージをインストールし、コマンドとローカルページを動かし、Linux、macOS、Windows でアプリウィンドウを開きます。
 
-直接の OneBot 経路（`/v1/onebot`）は非推奨ですが 1.x の間は残ります。`tools/` のスクリプトはクローンから実行するもので、[tools.md](tools.ja.md) で説明しています。
+直接の OneBot 経路（`/v1/onebot`）は非推奨ですが 1.x の間は残ります。
 
 - [はじめに](start.ja.md) · [デプロイガイド](deploy.ja.md) · [中国語の手順ガイド（QQ のスキャン接続とトラブルシューティング）](deploy.zh-CN.md)
-- コネクター：[AstrBot プラグイン](../integrations/astrbot/astrbot_plugin_personagent/README.ja.md) · [Satori](../integrations/satori/README.ja.md) · [Matrix](../integrations/matrix/README.ja.md) · [プロトコル](connectors.ja.md)
+- コネクター：[AstrBot プラグイン](../integrations/astrbot/astrbot_plugin_personagent/README.ja.md) · [プロトコル](connectors.ja.md)
 - [すべての設定](../.env.example) · [変更履歴](../CHANGELOG.md) · [貢献](../.github/CONTRIBUTING.md) · [セキュリティポリシー](../.github/SECURITY.md)

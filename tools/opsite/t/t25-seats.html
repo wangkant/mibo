@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>选座 - 星光影城</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #1d1f26; color: #eee; }
+main { max-width: 680px; margin: 20px auto; text-align: center; }
+canvas { background: #262933; border-radius: 10px; }
+button { margin-top: 14px; background: #ff4d6d; color: #fff; border: 0; padding: 9px 30px; border-radius: 20px; font-size: 15px; }
+</style></head>
+<body><main>
+<h2>《沙丘 3》 11-22 19:30 · 3 号厅</h2>
+<canvas id="c" width="640" height="360"></canvas>
+<p id="pick">已选：无</p>
+<button id="ok">确认选座</button><p id="said"></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// The hall is drawn: no element per seat, as many cinema and stadium sites do.
+const c = document.getElementById("c"), g = c.getContext("2d"), ROWS = "ABCDE", COLS = 10, taken = new Set(["A4", "A5", "C6", "D2", "B7"]);
+let chosen = "";
+const at = (r, k) => [80 + k * 50, 70 + r * 56];
+function draw() {
+  g.clearRect(0, 0, c.width, c.height);
+  g.fillStyle = "#555"; g.fillRect(140, 18, 360, 8); g.fillStyle = "#aaa"; g.font = "12px sans-serif"; g.fillText("银幕", 308, 44);
+  for (let r = 0; r < ROWS.length; r++) {
+    g.fillStyle = "#888"; g.font = "14px sans-serif"; g.fillText(ROWS[r], 40, at(r, 0)[1] + 5);
+    for (let k = 0; k < COLS; k++) {
+      const id = ROWS[r] + (k + 1), [x, y] = at(r, k);
+      g.fillStyle = taken.has(id) ? "#666" : id === chosen ? "#ff4d6d" : "#3fb87f";
+      g.beginPath(); g.roundRect(x - 16, y - 14, 32, 28, 6); g.fill();
+      g.fillStyle = "#fff"; g.font = "11px sans-serif"; g.fillText(String(k + 1), x - (k >= 9 ? 7 : 3), y + 4);
+    }
+  }
+}
+c.addEventListener("click", (e) => {
+  const b = c.getBoundingClientRect(), x = (e.clientX - b.left) * c.width / b.width, y = (e.clientY - b.top) * c.height / b.height;
+  for (let r = 0; r < ROWS.length; r++) for (let k = 0; k < COLS; k++) {
+    const id = ROWS[r] + (k + 1), [sx, sy] = at(r, k);
+    if (Math.abs(x - sx) <= 16 && Math.abs(y - sy) <= 14 && !taken.has(id)) { chosen = id; document.getElementById("pick").textContent = "已选：" + id; draw(); }
+  }
+});
+document.getElementById("ok").addEventListener("click", async () => {
+  if (!chosen) { document.getElementById("said").textContent = "请先选择座位"; return; }
+  if ((await post("/api/seat", { seat: chosen })).ok) document.getElementById("said").textContent = "已锁定座位 " + chosen + "，请在 15 分钟内支付";
+});
+draw();
+</script></body></html>

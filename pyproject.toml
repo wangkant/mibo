@@ -8,13 +8,13 @@ version = "1.5.0"
 description = "An agent that behaves like a person, on every platform you use: it has a character of its own, remembers, learns from the people it talks to, and judges for itself when to speak."
 readme = "README.md"
 requires-python = ">=3.10"
-# The bundled AstrBot plugin and connector SDK are MIT, and the three character
-# portraits are CC BY-NC-SA 4.0 (no commercial use).
+# Code adapted from MIT projects keeps their licence (NOTICE), and the three
+# character portraits are CC BY-NC-SA 4.0 (no commercial use).
 license = "Apache-2.0 AND MIT AND CC-BY-NC-SA-4.0"
-license-files = ["LICENSE", "NOTICE", "integrations/astrbot/astrbot_plugin_personagent/LICENSE", "persona_agent/static/characters/LICENSE.md"]
+license-files = ["LICENSE", "NOTICE", "persona_agent/static/characters/LICENSE.md"]
 authors = [{ name = "Qiankang Wang" }]
 keywords = [
-    "llm", "agent", "persona", "chatbot", "multi-platform", "group-chat", "memory", "astrbot", "onebot",
+    "llm", "agent", "persona", "chatbot", "group-chat", "memory", "onebot",
     "prompt-engineering", "self-evolution", "few-shot", "rag",
 ]
 classifiers = [
@@ -48,12 +48,21 @@ dependencies = [
     "Pillow>=10.4,<14",
     # The no-key web search backend (DuckDuckGo).
     "ddgs>=9,<10",
-    # Discord's and QQ's gateways for the platforms personagent connects itself.
-    "websockets>=15,<18",
-    # Draws the WeChat login QR code for the local page (with Pillow, above).
-    "qrcode>=7.4,<9",
-    # Unseals the bot secret QQ's scan-to-bind flow returns (AES-GCM).
-    "cryptography>=44,<52",
+    # Reads robots.txt as Scrapy does, wildcards and a group for Mibo before the one for all (web/sites.py).
+    "protego>=0.7,<1",
+    # Reads the YAML front matter of a skill's SKILL.md, as other agents' hosts do (skills/store.py).
+    "pyyaml>=6,<7",
+    # The person's MCP servers, through the official SDK (mcp_client.py); jsonschema checks a call's
+    # arguments against the tool's schema before the card (mcp_tools.py).
+    "mcp>=2.3,<3",
+    "jsonschema>=4.20,<5",
+    # Keeps MCP servers' values and sign-in tokens in the system's credential store (secretstore.py).
+    "keyring>=25,<26",
+    # Scheduled tasks (schedule.py): dateutil's rrule finds the next time of a rhythm; tzlocal names this
+    # computer's zone; tzdata is the zone database Windows lacks, for zoneinfo and daylight saving.
+    "python-dateutil>=2.9,<3",
+    "tzlocal>=5.3,<6",
+    "tzdata>=2025.2",
     # Opens the local page in a window of its own. Windows has WebView2 for it;
     # elsewhere it needs a system toolkit, so it is the `app` extra there.
     "pywebview>=6,<7; sys_platform == 'win32'",
@@ -63,13 +72,11 @@ dependencies = [
 # The window of its own on macOS and Linux; without it the page opens in the browser.
 # pywebview alone brings no toolkit on Linux, so Qt comes with it there.
 app = ["pywebview>=6,<7; sys_platform != 'linux'", "pywebview[qt]>=6,<7; sys_platform == 'linux'"]
-# Bilibili and YouTube with a personal account: drives the Edge, Chrome or
-# Chromium already installed, so no browser is downloaded.
+# Walks on the web: drives the Edge, Chrome or Chromium already installed, so
+# no browser is downloaded.
 web = ["playwright>=1.49,<2"]
 # What CI installs on top of the runtime dependencies.
-# mcp: the official SDK, only so the tests can run personagent's own MCP client
-# against its servers; it supports Python 3.10 to 3.14, the same range as here.
-dev = ["pytest>=8,<10", "ruff>=0.6,<1", "mcp>=2.3,<3", "playwright>=1.49,<2"]
+dev = ["pytest>=8,<10", "ruff>=0.6,<1", "playwright>=1.49,<2"]
 
 [project.scripts]
 personagent = "persona_agent.cli:main"
@@ -85,12 +92,11 @@ Documentation = "https://github.com/wangkant/personagent/blob/main/docs/guide.md
 [tool.hatch.build.targets.sdist]
 # The version PyPI took for 1.2.1; hatchling defaults to a newer one.
 core-metadata-version = "2.4"
-only-include = ["persona_agent", "data", ".env.example",
-                "integrations/astrbot/astrbot_plugin_personagent"]
+only-include = ["persona_agent", "data", ".env.example"]
 
 [tool.hatch.build.targets.wheel]
 core-metadata-version = "2.4"
-only-include = ["persona_agent", "data", "integrations/astrbot/astrbot_plugin_personagent"]
+only-include = ["persona_agent", "data"]
 # README illustrations: linked from published READMEs, read by nothing installed.
 exclude = ["persona_agent/static/*.webp"]
 # An editable install imports the checkout itself, which reads these files in place.
@@ -98,7 +104,6 @@ dev-mode-dirs = ["."]
 
 [tool.hatch.build.targets.wheel.sources]
 "data" = "persona_agent/_bundled/data"
-"integrations/astrbot/astrbot_plugin_personagent" = "persona_agent/_bundled/integrations/astrbot/astrbot_plugin_personagent"
 
 [tool.hatch.build.targets.wheel.force-include]
 ".env.example" = "persona_agent/_bundled/.env.example"

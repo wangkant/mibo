@@ -36,10 +36,9 @@ personagent
 |---|---|
 | Run without installing | `uvx personagent` (part of [uv](https://docs.astral.sh/uv/), which also fetches Python for you) |
 | A permanent `personagent` command | `uv tool install personagent` or `pipx install personagent` |
-| Windows, from the source ZIP | unpack it and double-click `start.bat` |
 | From a clone | `git clone https://github.com/wangkant/personagent.git`, `cd personagent`, `python -m venv .venv`, then `.venv/bin/python -m pip install -e .` and `.venv/bin/python -m persona_agent` (on Windows, `.venv\Scripts\python.exe`) |
 
-personagent runs on Python 3.10–3.14. `start.bat` creates `.venv`, installs the dependencies and opens the same page; the first time, it also puts a personagent icon on the desktop and in the Start menu. It installs them again whenever the dependency list in `pyproject.toml` changes.
+personagent runs on Python 3.10–3.14.
 
 The **home folder** holds the settings (`.env`), the character (`persona.txt`), what it learns (`runtime/`) and the chat platforms (`platforms/`). `platforms/` contains the managed AstrBot and `direct.json`, which stores the credentials of the platforms personagent connects itself. personagent uses the first of these folders:
 
@@ -176,11 +175,9 @@ Everything the page does is also available from a terminal, which suits servers 
 | `personagent tools` | [tools from MCP servers](#tools): `list`, `add`, `remove`, `check`, `call`, `set` |
 | `personagent mcp` | the MCP server a coding agent starts; you do not run it yourself |
 | `personagent doctor` | check the setup and every service it depends on |
-| `personagent learned` | show what it learned and what it is still observing, and step in if you choose |
 | `personagent memory` | list what it remembers, forget an item or bring one back |
 | `personagent access` | list the [new chats waiting for approval](#who-it-answers-approval-of-new-chats) and approve or decline them by code (`approve`, `admin`, `decline`, `undo`, `policy <platform> approve\|open`) |
 | `personagent eval` | measure speaking, persona, learning and memory |
-| `personagent character` | [import a character card](#character-cards-and-drafts) (`import FILE`), save the character as one (`export FILE.png` or `.json`), or print a persona drafted from a description (`draft "..."`) |
 
 Every command takes `--help`.
 
@@ -401,8 +398,6 @@ The projects below are third-party software that personagent works with. You do 
 |---|---|
 | An [AstrBot](https://docs.astrbot.app) you already run | its platforms |
 | [NapCat](https://github.com/NapNeko/NapCatQQ) (OneBot v11), through AstrBot | QQ with a personal QQ account |
-| [Koishi](https://koishi.chat) or another Satori server, through the [Satori connector](../integrations/satori/README.md) | whatever that server is logged in to |
-| [Matrix](../integrations/matrix/README.md), through mautrix bridges | Matrix rooms, and WhatsApp, Signal, Messenger, Instagram and Google Messages |
 
 Anything else can connect through the [connector protocol](connectors.md), which takes one signed HTTP request per message. Several connectors can serve one personagent at once. The [deployment guide](deploy.md) covers running it in production.
 
@@ -847,12 +842,6 @@ Two checks need no model and no key, and run with the project's tests from a clo
 
 `--rejudge REPORT` judges a kept report's replies again with the `BENCH_JUDGE_MODEL` you set now, without calling the model under test, and writes the result beside the original. The replies, the baselines and what the promotion policy did stay as they were.
 
-The latest results, with the method and every report, are in [evals/2026-10-18](evals/2026-10-18/README.md). A few notes on reading the reports:
-
-- In `speak`, most misses are lines where its name means something else, such as a cinema or a puppy, or where someone tells someone else what it said. A name counts as a call, and the model seldom overrides that.
-- In `persona`, a split means the judge picked whichever reply came first (or second) both times. The published verdicts are Claude Opus 5.5's. It judged outside `personagent eval`, in batches, as each report's `rejudged` field records. Each pair's `earlier` field keeps the verdict of the first judge, Claude Haiku 5.5.
-- In `learning`, the policy row and the probe rows answer different questions. The policy row asks whether the rule promoted the right corrections. The probe rows ask whether a promoted correction changed a later reply. The `not_promoted` probe row is the noise floor, since nothing about its prompt changed.
-
 ## How it works
 
 ![Architecture: a group-chat message goes through Decide, Build prompt, Model and Check, and the reply goes back through the connector; if the bot stays quiet, nothing is sent. Reactions are judged into an evidence log, and only what promotion approves reaches the examples the prompt reads](persona_llm_agent_architecture.svg)
@@ -961,8 +950,8 @@ The deployment guide has [the full checklist](deploy.md#when-the-bot-goes-quiet)
 
 personagent 1.5.0 is on PyPI. CI runs the tests on Linux with Python 3.10–3.14 and on Windows with Python 3.12. Further CI jobs install the package and drive the command and the local page, and open the app window on Linux, macOS and Windows.
 
-The direct OneBot route (`/v1/onebot`) is deprecated but kept through 1.x. The scripts in `tools/` are meant to be run from a clone, and [tools.md](tools.md) describes them.
+The direct OneBot route (`/v1/onebot`) is deprecated but kept through 1.x.
 
 - [Getting started](start.md) · [Deployment guide](deploy.md) · [Chinese step-by-step guide (QQ by scan, and troubleshooting)](deploy.zh-CN.md)
-- Connectors: [AstrBot plugin](../integrations/astrbot/astrbot_plugin_personagent/README.md) · [Satori](../integrations/satori/README.md) · [Matrix](../integrations/matrix/README.md) · [protocol](connectors.md)
+- Connectors: [AstrBot plugin](../integrations/astrbot/astrbot_plugin_personagent/README.md) · [protocol](connectors.md)
 - [Every setting](../.env.example) · [Changelog](../CHANGELOG.md) · [Contributing](../.github/CONTRIBUTING.md) · [Security policy](../.github/SECURITY.md)

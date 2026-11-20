@@ -1,7 +1,7 @@
 """One vocabulary for conversation keys, across every channel.
 
 A conversation has three names: routing (transport, locks, buffers), memory
-(`memories` / `core_memory`) and learning (the `conv_id` of every evidence
+(the chat logs) and learning (the `conv_id` of every evidence
 event and candidate scope, which retrieval compares against):
 
     channel        routing               memory                learning
@@ -23,6 +23,9 @@ DM_LEARNING_PREFIX = "dm:"
 
 #: The platform a bare (un-namespaced) key belongs to.
 NATIVE_PLATFORM = "qq"
+
+#: The platform name in the keys of the app's chats (dm.chat_key). Stored in ids, so keep it.
+PAGE_PLATFORM = "browser"
 
 
 def is_dm(routing_key: str) -> bool:

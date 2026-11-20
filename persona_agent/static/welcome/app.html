@@ -4,18 +4,57 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>personagent</title>
+    <title>Mibo</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Cpath fill=%22%23ad4e2b%22 d=%22M8.5 3.5h7a5.5 5.5 0 0 1 5.5 5.5v3a5.5 5.5 0 0 1-5.5 5.5h-4.6l-4.2 3.4a.6.6 0 0 1-1-.47v-3.3A5.5 5.5 0 0 1 3 12V9a5.5 5.5 0 0 1 5.5-5.5z%22/%3E%3Crect x=%228.6%22 y=%228.6%22 width=%222%22 height=%223.4%22 rx=%221%22 fill=%22%23fff%22/%3E%3Crect x=%2213.4%22 y=%228.6%22 width=%222%22 height=%223.4%22 rx=%221%22 fill=%22%23fff%22/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/assets/app.css" />
     <link rel="stylesheet" href="/assets/chat.css" />
-    <link rel="stylesheet" href="/assets/places.css" />
+    <link rel="stylesheet" href="/assets/finds.css" />
+    <link rel="stylesheet" href="/assets/activity.css" />
+    <link rel="stylesheet" href="/assets/linkcard.css" />
+    <link rel="stylesheet" href="/assets/plus.css" />
+    <link rel="stylesheet" href="/assets/modelbar.css" />
+    <link rel="stylesheet" href="/assets/sites.css" />
     <link rel="stylesheet" href="/assets/onboard.css" />
+    <link rel="stylesheet" href="/assets/characters.css" />
     <link rel="stylesheet" href="/assets/setup.css" />
+    <link rel="stylesheet" href="/assets/setup/skills.css" />
+    <link rel="stylesheet" href="/assets/setup/schedule.css" />
+    <link rel="stylesheet" href="/assets/browse.css" />
+    <link rel="stylesheet" href="/assets/compact.css" />
+    <script src="/assets/i18n.js" defer></script>
+    <script src="/locale.js" defer></script>
+    <script src="/assets/plus.js" defer></script>
+    <script src="/assets/modelbar.js" defer></script>
+    <script src="/assets/providermarks.js" defer></script>
+    <script src="/assets/activity.js" defer></script>
+    <script src="/assets/linkcard.js" defer></script>
+    <script src="/assets/toolcard.js" defer></script>
+    <script src="/assets/skilloffer.js" defer></script>
+    <script src="/assets/schedulechat.js" defer></script>
     <script src="/assets/chat.js" defer></script>
-    <script src="/assets/places.js" defer></script>
+    <script src="/assets/finds.js" defer></script>
+    <script src="/assets/sites.js" defer></script>
+    <script src="/assets/characters.js" defer></script>
     <script src="/assets/onboard.js" defer></script>
     <script src="/assets/setup.js" defer></script>
+    <script src="/assets/setup/character.js" defer></script>
+    <script src="/assets/setup/model.js" defer></script>
+    <script src="/assets/setup/connect.js" defer></script>
+    <script src="/assets/setup/language.js" defer></script>
+    <script src="/assets/setup/recs.js" defer></script>
+    <script src="/assets/setup/memory.js" defer></script>
+    <script src="/assets/setup/privacy.js" defer></script>
+    <script src="/assets/setup/device.js" defer></script>
+    <script src="/assets/setup/shell.js" defer></script>
+    <script src="/assets/setup/programs.js" defer></script>
+    <script src="/assets/setup/skills.js" defer></script>
+    <script src="/assets/setup/tools.js" defer></script>
+    <script src="/assets/setup/schedule.js" defer></script>
+    <script src="/assets/setup/about.js" defer></script>
     <script src="/assets/app.js" defer></script>
+    <script src="/assets/browse.js" defer></script>
+    <!-- The small chat beside the pet is this page at /compact (petchat.py). -->
+    <script src="/assets/compact.js" defer></script>
   </head>
   <body class="starting">
     <div class="topline" aria-hidden="true"></div>
@@ -23,12 +62,12 @@
       <div class="titlebar-page" id="page-title"></div>
       <div class="pet-zone" aria-hidden="true"></div>
       <div class="window-controls" id="window-controls" hidden>
-        <button type="button" id="window-minimize">
+        <button type="button" id="window-minimize" tabindex="-1">
           <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10" /></svg></button
-        ><button type="button" id="window-maximize">
+        ><button type="button" id="window-maximize" tabindex="-1">
           <svg class="when-normal" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" rx="1" /></svg
           ><svg class="when-maximized" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="2.5" width="7" height="7" rx="1" /><path d="M2.5 2.5v-1a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1" /></svg></button
-        ><button type="button" id="window-close">
+        ><button type="button" id="window-close" tabindex="-1">
           <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" /></svg>
         </button>
       </div>
@@ -53,16 +92,16 @@
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.4 2.6a1.9 1.9 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z" /></svg>
           <span data-t="newChat"></span><span class="kbd">Ctrl N</span>
         </button>
-        <button type="button" class="side-item side-history" id="side-history">
-          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>
-          <span data-t="chatList"></span>
+        <button type="button" class="side-item" id="side-finds">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8" /><path d="M3 3.5V8h4.5M12 7.5V12l3 2" /></svg>
+          <span data-t="finds"></span>
         </button>
         <div class="side-chats" id="side-chats"></div>
         <div class="side-spacer"></div>
         <div class="side-foot">
           <button type="button" class="side-item" id="side-settings">
             <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
-            <span data-t="settings"></span><span class="side-note" id="side-note" hidden></span>
+            <span data-t="settings"></span>
           </button>
         </div>
       </nav>

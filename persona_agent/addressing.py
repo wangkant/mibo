@@ -1,15 +1,13 @@
-"""Is the persona being named in a message: one rule for every caller.
+"""The character's name as a pattern, for a memory command that begins with it.
 
-A Latin-script name matches case-insensitively as a whole word ("luna" calls
-Luna, "Lunar" does not); a name with CJK in it matches as a substring. Text
-and names are folded first, so full-width letters and missing accents still
-call ("ＬＵＮＡ", "sofia" for Sofía). Nicknames come from the persona card.
+A Latin-script name matches case-insensitively as a whole word ("luna" names
+Luna, "Lunar" does not); a name with CJK in it matches as a substring, and an
+accent may be left off ("sofia" for Sofía). Nicknames come from the persona card.
 """
 from __future__ import annotations
 
 import re
 import unicodedata
-from functools import lru_cache
 from typing import Iterable
 
 _CJK = ("⺀-⿟぀-ヿ㄀-ㇿ㐀-䶿一-鿿"
@@ -32,11 +30,6 @@ def _strip_marks(s: str) -> str:
     return unicodedata.normalize("NFC", "".join(
         ch for ch in unicodedata.normalize("NFD", s)
         if ch in _KEEP_MARKS or unicodedata.category(ch) != "Mn"))
-
-
-def fold(text: str) -> str:
-    """Width, case and accents folded away."""
-    return _strip_marks(unicodedata.normalize("NFKC", str(text or "")).casefold())
 
 
 def name_regex(name: str) -> str:
@@ -77,20 +70,3 @@ def names_regex(name: str, aliases: Iterable[str] = ()) -> str:
                 sources.append(src)
     return "(?:" + "|".join(sources) + ")" if sources else ""
 
-
-@lru_cache(maxsize=64)
-def _compiled(name: str) -> re.Pattern | None:
-    source = name_regex(fold(name))
-    return re.compile(source, re.IGNORECASE) if source else None
-
-
-def mentions_name(text: str, name: str, aliases: Iterable[str] = ()) -> bool:
-    """True when `text` names the persona called `name` or by an alias."""
-    if not text:
-        return False
-    folded = fold(text)
-    for n in (name, *aliases):
-        pattern = _compiled(str(n or ""))
-        if pattern and pattern.search(folded):
-            return True
-    return False

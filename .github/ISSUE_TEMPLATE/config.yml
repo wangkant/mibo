@@ -3,12 +3,6 @@ contact_links:
   - name: Documentation
     url: https://github.com/wangkant/personagent#readme
     about: The README, with the quick start and what each part does.
-  - name: Deploying, and when the bot goes quiet
-    url: https://github.com/wangkant/personagent/blob/main/docs/deploy.md
-    about: Settings, exposing the service, costs, and an ordered checklist for a bot that does not answer.
-  - name: 中文部署教程（QQ 扫码直连）
-    url: https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-CN.md
-    about: 从安装到手机 QQ 扫码接入的中文步骤，以及「机器人不说话」的排查清单。
   - name: Report a security vulnerability
     url: https://github.com/wangkant/personagent/security/advisories/new
     about: Report it privately, not in a public issue. See SECURITY.md.

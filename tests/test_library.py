@@ -1,7 +1,7 @@
 """What the character has seen, kept for the home page and the days."""
 from __future__ import annotations
 
-from persona_agent.library import DISMISSED, KEPT, Item, Library, item_id
+from persona_agent.library import KEPT, Item, Library, item_id
 
 NOW = 1_800_000_000
 
@@ -16,19 +16,6 @@ def test_an_item_is_kept_once_and_the_owner_s_choice_outlives_a_second_visit(tmp
     again = Library(tmp_path).get(first.id)
     assert (again.title, again.state, again.told) == ("One, renamed", KEPT, True)
     assert len(library.items()) == 1
-
-
-def test_what_to_tell_is_what_fits_and_was_not_said_or_dismissed(tmp_path):
-    library = Library(tmp_path)
-    a = library.add(Item(url="https://example.test/a", fits=True, seen_at=NOW))
-    b = library.add(Item(url="https://example.test/b", fits=True, seen_at=NOW + 1))
-    library.add(Item(url="https://example.test/c", fits=False, seen_at=NOW + 2))
-    d = library.add(Item(url="https://example.test/d", fits=True, seen_at=NOW + 3))
-    assert [item.id for item in library.to_tell()] == [a.id, b.id, d.id]
-    library.change(a.id, told=True)
-    library.change(d.id, state=DISMISSED)
-    assert [item.id for item in library.to_tell()] == [b.id]
-    assert [item.url[-1] for item in library.items()] == ["d", "c", "b", "a"], "newest first"
 
 
 def test_a_card_holds_public_facts_and_no_path(tmp_path):

@@ -5,12 +5,12 @@
    as round as the card's (CARD_RADIUS in window.py). */
 .card {
   --card-bg: #ffffff;
-  --card-line: #d9d5cd;
-  --card-ink: #1d1b18;
-  --card-text: #6f6a63;
-  --card-faint: #a7a199;
-  --card-wash: rgba(40, 32, 20, 0.06);
-  --card-sunken: #efebe4;
+  --card-line: #d8d8dc;
+  --card-ink: #1a1a1c;
+  --card-text: #68686f;
+  --card-faint: #a1a1a8;
+  --card-wash: rgba(20, 20, 24, 0.06);
+  --card-sunken: #f0f0f2;
   position: absolute;
   left: 0;
   bottom: 80px;
@@ -25,13 +25,13 @@
 }
 @media (prefers-color-scheme: dark) {
   .card {
-    --card-bg: #262421;
-    --card-line: #45413b;
-    --card-ink: #f3f1ed;
-    --card-text: #bdb9b1;
-    --card-faint: #8d877e;
+    --card-bg: #242426;
+    --card-line: #414145;
+    --card-ink: #f2f2f4;
+    --card-text: #b9b9bf;
+    --card-faint: #86868d;
     --card-wash: rgba(255, 255, 255, 0.08);
-    --card-sunken: #34312d;
+    --card-sunken: #313134;
   }
 }
 body.card-right .card {
@@ -69,32 +69,17 @@ body.card-right .card-tail {
 .card-head {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   height: 24px;
-  margin-right: -6px;
 }
 .card-site {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--card-faint);
   font-size: 12px;
-}
-.card-like,
-.card-close {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--card-faint);
-  cursor: pointer;
 }
 .card svg {
   fill: none;
@@ -103,15 +88,95 @@ body.card-right .card-tail {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.card-like svg,
-.card-close svg {
-  width: 15px;
-  height: 15px;
+.card button {
+  font: inherit;
+  cursor: pointer;
 }
-.card-like:hover,
-.card-close:hover {
+/* Why this one, under the site: a quiet pill, pressed for more or less of what it names. */
+.card-why {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--card-wash);
+  color: var(--card-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.card-why:disabled {
+  padding-right: 8px;
+  cursor: inherit;
+}
+.card-why:not(:disabled):hover {
+  color: var(--card-ink);
+}
+.card-why svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+/* A choice in the card's frame: more or less of this, what a no was about. */
+.card-chip {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--card-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.card-chip:hover {
+  background: var(--card-wash);
+}
+.card-chip[aria-pressed="true"] {
+  border-color: var(--card-ink);
+  background: var(--card-ink);
+  color: var(--card-bg);
+}
+.card-lean {
+  justify-content: flex-end;
+}
+/* The find's three controls, each with its name. */
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 10px -6px -6px;
+}
+.card-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--card-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.card-foot svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.card-foot button:hover {
   background: var(--card-wash);
   color: var(--card-ink);
+}
+.card-foot .card-next {
+  margin-left: auto;
+}
+.card-foot.tight .card-like span {
+  display: none;
 }
 .card-like.on,
 .card-like.on:hover {
@@ -119,6 +184,66 @@ body.card-right .card-tail {
 }
 .card-like.on svg {
   fill: currentColor;
+}
+/* In the find's frame after "Not interested": what it was about, then the line that takes it back. */
+.card-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  gap: 8px 10px;
+  box-sizing: border-box;
+  padding-bottom: 12px;
+  cursor: default;
+}
+.card-ask {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--card-faint);
+  font-size: 12px;
+}
+.card-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 0 100%;
+}
+.card-reasons .card-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-note .card-words {
+  flex: 1 1 0;
+  margin: 0;
+}
+.card-undo {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 13px;
+  background: var(--card-bg);
+  color: var(--card-ink);
+  font-size: 12px;
+}
+.card-undo:hover {
+  background: var(--card-wash);
+}
+/* The cross of a line the character says. */
+.card-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--card-faint);
+}
+.card-close:hover {
+  background: var(--card-wash);
+  color: var(--card-ink);
 }
 .card-media {
   position: relative;
@@ -146,7 +271,7 @@ body.card-right .card-tail {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(29, 27, 24, 0.78);
+  background: rgba(20, 20, 24, 0.78);
   cursor: pointer;
 }
 .card-play::after {
@@ -160,7 +285,7 @@ body.card-right .card-tail {
   border-color: transparent transparent transparent #ffffff;
 }
 .card-play:hover {
-  background: #1d1b18;
+  background: #1a1a1c;
 }
 .card-shield {
   position: absolute;
@@ -185,9 +310,6 @@ body.card-right .card-tail {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.with-media .card-words {
-  -webkit-line-clamp: 2;
-}
 /* The character's own sentence leads the card. It is short by the rule it was written to, and is shown whole. */
 .card-words.card-line {
   display: block;
@@ -195,6 +317,15 @@ body.card-right .card-tail {
   color: var(--card-ink);
   font-size: 14px;
   line-height: 1.5;
+}
+/* A sentence still being written: two quiet bars in the room of two lines, which the sentence keeps. */
+.card-words.card-wait {
+  min-height: 42px;
+}
+.card-wait:empty {
+  background:
+    linear-gradient(var(--card-sunken) 0 0) 0 6px / 100% 10px no-repeat,
+    linear-gradient(var(--card-sunken) 0 0) 0 27px / 60% 10px no-repeat;
 }
 /* A line the character says: only as wide as its words, the cross beside them. */
 .card.bubble {

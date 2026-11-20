@@ -20,7 +20,7 @@ MAX_MODELS = 20
 #: (id, name, the provider the page selects, the address to save, where it lists its models)
 LOCAL = (
     ("ollama", "Ollama", "ollama", "http://localhost:11434/v1", "http://127.0.0.1:11434/api/tags"),
-    ("lmstudio", "LM Studio", "other", "http://localhost:1234/v1", "http://127.0.0.1:1234/v1/models"),
+    ("lmstudio", "LM Studio", "lmstudio", "http://localhost:1234/v1", "http://127.0.0.1:1234/v1/models"),
 )
 #: The variable each service's own documentation names -> the page's provider.
 ENV_KEYS = {
@@ -33,6 +33,11 @@ ENV_KEYS = {
     "ARK_API_KEY": "ark",
     "OPENAI_API_KEY": "openai",
     "GEMINI_API_KEY": "gemini",
+    "ANTHROPIC_API_KEY": "anthropic",
+    "XAI_API_KEY": "xai",
+    "MISTRAL_API_KEY": "mistral",
+    "GROQ_API_KEY": "groq",
+    "MINIMAX_API_KEY": "minimax",
 }
 
 

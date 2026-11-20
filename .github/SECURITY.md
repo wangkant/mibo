@@ -39,8 +39,7 @@ of them is a vulnerability.
   only programs on the same machine. The server refuses a request that
   carries `Origin`, a `Sec-Fetch-Site` other than `none`, a foreign `Host`,
   or a proxy header. The proxy headers include `X-Forwarded-For`,
-  `Forwarded`, `Via`, `X-Real-IP` and the others listed in
-  [docs/deploy.md](../docs/deploy.md#exposing-the-endpoints). This keeps
+  `Forwarded`, `Via`, `X-Real-IP` and the other proxy headers. This keeps
   web pages and tunnels from reaching the endpoints. A blank `SERVER_HOST`
   means `127.0.0.1`. A network bind (`SERVER_HOST=0.0.0.0`) will not start
   without `CONNECTOR_TOKEN`. On such a bind the deprecated `/v1/onebot`
@@ -68,14 +67,10 @@ of them is a vulnerability.
   local page, bound to 127.0.0.1, reads the token file on the same machine
   and calls the API from its own process, so the token never reaches the
   browser. `DASHBOARD_ENABLED=false` removes the API.
-- **Secrets in the home folder.** API keys and tokens live in `.env`. The
-  credentials of QQ, WeChat, Telegram and Discord bots live in
-  `platforms/direct.json`. Both files are made owner-only where the
-  operating system allows it. Anything that leaks them to a log, a
-  response, a connector or another user is a vulnerability.
-- **The AstrBot plugin**, which passes AstrBot's messages to personagent.
-  It refuses plain `http://` to anything but loopback, and delivers outbox
-  messages only to conversations it has seen itself.
+- **Secrets in the home folder.** API keys and tokens live in `.env`, which
+  is made owner-only where the operating system allows it. Anything that
+  leaks them to a log, a response, a connector or another user is a
+  vulnerability.
 - **What it learns.** Planting an instruction or a memory in the bot from a
   chat without the corroboration the learning rules require is in scope.
   So is making a change that the ledger cannot undo.
@@ -94,10 +89,8 @@ of them is a vulnerability.
 
 ## Running it safely
 
-Read [Exposing the endpoints](../docs/deploy.md#exposing-the-endpoints)
-before you make the service reachable from another machine, and the
-guide's [privacy section](../docs/guide.md#privacy-and-consent) for what to
-keep private.
+Read the guide's [privacy section](../docs/guide.md#privacy-and-consent)
+for what to keep private.
 
 personagent asks PyPI whether a newer release exists at most once a day.
 The request carries only the version number. Set

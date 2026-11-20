@@ -314,13 +314,12 @@ def load_rebuildable_json(path: str | Path,
     """``parse(data)`` for a JSON state file written with ``fsync=False``;
     None when the file is absent or does not load.
 
-    Only for pending_reactions.json and connector_handles.json: both skip
-    fsync, so a power cut can leave them empty or cut off, and the next
-    messages rebuild what they held. A file that is not JSON, or whose shape
+    Only for connector_handles.json, which skips fsync, so a power cut can
+    leave it empty or cut off, and the next messages rebuild what it held. A file that is not JSON, or whose shape
     ``parse`` rejects (ValueError, LookupError, TypeError, AttributeError),
     is moved aside as ``<name>.corrupt``, replacing an older one, with one
     warning, and the caller starts empty. Never for a file written with
-    fsync (ledger, evidence, memory, settings): damage there must stop with
+    fsync (memory, settings): damage there must stop with
     an error, not be started over.
     """
     path = Path(path)

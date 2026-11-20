@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>优品商城 - 首页</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f5f5f5; }
+.top { background: #e1251b; color: #fff; display: flex; gap: 24px; padding: 0 24px; align-items: center; height: 44px; }
+.top span, .top a { color: #fff; text-decoration: none; }
+.more { position: relative; height: 44px; display: flex; align-items: center; }
+.menu { position: absolute; top: 44px; left: 0; background: #fff; border: 1px solid #ddd; min-width: 140px; z-index: 9; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.menu a { display: block; padding: 8px 14px; color: #333; text-decoration: none; } .menu a:hover { background: #f5f5f5; }
+main { max-width: 900px; margin: 20px auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.g { background: #fff; padding: 12px; border-radius: 6px; text-align: center; } .g b { color: #e1251b; }
+</style></head>
+<body>
+<div class="top"><b>优品商城</b><a href="#">首页</a><a href="#">秒杀</a><a href="#">优惠券</a>
+  <div class="more" id="more"><span>更多 ▾</span>
+    <div class="menu" id="menu" hidden><a href="#">我的订单</a><a href="#">我的收藏</a><a href="/t/t23-help.html">帮助中心</a><a href="#">商家入驻</a></div></div></div>
+<main id="goods"></main>
+<script src="/t/kit.js"></script>
+<script>
+// The menu opens only while the pointer is over it, as many shop headers do; a click on 更多 does nothing.
+const more = document.getElementById("more"), menu = document.getElementById("menu");
+more.addEventListener("mouseenter", () => { menu.hidden = false; });
+more.addEventListener("mouseleave", () => { menu.hidden = true; });
+for (const [n, p] of [["保温杯", 89], ["蓝牙耳机", 199], ["羽绒服", 599], ["电热毯", 129], ["加湿器", 159], ["围巾", 79], ["台灯", 99], ["拖鞋", 39]]) {
+  document.getElementById("goods").insertAdjacentHTML("beforeend", `<div class="g"><div>${n}</div><b>¥${p}</b></div>`);
+}
+</script></body></html>

@@ -1,6 +1,6 @@
 """Small sites for the walks' tests: pages describing themselves in the
 standard ways (or not at all), walls, a redirect and a subrequest to an
-internal address, and pages shaped like Bilibili's and YouTube's lists."""
+internal address, and a site's hot list, search and items."""
 from __future__ import annotations
 
 import io
@@ -120,44 +120,30 @@ class Site:
                 + "</head><body><p>Subscribe.</p></body></html>"), {}
         if path == "/file":
             return 200, "application/zip", "PK", {"Content-Disposition": "attachment; filename=a.zip"}
-        # Bilibili-shaped pages
-        if path == "/v/popular/all":
-            return 200, html, ("<html><head><title>Popular</title></head><body><div id='list'></div><script>"
-                               "fetch('/x/web-interface/popular?ps=20&pn=1').then(r => r.json()).then(d => {"
-                               "document.getElementById('list').textContent = d.data.list.length; });"
-                               "</script></body></html>"), {}
-        if path == "/all":
-            words = (query.get("keyword") or [""])[0]
-            cards = "".join(f'<div class="video-card"><a href="//127.0.0.1:{self.server.server_address[1]}'
-                            f'/video/{bv}/"><img></a><h3 title="{words} {title}">{words} {title}</h3></div>'
-                            for bv, title in list(self.videos.items())[:6])
-            return 200, html, f"<html><head><title>search</title></head><body>{cards}</body></html>", {}
-        if path.startswith("/video/BV"):
-            bv = path.split("/")[2]
-            state = {"videoData": {"bvid": bv, "title": self.videos.get(bv, "?"), "desc": "A video description.",
-                                   "pic": f"{self.url}/cover.png", "duration": 125, "pubdate": 1763000000,
-                                   "owner": {"name": "Uploader A", "mid": 99}}}
-            return 200, html, (f'<html><head><title>{self.videos.get(bv, "?")}_bilibili</title>'
-                               f'<meta property="og:title" content="{self.videos.get(bv, "?")}">'
-                               f"<script>window.__INITIAL_STATE__ = {json.dumps(state)};</script></head>"
-                               "<body><p>video page</p></body></html>"), {}
-        # YouTube-shaped pages
-        if path == "/results":
-            items = [{"videoRenderer": {"videoId": f"abcdefghij{n}", "title": {"runs": [{"text": f"Clip {n}"}]}}}
-                     for n in range(5)]
-            data = {"contents": {"sectionListRenderer": {"contents": [{"itemSectionRenderer": {"contents": items}}]}}}
-            return 200, html, (f"<html><head><title>results</title><script>var ytInitialData = "
-                               f"{json.dumps(data)};</script></head><body></body></html>"), {}
-        if path == "/watch":
-            ident = (query.get("v") or [""])[0]
-            player = {"videoDetails": {"videoId": ident, "title": f"Clip {ident[-1]}", "author": "Channel B",
-                                       "lengthSeconds": "61", "shortDescription": "About the clip.",
-                                       "thumbnail": {"thumbnails": [{"url": f"{self.url}/cover.png"}]}},
-                      "microformat": {"playerMicroformatRenderer": {"publishDate": "2026-10-02"}}}
-            if ident == "walledvideo":
-                player = {"playabilityStatus": {"status": "LOGIN_REQUIRED", "reason": "Sign in to confirm"}}
-            return 200, html, (f"<html><head><title>Clip - YouTube</title><script>var ytInitialPlayerResponse = "
-                               f"{json.dumps(player)};</script></head><body><p>watch</p></body></html>"), {}
+        # A site's lists: a hot list its page fetches and draws, a search drawn by the server, and the items
+        # they lead to, which declare no picture of their own (the row's is the cover).
+        if path == "/hot":
+            return 200, html, ("<html><head><title>Popular</title></head><body><h1>Popular now</h1>"
+                               "<div id='list'></div><script>fetch('/api/hot').then(r => r.json()).then(d => {"
+                               "document.getElementById('list').innerHTML = d.rows.map(r => "
+                               "`<div class=\"card\"><a href=\"/item/${r.id}\"><img src=\"/cover.png\"></a>"
+                               "<h3><a href=\"/item/${r.id}\">${r.title}</a></h3><span class=\"by\">Uploader A</span>"
+                               "</div>`).join(''); });</script></body></html>"), {}
+        if path == "/find":
+            words = (query.get("q") or [""])[0]
+            cards = "".join(f'<div class="result"><a href="/item/{ident}"><img src="{self.url}/cover.png"></a>'
+                            f'<h3><a href="/item/{ident}">{words} {title}</a></h3><span>Uploader A</span></div>'
+                            for ident, title in list(self.videos.items())[:6])
+            return 200, html, (f"<html><head><title>{words} - search</title></head><body><h1>Results</h1>"
+                               f"{cards}</body></html>"), {}
+        if path.startswith("/item/"):
+            ident = path.split("/")[2]
+            return 200, html, (f'<html><head><title>{self.videos.get(ident, "?")}</title>'
+                               f'<meta property="og:title" content="{self.videos.get(ident, "?")}">'
+                               + ld({"@type": "VideoObject", "name": self.videos.get(ident, "?"),
+                                     "description": "A video description.", "duration": "PT2M5S",
+                                     "uploadDate": "2026-11-12", "author": {"@type": "Person", "name": "Uploader A"}})
+                               + "</head><body><p>video page</p></body></html>"), {}
         return 404, html, "<title>gone</title>", {}
 
     def _handler(self):
@@ -172,10 +158,9 @@ class Site:
                 site.loads.append(url.path)
                 if url.path == "/cover.png":
                     return self._send(200, "image/png", site.cover)
-                if url.path == "/x/web-interface/popular":
-                    rows = [{"bvid": bv, "title": title} for bv, title in site.videos.items()]
-                    return self._send(200, "application/json",
-                                      json.dumps({"code": 0, "data": {"list": rows}}).encode())
+                if url.path == "/api/hot":
+                    rows = [{"id": ident, "title": title} for ident, title in site.videos.items()]
+                    return self._send(200, "application/json", json.dumps({"rows": rows}).encode())
                 status, kind, body, headers = site.page(url.path, parse_qs(url.query))
                 self._send(status, kind, body.encode("utf-8"), headers)
 

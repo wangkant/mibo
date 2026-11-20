@@ -17,7 +17,6 @@ SPEC = Spec(
     # Recall must be the whole message: "小夏 記憶力真好" is a compliment.
     recall=(r"(?:你\s*)?(?:都\s*)?(?:還\s*)?(?:記得(?:什麼|啥|哪些)|記了(?:什麼|啥|哪些)"
             r"|記憶|有什麼記憶|腦袋裡有什麼)"),
-    learned=r"(?:你)?(?:學到|學會|學了)(?:了)?(?:什麼|啥|哪些)",
     # The question mark is often dropped: "記住了嗎", "記下來沒", "忘記了呢".
     question_end=r"(?:[?？]|嗎|麼|呢|沒有?)[\s?？!！。.~～]*$",
     # Judged on a forget only: "忘了帶傘怎麼辦" asks, it does not delete.
@@ -36,12 +35,6 @@ SPEC = Spec(
                           "全部記憶", "所有記憶", "全部记忆", "所有记忆"}),
     # en's 我 excludes 们 only; here 我們 is not the saver either.
     first_person=FIRST_PERSON.replace("我(?!们)", "我(?![們们])"),
-    made_by=r"開發|研發|訓練|打造|出品|推出|家的",
-    leak_labels=r"輸入|發言人|發言者|意圖|決策|風格|分析|判斷",
-    assistant_tells=(r"(?:抱歉|對不起)[，,。!！\s]*(?:但是?|不過)?[，,\s]*"
-                     r"我(?:無法|不能(?=回答|提供|協助|滿足|回應))"
-                     r"(?:回答|提供|協助|滿足|回應|處理|完成|幫助|幫你|幫您)"
-                     r"|希望[^。！？\n]{0,8}(?:有所幫助|有幫助|幫到你|幫到您|幫得上忙)"),
     replies={
         "remember_what": ("記什麼？你什麼都沒說", "說啊，要記啥", "要我記什麼"),
         "not_instructions": ("我只記事實，不記指令",),
@@ -51,33 +44,17 @@ SPEC = Spec(
         "forgotten": ("忘掉了", "刪掉了", "沒了"),
         "empty": ("腦袋空空的", "什麼都沒記", "一片空白"),
         "recall_head": ("我記得這些：",),
-        "said": ("你說過：",),
-        "about": ("關於{name}：",),
-        "from": ("來自{name}：",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("要等我的管理員核准，我才能在這裡回覆\n這次申請的代碼是 {code}，麻煩轉告我的管理員",),
-        "approval_group": ("我的管理員還沒核准這個群組，所以我暫時不能在這裡回覆",),
+        "secret": ('這條沒有記下：身分證號、銀行卡號、密碼和驗證碼不會保存。',),
     },
     failure_excuses=("等我一下，網路有點卡",
                      "訊號不太好，稍等",
                      "卡住了，等等再聊"),
-    learned_text={
-        "head": ("記憶 {memories} 則，學到 {examples} 則回覆和 {fixes} 組糾正，"
-                 "{voice} 則仍在觀察（再獲得一次一致的反應即生效），{admin} 則由我自行判斷"),
-        "score": "，最近自評 {score}/5",
-        "pair": "原本：{was}，改成：{better}",
-        "someone_else": "另一個聊天裡有人",
-        "someone": "有人",
-        "retry": "{who} 接受了重答",
-        "self_review": "自我檢討",
-        "self_eval": "自評滿分",
-        "corrected": "{who} 糾正了",
-        "missed": "{who} 說沒答對",
-        "liked": "{who} 覺得不錯",
-        "by_me": "由我自己決定",
-        "by_person": "人工啟用",
-        "passed": "{events} 條證據其中 {strong} 條強，通過",
-        "why": "原因：{steps}",
-        "sep": "，",
-    },
+    unsaid=(r"(?:別|别|不要|不用|甭|千萬別)\s*(?:給我)?\s*(?:記|记)(?:下來|下|住|著|錄|這個|這)?(?![仇錯恨性得憶者])"
+            r"|這(?:個|件事|事)?(?:你)?(?:就)?別記"),
+    forget_that=(r"把(?:我)?(?:剛才|剛剛|之前|上面)?(?:說的|講的|提的)?(?:的)?"
+                 r"(?:那件事|這件事|那個|這個|那些|這些|那段|這段|那事|這事|剛才的|這|那)(?:都|也)?忘(?:了|掉|記)"
+                 r"|^忘(?:了|掉|記)(?:它|這個|那個|這件事|那件事|剛才的|我剛才說的|我說的)"
+                 r"|當我沒說(?:過)?"),
+    lead_in=r"算了|好了|好吧|對了|那個|嗯|哎|唉|還有",
+    kinds=("關於你", "喜歡", "不喜歡", "近況", "計畫", "怎麼對待你"),
 )

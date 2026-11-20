@@ -33,9 +33,7 @@ personagent
 
 Настройку может выполнить помощник для программирования: попросите его прочитать [setup-for-agents.md](setup-for-agents.md) и настроить personagent.
 
-В Windows можно также скачать ZIP с исходным кодом, распаковать его и дважды щёлкнуть `start.bat`. Он создаст в папке собственное окружение Python, предварительно скачав Python, если его нет на компьютере, и откроет ту же страницу. При первом запуске он также поместит значок personagent на рабочий стол и в меню «Пуск».
-
-Чтобы запустить его из клона, создайте для него отдельный venv: `python -m venv .venv`, затем `.venv/bin/python -m pip install -e .` и `.venv/bin/python -m persona_agent`. В Windows интерпретатор находится в `.venv\Scripts\python.exe`, либо можно дважды щёлкнуть `start.bat`.
+Чтобы запустить его из клона, создайте для него отдельный venv: `python -m venv .venv`, затем `.venv/bin/python -m pip install -e .` и `.venv/bin/python -m persona_agent`. В Windows интерпретатор находится в `.venv\Scripts\python.exe`.
 
 ## Войдите и общайтесь
 

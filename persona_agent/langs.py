@@ -1,19 +1,12 @@
-"""The languages personagent speaks to the person running it.
-
-English and Chinese sit next to the code that prints them. The other languages
-read `locales/<code>.json`, keyed by the English sentence. The prompts and the
-bundled examples and filters exist in English and Chinese; `content` says which
-of the two a language uses.
+"""The languages personagent knows: their codes, their names, and which of the
+prompts' two languages each reads (`content`). The interface's own words are in
+i18n.py's catalogs.
 """
 from __future__ import annotations
 
-import functools
-import json
 import os
-import re
 import sys
 import unicodedata
-from pathlib import Path
 
 from .chatlangs import CODES
 
@@ -33,11 +26,6 @@ _ALIASES = {"cn": "zh", "chinese": "zh", "中文": "zh", "english": "en",
 _LOWER = {code.lower(): code for code in CODES}
 _TRADITIONAL = {"tw", "hk", "mo", "hant"}
 
-_LOCALES = Path(__file__).resolve().parent / "locales"
-#: `--help`, `doctor` and the refusals of a start, keyed by the English sentence;
-#: `{0}` stands for what the sentence is built around.
-_TERMINAL = _LOCALES / "terminal"
-
 
 def normalize(value: object) -> str:
     """The code for a spelling of a language (zh-CN, zh_TW, pt, Japanese), or ''."""
@@ -56,51 +44,6 @@ def content(lang: str) -> str:
     if lang in ("zh", "zh-TW"):
         return "zh"
     return "en" if lang in CODES else lang
-
-
-@functools.lru_cache(maxsize=None)
-def catalog(lang: str) -> dict:
-    path = _LOCALES / f"{lang}.json"
-    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-
-
-def say(en: str, zh: str, lang: str) -> str:
-    """One sentence in `lang`."""
-    if lang == "zh":
-        return zh
-    if lang == "en":
-        return en
-    return catalog(lang).get(en, zh if lang == "zh-TW" else en)
-
-
-def table(en, zh, lang: str):
-    """A tree of sentences, written twice with one shape, in `lang`."""
-    if lang == "en":
-        return en
-    if lang == "zh":
-        return zh
-    if isinstance(en, str):
-        return say(en, zh, lang)
-    if isinstance(en, dict):
-        return {key: table(value, zh[key], lang) for key, value in en.items()}
-    if isinstance(en, (list, tuple)):
-        return type(en)(table(a, b, lang) for a, b in zip(en, zh))
-    return en
-
-
-@functools.lru_cache(maxsize=None)
-def _terminal_catalog(lang: str) -> tuple[dict, tuple]:
-    """A language's terminal sentences, and those with slots as patterns, the
-    longest first so a short shape cannot swallow a long one."""
-    path = _TERMINAL / f"{lang}.json"
-    sentences = json.loads(path.read_text(encoding="utf-8"))
-    shapes = []
-    for english, there in sentences.items():
-        if re.search(r"\{\d\}", english):
-            pattern = re.sub(r"\\\{(\d)\\\}", r"(?P<s\1>.+?)", re.escape(english))
-            shapes.append((len(english), re.compile(pattern, re.DOTALL), there))
-    shapes.sort(key=lambda shape: -shape[0])
-    return sentences, tuple((pattern, there) for _, pattern, there in shapes)
 
 
 def utf8_console() -> None:
@@ -132,56 +75,3 @@ def interactive() -> bool:
 def width(text: str) -> int:
     """Columns `text` takes in a terminal: CJK characters take two."""
     return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
-
-
-def under_uvx() -> bool:
-    """Run by uvx, from a throwaway environment in uv's cache under archive-v<N>;
-    a folder that only starts that way (Archive-Videos) is not it."""
-    return bool(re.search(r"/archive-v\d+/", sys.prefix.replace("\\", "/").lower() + "/"))
-
-
-_terminal_lang: dict = {}
-
-
-def terminal_lang() -> str:
-    """AGENT_LANG from the environment or the home's `.env`, else the system's."""
-    from . import home
-    from .setup_wizard import detect_lang, env_get
-
-    named = normalize(os.environ.get("AGENT_LANG"))
-    if named:
-        return named
-    # Asked once per sentence: the file is read again only after it changes.
-    path = home.find_home() / ".env"
-    try:
-        stat = path.stat()
-        key = (str(path), stat.st_mtime_ns, stat.st_size)
-    except OSError:
-        key = (str(path), 0, 0)
-    if key not in _terminal_lang:
-        _terminal_lang.clear()
-        _terminal_lang[key] = normalize(env_get(path, "AGENT_LANG")) or detect_lang()
-    return _terminal_lang[key]
-
-
-def term(text: str, *, keep: tuple = ()) -> str:
-    """One terminal sentence in the language of this install, slots kept. A
-    slot holding a sentence is translated too; one holding a value in `keep`
-    (a name, a quotation) stays as given, even if it reads like a word here."""
-    lang = terminal_lang()
-    if lang == "en":
-        return text
-    sentences, shapes = _terminal_catalog(lang)
-    if text in sentences:
-        return sentences[text]
-    kept = {str(value) for value in keep}
-
-    def fill(value: str) -> str:
-        return value if value in kept else term(value)
-    for pattern, there in shapes:
-        match = pattern.fullmatch(text)
-        if match:
-            return re.sub(r"\{(\d)\}", lambda slot: fill(match[f"s{slot[1]}"]), there)
-    if "\n" in text:
-        return "\n".join(term(line) for line in text.split("\n"))
-    return text

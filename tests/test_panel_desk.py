@@ -1,17 +1,16 @@
-"""The desk panel: icon and start-at-sign-in links, opening the data folders,
-backups, restore and starting over."""
+"""The desk panel: start at sign-in, and backing up, restoring and resetting the home."""
 from __future__ import annotations
 
-import concurrent.futures
 import io
 import json
 import os
 import zipfile
 
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 import pytest
 
-from persona_agent import langs, shortcut
+from persona_agent import i18n, shortcut
 from persona_agent import setup_wizard as sw
 from persona_agent import welcome
 from persona_agent.panels import desk
@@ -19,7 +18,7 @@ from persona_agent.panels import desk
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 KEY = "sk-desk-secret-0123456789"
-PLATFORM_SECRET = "bot-token-secret-987654"
+MCP_KEY = "ghp-desk-secret-0123456789"
 
 
 @pytest.fixture
@@ -32,7 +31,6 @@ def workspace(tmp_path, monkeypatch):
     monkeypatch.setenv(desk.DIRS_ENV, os.pathsep.join([str(desktop), str(documents)]))
     links = [tmp_path / "links" / k for k in shortcut.SPECIAL]
     monkeypatch.setenv(shortcut.DIRS_ENV, os.pathsep.join(map(str, links)))
-    monkeypatch.delenv("AGENT_RUNTIME_DIR", raising=False)
     value = welcome.Workspace(home)
     yield value
     value.close()
@@ -40,9 +38,13 @@ def workspace(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(workspace):
-    with TestClient(welcome.create_app(workspace.home, TOKEN, workspace=workspace),
-                    base_url="http://127.0.0.1") as value:
-        yield value
+    app = welcome.create_app(workspace.home, TOKEN, workspace=workspace)
+    # What welcome._start gives the page: a new start, and this one ending.
+    app.state.restarts = []
+    app.state.relaunch = lambda: app.state.restarts.append("relaunch")
+    app.state.shutdown = lambda: app.state.restarts.append("shutdown")
+    # No lifespan: its loops write into the home, which the app that asked has left by the next start.
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 @pytest.fixture
@@ -53,25 +55,25 @@ def opened(monkeypatch):
 
 
 def seed(home):
-    sw.write_env(home / ".env", {"LLM_API_KEY": KEY, "LLM_MODEL": "m", "PERSONA_NAME": "Ann"})
+    sw.write_env(home / ".env", {"LLM_API_KEY": KEY, "LLM_MODEL": "m", "PERSONA_NAME": "Ann",
+                                 "MIBO_MCP_GITHUB_TOKEN": MCP_KEY})
     (home / "persona.txt").write_text("You are Ann.\n", encoding="utf-8")
+    (home / "mcp.json").write_text('{"mcpServers": {}}', encoding="utf-8")
+    (home / "skills" / "notes").mkdir(parents=True)
+    (home / "skills" / "notes" / "SKILL.md").write_text("notes", encoding="utf-8")
     runtime = home / "runtime"
-    (runtime / "desktop").mkdir(parents=True)
+    (runtime / "desktop" / "webview").mkdir(parents=True)
+    (runtime / "desktop" / "webview" / "Cookies").write_text("site sign-in", encoding="utf-8")
     (runtime / "desktop" / "app.log").write_text("log line\n", encoding="utf-8")
+    (runtime / "desktop" / "welcome.json").write_text('{"url": "x"}', encoding="utf-8")
+    (runtime / "desktop" / "browser-chat.json").write_text('{"history": []}', encoding="utf-8")
+    (runtime / "desktop" / "app.json").write_text('{"toured": true}', encoding="utf-8")
     (runtime / "memory.json").write_text('{"a": "likes tea"}', encoding="utf-8")
-    (runtime / "core_memory.json").write_text("{}", encoding="utf-8")
-    (runtime / "stickers.json").write_text("{}", encoding="utf-8")
     (runtime / "dashboard.token").write_text("dash-token", encoding="utf-8")
-    (runtime / "trial").mkdir()
-    (runtime / "trial" / "x.json").write_text("{}", encoding="utf-8")
-    (home / "stickers").mkdir()
-    (home / "stickers" / "cat.png").write_bytes(b"png")
+    (runtime / "log").mkdir()
+    (runtime / "log" / "x.jsonl").write_text("{}", encoding="utf-8")
     (home / "data").mkdir()
-    (home / "data" / "lorebook.en.json").write_text("[]", encoding="utf-8")
-    (home / "platforms" / "astrbot" / "bin").mkdir(parents=True)
-    (home / "platforms" / "astrbot" / "bin" / "big.exe").write_bytes(b"x" * 10)
-    (home / "platforms" / "direct.json").write_text(
-        json.dumps({"telegram": {"token": PLATFORM_SECRET}}), encoding="utf-8")
+    (home / "data" / "examples.en.jsonl").write_text("", encoding="utf-8")
 
 
 def post(client, path, payload=None):
@@ -79,59 +81,32 @@ def post(client, path, payload=None):
 
 
 def test_every_route_needs_the_local_token(client):
-    assert client.get("/api/desk").status_code == 403
+    assert client.get("/api/desk/data").status_code == 403
     assert client.post("/api/desk/reset", json={}).status_code == 403
-    assert client.post("/api/desk/open", json={"place": "home"},
+    assert client.post("/api/desk/open", json={"place": "desktop"},
                        headers={**HEADERS, "Origin": "https://other.example"}).status_code == 403
 
 
-def test_overview_shows_where_things_are_and_no_secret(client, workspace, tmp_path):
+def test_data_names_the_places_and_no_secret(client, workspace, tmp_path):
     seed(workspace.home)
-    answer = client.get("/api/desk", headers=HEADERS)
+    answer = client.get("/api/desk/data", headers=HEADERS)
     assert answer.status_code == 200
     value = answer.json()
-    assert value["home"] == str(workspace.home)
-    assert {p["id"] for p in value["places"]} == set(desk.PLACES)
     assert {t["id"]: t["path"] for t in value["targets"]} == {
         "desktop": str(tmp_path / "Desktop"), "documents": str(tmp_path / "Documents"),
         "backups": str(workspace.home / "backups")}
-    assert value["backups"] == []
-    assert KEY not in answer.text and PLATFORM_SECRET not in answer.text
+    assert value["backups"] == [] and value["restored"] is None
+    assert KEY not in answer.text
 
 
-def test_open_shows_only_known_places(client, workspace, opened):
-    seed(workspace.home)
-    home = workspace.home
-    expected = {"home": home, "persona": home / "persona.txt", "logs": home / "runtime" / "desktop",
-                "memory": home / "runtime", "stickers": home / "stickers", "data": home / "data"}
-    for place, path in expected.items():
-        assert post(client, "/open", {"place": place}).json() == {"ok": True}
-        assert opened[-1] == path.resolve() or opened[-1] == path
-    for place in ("..", "C:\\Windows", "../.env", ""):
-        answer = post(client, "/open", {"place": place})
-        assert answer.status_code == 400 and answer.json() == {"error": "desk_invalid_place"}
-    assert len(opened) == len(expected)
+def test_open_shows_only_the_places_a_backup_goes(client, opened, tmp_path, workspace):
+    assert post(client, "/open", {"place": "backups"}).json() == {"ok": True}
+    assert opened == [workspace.home / "backups"] and (workspace.home / "backups").is_dir()
+    assert post(client, "/open", {"place": "D:/anywhere"}).json() == {"error": "desk_invalid_place"}
+    assert opened == [workspace.home / "backups"]
 
 
-def test_open_makes_a_missing_folder_but_not_a_missing_persona(client, workspace, opened, monkeypatch):
-    assert post(client, "/open", {"place": "stickers"}).status_code == 200
-    assert (workspace.home / "stickers").is_dir()
-    answer = post(client, "/open", {"place": "persona"})
-    assert answer.json() == {"error": "desk_missing"}
-
-    def broken(path):
-        raise OSError("no file manager")
-    monkeypatch.setattr(desk, "open_path", broken)
-    assert post(client, "/open", {"place": "home"}).json() == {"error": "desk_open_failed"}
-
-
-def test_a_runtime_outside_the_home_is_refused(client, workspace, opened):
-    sw.write_env(workspace.env, {"AGENT_RUNTIME_DIR": "../elsewhere"})
-    assert post(client, "/open", {"place": "memory"}).json() == {"error": "desk_runtime_elsewhere"}
-    assert opened == []
-
-
-# -- links ------------------------------------------------------------------
+# -- start at sign-in --------------------------------------------------------
 
 def fake_windows(monkeypatch, found):
     """Windows' answer about the links, and every script it was asked to run."""
@@ -142,22 +117,15 @@ def fake_windows(monkeypatch, found):
         return (json.dumps(found) if "ConvertTo-Json" in source else ""), ""
     monkeypatch.setattr(shortcut, "WINDOWS", True)
     monkeypatch.setattr(shortcut, "_powershell", powershell)
-    monkeypatch.setattr(langs, "under_uvx", lambda: False)
     return ran
 
 
-def test_link_status_tells_this_copy_from_another(client, workspace, monkeypatch):
+def test_start_at_sign_in_tells_this_copy_from_another(client, workspace, monkeypatch):
     program, arguments = shortcut.target(workspace.home)
-    mine = {"target": str(program), "arguments": arguments}
-    fake_windows(monkeypatch, [{"kind": "desktop", **mine}, {"kind": "programs", **mine},
-                               {"kind": "startup", "target": str(program), "arguments": "-m other"}])
-    value = client.get("/api/desk/shortcuts", headers=HEADERS).json()
-    assert value == {"supported": True, "login_supported": True, "uvx": False, "icon": "on", "login": "other"}
-    fake_windows(monkeypatch, [{"kind": "desktop", **mine}])
-    assert client.get("/api/desk/shortcuts", headers=HEADERS).json()["icon"] == "other"
+    fake_windows(monkeypatch, [{"kind": "startup", "target": str(program), "arguments": "-m other"}])
+    assert client.get("/api/desk/shortcuts", headers=HEADERS).json() == {"login_supported": True, "login": "other"}
     fake_windows(monkeypatch, [])
-    value = client.get("/api/desk/shortcuts", headers=HEADERS).json()
-    assert value["icon"] == "off" and value["login"] == "off"
+    assert client.get("/api/desk/shortcuts", headers=HEADERS).json()["login"] == "off"
 
 
 def test_status_asks_only_the_redirected_folders(workspace, tmp_path, monkeypatch):
@@ -169,56 +137,65 @@ def test_status_asks_only_the_redirected_folders(workspace, tmp_path, monkeypatc
         shortcut.status(workspace.home)
 
 
-def test_adding_and_removing_links_writes_only_their_folders(client, workspace, tmp_path, monkeypatch):
+def test_turning_it_on_writes_only_the_startup_link(client, workspace, tmp_path, monkeypatch):
     ran = fake_windows(monkeypatch, [])
     answer = post(client, "/shortcut", {"which": "login", "on": True})
-    assert answer.status_code == 200 and answer.json()["supported"] is True
+    assert answer.status_code == 200 and answer.json()["login_supported"] is True
     made = [s for s in ran if "Save-Link $final" in s][-1]
     assert str(tmp_path / "links" / "startup") in made and "Desktop" not in made
     assert f'--home "{workspace.home}"' in made
-    post(client, "/shortcut", {"which": "icon", "on": True})
-    made = [s for s in ran if "Save-Link $final" in s][-1]
-    assert str(tmp_path / "links" / "desktop") in made and str(tmp_path / "links" / "programs") in made
-    assert "startup" not in made
-    post(client, "/shortcut", {"which": "icon", "on": False})
-    assert "Remove-Item" in [s for s in ran if "ConvertTo-Json" not in s][-1]
 
 
-def test_link_refusals(client, monkeypatch):
+def test_start_at_sign_in_refusals(client, monkeypatch):
     fake_windows(monkeypatch, [])
-    assert post(client, "/shortcut", {"which": "tray", "on": True}).json() == {"error": "desk_invalid_place"}
-    monkeypatch.setattr(langs, "under_uvx", lambda: True)
-    assert post(client, "/shortcut", {"which": "icon", "on": True}).json() == {"error": "desk_uvx"}
-    # Taking a link away needs no install that stays.
-    assert post(client, "/shortcut", {"which": "icon", "on": False}).status_code == 200
-    monkeypatch.setattr(langs, "under_uvx", lambda: False)
     monkeypatch.setattr(shortcut, "_powershell", lambda source: ("", "access denied"))
-    assert post(client, "/shortcut", {"which": "icon", "on": True}).json() == {"error": "desk_shortcut_failed"}
+    assert post(client, "/shortcut", {"on": True}).json() == {"error": "desk_shortcut_failed"}
     assert client.get("/api/desk/shortcuts", headers=HEADERS).json() == {"error": "desk_shortcut_failed"}
     monkeypatch.setattr(shortcut, "WINDOWS", False)
-    assert client.get("/api/desk/shortcuts", headers=HEADERS).json()["supported"] is False
-    assert post(client, "/shortcut", {"which": "icon", "on": True}).json() == {"error": "desk_unsupported"}
+    monkeypatch.setattr(desk.autostart, "MACOS", False)
+    assert client.get("/api/desk/shortcuts", headers=HEADERS).json()["login_supported"] is False
+    assert post(client, "/shortcut", {"on": True}).json() == {"error": "desk_unsupported"}
 
 
-# -- backups ----------------------------------------------------------------
+def test_a_startup_link_made_here_reads_as_on(workspace, monkeypatch):
+    program, arguments = shortcut.target(workspace.home)
+    made = shortcut.script(workspace.home, kinds=shortcut.LOGIN)
+    assert f"$link.Arguments = '{arguments} --background'" in made
+    fake_windows(monkeypatch, [{"kind": "startup", "target": str(program),
+                                "arguments": arguments + " --background"}])
+    assert shortcut.status(workspace.home)["startup"] == "on"
 
-def test_backup_holds_the_state_and_leaves_out_logs_and_downloads(client, workspace, tmp_path):
+
+# -- backing up ---------------------------------------------------------------
+
+def test_a_backup_holds_the_home_but_no_keys_logs_sign_ins_or_chat_record(client, workspace, tmp_path):
     seed(workspace.home)
     answer = post(client, "/backup", {"to": "documents"})
     assert answer.status_code == 200
     value = answer.json()
     path = tmp_path / "Documents" / value["name"]
     assert value["path"] == str(path) and value["size"] == path.stat().st_size > 0
-    assert KEY not in answer.text and PLATFORM_SECRET not in answer.text
-    names = set(zipfile.ZipFile(path).namelist())
-    assert {desk.MANIFEST, ".env", "persona.txt", "runtime/memory.json", "runtime/core_memory.json",
-            "runtime/stickers.json", "stickers/cat.png", "data/lorebook.en.json",
-            "platforms/direct.json"} <= names
-    assert not any(n.startswith(("runtime/desktop", "runtime/trial", "platforms/astrbot")) for n in names)
-    assert "runtime/dashboard.token" not in names
+    archive = zipfile.ZipFile(path)
+    names = set(archive.namelist())
+    assert {desk.MANIFEST, ".env", "persona.txt", "mcp.json", "skills/notes/SKILL.md", "runtime/memory.json",
+            "runtime/desktop/browser-chat.json", "runtime/desktop/app.json", "data/examples.en.jsonl"} <= names
+    for left in ("runtime/desktop/app.log", "runtime/desktop/welcome.json",
+                 "runtime/desktop/webview/Cookies", "runtime/log/x.jsonl"):
+        assert left not in names, left
+    env = archive.read(".env").decode("utf-8")
+    assert KEY not in env and MCP_KEY not in env and "LLM_MODEL=m" in env and "LLM_API_KEY=" in env
+    assert json.loads(archive.read(desk.MANIFEST))["secrets"] is False
     assert [b["name"] for b in value["backups"]] == [value["name"]]
     assert value["backups"][0]["place"] == "documents"
     assert post(client, "/backup", {"to": "D:/anywhere"}).json() == {"error": "desk_invalid_place"}
+
+
+def test_keys_go_into_a_backup_only_when_asked(client, workspace, tmp_path):
+    seed(workspace.home)
+    name = post(client, "/backup", {"to": "desktop", "secrets": True}).json()["name"]
+    archive = zipfile.ZipFile(tmp_path / "Desktop" / name)
+    assert KEY in archive.read(".env").decode("utf-8") and MCP_KEY in archive.read(".env").decode("utf-8")
+    assert json.loads(archive.read(desk.MANIFEST))["secrets"] is True
 
 
 def test_backup_reports_a_folder_it_cannot_write(client, workspace, monkeypatch, tmp_path):
@@ -231,46 +208,33 @@ def test_backup_reports_a_folder_it_cannot_write(client, workspace, monkeypatch,
     assert post(client, "/backup", {"to": "desktop"}).json() == {"error": "desk_missing"}
 
 
-def stopped_services(workspace, monkeypatch, running=()):
-    """Every stop and start, in order; `running` is what ran before."""
-    calls = []
-    running = set(desk.SERVICES) if running is True else set(running)
-    monkeypatch.setattr(workspace.services, "running", lambda name: name in running)
-    monkeypatch.setattr(workspace.services, "close", lambda: calls.append("close"))
-    for name in desk.SERVICES:
-        monkeypatch.setattr(workspace.services, f"start_{name}",
-                            lambda name=name: calls.append(f"start {name}"))
-    monkeypatch.setattr(workspace, "_connect_plugin", lambda: None)
-    return calls
+# -- restoring ------------------------------------------------------------------
 
-
-def settled(workspace, calls):
-    if workspace._future is not None:
-        workspace._future.result(timeout=10)
-    return calls
-
-
-def test_restore_brings_the_backup_back_after_saving_the_present(client, workspace, monkeypatch):
+def test_a_restore_is_done_by_the_next_start_and_keeps_the_keys_here(client, workspace, tmp_path):
     seed(workspace.home)
-    name = post(client, "/backup", {"to": "backups"}).json()["name"]
     home = workspace.home
-    (home / "runtime" / "memory.json").write_text('{"b": "new"}', encoding="utf-8")
-    (home / "runtime" / "learned-later.jsonl").write_text("{}\n", encoding="utf-8")
-    (home / "stickers" / "dog.png").write_bytes(b"png")
-    (home / "persona.txt").write_text("Someone else.\n", encoding="utf-8")
-    calls = stopped_services(workspace, monkeypatch, running=True)
-    answer = post(client, "/restore", {"place": "backups", "name": name})
-    assert answer.status_code == 200, answer.text
-    value = answer.json()
-    assert settled(workspace, calls) == ["close", "start agent", "start direct"],         "stopped first, started again after"
+    name = post(client, "/backup", {"to": "desktop"}).json()["name"]
+    (home / "runtime" / "memory.json").write_text('{"b": "later"}', encoding="utf-8")
+    (home / "skills" / "later").mkdir()
+    (home / "skills" / "later" / "SKILL.md").write_text("later", encoding="utf-8")
+    answer = post(client, "/restore", {"place": "desktop", "name": name})
+    assert answer.json() == {"restarting": True}
+    assert client.app.state.restarts == ["relaunch", "shutdown"]
+    assert json.loads((home / "runtime" / "desktop" / "pending.json").read_text(encoding="utf-8")) == {
+        "restore": str(tmp_path / "Desktop" / name)}
+    desk.apply_pending(home)
     assert (home / "runtime" / "memory.json").read_text(encoding="utf-8") == '{"a": "likes tea"}'
-    assert not (home / "runtime" / "learned-later.jsonl").exists()
-    assert not (home / "stickers" / "dog.png").exists() and (home / "stickers" / "cat.png").exists()
-    assert (home / "persona.txt").read_text(encoding="utf-8") == "You are Ann.\n"
-    assert (home / "runtime" / "desktop" / "app.log").exists(), "logs are left alone"
-    safety = zipfile.ZipFile(value["safety"])
-    assert safety.read("persona.txt").strip() == b"Someone else."
-    assert KEY not in answer.text
+    assert not (home / "skills" / "later").exists()
+    values = dotenv_values(home / ".env")
+    assert values["LLM_API_KEY"] == KEY and values["MIBO_MCP_GITHUB_TOKEN"] == MCP_KEY
+    assert (home / "runtime" / "desktop" / "webview" / "Cookies").exists()
+    assert (home / "runtime" / "log" / "x.jsonl").exists()
+    assert not (home / "runtime" / "desktop" / "pending.json").exists()
+    safety = [p.name for p in (home / "backups").glob("mibo-backup-*-before-restore.zip")]
+    assert len(safety) == 1
+    told = client.get("/api/desk/data", headers=HEADERS).json()
+    assert told["restored"] == {"error": ""}
+    assert client.get("/api/desk/data", headers=HEADERS).json()["restored"] is None
 
 
 def make_zip(path, members, manifest=True):
@@ -284,154 +248,40 @@ def make_zip(path, members, manifest=True):
 @pytest.mark.parametrize("members,manifest", [
     ({"../evil.txt": "x"}, True),
     ({"runtime/../../evil.txt": "x"}, True),
-    ({"persona_agent/welcome.py": "x"}, True),
     ({"/abs.txt": "x"}, True),
     ({"C:/abs.txt": "x"}, True),
     ({"runtime\\..\\evil.txt": "x"}, True),
-    ({"platforms/astrbot/bin/x.exe": "x"}, True),
-    ({"runtime/desktop/children-1.json": "{}"}, True),
+    ({"runtime/desktop/welcome.json": "{}"}, True),
     ({"runtime/desktop/webview/x": "x"}, True),
+    ({"backups/mibo-backup-1.zip": "x"}, True),
     ({"persona.txt": "x"}, False),
 ])
-def test_restore_refuses_a_zip_with_unexpected_files(client, workspace, tmp_path, monkeypatch, members, manifest):
+def test_restore_refuses_a_zip_with_unexpected_files(client, workspace, tmp_path, members, manifest):
     seed(workspace.home)
-    make_zip(tmp_path / "Desktop" / "personagent-backup-bad.zip", members, manifest)
-    calls = stopped_services(workspace, monkeypatch)
-    answer = post(client, "/restore", {"place": "desktop", "name": "personagent-backup-bad.zip"})
+    make_zip(tmp_path / "Desktop" / "mibo-backup-bad.zip", members, manifest)
+    answer = post(client, "/restore", {"place": "desktop", "name": "mibo-backup-bad.zip"})
     assert answer.json() == {"error": "desk_invalid_backup"}
-    assert calls == [], "nothing was stopped"
-    assert (workspace.home / "persona.txt").read_text(encoding="utf-8") == "You are Ann.\n"
-    assert not (tmp_path / "evil.txt").exists() and not (workspace.home / "backups").exists()
+    assert client.app.state.restarts == []
+    assert not (workspace.home / "runtime" / "desktop" / "pending.json").exists()
 
 
-def test_restore_refusals(client, workspace, tmp_path, monkeypatch):
+def test_restore_refusals(client, workspace, tmp_path):
     for payload in ({"place": "desktop", "name": "../x.zip"}, {"place": "desktop", "name": "other.zip"},
-                    {"place": "elsewhere", "name": "personagent-backup-1.zip"}):
+                    {"place": "elsewhere", "name": "mibo-backup-1.zip"}):
         assert post(client, "/restore", payload).json() == {"error": "desk_invalid_backup"}
-    assert post(client, "/restore", {"place": "desktop", "name": "personagent-backup-none.zip"}).json() \
+    assert post(client, "/restore", {"place": "desktop", "name": "mibo-backup-none.zip"}).json() \
         == {"error": "desk_missing"}
-    (tmp_path / "Desktop" / "personagent-backup-junk.zip").write_bytes(b"not a zip")
-    assert post(client, "/restore", {"place": "desktop", "name": "personagent-backup-junk.zip"}).json() \
+    (tmp_path / "Desktop" / "mibo-backup-junk.zip").write_bytes(b"not a zip")
+    assert post(client, "/restore", {"place": "desktop", "name": "mibo-backup-junk.zip"}).json() \
         == {"error": "desk_invalid_backup"}
-    make_zip(tmp_path / "Desktop" / "personagent-backup-ok.zip", {"persona.txt": "x"})
-    pending = concurrent.futures.Future()
-    workspace._future = pending
-    assert post(client, "/restore", {"place": "desktop", "name": "personagent-backup-ok.zip"}).json() \
-        == {"error": "busy"}
-    assert post(client, "/forget").json() == {"error": "busy"}
-    assert post(client, "/reset").json() == {"error": "busy"}
-    pending.set_result(None)
-
-
-# -- starting over ----------------------------------------------------------
-
-def test_forget_keeps_settings_persona_and_stickers(client, workspace, monkeypatch):
-    seed(workspace.home)
-    home = workspace.home
-    (home / "runtime" / "model_usage.json").write_text('{"days": {}}', encoding="utf-8")
-    calls = stopped_services(workspace, monkeypatch, running=True)
-    answer = post(client, "/forget")
-    assert answer.status_code == 200
-    assert settled(workspace, calls) == ["close", "start agent", "start direct"]
-    assert not (home / "runtime" / "memory.json").exists()
-    assert not (home / "runtime" / "core_memory.json").exists()
-    assert not (home / "runtime" / "trial").exists()
-    assert (home / "runtime" / "stickers.json").exists() and (home / "stickers" / "cat.png").exists()
-    assert (home / ".env").exists() and (home / "persona.txt").exists()
-    assert (home / "runtime" / "model_usage.json").exists(), "the bill record is not memory"
-    assert (home / "platforms" / "direct.json").exists()
-    assert (home / "runtime" / "desktop" / "app.log").exists()
-    safety = zipfile.ZipFile(answer.json()["safety"])
-    assert "runtime/memory.json" in safety.namelist()
-    assert KEY not in answer.text
-
-
-def test_reset_goes_back_to_the_first_run(client, workspace, monkeypatch):
-    seed(workspace.home)
-    home = workspace.home
-    calls = stopped_services(workspace, monkeypatch, running=True)
-    answer = post(client, "/reset")
-    assert answer.status_code == 200
-    assert calls == ["close"], "nothing starts again: nothing is set up"
-    for gone in (".env", "persona.txt", "platforms/direct.json", "runtime/memory.json",
-                 "runtime/stickers.json"):
-        assert not (home / gone).exists(), gone
-    assert (home / "stickers" / "cat.png").exists() and (home / "data" / "lorebook.en.json").exists()
-    assert client.get("/api/state", headers=HEADERS).json()["configured"] is False
-    safety = zipfile.ZipFile(answer.json()["safety"])
-    assert ".env" in safety.namelist() and "platforms/direct.json" in safety.namelist()
-    assert KEY not in answer.text and PLATFORM_SECRET not in answer.text
-    listed = client.get("/api/desk", headers=HEADERS).json()["backups"]
-    assert [b["place"] for b in listed] == ["backups"]
-
-
-def test_a_startup_link_made_here_reads_as_on(workspace, monkeypatch):
-    program, arguments = shortcut.target(workspace.home)
-    made = shortcut.script(workspace.home, kinds=shortcut.LOGIN)
-    assert f"$link.Arguments = '{arguments} --background'" in made
-    fake_windows(monkeypatch, [{"kind": "startup", "target": str(program),
-                                "arguments": arguments + " --background"}])
-    assert shortcut.status(workspace.home)["startup"] == "on"
-    fake_windows(monkeypatch, [{"kind": "startup", "target": str(program), "arguments": arguments},
-                               {"kind": "desktop", "target": str(program),
-                                "arguments": arguments + " --background"}])
-    found = shortcut.status(workspace.home)
-    assert found["startup"] == "other" and found["desktop"] == "other"
-
-
-def test_starting_over_stops_the_panels_children_and_restarts_only_what_ran(client, workspace, monkeypatch):
-    seed(workspace.home)
-    calls = stopped_services(workspace, monkeypatch, running={"agent"})
-    client.app.state.closers.append(lambda: calls.append("practice stopped"))
-    assert post(client, "/forget").status_code == 200
-    assert settled(workspace, calls) == ["practice stopped", "close", "start agent"]
-    calls.clear()
-    monkeypatch.setattr(workspace.services, "running", lambda name: name == "astrbot")
-    monkeypatch.setattr(desk.conn, "connected", lambda data: ["aiocqhttp"])
-    assert post(client, "/forget").status_code == 200
-    assert settled(workspace, calls) == ["practice stopped", "close", "start astrbot"]
-
-
-def test_a_failed_safety_backup_changes_nothing_and_starts_again(client, workspace, monkeypatch):
-    seed(workspace.home)
-    calls = stopped_services(workspace, monkeypatch, running={"agent", "direct"})
-
-    def refuse(*args, **kwargs):
-        raise ValueError("desk_backup_failed")
-    monkeypatch.setattr(desk.Desk, "_write_backup", refuse)
-    assert post(client, "/forget").json() == {"error": "desk_backup_failed"}
-    assert settled(workspace, calls) == ["close", "start agent", "start direct"]
-    assert (workspace.home / "runtime" / "memory.json").exists()
-
-
-def test_a_runtime_elsewhere_is_refused_before_anything_stops(client, workspace, monkeypatch):
-    seed(workspace.home)
-    sw.write_env(workspace.env, {"AGENT_RUNTIME_DIR": "../elsewhere"})
-    calls = stopped_services(workspace, monkeypatch, running=True)
-    for action in ("/forget", "/reset"):
-        assert post(client, action).json() == {"error": "desk_runtime_elsewhere"}
-    assert calls == [] and (workspace.home / ".env").exists()
-
-
-def test_reset_clears_a_runtime_folder_named_in_the_env(client, workspace, monkeypatch):
-    seed(workspace.home)
-    sw.write_env(workspace.env, {"AGENT_RUNTIME_DIR": "state"})
-    state = workspace.home / "state"
-    state.mkdir()
-    (state / "memory.json").write_text("{}", encoding="utf-8")
-    stopped_services(workspace, monkeypatch)
-    answer = post(client, "/reset")
-    assert answer.status_code == 200, answer.text
-    assert not (state / "memory.json").exists()
-    assert "runtime/memory.json" in zipfile.ZipFile(answer.json()["safety"]).namelist()
+    assert client.app.state.restarts == []
 
 
 def test_a_restore_that_fails_midway_puts_the_present_back(client, workspace, monkeypatch):
     seed(workspace.home)
-    name = post(client, "/backup", {"to": "backups"}).json()["name"]
     home = workspace.home
+    name = post(client, "/backup", {"to": "backups"}).json()["name"]
     (home / "runtime" / "memory.json").write_text('{"b": "now"}', encoding="utf-8")
-    calls = stopped_services(workspace, monkeypatch, running={"agent"})
     real, failed = desk.shutil.copyfileobj, []
 
     def flaky(source, out, *args):
@@ -441,40 +291,48 @@ def test_a_restore_that_fails_midway_puts_the_present_back(client, workspace, mo
             raise OSError("disk full")
         return real(source, out, *args)
     monkeypatch.setattr(desk.shutil, "copyfileobj", flaky)
-    answer = post(client, "/restore", {"place": "backups", "name": name})
-    assert answer.json() == {"error": "desk_restore_undone"}
+    post(client, "/restore", {"place": "backups", "name": name})
+    desk.apply_pending(home)
     assert (home / "runtime" / "memory.json").read_text(encoding="utf-8") == '{"b": "now"}'
-    assert (home / "stickers" / "cat.png").exists() and (home / "persona.txt").exists()
-    assert settled(workspace, calls) == ["close", "start agent"]
+    assert (home / "persona.txt").exists() and (home / "skills" / "notes" / "SKILL.md").exists()
+    assert client.get("/api/desk/data", headers=HEADERS).json()["restored"] == {"error": "desk_restore_undone"}
 
 
-def test_clearing_waits_for_the_stopped_service_to_let_go_of_the_home(client, workspace, monkeypatch):
-    """The service's interpreter outlives its launcher by a moment and still holds the lock."""
-    import threading
+# -- resetting --------------------------------------------------------------------
+
+def test_a_reset_backs_up_first_when_asked_then_leaves_only_the_backups(client, workspace, tmp_path):
     seed(workspace.home)
-    stopped_services(workspace, monkeypatch, running={"agent"})
-    lingering = desk.RuntimeInstanceLock(workspace.home)
-    lingering.acquire()
-    threading.Timer(0.6, lingering.release).start()
-    answer = post(client, "/forget")
-    assert answer.status_code == 200 and "error" not in answer.json(), answer.text
-    assert not (workspace.home / "runtime" / "memory.json").exists()
+    home = workspace.home
+    (home / "backups").mkdir()
+    (home / "backups" / "mibo-backup-old.zip").write_bytes(b"kept")
+    answer = post(client, "/reset", {"backupTo": "desktop", "secrets": True})
+    value = answer.json()
+    assert value["restarting"] is True and value["path"].startswith(str(tmp_path / "Desktop"))
+    assert KEY in zipfile.ZipFile(value["path"]).read(".env").decode("utf-8")
+    assert client.app.state.restarts == ["relaunch", "shutdown"]
+    assert (home / ".env").exists(), "nothing is deleted before the next start"
+    desk.apply_pending(home)
+    assert (home / "backups" / "mibo-backup-old.zip").exists() and (home / "runtime" / "desktop" / "app.log").exists()
+    for gone in (".env", "persona.txt", "mcp.json", "skills", "data", "runtime/memory.json", "runtime/log",
+                 "runtime/desktop/webview", "runtime/desktop/app.json", "runtime/desktop/pending.json"):
+        assert not (home / gone).exists(), gone
 
 
-def test_nothing_changes_while_a_service_from_elsewhere_holds_the_home(client, workspace, monkeypatch):
+def test_a_reset_without_a_backup_writes_none(client, workspace, tmp_path):
     seed(workspace.home)
-    calls = stopped_services(workspace, monkeypatch, running={"agent"})
-    monkeypatch.setattr(desk, "HELD_WAIT_S", 0.3)
-    with desk.RuntimeInstanceLock(workspace.home):
-        assert post(client, "/forget").json() == {"error": "desk_service_elsewhere"}
-        assert post(client, "/reset").json() == {"error": "desk_service_elsewhere"}
-    assert (workspace.home / "runtime" / "memory.json").exists() and (workspace.home / ".env").exists()
-    assert not (workspace.home / "backups").exists()
-    assert settled(workspace, calls)[-1] == "start agent"
+    assert post(client, "/reset", {}).json() == {"restarting": True, "path": ""}
+    assert list((tmp_path / "Desktop").iterdir()) == [] and list((tmp_path / "Documents").iterdir()) == []
 
 
-def test_errors_are_ones_the_page_can_show(client):
+def test_a_start_with_nothing_asked_changes_nothing(workspace):
+    seed(workspace.home)
+    before = sorted(p.relative_to(workspace.home).as_posix() for p in workspace.home.rglob("*"))
+    desk.apply_pending(workspace.home)
+    assert sorted(p.relative_to(workspace.home).as_posix() for p in workspace.home.rglob("*")) == before
+
+
+def test_errors_are_ones_the_page_can_show():
     assert all(code.startswith("desk_") for code in desk.ERRORS)
-    js = (welcome.ASSETS / "panels" / "desk.js").read_text(encoding="utf-8")
-    for code in desk.ERRORS:
-        assert js.count(f"    {code}: ") == 2, code
+    for code in (*desk.ERRORS, "desk_restore_undone", "desk_restore_failed"):
+        for lang in ("zh", "en"):
+            assert code in i18n.catalog(lang)["setup_device"]["errors"], (lang, code)

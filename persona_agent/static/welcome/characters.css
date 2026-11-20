@@ -1,0 +1,282 @@
+/* The character picker (characters.js): five cards, and the small form of one's own.
+   Drawn with app.css's tokens, so it is light or dark with the app. */
+.pac {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pac-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 12px;
+}
+.pac-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 8px 12px;
+  border: 1.5px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--pa-t-fast),
+    background var(--pa-t-fast);
+}
+.pac-card:hover:not(:disabled) {
+  border-color: var(--pa-line-strong);
+}
+.pac-card:disabled {
+  cursor: default;
+}
+.pac-card:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+.pac-card[aria-pressed="true"],
+.pac-card[aria-expanded="true"] {
+  border-color: var(--pa-accent);
+  background: var(--pa-accent-soft);
+}
+.pac-card[aria-busy="true"] {
+  opacity: 0.7;
+}
+.pac-stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  height: 128px;
+  margin-bottom: 6px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-canvas);
+}
+.pac-card[aria-pressed="true"] .pac-stage,
+.pac-card[aria-expanded="true"] .pac-stage {
+  background: var(--pa-surface);
+}
+.pac-figure {
+  width: 92px;
+}
+.pac-plus {
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: var(--pa-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.pac-own .pac-stage:has(.pac-plus) {
+  border: 1.5px dashed var(--pa-line-strong);
+}
+/* One's own character on its card: its picture, or the first letter of its name. */
+.pac-face {
+  align-self: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.pac-initial {
+  display: grid;
+  place-items: center;
+  background: var(--pa-accent-tint);
+  color: var(--pa-accent-ink);
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* The card of one's own with its pencil over the corner (a button cannot sit inside a button). */
+.pac-wrap {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.pac-edit {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--pa-line);
+  border-radius: 50%;
+  background: var(--pa-surface);
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+.pac-edit:hover:not(:disabled) {
+  color: var(--pa-ink);
+  border-color: var(--pa-line-strong);
+}
+.pac-edit-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pac-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pac-line {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.pac-tick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--pa-accent);
+  fill: none;
+  stroke: var(--pa-on-accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity var(--pa-t-fast);
+}
+.pac-card[aria-pressed="true"] .pac-tick {
+  opacity: 1;
+}
+
+/* One's own: the form under the cards. */
+.pac-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+}
+.pac-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pac-label {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  font-weight: 600;
+}
+.pac-help {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.pac-input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+  outline: none;
+}
+.pac-about {
+  height: auto;
+  padding: 9px 12px;
+  line-height: var(--pa-lh);
+  resize: vertical;
+}
+.pac-input::placeholder {
+  color: var(--pa-placeholder);
+}
+.pac-input:focus {
+  border-color: var(--pa-a500);
+  box-shadow: var(--pa-ring);
+}
+.pac-picture-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pac-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--pa-sunken);
+}
+.pac-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pac-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.pac-button {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+  font-size: var(--pa-fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pac-button:hover:not(:disabled) {
+  background: var(--pa-hover);
+}
+.pac-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--pa-muted);
+}
+.pac-primary {
+  border-color: var(--pa-ink);
+  background: var(--pa-ink);
+  color: var(--pa-surface);
+}
+.pac-primary:hover:not(:disabled) {
+  background: var(--pa-n700);
+}
+.pac-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pac-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+  font-size: var(--pa-fs-sm);
+}

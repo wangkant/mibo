@@ -17,17 +17,24 @@ from typing import Iterable, Optional
 from .storage import append_jsonl, atomic_write_text
 
 KINDS = ("video", "article", "post", "page")
-# The walks, the sources, mail and Discord add from their own threads; a compact
+# The walks and the sources add from their own threads; a compact
 # between another's read and its append would lose that append.
 _write = threading.Lock()
 # What became of an item: the owner's doing, never the character's.
 NEW, KEPT, DISMISSED = "", "kept", "dismissed"
+CHAT = "chat"
+# Read by the person themselves in the app's own browser (browsed.py), not by the character.
+BROWSED = "browsed"
 TEXT_MAX = 20_000
 EXCERPT_MAX = 400
 PICTURE_MAX_BYTES = 200_000
 ITEMS_MAX = 2000
-# A thing the person reacted to this recently is kept past the limit while older ones can go.
+# A thing the person opened, liked, played or read this recently is kept past the limit while older ones can go.
 REACTED_DAYS = 45
+# A walk's or a source's find nobody kept or opened retires this long after it came: the feed would not bring it now.
+STALE_DAYS = 30
+# What the feed counts as the person taking a thing up; a showing or a skip is not.
+ENGAGED = ("open", "like", "play", "read")
 
 
 @dataclass
@@ -59,8 +66,11 @@ class Item:
     love: int = -1
     tags: list = field(default_factory=list)
     judged: bool = False
-    # The person's own mail or private message, kept only while they let the character read those (privacy.py).
-    private: bool = False
+    # CHAT when the character read it during a chat, BROWSED when the person read it in the app's browser;
+    # "" for a walk's find or a source's.
+    via: str = ""
+    # The words from a chat that sent a walk looking for it, "" when it went on its own.
+    wonder: str = ""
 
     def card(self) -> dict:
         """What the page draws: public facts, no file paths."""
@@ -143,23 +153,18 @@ class Library:
             if item is None:
                 return None
             for name, value in values.items():
-                if name in ("state", "told", "why", "fits", "love", "tags", "judged"):
+                if name in ("state", "told", "why", "fits", "love", "tags", "judged", "picture"):
                     setattr(item, name, value)
             append_jsonl(self.items_path, asdict(item))
         return item
-
-    def to_tell(self) -> list[Item]:
-        """What it kept for its owner and has not said yet, oldest first. What a source brought is
-        ranked by the feed, whatever the character's judgement of it said."""
-        return [item for item in self.items(newest_first=False)
-                if item.fits and not item.source and not item.told and item.state != DISMISSED]
 
     def seen(self, url: str) -> bool:
         return item_id(url) in self._rows()
 
     def compact(self) -> None:
-        """One line per item again. Past the limit the dismissed go first, then the oldest
-        nobody reacted to in REACTED_DAYS, then the oldest of the rest; a kept one never goes."""
+        """One line per item again, without the stale (a walk's or a source's find older than STALE_DAYS that
+        nobody kept or took up). Past the limit the dismissed go first, then the oldest shown and never taken
+        up, then the oldest not taken up in REACTED_DAYS, then the oldest of the rest; a kept one never goes."""
         with _write:
             self._compact()
 
@@ -173,29 +178,41 @@ class Library:
                                                            for r in rows if r.id not in dropped))
             return dropped
 
-    def _reacted(self) -> set[str]:
+    def _reacted(self) -> tuple[set[str], set[str]]:
+        """The ids the person took up (ENGAGED) in REACTED_DAYS, and every id shown to them."""
         # The feed's events (see panels.feed), read here so the feed's model can still rebuild them.
         try:
             events = json.loads((self.root.parent / "feed.json").read_text(encoding="utf-8")).get("events")
         except (OSError, ValueError, AttributeError):
-            return set()
+            return set(), set()
+        if not isinstance(events, list):
+            return set(), set()
         since = time.time() - REACTED_DAYS * 86400
-        return {e[1] for e in events if isinstance(e, list) and len(e) >= 5 and e[0] >= since} \
-            if isinstance(events, list) else set()
+        rows = [e for e in events if isinstance(e, list) and len(e) >= 5]
+        return {e[1] for e in rows if e[0] >= since and e[2] in ENGAGED}, {e[1] for e in rows}
 
     def _compact(self) -> None:
         rows = self.items(newest_first=False)
-        recent = self._reacted() if len(rows) > ITEMS_MAX else set()
+        taken, shown = self._reacted()
+        old = time.time() - STALE_DAYS * 86400
+        # The person's own reading has its own keeping (browsed.py).
+        stale = {r.id for r in rows if r.seen_at < old and r.state != KEPT and r.id not in taken
+                 and not r.via}
+        gone = [r for r in rows if r.id in stale]
+        rows = [r for r in rows if r.id not in stale]
         while len(rows) > ITEMS_MAX:
             drop = (next((r for r in rows if r.state == DISMISSED), None)
-                    or next((r for r in rows if r.state != KEPT and r.id not in recent), None)
+                    or next((r for r in rows if r.state != KEPT and r.id in shown and r.id not in taken), None)
+                    or next((r for r in rows if r.state != KEPT and r.id not in taken), None)
                     or next((r for r in rows if r.state != KEPT), None))
             if drop is None:
                 break
             rows.remove(drop)
+            gone.append(drop)
+        for drop in gone:
             if drop.picture:
                 (self.pictures / drop.picture).unlink(missing_ok=True)
-        if rows:
+        if rows or gone:
             self.root.mkdir(parents=True, exist_ok=True)
             atomic_write_text(self.items_path, "".join(json.dumps(asdict(r), ensure_ascii=False) + "\n" for r in rows))
 

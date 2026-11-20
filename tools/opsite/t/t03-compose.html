@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>写动态</title>
+<style>
+body { margin: 0; font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #fafafa; }
+.wrap { max-width: 640px; margin: 30px auto; background: #fff; border: 1px solid #e6e6e6; border-radius: 12px; }
+.tools { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid #eee; }
+.tools button { width: 32px; height: 30px; border: 0; background: none; border-radius: 6px; cursor: pointer; }
+.tools button:hover { background: #f0f0f0; }
+.ed { min-height: 140px; padding: 14px 16px; outline: none; }
+.ed[data-empty="1"]::before { content: "分享新鲜事…"; color: #aaa; }
+.foot { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid #eee; color: #999; font-size: 13px; }
+.pub { background: #fe2c55; color: #fff; border: 0; border-radius: 18px; padding: 6px 22px; cursor: pointer; }
+.pub:disabled { background: #f6b3c0; cursor: default; }
+.done { max-width: 640px; margin: 10px auto; color: #2a8; }
+</style></head>
+<body>
+<div class="wrap">
+  <div class="tools" role="toolbar">
+    <button aria-label="加粗" data-cmd="bold"><b>B</b></button>
+    <button aria-label="斜体" data-cmd="italic"><i>I</i></button>
+    <button aria-label="插入话题"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M10 3 8 21M16 3l-2 18M4 8h17M3 16h17" stroke="#333" stroke-width="2" fill="none"/></svg></button>
+    <button aria-label="表情">☺</button>
+    <button aria-label="图片"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M3 5h18v14H3zM7 15l3-3 3 3 3-4 3 4" stroke="#333" stroke-width="2" fill="none"/></svg></button>
+  </div>
+  <div class="ed" id="ed" contenteditable="true" data-empty="1"></div>
+  <div class="foot"><span id="count">0/2000</span><button class="pub" id="pub" disabled>发布</button></div>
+</div>
+<p class="done" id="done"></p>
+<script src="/t/kit.js"></script>
+<script>
+const ed = document.getElementById("ed"), pub = document.getElementById("pub");
+function changed() {
+  const text = ed.innerText.trim();
+  ed.dataset.empty = text ? "0" : "1";
+  pub.disabled = !text;
+  document.getElementById("count").textContent = text.length + "/2000";
+}
+ed.addEventListener("input", changed);
+for (const b of document.querySelectorAll("[data-cmd]")) b.addEventListener("mousedown", (e) => { e.preventDefault(); document.execCommand(b.dataset.cmd); });
+pub.addEventListener("click", async () => {
+  const text = ed.innerText.trim();
+  if ((await post("/api/post", { text, html: ed.innerHTML })).ok) {
+    ed.textContent = "";
+    changed();
+    document.getElementById("done").textContent = "发布成功：" + text;
+  }
+});
+</script></body></html>

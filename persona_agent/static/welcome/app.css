@@ -1,21 +1,21 @@
 /* The app's design system. Every page (chats, settings, onboarding) draws
    with these tokens and the shared controls below, so the app reads as one:
-   a warm-neutral canvas, type that carries it, one accent taken from the character. */
+   a neutral white canvas, type that carries it, one accent taken from the character. */
 :root {
-  /* Warm neutrals. */
+  /* Neutrals: white and plain greys, no yellow in them. */
   --pa-n0: #ffffff;
-  --pa-n25: #fbfaf7;
-  --pa-n50: #f4f2ee;
-  --pa-n100: #efebe4;
-  --pa-n150: #e9e5de;
-  --pa-n200: #dcd7ce;
-  --pa-n300: #c9c4ba;
-  --pa-n400: #a7a199;
-  --pa-n500: #8d877e;
-  --pa-n600: #6f6a63;
-  --pa-n700: #4c4842;
-  --pa-n800: #36332e;
-  --pa-n900: #1d1b18;
+  --pa-n25: #fcfcfd;
+  --pa-n50: #f6f6f7;
+  --pa-n100: #f0f0f2;
+  --pa-n150: #e8e8eb;
+  --pa-n200: #dadade;
+  --pa-n300: #c6c6cb;
+  --pa-n400: #a1a1a8;
+  --pa-n500: #86868d;
+  --pa-n600: #68686f;
+  --pa-n700: #47474c;
+  --pa-n800: #323236;
+  --pa-n900: #1a1a1c;
 
   /* The character's colour; app.js names the figure on <html>. */
   --char: #ad4e2b;
@@ -39,10 +39,10 @@
 
   /* What the pages use. */
   --pa-chrome: var(--pa-n50);
-  --pa-side-hover: #eae7e1;
+  --pa-side-hover: #ebebee;
   --pa-canvas: var(--pa-n25);
   --pa-surface: var(--pa-n0);
-  --pa-sunken: #f1eee9;
+  --pa-sunken: #f2f2f4;
   --pa-line: var(--pa-n150);
   --pa-line-strong: var(--pa-n200);
   --pa-ink: var(--pa-n900);
@@ -50,8 +50,8 @@
   --pa-muted: var(--pa-n600);
   --pa-faint: var(--pa-n500);
   --pa-placeholder: var(--pa-n500);
-  --pa-hover: rgba(40, 32, 20, 0.04);
-  --pa-press: rgba(40, 32, 20, 0.07);
+  --pa-hover: rgba(20, 20, 24, 0.04);
+  --pa-press: rgba(20, 20, 24, 0.07);
   --pa-accent: var(--pa-a600);
   --pa-accent-hover: var(--pa-a700);
   --pa-accent-ink: var(--pa-a700);
@@ -68,9 +68,9 @@
   --pa-send: var(--pa-n900);
   --pa-send-ink: #ffffff;
   --pa-cover-filter: none;
-  --pa-scrim: rgba(29, 27, 24, 0.18);
-  --pa-tip-bg: #1d1b18;
-  --pa-tip-ink: #f7f5f1;
+  --pa-scrim: rgba(20, 20, 24, 0.18);
+  --pa-tip-bg: #1a1a1c;
+  --pa-tip-ink: #f7f7f8;
 
   /* Type: Segoe UI Variable for Latin, YaHei UI for Chinese, both Windows' own. */
   --pa-font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
@@ -144,7 +144,7 @@
   text-rendering: optimizeLegibility;
 }
 /* Each figure's own colour, and its lighter form for a dark window. */
-:root[data-figure="pico"] {
+:root[data-figure="mibo"] {
   --char: #2f7fb8;
   --char-hi: #7cc8f2;
 }
@@ -160,32 +160,28 @@
   --char: #b5532f;
   --char-hi: #f0a07a;
 }
-:root[data-figure="sprout"] {
-  --char: #3d7f4b;
-  --char-hi: #8fd09c;
-}
 
 /* Dark: the same rooms with the lights down. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --pa-n0: #2a2927;
-    --pa-n25: #222120;
-    --pa-n50: #1b1a18;
-    --pa-n100: #353330;
-    --pa-n150: #3a3835;
-    --pa-n200: #4a4743;
-    --pa-n300: #5a5751;
-    --pa-n400: #75716a;
-    --pa-n500: #85807a;
-    --pa-n600: #a8a39b;
-    --pa-n700: #c4bfb7;
-    --pa-n800: #dcd8d1;
-    --pa-n900: #f2efe9;
-    --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #222120);
-    --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #222120);
-    --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #222120);
-    --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #222120);
-    --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #222120);
+    --pa-n0: #28282a;
+    --pa-n25: #202022;
+    --pa-n50: #19191b;
+    --pa-n100: #333335;
+    --pa-n150: #38383b;
+    --pa-n200: #48484b;
+    --pa-n300: #58585c;
+    --pa-n400: #727277;
+    --pa-n500: #828287;
+    --pa-n600: #a4a4aa;
+    --pa-n700: #c0c0c6;
+    --pa-n800: #d9d9dd;
+    --pa-n900: #f1f1f3;
+    --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #202022);
+    --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #202022);
+    --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #202022);
+    --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #202022);
+    --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #202022);
     --pa-a600: var(--char-hi);
     --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
     --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
@@ -196,22 +192,22 @@
     --pa-amber50: #352b1b;
     --pa-amber200: #5e4a25;
     --pa-green600: #6fc48f;
-    --pa-side-hover: #262523;
-    --pa-sunken: #312f2c;
-    --pa-hover: rgba(255, 250, 240, 0.05);
-    --pa-press: rgba(255, 250, 240, 0.08);
+    --pa-side-hover: #252527;
+    --pa-sunken: #2f2f31;
+    --pa-hover: rgba(255, 255, 255, 0.05);
+    --pa-press: rgba(255, 255, 255, 0.08);
     --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
     --pa-on-accent: #14161c;
     --pa-love: #f07386;
     --pa-live: #5fb27e;
-    --pa-bubble: #353330;
-    --pa-bubble-ink: #e8e4dd;
-    --pa-send: #f2efe9;
-    --pa-send-ink: #1d1b18;
+    --pa-bubble: #333335;
+    --pa-bubble-ink: #e5e5e8;
+    --pa-send: #f1f1f3;
+    --pa-send-ink: #1a1a1c;
     --pa-cover-filter: brightness(0.82) saturate(0.92);
     --pa-scrim: rgba(0, 0, 0, 0.4);
-    --pa-tip-bg: #f2efe9;
-    --pa-tip-ink: #1d1b18;
+    --pa-tip-bg: #f1f1f3;
+    --pa-tip-ink: #1a1a1c;
     --pa-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
     --pa-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
     --pa-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -223,24 +219,24 @@
   }
 }
 :root[data-theme="dark"] {
-  --pa-n0: #2a2927;
-  --pa-n25: #222120;
-  --pa-n50: #1b1a18;
-  --pa-n100: #353330;
-  --pa-n150: #3a3835;
-  --pa-n200: #4a4743;
-  --pa-n300: #5a5751;
-  --pa-n400: #75716a;
-  --pa-n500: #85807a;
-  --pa-n600: #a8a39b;
-  --pa-n700: #c4bfb7;
-  --pa-n800: #dcd8d1;
-  --pa-n900: #f2efe9;
-  --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #222120);
-  --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #222120);
-  --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #222120);
-  --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #222120);
-  --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #222120);
+  --pa-n0: #28282a;
+  --pa-n25: #202022;
+  --pa-n50: #19191b;
+  --pa-n100: #333335;
+  --pa-n150: #38383b;
+  --pa-n200: #48484b;
+  --pa-n300: #58585c;
+  --pa-n400: #727277;
+  --pa-n500: #828287;
+  --pa-n600: #a4a4aa;
+  --pa-n700: #c0c0c6;
+  --pa-n800: #d9d9dd;
+  --pa-n900: #f1f1f3;
+  --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #202022);
+  --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #202022);
+  --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #202022);
+  --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #202022);
+  --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #202022);
   --pa-a600: var(--char-hi);
   --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
   --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
@@ -251,22 +247,22 @@
   --pa-amber50: #352b1b;
   --pa-amber200: #5e4a25;
   --pa-green600: #6fc48f;
-  --pa-side-hover: #262523;
-  --pa-sunken: #312f2c;
-  --pa-hover: rgba(255, 250, 240, 0.05);
-  --pa-press: rgba(255, 250, 240, 0.08);
+  --pa-side-hover: #252527;
+  --pa-sunken: #2f2f31;
+  --pa-hover: rgba(255, 255, 255, 0.05);
+  --pa-press: rgba(255, 255, 255, 0.08);
   --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
   --pa-on-accent: #14161c;
   --pa-love: #f07386;
   --pa-live: #5fb27e;
-  --pa-bubble: #353330;
-  --pa-bubble-ink: #e8e4dd;
-  --pa-send: #f2efe9;
-  --pa-send-ink: #1d1b18;
+  --pa-bubble: #333335;
+  --pa-bubble-ink: #e5e5e8;
+  --pa-send: #f1f1f3;
+  --pa-send-ink: #1a1a1c;
   --pa-cover-filter: brightness(0.82) saturate(0.92);
   --pa-scrim: rgba(0, 0, 0, 0.4);
-  --pa-tip-bg: #f2efe9;
-  --pa-tip-ink: #1d1b18;
+  --pa-tip-bg: #f1f1f3;
+  --pa-tip-ink: #1a1a1c;
   --pa-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
   --pa-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -10px rgba(0, 0, 0, 0.6);
   --pa-shadow-raise: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -547,7 +543,7 @@ textarea.pa-input {
   height: 16px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(29, 27, 24, 0.2);
+  box-shadow: 0 1px 2px rgba(20, 20, 24, 0.2);
   transition: transform var(--pa-t) var(--pa-ease);
 }
 .pa-switch:hover:not(:disabled) {
@@ -1033,9 +1029,6 @@ body.starting .side {
 .side-new {
   margin-top: var(--pa-s2);
 }
-.side-history {
-  display: none;
-}
 .kbd {
   margin-left: auto;
   color: var(--pa-muted);
@@ -1155,24 +1148,6 @@ body.starting .side {
   padding-top: var(--pa-s2);
   border-top: 1px solid var(--pa-line);
 }
-.side-note {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--pa-muted);
-  font-size: var(--pa-fs-xs);
-  font-weight: 400;
-  white-space: nowrap;
-}
-.side-note::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pa-live);
-}
-
 /* A chat's menu, over everything. */
 .side-menu {
   position: fixed;
@@ -1256,6 +1231,19 @@ body.starting .side {
   margin: var(--pa-s2) 0 0;
   color: var(--pa-muted);
   font-size: var(--pa-fs-md);
+}
+.confirm-also {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  margin-top: var(--pa-s4);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-md);
+  cursor: pointer;
+}
+.confirm-also input {
+  margin: 0;
+  accent-color: var(--pa-accent);
 }
 .confirm-actions {
   display: flex;
@@ -1369,10 +1357,6 @@ body.side-rail:not(.side-open) .side-item {
   width: 40px;
   height: 40px;
   padding: 0;
-}
-body.side-rail:not(.side-open) .side-history {
-  display: flex;
-  margin-top: var(--pa-s1);
 }
 body.side-rail:not(.side-open) .side-spacer {
   display: block;

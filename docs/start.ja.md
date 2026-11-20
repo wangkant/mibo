@@ -33,9 +33,7 @@ Windows では、ページは専用のウィンドウで開きます。macOS と
 
 コーディングアシスタントにセットアップを任せることもできます。[setup-for-agents.md](setup-for-agents.md) を読んで personagent をセットアップするよう頼んでください。
 
-Windows では、ソースの ZIP をダウンロードして展開し、`start.bat` をダブルクリックする方法もあります。フォルダー内に専用の Python 環境を作り（コンピューターに Python がない場合は先に Python を取得します）、同じページを開きます。初回は、デスクトップとスタートメニューに personagent のアイコンも置きます。
-
-クローンから実行する場合は、専用の venv を用意します。`python -m venv .venv` のあと、`.venv/bin/python -m pip install -e .` と `.venv/bin/python -m persona_agent` を実行します。Windows のインタープリターは `.venv\Scripts\python.exe` です。`start.bat` をダブルクリックしてもかまいません。
+クローンから実行する場合は、専用の venv を用意します。`python -m venv .venv` のあと、`.venv/bin/python -m pip install -e .` と `.venv/bin/python -m persona_agent` を実行します。Windows のインタープリターは `.venv\Scripts\python.exe` です。
 
 ## サインインしてチャットする
 

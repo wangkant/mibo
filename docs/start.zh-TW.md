@@ -33,9 +33,7 @@ personagent
 
 也可以交由 AI 程式設計助理處理：請它閱讀 [setup-for-agents.md](setup-for-agents.md)，再由它完成 personagent 的安裝與設定。
 
-在 Windows 上，也可以下載原始碼 ZIP，解壓縮後按兩下 `start.bat`。它會在資料夾中建立專用的 Python 環境（電腦上沒有 Python 時會先自動取得），再開啟同一個本機頁面。首次執行時，還會在桌面和「開始」功能表中新增 personagent 圖示。
-
-從 Git 儲存庫執行時，請為它另建一個虛擬環境：先執行 `python -m venv .venv`，再執行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`。Windows 上的直譯器是 `.venv\Scripts\python.exe`，也可以直接按兩下 `start.bat`。
+從 Git 儲存庫執行時，請為它另建一個虛擬環境：先執行 `python -m venv .venv`，再執行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`。Windows 上的直譯器是 `.venv\Scripts\python.exe`。
 
 ## 登入並開始聊天
 

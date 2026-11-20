@@ -4,9 +4,12 @@ One small Bayesian logistic regression per person (Chapelle and Li 2011,
 Algorithm 3): a Gaussian prior N(m0, 1/q0) on each weight, a fit by cyclic
 coordinate Newton on the person's reactions, a Laplace posterior N(m, 1/q) and
 Thompson-sampled scores. The features are few and sparse: where a thing came
-from (its source, or its site for a walk's find), its kind and length, whether
-it is in a language the person reads, how fresh it is, what the character
-thought of it and the topics the person picked.
+from (its source, or its site for a walk's find), what it is about (subjects.py),
+its kind and length, its language (and whether the computer lists it as one
+the person reads), how fresh it
+is, how much on its subjects they were brought lately, what the character
+thought of it, the topics the person picked and those they said they like or
+do not want in the chat (profile.py), whose priors are set by what they said.
 
 Every event in feed.json keeps a snapshot of these as they were at that moment
 (see `Reader.snapshot`), so the model and the replay learn from what the feed
@@ -33,7 +36,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlsplit
 
-from . import life, situation
+from . import life, situation, subjects
 from .library import Item, Library
 from .sources import weights
 from .storage import append_jsonl, atomic_write_text
@@ -52,54 +55,66 @@ REFIT_S = 60
 QUIET_S = DAY
 # Each row counts half as much HALF_DAYS later.
 HALF_DAYS = 45
-# (label, confidence) of a thing's final mark. A play counts from PLAY_MIN_S seconds in the app's player.
-HIDE, LIKE, SKIP, PLAY, OPEN = (0, 3.0), (1, 3.0), (0, 1.0), (1, 2.0), (1, 1.0)
+# (label, confidence) of a thing's final mark. A play counts from PLAY_SHARE of the thing's own length in
+# the app's player, or PLAY_MIN_S seconds where the length is not known or long, and so does reading for as
+# long in the app's browser (READ_CHARS_S characters a second). A card the person closed at once is a firmer no.
+HIDE, LIKE, SKIP, PLAY, QUICK = (0, 3.0), (1, 3.0), (0, 1.0), (1, 2.0), (0, 1.5)
+PLAY_SHARE, READ_CHARS_S = 0.5, 15
+# An open says the title drew them, not that the thing was for them; how long they stayed says that (dwell
+# time, as feeds that learn from watch time rather than clicks count it). OPEN: opened where the app cannot
+# see the stay (the system's browser), a faint yes. GLANCE: opened in the app and left within GLANCE_S, less
+# than GLANCE_WAY of the way to a real play: a look and no more, a faint no. A longer stay short of a real
+# play is a yes whose confidence grows from STAY to PLAY's with how far they got.
+OPEN, GLANCE, STAY = (1, 0.5), (0, 0.5), 0.5
+GLANCE_S, GLANCE_WAY = 10, 0.3
+# Came back to it another time (BACK_S or more after first opening it), or answered it in the chat: more
+# than a look, however long the stay.
+BACK, TALK = (1, 2.0), (1, 1.5)
+BACK_S = 3600
+# A no the person put in words in the chat: firmer than any skip, short of hiding the source.
+SAID_NO = (0, 2.5)
 PLAY_MIN_S = 60
 # A quiet no from the pet's card or the main chat, and from a list the person scrolled past.
 SHOWN_CARD, SHOWN_LIST = 0.3, 0.1
-SURFACES = ("card", "list", "chat")
+# "first" is the first run's round of sample finds.
+SURFACES = ("card", "list", "chat", "first", "browser")
+# How a card ended that says nothing: it went while the person was away, or with the pet (a game in front),
+# or they had seen the thing already ("known").
+UNSEEN_ENDS = ("away", "hushed", "known")
 PROMINENT = ("card", "chat")
 # Videos under 4 minutes are short, over 20 long; text by its characters.
 VIDEO_SHORT, VIDEO_LONG = 240, 1200
 TEXT_SHORT, TEXT_LONG = 600, 6000
+# Length also as one number, so short videos are told apart among themselves: log seconds of a video and
+# log characters of a text the library holds, each 0 at its MID and 1 at SPAN times that, within +-LOG_MAX.
+SECS_MID, CHARS_MID, SPAN, LOG_MAX = 180, 1500, 4, 2.5
 
 # (m0, q0): q0 is roughly a quarter of the reactions' worth of evidence the prior counts for.
 PRIORS = {"bias": (0.0, 1.0), "unread_lang": (-2.0, 2.0), "fresh": (1.5, 2.0), "judged": (0.0, 2.0),
-          "char_fits": (1.0, 5.0), "char_love": (1.0, 5.0)}
-# avoid:<t> is a topic the owner said no to in the profile; its prior comes from that rule.
+          "secs": (0.0, 1.0), "chars": (0.0, 1.0),
+          "char_fits": (1.0, 5.0), "char_love": (1.0, 5.0), "again_day": (-0.5, 1.0), "again_week": (-0.5, 1.0)}
+# again_day and again_week: how many things on a subject of this one the card or the chat brought in the last
+# day and the last week, counted up to AGAIN_DAY and AGAIN_WEEK. Whether more of the same tires this person
+# is theirs to show: the prior only leans the way the "not two in a row" rule already does.
+AGAIN_DAY, AGAIN_WEEK = 3, 6
+# avoid:<t> is a topic the owner said no to in the profile, like:<t> one they said they like; their priors
+# come from the profile, and fall back to these once the person takes the words back.
+# subj:<key> is what a thing is about (subjects.py), learned from nothing.
+# lang:<code> is the language a thing is in, learned from nothing too: the computer's list of languages is
+# only a first guess (unread_lang), and without this a person who closes every English text teaches the
+# model that they dislike text.
 FAMILIES = {"origin": (0.0, 1.0), "kind": (0.0, 1.0), "len": (0.0, 1.0), "topic": (1.5, 3.0), "tag": (0.0, 1.0),
-            "avoid": (0.0, 1.0)}
+            "avoid": (0.0, 1.0), "like": (0.0, 1.0), "subj": (0.0, 1.0), "lang": (0.0, 1.0)}
 # A source the person asked to see less of: the same form a person's own override takes.
 HIDDEN = (-4.0, 100.0)
+# The person's own lean on a feature in Settings (profile "leans"): more, less, or not counted at all (held at 0).
+LEANS = {1: (3.0, 3.0), -1: (-1.5, 3.0), 0: (0.0, 100.0)}
 
 # The character's pick: in each WINDOW placed things, k_c go to its best loved unseen ones, by PICK_BY.
 WINDOW, PICK_BY, PICK_LOVE = 20, 10, 2
 # A reason is named only when its term is at least this, and "something new" when the draw lifted it this much.
 REASON_MIN, EXPLORE_MIN = 0.2, 1.0
 SERVED_MAX = 5000
-
-# The line under the character's own sentence, by UI language (the language pass moves these).
-LABELS = {
-    "en": {"origin": "Like things you opened from {site}", "topic": "On {topic}",
-           "explore": "Something new to try", "pick": "My pick"},
-    "zh": {"origin": "像你在{site}打开过的那些", "topic": "关于{topic}", "explore": "换点新的试试", "pick": "我挑的"},
-    "zh-Hant": {"origin": "像你在{site}打開過的那些", "topic": "關於{topic}", "explore": "換點新的試試",
-                "pick": "我挑的"},
-    "ja": {"origin": "{site}で開いたものに近いもの", "topic": "{topic}の話", "explore": "新しいものをひとつ",
-           "pick": "わたしのおすすめ"},
-    "ko": {"origin": "{site}에서 열어 본 것들과 비슷해요", "topic": "{topic} 이야기", "explore": "새로운 걸 한번",
-           "pick": "내가 고른 것"},
-    "ru": {"origin": "Похоже на то, что вы открывали на {site}", "topic": "Тема: {topic}",
-           "explore": "Что-то новое на пробу", "pick": "Мой выбор"},
-    "pt-BR": {"origin": "Parecido com o que você abriu em {site}", "topic": "Sobre {topic}",
-              "explore": "Algo novo para experimentar", "pick": "Minha escolha"},
-    "es": {"origin": "Como lo que abriste en {site}", "topic": "Sobre {topic}",
-           "explore": "Algo nuevo para probar", "pick": "Mi elección"},
-    "fr": {"origin": "Comme ce que tu as ouvert sur {site}", "topic": "Sur {topic}",
-           "explore": "Quelque chose de nouveau à essayer", "pick": "Mon choix"},
-    "de": {"origin": "Wie das, was du auf {site} geöffnet hast", "topic": "Zum Thema {topic}",
-           "explore": "Mal etwas Neues", "pick": "Meine Wahl"},
-}
 
 _SCRIPTS = (("ja", re.compile(r"[぀-ヿ]")), ("ko", re.compile(r"[가-힯ᄀ-ᇿ]")),
             ("zh", re.compile(r"[一-鿿]")), ("ru", re.compile(r"[Ѐ-ӿ]")))
@@ -138,6 +153,17 @@ def _length(item: Item, shaped: dict) -> str:
     return "short" if n < TEXT_SHORT else "mid" if n < TEXT_LONG else "long"
 
 
+def _size(item: Item, shaped: dict) -> dict:
+    """A video's seconds or a held text's characters, where known: {"secs": n} or {"chars": n}."""
+    if shaped["kind"] == "video":
+        return {"secs": item.length} if item.length else {}
+    return {"chars": len(item.text)} if item.text else {}
+
+
+def _log(n: float, mid: float) -> float:
+    return max(-LOG_MAX, min(LOG_MAX, math.log(n / mid) / math.log(SPAN)))
+
+
 def _host(url: str) -> str:
     return (urlsplit(url).hostname or "").lower()
 
@@ -154,28 +180,53 @@ def readable(runtime: Path) -> set[str]:
 
 class Reader:
     """What a snapshot needs from the runtime, read once: the picked topics, the topics the owner said no
-    to, and the sources' languages."""
+    to and those they said they like, and the sources' languages and what each says it brings."""
 
-    def __init__(self, runtime: Path, topics: Optional[list[str]] = None):
+    def __init__(self, runtime: Path, topics: Optional[list[str]] = None, events: Optional[list] = None):
         from . import profile
         from .sources import catalog
         feed = _feed()
         self.runtime = Path(runtime)
         topics = feed.load_topics(self.runtime / feed.TASTE_FILE) if topics is None else topics
-        self.topics = [(t.casefold(), feed.topic_matcher([t])) for t in topics]
-        self.avoid = [(t.casefold(), feed.topic_matcher([t])) for t in profile.avoided(self.runtime)]
-        self.langs = {k: s.lang for k, s in catalog.all_sources(catalog.load_choice(self.runtime)["own"]).items()}
+        self.topics, self.avoid, self.likes = ([t.casefold() for t in words] for words in (
+            topics, profile.avoided(self.runtime), profile.liked(self.runtime)))
+        sources = catalog.all_sources(catalog.load_choice(self.runtime)["own"])
+        self.langs = {k: s.lang for k, s in sources.items()}
+        self.brings = {k: subjects.of("", " ".join((*s.name, *s.about))) for k, s in sources.items()}
+        self.brought = self.lately(feed._load(self.runtime / feed.TASTE_FILE) if events is None else events)
+
+    @staticmethod
+    def lately(events: list) -> list[tuple[float, str, set]]:
+        """(when, id, subjects) of each thing the card or the chat brought, from the events' own snapshots."""
+        return [(e[0], e[1], set(e[5]["f"].get("subj", ()))) for e in events
+                if e[2] == "seen" and len(e) > 5 and e[5].get("s") in PROMINENT and e[5].get("f")]
 
     def snapshot(self, item: Item, shaped: dict, now: float) -> dict:
         """The facts the model reads, as they are at `now`; kept in the event as they are."""
         text = " ".join((shaped["title"], shaped["text"], shaped["site"])).casefold()
+        words = shaped["title"], " ".join((shaped["text"], shaped["site"], *map(str, item.tags)))
+        # Its own words say what it is about; when they say nothing, what its source says it brings is a
+        # guess (a recipe's title seldom says "food"), good enough to rank by and not to tell the person.
+        own = subjects.of(*words)
+        subj = list(own or self.brings.get(item.source, ()))
+        on = set(subj)
+
+        def named(rows: list, on: set = on) -> list:
+            # Each word as one interest: a phrase naming two subjects needs both, or the phrase itself.
+            return [name for name in rows if subjects.holds(name, on, text)]
+
+        same = [at for at, ident, about in self.brought
+                if now - 7 * DAY <= at < now and ident != item.id and about & on]
         return {"origin": "src:" + item.source if item.source else "site:" + shaped["site"],
-                "kind": shaped["kind"], "len": _length(item, shaped),
+                "kind": shaped["kind"], "len": _length(item, shaped), **_size(item, shaped),
                 "lang": language(shaped["title"] + " " + shaped["text"][:200], self.langs.get(item.source, "")),
                 "fresh": round(0.5 ** (max(0.0, now - item.seen_at) / DAY), 4),
                 "judged": bool(item.judged or item.love >= 0), "fits": bool(item.fits), "love": item.love,
-                "topics": [name for name, matcher in self.topics if matcher.search(text)],
-                "avoid": [name for name, matcher in self.avoid if matcher.search(text)],
+                "subj": subj, "guess": bool(subj) and not own,
+                "again": [sum(1 for at in same if at >= now - DAY), len(same)],
+                # A no is kept wide: a subject the thing so much as names counts.
+                "topics": named(self.topics), "avoid": named(self.avoid, on | set(subjects.mentioned(*words))),
+                "likes": named(self.likes),
                 "tags": [str(t) for t in item.tags][:8], "host": _host(item.url), "site": shaped["site"]}
 
 
@@ -184,6 +235,11 @@ def vector(snap: dict, read: set[str], families: tuple = ()) -> dict[str, float]
     x = {"bias": 1.0, "origin:" + snap["origin"]: 1.0, "kind:" + snap["kind"]: 1.0, "fresh": snap["fresh"]}
     if snap["len"]:
         x["len:" + snap["len"]] = 1.0
+    if snap.get("secs"):
+        x["secs"] = _log(snap["secs"], SECS_MID)
+    if snap.get("chars"):
+        x["chars"] = _log(snap["chars"], CHARS_MID)
+    x["lang:" + _base(snap["lang"])] = 1.0
     if _base(snap["lang"]) not in read:
         x["unread_lang"] = 1.0
     if snap["judged"]:
@@ -192,10 +248,19 @@ def vector(snap: dict, read: set[str], families: tuple = ()) -> dict[str, float]
         x["char_fits"] = 1.0
     if snap["love"] > 0:
         x["char_love"] = snap["love"] / 3
+    for key in snap.get("subj", ()):
+        x["subj:" + key] = 1.0
+    day, week = snap.get("again", (0, 0))
+    if day:
+        x["again_day"] = min(day, AGAIN_DAY) / AGAIN_DAY
+    if week:
+        x["again_week"] = min(week, AGAIN_WEEK) / AGAIN_WEEK
     for topic in snap["topics"]:
         x["topic:" + topic] = 1.0
     for topic in snap.get("avoid", ()):
         x["avoid:" + topic] = 1.0
+    for topic in snap.get("likes", ()):
+        x["like:" + topic] = 1.0
     if "tags" in families:
         for tag in snap["tags"]:
             x["tag:" + tag] = 1.0
@@ -208,8 +273,9 @@ def features(item: Item, shaped: dict, runtime: Path, now: float) -> dict[str, f
 
 class Priors:
     """(m0, q0) per feature: the defaults, a hidden source pushed down, the owner's own "not this"
-    rules from the profile, then the situation's. The replay passes the sources hidden by then and
-    leaves the profile's rules out, since it cannot tell when each was made."""
+    rules from the profile, the topics they said they like and the length and kind they said they want,
+    then the situation's. The replay passes the sources hidden by then and leaves the profile out, since
+    it cannot tell when each was said."""
 
     def __init__(self, runtime: Path, hidden: Optional[set[str]] = None, rules: bool = True):
         from . import profile
@@ -218,8 +284,19 @@ class Priors:
             hidden = {key for key, row in weights.load(runtime).items() if row["hides"]}
         if rules:
             hidden = set(hidden) | profile.hidden_sources(runtime)
+            self.table.update({key: LEANS[int(to)] for key, to in profile.load(runtime, False)["leans"].items()})
             for topic in profile.avoided(runtime):
                 self.table["avoid:" + topic.casefold()] = self.table["topic:" + topic.casefold()] = profile.AVOID_TOPIC
+            for topic in profile.liked(runtime):
+                self.table["like:" + topic.casefold()] = profile.LIKE_TOPIC
+            form = profile.load(runtime, False)["form"]
+            against = {True: ["len:long"], False: ["len:short"]}.get(form.get("short"), []) + {
+                "video": ["kind:text", "kind:page"], "text": ["kind:video"]}.get(form.get("kind"), [])
+            self.table.update({name: profile.FORM_AGAINST for name in against})
+            if form.get("short") is not None:
+                # The same wish on the lengths as numbers: against longer, or against shorter.
+                lean = profile.FORM_AGAINST[0] / 2 * (1 if form["short"] else -1)
+                self.table.update({name: (lean, profile.FORM_AGAINST[1]) for name in ("secs", "chars")})
         self.table.update({"origin:src:" + key: HIDDEN for key in hidden})
         self.table.update(situation.priors(runtime))
 
@@ -240,32 +317,65 @@ def history(events: list, until: float = math.inf) -> dict[str, dict]:
         if h is None:
             h = found[ident] = {"f": extra.get("f"), "at": at, "s": extra.get("s", ""), "p": extra.get("p", ""),
                                 "r": extra.get("r"), "site": site, "kind": kind, "open": False, "like": False,
-                                "skip": False, "hide": False, "play": 0.0, "acted": None}
+                                "skip": False, "hide": False, "play": 0.0, "acted": None, "end": "",
+                                "ended": None, "said": False, "opened": None, "back": False, "talk": False}
         h["f"] = h["f"] or extra.get("f")
         if action == "seen":
             h["s"] = h["s"] or extra.get("s", "")
             continue
+        if action == "end":
+            # How a card went is not a reaction of its own: it says how to read the others, or their absence.
+            h["end"], h["ended"] = extra.get("end") or "", at
+            continue
         h["acted"] = at
         if action == "open":
             h["open"] = True
+            h["back"] = h["back"] or h["opened"] is not None and at - h["opened"] >= BACK_S
+            h["opened"] = at if h["opened"] is None else h["opened"]
+        elif action == "talk":
+            h["talk"] = True
         elif action == "like":
             h["like"], h["skip"] = True, False
         elif action == "unlike":
             h["like"] = False
         elif action == "skip":
-            h["skip"] = True
+            h["skip"], h["said"] = True, bool(extra.get("said"))
         elif action == "hide_source":
             h["like"], h["skip"], h["hide"] = False, True, True
-        elif action == "play":
-            h["play"] = max(h["play"], float(extra.get("play_s") or 0))
+        elif action in ("play", "read"):
+            # Reading an article in the app's browser counts as playing a video does.
+            h["play"] = max(h["play"], float(extra.get(action + "_s") or 0))
     return found
 
 
+def _played(h: dict) -> bool:
+    """Whether a thing was played or read for real: PLAY_SHARE of its own length, or PLAY_MIN_S seconds."""
+    snap = h["f"] or {}
+    full = snap.get("secs") or snap.get("chars", 0) / READ_CHARS_S
+    return h["play"] >= PLAY_MIN_S or bool(full) and h["play"] >= PLAY_SHARE * full
+
+
+def _stay(h: dict) -> tuple[int, float]:
+    """What a stay short of a real play says: a glance is a faint no, a longer one a yes that grows with
+    how far toward a real play they got."""
+    snap = h["f"] or {}
+    full = snap.get("secs") or snap.get("chars", 0) / READ_CHARS_S
+    way = h["play"] / (min(PLAY_MIN_S, PLAY_SHARE * full) if full else PLAY_MIN_S)
+    if h["play"] < GLANCE_S and way < GLANCE_WAY:
+        return GLANCE
+    return 1, STAY + (PLAY[1] - STAY) * way
+
+
 def reacted(h: dict) -> Optional[int]:
-    """1 for a thing opened, played or liked, 0 for one skipped or hidden, None when nothing was done."""
+    """1 for a thing liked, stayed with, come back to or answered, or opened where the stay is not seen;
+    0 for one skipped, hidden or only glanced at; None when nothing was done."""
     if h["hide"] or h["like"] or h["skip"]:
         return int(h["like"])
-    return 1 if h["open"] or h["play"] > 0 else None
+    if _played(h) or h["back"] or h["talk"]:
+        return 1
+    if h["play"] > 0:
+        return _stay(h)[0]
+    return 1 if h["open"] else None
 
 
 def label(h: dict, until: float) -> Optional[tuple[int, float, float]]:
@@ -275,12 +385,22 @@ def label(h: dict, until: float) -> Optional[tuple[int, float, float]]:
     elif h["like"]:
         y, c = LIKE
     elif h["skip"]:
-        y, c = SKIP
-    elif h["play"] >= PLAY_MIN_S:
+        y, c = SAID_NO if h["said"] else QUICK if h["end"] == "quick" else SKIP
+    elif _played(h):
         y, c = PLAY
-    elif h["open"] or h["play"] > 0:
-        # A short play in the app's player is an open: play time only ever adds confidence.
+    elif h["back"]:
+        y, c = BACK
+    elif h["talk"]:
+        y, c = TALK
+    elif h["play"] > 0:
+        y, c = _stay(h)
+    elif h["open"]:
         y, c = OPEN
+    elif h["end"] in UNSEEN_ENDS:
+        return None
+    elif h["end"] in ("timeout", "next"):
+        # Out its whole time with the person there and left alone, or passed over for another: the quiet no, at once.
+        return 0, SHOWN_CARD, h["ended"]
     elif until - h["at"] >= QUIET_S:
         return 0, SHOWN_CARD if h["s"] in PROMINENT else SHOWN_LIST, h["at"] + QUIET_S
     else:
@@ -301,6 +421,9 @@ def rows(events: list, until: float, read: set[str], rebuild: Callable[[str, flo
         if snap is None:
             lost += 1
             continue
+        if "subj" not in snap:
+            # An event from before subjects were read: the thing's, as the library has it now.
+            snap = dict(snap, subj=(rebuild(ident, h["at"]) or {}).get("subj", []))
         y, c, at = got
         found.append((vector(snap, read, families), y, c * 0.5 ** (max(0.0, until - at) / DAY / HALF_DAYS), ident))
     return found, lost
@@ -402,9 +525,13 @@ def train(runtime: Path, now: Optional[float] = None) -> dict:
     """Fit on every reaction so far and write the model; what was written."""
     runtime = Path(runtime)
     now = life.clock() if now is None else now
+    from . import profile
     feed = _feed()
     events = feed._load(runtime / feed.TASTE_FILE)
-    data, lost = rows(events, now, readable(runtime), _Rebuild(runtime, Reader(runtime)))
+    # Reactions from before the person started their taste over teach nothing.
+    since = profile.load(runtime, False)["reset_at"]
+    data, lost = rows([e for e in events if e[0] >= since], now, readable(runtime),
+                      _Rebuild(runtime, Reader(runtime, events=events)))
     m, q = solve(data, Priors(runtime), load(runtime)["m"])
     model = {"at": now, "rows": len(data), "lost": lost, "m": {k: round(v, 5) for k, v in m.items()},
              "q": {k: round(v, 5) for k, v in q.items()}}
@@ -417,13 +544,16 @@ _pending: dict[str, threading.Timer] = {}
 _last: dict[str, float] = {}
 
 
-def fit(runtime: Path) -> None:
-    """Refit soon in a worker thread, at most once every REFIT_S; never inside the feed's lock."""
+def fit(runtime: Path, soon: bool = False) -> None:
+    """Refit soon in a worker thread, at most once every REFIT_S, or at once when `soon` (the person said
+    something in the chat that changes the priors); never inside the feed's lock."""
     key = str(Path(runtime))
     with _fitting:
         if key in _pending:
-            return
-        wait = max(0.0, _last.get(key, -REFIT_S) + REFIT_S - time.monotonic())
+            if not soon or _pending[key].interval == 0:
+                return
+            _pending.pop(key).cancel()
+        wait = 0.0 if soon else max(0.0, _last.get(key, -REFIT_S) + REFIT_S - time.monotonic())
         timer = _pending[key] = threading.Timer(wait, _refit, (Path(runtime), key))
         timer.daemon = True
         timer.start()
@@ -431,12 +561,22 @@ def fit(runtime: Path) -> None:
 
 def _refit(runtime: Path, key: str) -> None:
     with _fitting:
-        del _pending[key]
+        # A timer `soon` replaced may already have been on its way here.
+        _pending.pop(key, None)
         _last[key] = time.monotonic()
     try:
         train(runtime)
     except Exception:
         logger.exception("taste: the fit failed; the last model stays")
+
+
+def reset(runtime: Path) -> None:
+    """Forget the last fit (profile.reset set where the reactions now start) and fit again at once."""
+    path = _model_path(runtime)
+    path.unlink(missing_ok=True)
+    _models.pop(path, None)
+    _kept.pop(path, None)
+    fit(runtime, soon=True)
 
 
 def due(runtime: Path, events: list, now: float) -> bool:
@@ -485,16 +625,11 @@ def pick_share(events: list) -> int:
         slot = "character" if h["p"] == "character" else "model" if h["p"] in ("model", "explore") else ""
         if slot:
             n[slot][0] += 1
-            n[slot][1] += bool(h["open"] or h["like"] or h["play"] >= PLAY_MIN_S)
+            n[slot][1] += bool(h["open"] or h["like"] or _played(h))
     r_c, r_m = ((1 + pos) / (2 + count) for count, pos in (n["character"], n["model"]))
     if r_c > 1.2 * r_m:
         return 2
     return 0 if n["character"][0] >= 10 and r_c < 0.5 * r_m else 1
-
-
-def labels(lang: str) -> dict:
-    lang = "zh-Hant" if lang == "zh-TW" else lang
-    return LABELS.get(lang) or LABELS.get(_base(lang)) or LABELS["en"]
 
 
 def _topic_name(topic: str, lang: str) -> str:
@@ -510,39 +645,38 @@ _serving = threading.Lock()
 class Ranker:
     """Scores, reasons and the character's slot for one ranking at `at`."""
 
-    def __init__(self, runtime: Path, topics: list[str], at: float, seed: int, lang: str = "",
-                 hidden: Optional[set[str]] = None):
-        self.reader = Reader(runtime, list(topics))
+    def __init__(self, runtime: Path, topics: list[str], at: float, seed: int,
+                 hidden: Optional[set[str]] = None, events: Optional[list] = None):
+        self.reader = Reader(runtime, list(topics), events)
         self.read = readable(runtime)
         self.prior = Priors(runtime, hidden)
         self.sampler = Sampler(load_at(runtime, at), self.prior, seed)
-        self.at, self.labels, self.lang = at, labels(lang), lang
+        self.at = at
         self.info: dict[str, dict] = {}
 
     def score(self, item: Item, shaped: dict) -> float:
-        x = vector(self.reader.snapshot(item, shaped, self.at), self.read)
+        snap = self.reader.snapshot(item, shaped, self.at)
+        x = vector(snap, self.read)
         s, mean = self.sampler.score(x)
         # Each term as the posterior mean has it and as the draw that placed the thing had it.
         self.info[item.id] = {"s": s, "mean": mean, "terms": {k: self.sampler.mean(k) * v for k, v in x.items()},
-                              "drawn": {k: self.sampler.theta(k) * v for k, v in x.items()}}
+                              "drawn": {k: self.sampler.theta(k) * v for k, v in x.items()},
+                              "away": bool(snap["avoid"]), "guess": snap["guess"]}
         return s
 
-    def reason(self, ident: str, shaped: dict) -> tuple[str, str]:
-        """The label for the largest term the score used besides the character's own: a site or a topic
-        the person's reactions or picks lifted, in the posterior and in this draw alike, or the draw itself;
-        ("", "") when none says enough."""
+    def reason(self, ident: str) -> str:
+        """The largest term the score used besides the character's own: a site or a topic the person's
+        reactions or picks lifted, in the posterior and in this draw alike, kept in info["term"] for the chip
+        under a card (recommend.Why); else "explore" when the draw itself lifted the thing, else ""."""
         info = self.info[ident]
         best, key = REASON_MIN, ""
+        # A subject only guessed from the source is not named to the person.
+        named = ("origin:",) if info["guess"] else ("origin:", "topic:", "like:", "subj:")
         for k, term in info["terms"].items():
-            if k.startswith(("origin:", "topic:")) and term > best and info["drawn"][k] > REASON_MIN:
+            if k.startswith(named) and term > best and info["drawn"][k] > REASON_MIN:
                 best, key = term, k
-        if key.startswith("origin:"):
-            return "origin", self.labels["origin"].format(site=shaped["site"])
-        if key.startswith("topic:"):
-            return "topic", self.labels["topic"].format(topic=_topic_name(key[6:], self.lang))
-        if info["s"] - info["mean"] > EXPLORE_MIN:
-            return "explore", self.labels["explore"]
-        return "", ""
+        info["term"] = key
+        return key or ("explore" if info["s"] - info["mean"] > EXPLORE_MIN else "")
 
     def picks(self, rows: list, k: int) -> tuple[list, set[str]]:
         """`rows` (seen first-flag, ..., item last) with k of each WINDOW given to the best loved unseen
@@ -566,11 +700,11 @@ class Ranker:
         return rows, chosen
 
     def finish(self, shaped: dict, rank: int, pick: bool) -> None:
-        """Mark a served thing with its reason, pick and slot, and remember where it stood."""
-        key, text = self.reason(shaped["id"], shaped)
-        slot = "character" if pick else "explore" if key == "explore" else "model"
-        shaped.update(reason=text, reason_key=key, is_pick=pick, pick=self.labels["pick"] if pick else "",
-                      slot=slot)
+        """Mark a served thing with its slot, and remember where it stood."""
+        # Read for every thing: the card's chip takes its term (feed.ranked).
+        reason = self.reason(shaped["id"])
+        slot = "character" if pick else "explore" if reason == "explore" else "model"
+        shaped["slot"] = slot
         info = self.info[shaped["id"]]
         top = sorted(info["terms"].items(), key=lambda kv: -kv[1])[:3]
         with _serving:
@@ -588,6 +722,8 @@ def shown(runtime: Path, item: Item, surface: str, rank: Optional[int], now: flo
     path = Path(runtime) / SHOWN_FILE
     there = served.get(item.id, {})
     append_jsonl(path, {"at": now, "id": item.id, "surface": surface, "rank": there.get("r") if rank is None else rank,
+                        # Where it stood among the candidates the model chose from (0: the ranking's first).
+                        "six": there.get("six"),
                         "s": there.get("s"), "lift": there.get("lift"), "top": there.get("top", []),
                         "slot": slot or there.get("p", ""), "host": host,
                         "gated": bool(host) and not situation.gate(runtime, host=host)})
@@ -597,11 +733,57 @@ def shown(runtime: Path, item: Item, surface: str, rank: Optional[int], now: flo
         atomic_write_text(path, "".join(lines[-SHOWN_MAX:]), fsync=False)
 
 
+# ------------------------------------------------------------------- learned --
+
+# A weight is told once it is this large and this many of its own deviations from zero.
+LEARNED_MIN, LEARNED_SURE, LEARNED_MOST = 0.5, 1.0, 6
+
+
+def taught(runtime: Path, lang: str = "en") -> dict:
+    """What the person's own reactions have taught the model, strongest first: {"takes": [...], "passes": [...]},
+    each {"key", "name", "weight"}. Only subjects, sources and forms, and only weights the fit is sure of the
+    sign of; a form's name is its kind ("video", "text", "page") for the page to put in words. What they said
+    is in the profile; what a subject taught is forgotten with feed.forget_said, or held at 0 by a lean.
+    Weights that always come together are told together: a subject with the picked or said topics whose word
+    stands for it (one they picked and open is not news, so it is left out), a form against the other forms."""
+    from .sources import catalog
+    model = load(runtime)
+    sources = catalog.all_sources(catalog.load_choice(Path(runtime))["own"])
+    zh = _base(lang) == "zh"
+    told: dict[str, float] = {}
+    for key, mean in model["m"].items():
+        family, _, rest = key.partition(":")
+        if family in ("topic", "like"):
+            for subject in subjects.named(rest):
+                told[subject] = told.get(subject, 0.0) + mean
+    forms = [mean for key, mean in model["m"].items() if key.startswith("kind:")]
+    found = []
+    for key, mean in model["m"].items():
+        family, _, rest = key.partition(":")
+        if family == "subj" and rest in subjects.SUBJECTS:
+            name = subjects.name(rest, lang)
+            if rest in told:
+                mean += told[rest]
+                name = "" if mean > 0 else name
+        elif family == "kind":
+            name, mean = rest, mean - sum(forms) / len(forms)
+        elif family == "origin":
+            where, _, name = rest.partition(":")
+            name = sources[name].name[zh] if where == "src" and name in sources else name
+        else:
+            name = ""
+        if name and abs(mean) >= LEARNED_MIN and abs(mean) * math.sqrt(model["q"].get(key, 1.0)) >= LEARNED_SURE:
+            found.append({"key": key, "name": name, "weight": round(mean, 2)})
+    found.sort(key=lambda row: -abs(row["weight"]))
+    return {"takes": [row for row in found if row["weight"] > 0][:LEARNED_MOST],
+            "passes": [row for row in found if row["weight"] < 0][:LEARNED_MOST]}
+
+
 # ------------------------------------------------------------------- numbers --
 
 def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
-    """The week in numbers, for settings: what each surface's showings led to, play time, how much of the
-    list's opens came from its top 5, the character's picks against the model's, and its learned weights."""
+    """The week in numbers, for settings: what each surface's showings led to, play time, and the
+    character's picks against the model's."""
     runtime = Path(runtime)
     now = life.clock() if now is None else now
     feed = _feed()
@@ -609,20 +791,16 @@ def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
     events = feed._load(runtime / feed.TASTE_FILE)
     recent = [e for e in events if e[0] >= since]
     surfaces: dict[str, dict] = {}
-    top5 = opens = 0
     for h in history(recent).values():
         row = surfaces.setdefault(h["s"] or "other", {"shown": 0, "open": 0, "like": 0, "skip_hide": 0})
         row["shown"] += 1
-        row["open"] += h["open"] or h["play"] >= PLAY_MIN_S
+        row["open"] += h["open"] or _played(h)
         row["like"] += h["like"]
         row["skip_hide"] += h["skip"]
-        if h["open"] and h["s"] == "list":
-            opens += 1
-            top5 += h["r"] is not None and h["r"] < 5
     for row in surfaces.values():
         for k in ("open", "like", "skip_hide"):
             row[k + "_rate"] = round(row[k] / row["shown"], 3)
-    played = sum(float(e[5].get("play_s") or 0) for e in recent if e[2] == "play" and len(e) > 5)
+    played = sum(float(e[5].get(e[2] + "_s") or 0) for e in recent if e[2] in ("play", "read") and len(e) > 5)
     picks = {"character": [0, 0], "model": [0, 0]}
     for h in history(recent).values():
         slot = "character" if h["p"] == "character" else "model" if h["p"] in ("model", "explore") else ""
@@ -630,11 +808,6 @@ def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
             picks[slot][0] += 1
             picks[slot][1] += h["like"]
     model = load(runtime)
-    prior = Priors(runtime)
-    learned = {}
-    for k in ("char_fits", "char_love", "judged"):
-        q = model["q"].get(k) or prior(k)[1]
-        learned[k] = {"mean": round(model["m"].get(k, prior(k)[0]), 3), "sd": round(1 / math.sqrt(q), 3)}
     try:
         shown_lines = (runtime / SHOWN_FILE).read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -644,11 +817,11 @@ def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
         row = json.loads(line)
         # Whether its host was down when it was shown, not now.
         gated_hosts += row["at"] >= since and bool(row.get("gated"))
-    return {"days": days, "surfaces": surfaces, "play_s": round(played), "list_opens": opens,
-            "list_opens_top5_share": round(top5 / opens, 3) if opens else None,
+    return {"days": days, "surfaces": surfaces, "play_s": round(played),
             "picks": {slot: {"shown": n, "liked": pos, "like_rate": round(pos / n, 3) if n else None}
                       for slot, (n, pos) in picks.items()},
-            "k_c": pick_share(events), "learned": learned, "model": {"at": model["at"], "rows": model["rows"]},
+            "k_c": pick_share(events),
+            "model": {"at": model["at"], "rows": model["rows"]},
             "shown_on_gated_hosts": gated_hosts, "on": enabled(runtime)}
 
 

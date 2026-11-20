@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>在线预约 · 安心口腔</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #eef4f7; }
+.card { max-width: 520px; margin: 30px auto; background: #fff; padding: 22px 26px; border-radius: 10px; }
+label { display: block; margin: 12px 0 4px; color: #456; }
+input[type=text] { width: 240px; padding: 6px; }
+.pick { position: relative; display: inline-block; }
+.pop { position: absolute; top: 38px; left: 0; background: #fff; border: 1px solid #cdd; border-radius: 8px; padding: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.12); z-index: 3; width: 260px; }
+.head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.head span.nav { cursor: pointer; padding: 0 8px; font-size: 18px; color: #2b7; }
+table { border-collapse: collapse; width: 100%; } th { color: #999; font-weight: 400; }
+td { text-align: center; padding: 4px 0; cursor: pointer; border-radius: 4px; } td:hover { background: #e6f7ef; }
+td.off { color: #ccc; cursor: default; } td.sel { background: #2b7; color: #fff; }
+.slots { display: flex; gap: 8px; flex-wrap: wrap; }
+.slots label { margin: 0; border: 1px solid #cde; padding: 4px 10px; border-radius: 14px; cursor: pointer; }
+.go { margin-top: 18px; background: #2b7; color: #fff; border: 0; padding: 8px 24px; border-radius: 6px; cursor: pointer; }
+.err { color: #d33; } .ok { color: #2b7; }
+</style></head>
+<body>
+<div class="card">
+  <h2>预约挂号</h2>
+  <label for="nm">就诊人姓名</label><input type="text" id="nm" placeholder="请输入姓名">
+  <label>就诊日期</label>
+  <div class="pick"><input type="text" id="date" readonly placeholder="请选择日期"><div class="pop" id="pop" hidden></div></div>
+  <label>时段</label>
+  <div class="slots" id="slots"></div>
+  <button class="go" id="go">确认预约</button>
+  <p id="said"></p>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+// Today is 2026-11-19 on this site, so the person's date is in the next month.
+let year = 2026, month = 10, chosen = "";
+const pop = document.getElementById("pop"), field = document.getElementById("date");
+function drawMonth() {
+  pop.innerHTML = `<div class="head"><span class="nav" id="prev">‹</span><b>${year} 年 ${month + 1} 月</b><span class="nav" id="next">›</span></div>
+    <table><tr>${"日一二三四五六".split("").map((d) => `<th>${d}</th>`).join("")}</tr></table>`;
+  const table = pop.querySelector("table");
+  const first = new Date(year, month, 1).getDay(), days = new Date(year, month + 1, 0).getDate();
+  let tr = document.createElement("tr");
+  for (let i = 0; i < first; i++) tr.append(document.createElement("td"));
+  for (let d = 1; d <= days; d++) {
+    const td = document.createElement("td");
+    td.textContent = d;
+    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    if (iso <= "2026-11-19") td.className = "off";
+    else {
+      if (iso === chosen) td.className = "sel";
+      td.addEventListener("click", (e) => { e.stopPropagation(); chosen = iso; field.value = iso; pop.hidden = true; });
+    }
+    tr.append(td);
+    if ((first + d) % 7 === 0) { table.append(tr); tr = document.createElement("tr"); }
+  }
+  table.append(tr);
+  pop.querySelector("#prev").addEventListener("click", (e) => { e.stopPropagation(); if (month === 0) { month = 11; year--; } else month--; drawMonth(); });
+  pop.querySelector("#next").addEventListener("click", (e) => { e.stopPropagation(); if (month === 11) { month = 0; year++; } else month++; drawMonth(); });
+}
+field.addEventListener("click", (e) => { e.stopPropagation(); drawMonth(); pop.hidden = false; });
+document.addEventListener("click", (e) => { if (!pop.contains(e.target)) pop.hidden = true; });
+for (const t of ["09:00", "10:30", "14:00", "15:00", "16:30"]) {
+  const l = document.createElement("label");
+  l.innerHTML = `<input type="radio" name="slot" value="${t}"> ${t}`;
+  document.getElementById("slots").append(l);
+}
+document.getElementById("go").addEventListener("click", async () => {
+  const slot = document.querySelector("input[name=slot]:checked"), said = document.getElementById("said");
+  const name = document.getElementById("nm").value.trim();
+  if (!name || !chosen || !slot) { said.className = "err"; said.textContent = "请填写姓名、选择日期和时段"; return; }
+  if ((await post("/api/booking", { name, date: chosen, time: slot.value })).ok) {
+    said.className = "ok"; said.textContent = `预约成功：${chosen} ${slot.value}`;
+  }
+});
+</script></body></html>

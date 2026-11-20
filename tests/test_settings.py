@@ -24,23 +24,16 @@ from helpers import check
 #: A deployment `.env` with every setting set to something distinctive.
 FULL_ENV = {
     "LLM_API_KEY": "sk-live", "LLM_BASE_URL": "https://llm.example/v1/",
-    "LLM_MODEL": "live-model", "QQ_BOT_ID": "900", "PERSONA_NAME": "Live",
-    "QQ_ONEBOT_URL": "http://napcat:3000/", "CHAT_TRIGGER_COUNT": "7",
-    "CHAT_CONTEXT_MESSAGES": "40", "CHAT_FOLLOWUP_WINDOW_S": "11",
+    "LLM_MODEL": "live-model", "PERSONA_NAME": "Live",
     "MEMORY_FILE": "m.json", "MEMORY_MAX_PER_CONVERSATION": "9",
-    "ADMIN_IDS": "42", "ADMIN_NAME": "O", "ADMIN_RELATIONSHIP": "rel",
+    "ADMIN_NAME": "O", "ADMIN_RELATIONSHIP": "rel",
     "LLM_DM_MODEL": "dm-model", "LLM_FALLBACK_MODEL": "cheap-model",
     "LLM_FALLBACK_BASE_URL": "https://fb.example/v1/", "LLM_FALLBACK_API_KEY": "sk-fb",
     "LLM_FALLBACK_THINKING": "true",
     "LLM_RATE_WINDOW_S": "13", "LLM_RATE_THRESHOLD": "14", "LLM_FALLBACK_DURATION_S": "15",
     "LLM_RATE_LIMIT_COOLDOWN_S": "16",
-    "EVAL_ENABLED": "true", "EVAL_MODEL": "eval-model", "EVAL_FILE": "e.jsonl",
     "VISION_MODEL": "v-model", "VISION_API_KEY": "vk", "TAVILY_API_KEY": " tav ",
     "VISION_BASE_URL": "https://vision.example/v4/", "AGENT_LANG": " ZH ",
-    "CONNECTOR_QQ_PLATFORMS": "aiocqhttp",
-    "ACCESS_GROUPS": "g1, g2 ,", "ACCESS_DM_USERS": "p1",
-    "PROACTIVE_ENABLED": "yes", "EVOLVE_INTERVAL_HOURS": "0.5",
-    "REACT_TTL_S": "30", "PROMOTE_MAX_EXAMPLES": "12",
 }
 
 
@@ -62,63 +55,18 @@ def test_the_vision_endpoint_reads_its_names() -> None:
           repr((s.vision_api_key, s.vision_base_url)))
 
 
-def test_the_identity_settings_are_read_per_platform(monkeypatch) -> None:
-    """ADMIN_IDS, ACCESS_GROUPS and ACCESS_DM_USERS take "<platform>:<id>"
-    entries on every platform."""
-    import dataclasses
-
-    new = AgentSettings.from_env(env={
-        "LLM_API_KEY": "k", "ADMIN_IDS": "telegram:1, qq:10000,",
-        "ACCESS_GROUPS": "telegram:-100,123", "ACCESS_DM_USERS": "slack:U1"})
-    check("identity: the names are read and canonicalised",
-          (new.admin_ids, new.access_groups, new.access_dm_users)
-          == (("telegram:1", "10000"), ("telegram:-100", "123"), ("slack:U1",)),
-          repr((new.admin_ids, new.access_groups, new.access_dm_users)))
-    check("identity: admins and DM users are the canonical sets",
-          new.admins == {"telegram:1", "10000"} and new.dm_users == {"slack:U1"})
-
-    native = AgentSettings.from_env(env={
-        "LLM_API_KEY": "k", "CONNECTOR_QQ_PLATFORMS": "aiocqhttp",
-        "ADMIN_IDS": "aiocqhttp:10000", "ACCESS_GROUPS": "qq:123,aiocqhttp:456",
-        "ACCESS_DM_USERS": "telegram:aiocqhttp"})
-    check("identity: qq: and native prefixes become the bare keys events carry",
-          native.admins == {"10000"} and native.access_groups == ("123", "456")
-          and native.dm_users == {"telegram:aiocqhttp"},
-          repr((native.admins, native.access_groups, native.dm_users)))
-    check("identity: re-resolving changes nothing",
-          dataclasses.replace(new) == new and dataclasses.replace(native) == native)
-
-    monkeypatch.setenv("ACCESS_GROUPS", "telegram:-100,123")
-    monkeypatch.setenv("ACCESS_DM_USERS", "telegram:42")
-    monkeypatch.setenv("ADMIN_IDS", "telegram:1")
-    ambient = AgentSettings(api_key="k")
-    check("identity: the admission lists are operational knobs, read in both",
-          ambient.access_groups == ("telegram:-100", "123")
-          and ambient.access_dm_users == ("telegram:42",),
-          repr((ambient.access_groups, ambient.access_dm_users)))
-    check("identity: the admins are a deployment setting",
-          not ambient.admins, repr(ambient.admins))
-
-
 def test_plain_construction_ignores_deployment_settings() -> None:
     """The constructor's own defaults, not the `.env` around it."""
     plain = AgentSettings(api_key="k")
     check("plain: literal endpoint default",
           plain.model == DEFAULT_LLM_MODEL and plain.base_url == DEFAULT_LLM_BASE_URL,
           repr((plain.model, plain.base_url)))
-    check("plain: the same rate window .env.example documents",
-          (plain.llm_rate_window_s, plain.llm_rate_threshold, plain.llm_fallback_duration_s)
-          == (120, 30, 180))
+    check("plain: the same fallback time .env.example documents", plain.llm_fallback_duration_s == 180)
     check("plain: a 429 cools for seconds, not the failure window",
           plain.llm_rate_limit_cooldown_s == 20, repr(plain.llm_rate_limit_cooldown_s))
-    check("plain: self-eval off by default, as in a deployment",
-          plain.eval_enabled is False)
-    check("plain: no NapCat HTTP server unless one is named", plain.qq_onebot_url == "")
-    check("plain: no deployment identity", not plain.qq_bot_id and not plain.admin_ids)
     empty = AgentSettings.from_env(env={}, api_key="k")
     check("an empty environment gives the documented knob defaults",
-          (empty.proactive_interval_s, empty.react_ttl_s, empty.llm_timeout_s,
-           empty.evolve_threshold) == (1500, 900.0, 120.0, 3))
+          (empty.roam_walks_a_day, empty.llm_timeout_s) == (3, 120.0))
 
 
 def test_from_env_reads_the_deployment() -> None:
@@ -126,8 +74,8 @@ def test_from_env_reads_the_deployment() -> None:
     check("from_env: key, model, endpoint",
           (s.api_key, s.model) == ("sk-live", "live-model"))
     check("from_env: trailing slash trimmed off every base url",
-          (s.base_url, s.qq_onebot_url, s.vision_base_url, s.llm_fallback_base_url)
-          == ("https://llm.example/v1", "http://napcat:3000",
+          (s.base_url, s.vision_base_url, s.llm_fallback_base_url)
+          == ("https://llm.example/v1",
               "https://vision.example/v4", "https://fb.example/v1"), repr(s.base_url))
     check("from_env: the fallback's own key", s.llm_fallback_api_key == "sk-fb")
     unset = AgentSettings.from_env(env={"LLM_API_KEY": "k"})
@@ -136,25 +84,15 @@ def test_from_env_reads_the_deployment() -> None:
           repr((unset.llm_fallback_base_url, unset.llm_fallback_api_key)))
     check("from_env: a fallback endpoint is sent `thinking` only when told it takes it",
           s.llm_fallback_thinking is True and unset.llm_fallback_thinking is False)
-    check("from_env: bounded integers", (s.chat_trigger_count, s.chat_context_messages,
-          s.chat_followup_window_s, s.memory_max_per_conversation) == (7, 40, 11, 9))
+    check("from_env: bounded integers", s.memory_max_per_conversation == 9)
     check("from_env: the two cooldowns are read separately",
           (s.llm_fallback_duration_s, s.llm_rate_limit_cooldown_s) == (15, 16),
           repr((s.llm_fallback_duration_s, s.llm_rate_limit_cooldown_s)))
     check("from_env: .env.example's defaults are the ones that apply",
-          AgentSettings.from_env(env={}).llm_rate_window_s == 120
-          and AgentSettings.from_env(env={}).eval_enabled is False)
+          AgentSettings.from_env(env={}).llm_fallback_duration_s == 180)
     check("from_env: language normalised", s.agent_lang == "zh", s.agent_lang)
-    check("from_env: id lists split, trimmed, emptied entries dropped",
-          s.admin_ids == ("42",) and s.access_groups == ("g1", "g2")
-          and s.access_dm_users == ("p1",))
     check("from_env: the admin's name and relationship",
           (s.admin_name, s.admin_relationship) == ("O", "rel"))
-    check("from_env: an explicit env reaches the operational knobs too",
-          s.proactive_enabled is True and s.react_ttl_s == 30.0
-          and s.promote_max_examples == 12, repr(s.proactive_enabled))
-    check("from_env: EVOLVE_INTERVAL_HOURS is seconds where it is used",
-          s.evolve_interval == 1800, repr(s.evolve_interval))
     check("from_env: overrides beat the environment",
           AgentSettings.from_env(env=FULL_ENV, persona_name="Override").persona_name
           == "Override")
@@ -164,15 +102,11 @@ def test_an_out_of_range_setting_falls_back_rather_than_raising() -> None:
     """A typo in one setting has to behave like a typo in any other: the
     documented default, and the process still starts."""
     s = AgentSettings.from_env(env={
-        "LLM_API_KEY": "k", "SERVER_PORT": "nope", "CHAT_CONTEXT_MESSAGES": "1",
-        "CHAT_TRIGGER_COUNT": "0", "REACT_TTL_S": "15m",
-        "PROACTIVE_PROB": "2", "LLM_TIMEOUT_S": "0", "LLM_RATE_LIMIT_COOLDOWN_S": "0",
+        "LLM_API_KEY": "k", "MEMORY_MAX_PER_CONVERSATION": "0", "ROAM_GAP_HOURS": "lots",
+        "LLM_TIMEOUT_S": "0", "LLM_RATE_LIMIT_COOLDOWN_S": "0",
     })
-    check("bad values: bounded ints fall back",
-          (s.chat_context_messages, s.chat_trigger_count) == (120, 30))
-    check("bad values: unparseable float falls back", s.react_ttl_s == 900.0)
-    check("bad values: out-of-range probability falls back",
-          s.proactive_prob == 0.25)
+    check("bad values: bounded ints fall back", s.memory_max_per_conversation == 50)
+    check("bad values: unparseable float falls back", s.roam_gap_h == 3.0)
     check("bad values: out-of-range timeout falls back", s.llm_timeout_s == 120.0)
     check("bad values: out-of-range 429 cooldown falls back",
           s.llm_rate_limit_cooldown_s == 20, repr(s.llm_rate_limit_cooldown_s))
@@ -189,9 +123,8 @@ def _template_values() -> dict[str, str]:
 
 
 #: Fields the comparison below cannot hold equal by construction: `lang` is
-#: the raw input `agent_lang` is resolved from, and the policy belongs to
-#: promotion.py.
-_NOT_DEFAULTS = {"lang", "promotion_policy"}
+#: the raw input `agent_lang` is resolved from.
+_NOT_DEFAULTS = {"lang"}
 #: The template starts a new setup on the first preset, while an unset endpoint
 #: keeps meaning DeepSeek, for a .env holding only that key.
 _NEW_SETUP_ONLY = {"LLM_BASE_URL", "LLM_MODEL"}
@@ -216,8 +149,8 @@ def test_one_source_of_defaults(monkeypatch) -> None:
         check(f"constructor and from_env agree on {f.name}", a == b, repr((a, b)))
         check(f".env.example documents the default of {f.name}", b == c, repr((b, c)))
     check("...and the comparison covered the settings it is about",
-          {"LLM_RATE_WINDOW_S", "EVAL_ENABLED", "QQ_ONEBOT_URL",
-           "REACT_TTL_S"} <= set(template), repr(sorted(template)[:8]))
+          {"LLM_FALLBACK_DURATION_S", "ROAM_GAP_HOURS", "MEMORY_TIDY_EVERY"}
+          <= set(template), repr(sorted(template)[:8]))
 
 
 def test_from_env_takes_each_default_from_its_field(monkeypatch) -> None:
@@ -227,13 +160,10 @@ def test_from_env_takes_each_default_from_its_field(monkeypatch) -> None:
     declared = AgentSettings.__dataclass_fields__
     moved = {
         "base_url": "https://moved.example/v1", "model": "moved-model",
-        "chat_trigger_count": 31, "chat_context_messages": 121,
-        "chat_followup_window_s": 122, "memory_file": "moved.json",
+        "memory_file": "moved.json",
         "memory_max_per_conversation": 51, "memory_tidy_every": 9,
-        "memory_share_rooms": True, "llm_fallback_thinking": True,
-        "llm_rate_window_s": 123, "llm_rate_threshold": 32,
+        "llm_fallback_thinking": True,
         "llm_fallback_duration_s": 181, "llm_rate_limit_cooldown_s": 21,
-        "eval_enabled": True, "eval_file": "moved.jsonl",
     }
     for name, value in moved.items():
         check(f"{name} starts from another default",
@@ -245,8 +175,7 @@ def test_from_env_takes_each_default_from_its_field(monkeypatch) -> None:
               getattr(s, name) == value, repr(getattr(s, name)))
     s = AgentSettings.from_env(env=FULL_ENV)
     check("from_env: a set value still wins over it",
-          (s.chat_trigger_count, s.memory_file, s.eval_enabled, s.model)
-          == (7, "m.json", True, "live-model"), repr(s.chat_trigger_count))
+          (s.memory_file, s.model) == ("m.json", "live-model"), repr(s.memory_file))
 
 
 def test_agent_lang_spellings_are_normalised() -> None:
@@ -264,29 +193,6 @@ def test_agent_lang_spellings_are_normalised() -> None:
           AgentSettings(api_key="k", lang="en-GB").agent_lang == "en")
 
 
-def test_an_evolve_interval_of_zero_does_not_spin() -> None:
-    s = AgentSettings.from_env(env={"LLM_API_KEY": "k", "EVOLVE_INTERVAL_HOURS": "0"})
-    check("EVOLVE_INTERVAL_HOURS=0 is floored, not a busy loop",
-          s.evolve_interval >= 360, repr(s.evolve_interval))
-    check("...and the floor survives a re-resolve",
-          dataclasses.replace(s).evolve_interval == s.evolve_interval)
-
-
-def test_the_outbox_settings() -> None:
-    """CONNECTOR_OUTBOX_ENABLED defaults on; PROACTIVE_PLATFORMS is a lowercase list
-    where a native connector's name means QQ, whose keys it mints."""
-    default = AgentSettings.from_env(env={"LLM_API_KEY": "k"})
-    check("outbox: on by default, every platform open",
-          default.connector_outbox_enabled is True and default.proactive_platforms == ())
-    s = AgentSettings.from_env(env={
-        "LLM_API_KEY": "k", "CONNECTOR_OUTBOX_ENABLED": "false",
-        "PROACTIVE_PLATFORMS": " Telegram, aiocqhttp ,qq,",
-        "CONNECTOR_QQ_PLATFORMS": "aiocqhttp"})
-    check("outbox: false turns it off", s.connector_outbox_enabled is False)
-    check("proactive platforms: trimmed, lowercased, native read as qq",
-          s.proactive_platforms == ("telegram", "qq"), repr(s.proactive_platforms))
-
-
 def test_the_empty_model_fallbacks_resolve_in_order() -> None:
     bare = AgentSettings(api_key="k", model="main")
     check("blank fallback model becomes the main model",
@@ -298,13 +204,7 @@ def test_the_empty_model_fallbacks_resolve_in_order() -> None:
                         llm_fallback_model="cheap").llm_judge_model == "cheap")
     chain = AgentSettings(api_key="k", model="main", llm_fallback_model="cheap",
                           llm_judge_model="judge")
-    check("eval model follows the cheap model, not the judge",
-          chain.eval_model == "cheap")
-    check("evolve model follows the eval model", chain.evolve_model == "cheap")
-    check("react model follows the judge model", chain.react_model == "judge")
-    check("an explicit eval model wins",
-          AgentSettings(api_key="k", model="main",
-                        eval_model="scorer").eval_model == "scorer")
+    check("an explicit judge model is kept", chain.llm_judge_model == "judge")
 
 
 def test_post_init_is_idempotent() -> None:
@@ -330,14 +230,11 @@ def test_the_agent_accepts_the_record_and_its_fields() -> None:
     previous_home = os.environ.get("AGENT_HOME")
     with tempfile.TemporaryDirectory() as d:
         os.environ["AGENT_HOME"] = d
-        paths = dict(memory_file=str(Path(d) / "memory.json"),
-                     stickers_dir=str(Path(d) / "stickers"),
-                     stickers_file=str(Path(d) / "stickers.json"),
-                     eval_file=str(Path(d) / "eval.jsonl"))
-        settings = AgentSettings(api_key="k", qq_bot_id="1", persona_name="B",
+        paths = dict(memory_file=str(Path(d) / "memory.json"))
+        settings = AgentSettings(api_key="k", persona_name="B",
                                  model="m", lang="en", **paths)
         from_record = Agent(settings)
-        from_kwargs = Agent(api_key="k", qq_bot_id="1", persona_name="B", model="m",
+        from_kwargs = Agent(api_key="k", persona_name="B", model="m",
                             lang="en", **paths)
         check("a record and its keywords build the same agent",
               from_record.settings == from_kwargs.settings)
@@ -389,8 +286,7 @@ def test_the_memory_settings_round_trip_and_keep_their_old_defaults() -> None:
     check("the defaults", (plain.memory_calls_per_day, plain.memory_prompt_chars,
                            plain.memory_episodes_max, plain.memory_keep_recent)
           == (40, 2400, 120, True))
-    check("the changed-meaning settings keep their defaults",
-          (plain.chat_context_messages, plain.memory_tidy_every) == (120, 8))
+    check("the changed-meaning settings keep their defaults", plain.memory_tidy_every == 8)
     bad = AgentSettings.from_env(env={
         "LLM_API_KEY": "k", "MEMORY_CALLS_PER_DAY": "-1", "MEMORY_PROMPT_CHARS": "5",
         "MEMORY_EPISODES_MAX": "x"})

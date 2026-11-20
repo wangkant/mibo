@@ -2,7 +2,6 @@
 JSON mode, fallback models and their cooldowns."""
 from __future__ import annotations
 
-import tempfile
 import time
 from pathlib import Path
 
@@ -94,113 +93,15 @@ class _Endpoint:
 async def _gate(agent: Agent, model: str = "m") -> str:
     try:
         return await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                     model=model, max_tokens=50, enable_search=False,
+                                     model=model, max_tokens=50,
                                      disable_thinking=True)
     except httpx.HTTPStatusError:
         return "error"
 
 
-async def test_a_refusal_is_remembered_only_when_the_retry_works(tmp: Path) -> None:
-    agent = make_agent(tmp, "https://api.deepseek.com")
-    agent.model = agent.llm_fallback_model = "Qwen3-235B-Thinking"
-    http = _Endpoint(lambda p: (400, f"Model does not exist: {p['model']}"))
-    agent._http = http
-    check("a wrong model name fails", await _gate(agent, agent.model) == "error")
-    check("...without a retry that drops `thinking`",
-          http.sent == [(agent.model, True)], repr(http.sent))
-    http.answer = lambda p: (400, "property 'thinking' is unsupported" if "thinking" in p
-                             else "model is overloaded, bad request")
-    await _gate(agent, agent.model)
-    http.answer = lambda p: (200, "")
-    http.sent.clear()
-    await _gate(agent, agent.model)
-    check("a refusal whose retry also failed is not remembered",
-          http.sent == [(agent.model, True)], repr(http.sent))
-
-
-async def test_the_thinking_verdict_is_per_model(tmp: Path) -> None:
-    agent = make_agent(tmp, "https://gateway.example/v1")
-    agent.llm_fallback_thinking = True
-    http = _Endpoint(lambda p: (400, "property 'thinking' is unsupported")
-                     if p["model"] == "thinker" and "thinking" in p else (200, ""))
-    agent._http = http
-    check("the model that refuses it answers", await _gate(agent, "thinker") == "ok")
-    http.sent.clear()
-    await _gate(agent, "plain")
-    await _gate(agent, "thinker")
-    check("another model on the same gateway is still sent it",
-          http.sent == [("plain", True), ("thinker", False)], repr(http.sent))
-
-
-async def test_an_unknown_endpoint_is_asked_by_its_first_gate_call(tmp: Path) -> None:
-    """No startup probe ran (personagent chat, demo and eval never run one)."""
-    for refuses, want in ((False, True), (True, False)):
-        agent = make_agent(tmp, "https://proxy.example/v1")
-        # A refusal in words of its own, as an unknown server may phrase it.
-        http = _Endpoint(lambda p: (422, "bad body") if refuses and "thinking" in p
-                         else (200, ""))
-        agent._http = http
-        check(f"asked and answered (refuses={refuses})", await _gate(agent) == "ok")
-        check("...sending `thinking` first",
-              http.sent[0] == ("m", True), repr(http.sent))
-        http.sent.clear()
-        await _gate(agent)
-        check(f"the next gate call sends it only if it was taken ({want})",
-              http.sent == [("m", want)], repr(http.sent))
-
-
-def test_a_base_url_is_judged_by_the_resolver_that_uses_it() -> None:
-    from persona_agent import preflight
-    from persona_agent.endpoints import chat_completions_url
-
-    check("an uppercase version is a version root",
-          chat_completions_url("https://llm.example/V1") == "https://llm.example/V1/chat/completions")
-
-    def found(**env):
-        return {(f.level, f.key): f.detail for f in preflight.check_config(
-            env={"LLM_API_KEY": "sk-x", **env})}
-
-    for base in ("https://api.groq.com/openai/v1", "https://api.groq.com/openai",
-                 "https://generativelanguage.googleapis.com/v1beta/openai"):
-        check(f"{base} is fine", not found(LLM_BASE_URL=base), repr(found(LLM_BASE_URL=base)))
-    gemini = found(LLM_BASE_URL="https://generativelanguage.googleapis.com/v1beta")
-    check("Gemini's native /v1beta is named, with the address to use",
-          "https://generativelanguage.googleapis.com/v1beta/openai"
-          in gemini.get(("WARN", "LLM_BASE_URL"), ""), repr(gemini))
-    for key, level in (("LLM_BASE_URL", "ERROR"), ("LLM_FALLBACK_BASE_URL", "WARN"),
-                       ("EMBEDDING_BASE_URL", "WARN")):
-        got = found(**{key: "api.deepseek.com", "LLM_FALLBACK_MODEL": "f",
-                       "LLM_FALLBACK_API_KEY": "k", "EMBEDDING_MODEL": "e"})
-        check(f"{key} without a scheme is named", "https://api.deepseek.com"
-              in got.get((level, key), ""), repr(got))
-
-
 # ---------------------------------------------------------------------------
 # Routing, retries, JSON mode, fallback models and cooldowns
 # ---------------------------------------------------------------------------
-
-def test_pick_group_model_mode_exempt() -> None:
-    """Frequency-driven downgrade must exempt called/admin (no 'dumber when most
-    @-ed'); error-driven fallback (_fallback_until, keyed by model name) must
-    apply to ALL modes."""
-    from collections import deque
-    with tempfile.TemporaryDirectory() as d:
-        a = isolated_agent(Path(d))
-        a.model, a.llm_fallback_model = "pro", "flash"
-        a.llm_rate_window_s = 60
-        a.llm_rate_threshold = 5
-        a.llm_fallback_duration_s = 300
-        a.model_calls = deque([time.time()] * 6)  # over threshold
-        check("route: hot window called stays pro", a._pick_group_model("called") == "pro")
-        check("route: hot window admin stays pro", a._pick_group_model("owner") == "pro")
-        check("route: hot window followup downgrades", a._pick_group_model("followup") == "flash")
-        check("route: after trip judge downgraded", a._pick_group_model("judge") == "flash")
-        check("route: after trip called still pro", a._pick_group_model("called") == "pro")
-        a._freq_fallback_until = 0.0
-        a._fallback_until = {"pro": time.time() + 100}  # real 429 on the primary
-        check("route: api-429 downgrades called too", a._pick_group_model("called") == "flash")
-        check("route: api-429 downgrades admin too", a._pick_group_model("owner") == "flash")
-
 
 async def test_cache_hits_are_logged_in_either_spelling(tmp: Path, caplog) -> None:
     """The cache line read only DeepSeek's usage keys, so it never fired on
@@ -239,7 +140,7 @@ async def test_cache_hits_are_logged_in_either_spelling(tmp: Path, caplog) -> No
         agent._http = lambda **kw: _HTTP(usage)
         with caplog.at_level(logging.INFO, logger="agent"):
             await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                  model="m", max_tokens=100, enable_search=False)
+                                  model="m", max_tokens=100)
         lines = [r.getMessage() for r in caplog.records if "cache:" in r.getMessage()]
         return lines[0] if lines else ""
 
@@ -292,10 +193,9 @@ async def test_truncated_reply_retries_once(tmp: Path) -> None:
 
     agent._http = lambda **kw: _HTTP()
     out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                model="reasoner", max_tokens=1200,
-                                enable_search=False)
-    check("truncation: retried once at a larger budget",
-          budgets == [1200, 4800], repr(budgets))
+                                model="reasoner", max_tokens=1200)
+    check("truncation: retried once with thinking off at the same budget",
+          budgets == [1200, 1200], repr(budgets))
     check("truncation: the retry's answer is returned",
           out == '{"reply":"recovered"}', repr(out))
 
@@ -309,23 +209,23 @@ async def test_truncated_reply_retries_once(tmp: Path) -> None:
     class _Trunc(_Resp):
         def json(self):
             return {"choices": [{"message": {"content": '{"reasoning": "half'},
-                                 "finish_reason": "length" if len(budgets) == 1
+                                 "finish_reason": "length" if len(budgets) <= 2
                                  else "stop"}]}
 
     class _HTTP3(_HTTP):
         async def post(self, url, headers=None, json=None):
             budgets.append(json["max_tokens"])
             payloads.append(json)
-            if len(budgets) == 1:
+            if len(budgets) <= 2:
                 return _Trunc("")
             return _Resp('{"reply":"whole"}')
 
     agent._http = lambda **kw: _HTTP3()
     out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
                                 model="m", max_tokens=1200,
-                                enable_search=False, json_object=True)
-    check("truncation: half-emitted JSON retries too",
-          budgets == [1200, 4800], repr(budgets))
+                                json_object=True)
+    check("truncation: half-emitted JSON retries too, thinking off and then a larger budget",
+          budgets == [1200, 1200, 4800], repr(budgets))
     check("truncation: whole JSON comes back from the retry",
           out == '{"reply":"whole"}', repr(out))
     check("json_object: payload carries response_format",
@@ -347,7 +247,7 @@ async def test_truncated_reply_retries_once(tmp: Path) -> None:
 
     agent._http = lambda **kw: _HTTP2()
     await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="m", max_tokens=1200, enable_search=False)
+                          model="m", max_tokens=1200)
     check("truncation: an empty stop is not retried", budgets == [1200], repr(budgets))
 
 
@@ -395,7 +295,7 @@ async def test_blank_content_with_reasoning_retries_thinking_disabled(tmp: Path)
         agent._http = lambda **_kw: _HTTP()
         return await agent._call_llm(
             "sys", [{"role": "user", "content": "hi"}], model="deepseek-v4-flash",
-            max_tokens=1200, enable_search=False, json_object=True, **kw)
+            max_tokens=1200, json_object=True, **kw)
 
     out = await call()
     check("blank+reasoning: retried exactly once", len(payloads) == 2, repr(payloads))
@@ -425,114 +325,10 @@ async def test_blank_content_with_reasoning_retries_thinking_disabled(tmp: Path)
     agent._http = lambda **kw: _HTTPNormal()
     out = await agent._call_llm(
         "sys", [{"role": "user", "content": "hi"}], model="deepseek-v4-flash",
-        max_tokens=1200, enable_search=False, json_object=True)
+        max_tokens=1200, json_object=True)
     check("normal reply: reasoning beside real content does not retry",
           len(payloads) == 1 and out == '{"reply":"fine"}',
           repr((len(payloads), out)))
-
-
-async def test_disabled_thinking_speaks_openrouters_dialect_too(tmp: Path) -> None:
-    """`thinking: {type: disabled}` is passed through by OpenRouter and
-    ignored by some of its upstreams (measured: qwen3.7-flash and
-    deepseek-v4-flash kept reasoning under it, 10-20s and 300+ tokens), so a
-    call that asks for no hidden reasoning also sends OpenRouter's own
-    `reasoning: {enabled: false}` -- on OpenRouter's host only, since another
-    vendor may 400 an unknown field. A call that did not ask keeps its
-    reasoning: this only makes an existing request mean what it says."""
-    agent = isolated_agent(tmp)
-    payloads: list = []
-
-    class _Resp:
-        status_code = 200
-
-        def raise_for_status(self) -> None:
-            pass
-
-        def json(self):
-            return {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}
-
-    class _HTTP:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def post(self, url, headers=None, json=None):
-            payloads.append(json)
-            return _Resp()
-
-    agent._http = lambda **kw: _HTTP()
-
-    async def call(base_url: str, disable_thinking: bool) -> dict:
-        agent.base_url = base_url
-        await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                              model=agent.model, max_tokens=100, enable_search=False,
-                              disable_thinking=disable_thinking)
-        return payloads[-1]
-
-    p = await call("https://openrouter.ai/api/v1", True)
-    check("openrouter: thinking off in OpenRouter's own dialect",
-          p.get("reasoning") == {"enabled": False}, repr(p))
-    check("openrouter: ...and not in DeepSeek's, which it does not need",
-          "thinking" not in p, repr(p))
-    p = await call("https://api.deepseek.com", True)
-    check("deepseek: thinking off in its dialect, and no OpenRouter field leaks to it",
-          p.get("thinking") == {"type": "disabled"} and "reasoning" not in p, repr(p))
-    p = await call("https://llm.example/api/v4/chat/completions", True)
-    check("a vendor of unknown dialect is asked in DeepSeek's dialect, not OpenRouter's",
-          p.get("thinking") == {"type": "disabled"} and "reasoning" not in p, repr(p))
-    p = await call("https://openrouter.ai/api/v1", False)
-    check("openrouter: a call that keeps its reasoning is not changed",
-          "thinking" not in p and "reasoning" not in p, repr(p))
-    # The search decision builds its own payload, and with reasoning on it
-    # rarely emits a tool call at all -- so the search never fired.
-    agent.base_url = "https://openrouter.ai/api/v1"
-    await agent._decide_and_search([], hint="what is the price of gold today")
-    p = payloads[-1]
-    check("openrouter: the search decision turns reasoning off in its dialect too",
-          p.get("reasoning") == {"enabled": False} and "thinking" not in p, repr(p))
-
-
-async def test_a_vision_verdict_on_openrouter_does_not_think(tmp: Path) -> None:
-    """The vision calls budget 60-120 tokens; a reasoning model on OpenRouter
-    spent all of them thinking and every caption and verdict came back empty.
-    The call site hands the endpoint to the switch, not just the model name."""
-    import io
-
-    from PIL import Image
-
-    agent = isolated_agent(tmp)
-    agent.vision_model = "qwen/qwen3.7-flash"
-    agent.vision_api_key = "vision-key"
-    agent.vision_base_url = "https://openrouter.ai/api/v1"
-    payloads: list = []
-
-    class _Resp:
-        status_code = 200
-
-        def json(self):
-            return {"choices": [{"message": {"content": '{"tacky": false}'}}]}
-
-    class _HTTP:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def post(self, url, headers=None, json=None):
-            payloads.append(json)
-            return _Resp()
-
-    agent._http = lambda **kw: _HTTP()
-    buf = io.BytesIO()
-    Image.effect_noise((64, 64), 64).convert("RGB").save(buf, "PNG")
-    verdict = await agent._judge_sticker_aesthetic(buf.getvalue())
-    check("vision: the verdict still parses", verdict is False, repr(verdict))
-    check("vision: OpenRouter's reasoning switch is on the payload",
-          payloads and payloads[0].get("reasoning") == {"enabled": False},
-          repr(payloads[:1]))
 
 
 async def test_json_mode_blank_falls_back_to_plain_text(tmp: Path) -> None:
@@ -587,7 +383,7 @@ async def test_json_mode_blank_falls_back_to_plain_text(tmp: Path) -> None:
         agent._http = lambda **_kw: _HTTP(last, reasoning)
         return await agent._call_llm(
             "sys", [{"role": "user", "content": "hi"}], model="m",
-            max_tokens=1200, enable_search=False, json_object=True, **kw)
+            max_tokens=1200, json_object=True, **kw)
 
     out = await call("the street is gone by morning", plain_text_fallback=True)
     check("the blank turn is retried WITHOUT response_format",
@@ -639,37 +435,10 @@ async def test_json_mode_blank_falls_back_to_plain_text(tmp: Path) -> None:
     agent._http = lambda **_kw: _ProseHTTP("")
     out = await agent._call_llm(
         "sys", [{"role": "user", "content": "hi"}], model="m", max_tokens=1200,
-        enable_search=False, json_object=True, plain_text_fallback=True)
+        json_object=True, plain_text_fallback=True)
     check("prose answered in JSON mode is wrapped, not dropped, in one call",
           TextProcessing._parse_model_output(out)[0] == "the lane is quiet tonight"
           and len(payloads) == 1, repr((out, len(payloads))))
-
-
-async def test_only_the_reply_calls_recover_plain_text(tmp: Path) -> None:
-    """The plain-text rung is for calls whose schema IS `reply`. The group
-    gate's output is a PASS/reply decision; recovering prose for it would
-    turn "could not decide" into "decided to say this"."""
-    agent = isolated_agent(tmp)
-    agent.llm_judge_model = "gate-model"
-    calls: list[tuple[str, bool]] = []
-
-    async def fake_call(*, system, messages, model, **kw):
-        calls.append((model, kw.get("plain_text_fallback", False)))
-        return '{"reasoning": "r", "intent": "chat", "reply": "sure", "mem": ""}'
-
-    agent._call_llm = fake_call
-    agent._append_buffer("g", "Alice", "anyone around tonight", "42")
-    await agent._think("g", "judge", "anyone around tonight")
-    check("group: the gate call does not recover plain text",
-          calls[0] == ("gate-model", False), repr(calls))
-    check("group: the reply call does",
-          len(calls) == 2 and calls[1][1] is True, repr(calls))
-
-    calls.clear()
-    await agent._chat_dm([{"role": "user", "content": "hey"}],
-                              is_admin=True, pkey="private:42")
-    check("private: the 1:1 reply call recovers plain text",
-          calls == [(agent.llm_dm_model, True)], repr(calls))
 
 
 class _429Resp:
@@ -723,52 +492,6 @@ def _two_model_agent(tmp: Path) -> Agent:
     return a
 
 
-async def test_error_cooldown_cools_only_failed_model(tmp: Path) -> None:
-    """A 429 on the primary cools ONLY the primary: the fallback stays
-    eligible, both as the mid-call failover and on the next
-    _pick_group_model() in every mode (error-driven cooldown applies to
-    called/admin too)."""
-    agent = _two_model_agent(tmp)
-    posts: list = []
-    agent._http = lambda **kw: _llm_http(posts, {"primary"})()
-
-    out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                model="primary", max_tokens=100, enable_search=False)
-    check("cooldown: mid-call failover lands on the fallback",
-          out == "ok from fallback", repr(out))
-    check("cooldown: primary tried once, then fallback -- no bouncing",
-          posts == ["primary", "fallback"], repr(posts))
-    now = time.time()
-    check("cooldown: primary's entry is armed",
-          agent._fallback_until.get("primary", 0.0) > now, repr(agent._fallback_until))
-    check("cooldown: fallback's entry is untouched -- it never failed",
-          "fallback" not in agent._fallback_until, repr(agent._fallback_until))
-    picks = {m: agent._pick_group_model(m) for m in ("called", "owner", "followup")}
-    check("cooldown: next pick routes straight to fallback for every mode",
-          all(p == "fallback" for p in picks.values()), repr(picks))
-
-
-async def test_a_side_model_failure_does_not_cool_the_group_model(tmp: Path) -> None:
-    """The defect the per-model clock fixes: one scalar clock meant a failing
-    LLM_DM_MODEL, LLM_JUDGE_MODEL or EVAL_MODEL -- any model sent through
-    _call_llm -- armed the cooldown and moved every group reply to the
-    fallback, though the primary never failed."""
-    agent = _two_model_agent(tmp)
-    posts: list = []
-    agent._http = lambda **kw: _llm_http(posts, {"dm-model"})()
-
-    out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                model="dm-model", max_tokens=100, enable_search=False)
-    check("side model: its call still fails over to the fallback",
-          out == "ok from fallback" and posts == ["dm-model", "fallback"],
-          repr((out, posts)))
-    check("side model: only the model that failed is cooling",
-          set(agent._fallback_until) == {"dm-model"}, repr(agent._fallback_until))
-    picks = {m: agent._pick_group_model(m) for m in ("called", "owner")}
-    check("side model: group replies stay on the primary",
-          all(p == "primary" for p in picks.values()), repr(picks))
-
-
 async def test_a_throttled_model_cools_in_seconds_not_minutes(tmp: Path) -> None:
     """A 429 is not a breakage, and treating it as one threw away most of a
     working model: under the one shared 300s window, a primary that 429s on
@@ -783,7 +506,7 @@ async def test_a_throttled_model_cools_in_seconds_not_minutes(tmp: Path) -> None
 
     before = time.time()
     out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                model="primary", max_tokens=100, enable_search=False)
+                                model="primary", max_tokens=100)
     check("throttled: the turn is still served, by the fallback",
           out == "ok from fallback", repr(out))
     armed = agent._fallback_until.get("primary", 0.0) - before
@@ -815,70 +538,13 @@ async def test_a_throttled_model_cools_in_seconds_not_minutes(tmp: Path) -> None
     broken._http = lambda **kw: _Bad()
     t0 = time.time()
     out = await broken._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                 model="primary", max_tokens=100, enable_search=False)
+                                 model="primary", max_tokens=100)
     long_window = broken._fallback_until.get("primary", 0.0) - t0
     check("a 400 is served by the fallback too",
           out == "ok from fallback" and bad == ["primary", "fallback"],
           repr((out, bad)))
     check("a 400 still cools for the long window",
           long_window > 200, f"{long_window:.1f}s")
-
-
-async def test_error_cooldown_both_models_can_cool(tmp: Path) -> None:
-    """One call, two in-call failover attempts: the primary 429s, the call
-    fails over to the fallback, and the fallback ALSO throttles -- there is
-    nowhere left to route, so the call raises. The per-model dict records
-    both cooldowns; the old scalar had no slot for the fallback's own."""
-    agent = _two_model_agent(tmp)
-    posts: list = []
-    agent._http = lambda **kw: _llm_http(posts, {"primary", "fallback"})()
-
-    raised = None
-    try:
-        await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                              model="primary", max_tokens=100, enable_search=False)
-    except RuntimeError as e:
-        raised = e
-    check("cooldown: the call still raises when both throttle",
-          raised is not None and "429" in str(raised), repr(raised))
-    check("cooldown: tried primary once then fallback once, no infinite bounce",
-          posts == ["primary", "fallback"], repr(posts))
-    now = time.time()
-    check("cooldown: primary cooled", agent._fallback_until.get("primary", 0.0) > now,
-          repr(agent._fallback_until))
-    check("cooldown: fallback ALSO cooled",
-          agent._fallback_until.get("fallback", 0.0) > now, repr(agent._fallback_until))
-    picked = agent._pick_group_model("called")
-    check("cooldown: pick still routes to fallback -- no third option",
-          picked == "fallback", picked)
-
-
-async def test_error_cooldown_single_model_unchanged(tmp: Path) -> None:
-    """With no distinct fallback (LLM_FALLBACK_MODEL blank resolves to the main
-    model) there is nowhere to switch: the call retries the one model and
-    raises, exactly as before. The dict does gain the model's own entry, but
-    it gates to the same name, so routing is unchanged."""
-    agent = isolated_agent(tmp)
-    agent.model = agent.llm_fallback_model = "solo"
-    agent.api_max_retries = 0
-    posts: list = []
-    agent._http = lambda **kw: _llm_http(posts, {"solo"})()
-
-    raised = None
-    try:
-        await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                              model="solo", max_tokens=100, enable_search=False)
-    except RuntimeError as e:
-        raised = e
-    check("cooldown: solo model raises on exhaustion", raised is not None, repr(raised))
-    check("cooldown: only ever tried the one model, no phantom switch",
-          posts == ["solo"], repr(posts))
-    check("cooldown: solo's own entry is armed",
-          agent._fallback_until.get("solo", 0.0) > time.time(),
-          repr(agent._fallback_until))
-    picks = {m: agent._pick_group_model(m) for m in ("called", "followup")}
-    check("cooldown: routing unchanged -- still the one model",
-          all(p == "solo" for p in picks.values()), repr(picks))
 
 
 class _EndpointSpy:
@@ -910,66 +576,6 @@ class _EndpointSpy:
                 return {"choices": [{"message": {"content": '{"score": 5, "reason": "ok"}'},
                                      "finish_reason": "stop"}]}
         return _OK()
-
-
-async def test_the_fallback_model_calls_its_own_endpoint(tmp: Path) -> None:
-    """The fallback model used to be only a NAME on the primary's endpoint, so
-    an outage at the primary's provider took the fallback down with it.
-    LLM_FALLBACK_BASE_URL / LLM_FALLBACK_API_KEY give it an endpoint of its own, used
-    wherever that model is called: the in-call failover, and the gate,
-    search decision and self-eval, whose models default to it."""
-    agent = _two_model_agent(tmp)
-    agent.base_url, agent.api_key = "https://primary.example", "primary-key"
-    agent.llm_fallback_base_url = "https://fallback.example/v1"
-    agent.llm_fallback_api_key = "fallback-key"
-    agent.llm_judge_model = agent.eval_model = "fallback"  # what blank resolves to
-    agent.llm_dm_model = "dm-model"
-    primary = ("https://primary.example/v1/chat/completions", "Bearer primary-key")
-    fallback = ("https://fallback.example/v1/chat/completions", "Bearer fallback-key")
-    seen: list = []
-    agent._http = lambda **kw: _EndpointSpy(seen, fail={"primary"})
-
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="primary", max_tokens=100, enable_search=False)
-    check("failover: the primary is asked on its endpoint, the fallback on its own",
-          seen == [(*primary, "primary"), (*fallback, "fallback")], repr(seen))
-
-    seen.clear()
-    await agent._decide_and_search([], hint="what is the price of gold today")
-    check("search decision: the judge model is the fallback, so its endpoint",
-          seen == [(*fallback, "fallback")], repr(seen))
-
-    seen.clear()
-    agent.examples_seed_file = tmp / "examples.seed.jsonl"
-    agent.examples_file = tmp / "examples.jsonl"
-    await agent._evaluate_reply("g", "called", "question", "a reply", None, "chat",
-                                ["Alice: question"])
-    check("self-eval: the eval model is the fallback, so its endpoint",
-          seen == [(*fallback, "fallback")], repr(seen))
-
-    seen.clear()
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="dm-model", max_tokens=100, enable_search=False)
-    check("every other model name stays on the primary endpoint",
-          seen == [(*primary, "dm-model")], repr(seen))
-
-    # The failed primary is cooling down, for every caller and not only a
-    # group reply: the next call starts on the fallback without the retries.
-    seen.clear()
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="primary", max_tokens=100, enable_search=False)
-    check("cooldown: a call for the cooling model goes straight to the fallback",
-          seen == [(*fallback, "fallback")], repr(seen))
-
-    # Unset: the fallback shares the primary's endpoint, as it always did.
-    agent.llm_fallback_base_url = agent.llm_fallback_api_key = ""
-    agent._fallback_until.clear()
-    agent._unreachable_until.clear()
-    seen.clear()
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="primary", max_tokens=100, enable_search=False)
-    check("unset: the fallback is a name on the primary's endpoint",
-          seen == [(*primary, "primary"), (*primary, "fallback")], repr(seen))
 
 
 class _ThinkingSpy:
@@ -1007,79 +613,6 @@ class _ThinkingSpy:
         return _Resp()
 
 
-async def test_a_fallback_on_another_vendor_is_not_sent_thinking(tmp: Path) -> None:
-    """`thinking` is DeepSeek's field; Groq and OpenAI answer 400 to it. The
-    gate, the search decision and the sticker tagger ask for thinking off and
-    run on the judge model, which defaults to the fallback — so with the
-    fallback on its own vendor all three went there with the field on EVERY
-    turn: the gate had no rung left to fail over to and the bot never spoke
-    up in a group, the search never fired, and no sticker was tagged."""
-    agent = _two_model_agent(tmp)
-    agent.base_url, agent.api_key = "https://api.deepseek.com", "primary-key"
-    agent.llm_fallback_base_url = "https://api.groq.com/openai/v1"
-    agent.llm_fallback_api_key = "fallback-key"
-    agent.llm_judge_model = "fallback"  # what a blank LLM_JUDGE_MODEL resolves to
-    primary = "https://api.deepseek.com/v1/chat/completions"
-    fallback = "https://api.groq.com/openai/v1/chat/completions"
-    seen: list = []
-    agent._http = lambda **kw: _ThinkingSpy(seen, rejects="groq.com")
-
-    async def fake_search(query: str, max_results: int = 4) -> str:
-        return f"results for {query}"
-
-    agent._web_search = fake_search
-
-    async def thinking_off(model: str) -> str:
-        # The gate's and the sticker tagger's call shape.
-        return await agent._call_llm(
-            "sys", [{"role": "user", "content": "hi"}], model=model,
-            max_tokens=100, enable_search=False, disable_thinking=True,
-            json_object=True)
-
-    out = await thinking_off(agent.llm_judge_model)
-    check("gate on the fallback's vendor: answered, without `thinking`",
-          out == "ok" and seen == [(fallback, "fallback", False)], repr((out, seen)))
-    seen.clear()
-    found = await agent._decide_and_search([], hint="what is the price of gold today")
-    check("search decision on the fallback's vendor: fires, without `thinking`",
-          found == "results for gold price" and seen == [(fallback, "fallback", False)],
-          repr((found, seen)))
-    seen.clear()
-    await thinking_off("primary")
-    check("a vendor known to take it is sent `thinking`",
-          seen == [(primary, "primary", True)], repr(seen))
-
-    # Told it takes it, and wrong: the 400 that names the field is retried
-    # without it once, and the endpoint is remembered.
-    agent.llm_fallback_thinking = True
-    seen.clear()
-    out = await thinking_off("fallback")
-    check("a 400 naming `thinking` is retried without it",
-          out == "ok" and seen == [(fallback, "fallback", True),
-                                   (fallback, "fallback", False)], repr((out, seen)))
-    seen.clear()
-    await thinking_off("fallback")
-    await agent._decide_and_search([], hint="what is the price of gold today")
-    check("...and that endpoint is not sent it again",
-          seen == [(fallback, "fallback", False)] * 2, repr(seen))
-
-    agent._api_quirks.clear()
-    agent._http = lambda **kw: _ThinkingSpy(seen)
-    seen.clear()
-    await thinking_off("fallback")
-    await agent._decide_and_search([], hint="what is the price of gold today")
-    check("LLM_FALLBACK_THINKING: a fallback vendor that takes it is sent it",
-          seen == [(fallback, "fallback", True)] * 2, repr(seen))
-
-    agent.llm_fallback_thinking = False
-    for base in ("https://api.deepseek.com/beta", ""):
-        agent.llm_fallback_base_url = base
-        seen.clear()
-        await thinking_off("fallback")
-        check(f"a fallback on the primary's known host is sent it ({base or 'unset'})",
-              [t for _u, _m, t in seen] == [True], repr(seen))
-
-
 async def test_the_startup_probe_learns_whether_an_endpoint_takes_thinking(tmp: Path) -> None:
     """A host of unknown dialect is asked once, by the startup probe, rather
     than by every gate call: if it takes `thinking` the gate gets it from then
@@ -1100,7 +633,7 @@ async def test_the_startup_probe_learns_whether_an_endpoint_takes_thinking(tmp: 
               repr(seen))
         seen.clear()
         await agent._call_llm("sys", [{"role": "user", "content": "hi"}], model="m",
-                              max_tokens=100, enable_search=False,
+                              max_tokens=100,
                               disable_thinking=True)
         check(f"a gate call afterwards sends it only if it was taken ({want})",
               seen == [(url, "m", want)], repr(seen))
@@ -1156,17 +689,17 @@ async def test_a_reasoning_model_gets_the_spelling_it_takes(tmp: Path) -> None:
     async def gate() -> str:
         return await agent._call_llm(
             "sys", [{"role": "user", "content": "hi"}], model="gpt-5-mini",
-            max_tokens=1500, enable_search=False, disable_thinking=True,
+            max_tokens=1500, disable_thinking=True,
             temperature=0.3)
 
     check("the gate answers on a reasoning model", await gate() == "ok")
     check("...after one retry per refused field",
-          sent == [["max_tokens", "temperature"],
-                   ["max_completion_tokens", "temperature"],
-                   ["max_completion_tokens"]], repr(sent))
+          sent == [["max_tokens", "reasoning_effort", "temperature"],
+                   ["max_completion_tokens", "reasoning_effort", "temperature"],
+                   ["max_completion_tokens", "reasoning_effort"]], repr(sent))
     sent.clear()
     check("the next call is spelled right the first time", await gate() == "ok")
-    check("...with no 400 at all", sent == [["max_completion_tokens"]], repr(sent))
+    check("...with no 400 at all", sent == [["max_completion_tokens", "reasoning_effort"]], repr(sent))
 
 
 async def test_a_model_that_must_reason_is_asked_for_the_lowest_effort(tmp: Path) -> None:
@@ -1208,7 +741,7 @@ async def test_a_model_that_must_reason_is_asked_for_the_lowest_effort(tmp: Path
     async def gate() -> str:
         return await agent._call_llm(
             "sys", [{"role": "user", "content": "hi"}], model="z-ai/glm-5.3-flash",
-            max_tokens=200, enable_search=False, disable_thinking=True)
+            max_tokens=200, disable_thinking=True)
 
     check("the gate answers on a model that must reason", await gate() == "ok")
     check("...after one retry at the lowest effort",
@@ -1262,8 +795,7 @@ async def test_an_exhausted_balance_is_fatal_and_said_once(tmp: Path, caplog) ->
         for _ in range(2):
             try:
                 await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                      model="primary", max_tokens=10,
-                                      enable_search=False)
+                                      model="primary", max_tokens=10)
             except Exception:
                 pass
     check("no retry and no failover on a 402", posts == ["primary", "primary"],
@@ -1331,7 +863,7 @@ async def test_one_refused_request_does_not_take_a_model_out(tmp: Path) -> None:
 
     throttled: set = set()
     agent._http = lambda **kw: _Http()
-    ask = dict(model="primary", max_tokens=100, enable_search=False)
+    ask = dict(model="primary", max_tokens=100)
     await agent._call_llm("sys", [{"role": "user", "content": "hi"}], **ask)
     check("a refused request is answered by the fallback", posts == ["primary", "fallback"], repr(posts))
     refuse.clear()
@@ -1394,7 +926,7 @@ async def _ask(agent: Agent, caplog, *answers, **call) -> tuple:
     with caplog.at_level(logging.INFO, logger="agent"):
         out = await agent._call_llm(
             "sys", [{"role": "user", "content": "hi"}],
-            **{"model": "m", "max_tokens": 100, "enable_search": False, **call})
+            **{"model": "m", "max_tokens": 100, **call})
     return out, http.payloads, [r.getMessage() for r in caplog.records]
 
 
@@ -1405,16 +937,19 @@ def _has(lines: list, *parts: str) -> bool:
 async def test_the_larger_budget_retry_in_every_outcome(tmp: Path, caplog) -> None:
     agent = isolated_agent(tmp)
     cut_off = _answer("", "length", tokens=11)
+    # Thinking already off: the larger budget is the first rung (with it on,
+    # a thinking-off retry at the same budget comes first).
+    off = {"disable_thinking": True}
 
     out, sent, lines = await _ask(agent, caplog, cut_off,
-                                  _answer('{"reply":"whole"}', tokens=22))
+                                  _answer('{"reply":"whole"}', tokens=22), **off)
     check("budget: the retry's answer is returned", out == '{"reply":"whole"}', out)
     check("budget: asked again at four times the cap",
           [p["max_tokens"] for p in sent] == [100, 400], repr(sent))
     check("budget: the usage line is the retry's", _has(lines, "cache:", "in=22"),
           repr(lines))
 
-    out, sent, lines = await _ask(agent, caplog, cut_off, httpx.ReadTimeout("slow"))
+    out, sent, lines = await _ask(agent, caplog, cut_off, httpx.ReadTimeout("slow"), **off)
     check("budget, retry raised: blank, and nothing asked a third time",
           out == "" and len(sent) == 2, repr((out, len(sent))))
     check("budget, retry raised: the failure is named",
@@ -1426,13 +961,13 @@ async def test_the_larger_budget_retry_in_every_outcome(tmp: Path, caplog) -> No
           _has(lines, "cache:", "in=11"), repr(lines))
 
     out, sent, lines = await _ask(agent, caplog, cut_off,
-                                  _answer("", "length", tokens=22))
+                                  _answer("", "length", tokens=22), **off)
     check("budget, still cut off: blank, said plainly, one retry only",
           out == "" and len(sent) == 2
           and _has(lines, "still empty at max_tokens=400"), repr(lines))
 
     malformed = {"choices": "oops", "usage": {"prompt_tokens": 33}}
-    out, sent, lines = await _ask(agent, caplog, cut_off, malformed)
+    out, sent, lines = await _ask(agent, caplog, cut_off, malformed, **off)
     check("budget, unreadable retry: blank and named",
           out == "" and _has(lines, "retry at a larger budget failed: AttributeError"),
           repr(lines))
@@ -1503,7 +1038,8 @@ async def test_the_plain_text_retry_in_every_outcome(tmp: Path, caplog) -> None:
     # The rungs chain: a cut-off answer is retried larger, then as plain text.
     out, sent, lines = await _ask(
         agent, caplog, _answer("", "length", tokens=11),
-        _answer("", "length", tokens=22), _answer("words", tokens=33), **reply_call)
+        _answer("", "length", tokens=22), _answer("words", tokens=33), **reply_call,
+        disable_thinking=True)
     check("chained: larger budget first, plain text last",
           [(p["max_tokens"], "response_format" in p) for p in sent]
           == [(100, True), (400, True), (100, False)], repr(sent))
@@ -1522,85 +1058,6 @@ def _noise_png() -> bytes:
     buf = io.BytesIO()
     Image.effect_noise((64, 64), 64).convert("RGB").save(buf, "PNG")
     return buf.getvalue()
-
-
-async def test_the_short_calls_turn_thinking_off_the_way_a_reply_does(
-        tmp: Path, monkeypatch) -> None:
-    """Self-eval, the vision calls and the doctor's probes went through an
-    older switch keyed on the model's name. On a host that takes `thinking`
-    (DeepSeek, Zhipu, Moonshot, Ark) it left hidden reasoning on, so every
-    self-eval call paid for reasoning nobody reads."""
-    from persona_agent import health
-
-    agent = isolated_agent(tmp, base_url="https://api.deepseek.com")
-    agent.model = agent.llm_fallback_model = agent.eval_model = "chat-model"
-    agent.examples_seed_file = tmp / "examples.seed.jsonl"
-    agent.examples_file = tmp / "examples.jsonl"
-    verdict = _answer('{"score": 3, "reason": "fine", "tacky": false}', tokens=1)
-    http = _Scripted(verdict, verdict, verdict)
-    agent._http = http
-
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model=agent.model, max_tokens=50, enable_search=False,
-                          disable_thinking=True)
-    switch = http.payloads[-1].get("thinking")
-    check("a reply turns thinking off", switch == {"type": "disabled"}, repr(switch))
-
-    await agent._evaluate_reply("g", "called", "question", "a reply", None, "chat",
-                                ["Alice: question"])
-    check("self-eval carries the same switch",
-          len(http.payloads) == 2 and http.payloads[-1].get("thinking") == switch,
-          repr(http.payloads[-1].get("thinking")))
-
-    agent.vision_model, agent.vision_api_key = "vision-model", "vision-key"
-    agent.vision_base_url = "https://open.bigmodel.cn/api/paas/v4"
-    await agent._judge_sticker_aesthetic(_noise_png())
-    check("a vision call carries it",
-          len(http.payloads) == 3 and http.payloads[-1].get("thinking") == switch,
-          repr(http.payloads[-1].get("thinking")))
-
-    probes: list = []
-
-    def fake_post(url, payload, headers, timeout=30):
-        probes.append(payload)
-        return {"choices": [{"message": {"content": "ok"}}]}
-
-    monkeypatch.setattr(health, "_post_json", fake_post)
-    for name, value in (
-            ("LLM_API_KEY", "k"), ("LLM_BASE_URL", "https://api.deepseek.com"),
-            ("LLM_MODEL", "chat-model"), ("LLM_FALLBACK_MODEL", ""),
-            ("EVAL_MODEL", "chat-model"), ("VISION_MODEL", "vision-model"),
-            ("VISION_API_KEY", "vision-key"), ("EVAL_ENABLED", "true"),
-            ("VISION_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")):
-        monkeypatch.setenv(name, value)
-    health.check_eval()
-    health.check_vision()
-    check("the eval and vision probes carry it",
-          [p.get("thinking") for p in probes] == [switch, switch], repr(probes)[:300])
-
-
-async def test_self_eval_learns_an_unknown_endpoint_like_any_reply_call(
-        tmp: Path) -> None:
-    agent = make_agent(tmp, "https://proxy.example/v1")
-    agent.eval_model = "m"
-    agent.examples_seed_file = tmp / "examples.seed.jsonl"
-    agent.examples_file = tmp / "examples.jsonl"
-    http = _Endpoint(lambda p: (400, "property 'thinking' is unsupported")
-                     if "thinking" in p else (200, ""))
-    agent._http = http
-
-    async def evaluate() -> None:
-        await agent._evaluate_reply("g", "called", "question", "a reply", None,
-                                    "chat", ["Alice: question"])
-
-    await evaluate()
-    check("self-eval asks an unknown endpoint, and resends without on a refusal",
-          http.sent == [("m", True), ("m", False)], repr(http.sent))
-    http.sent.clear()
-    await evaluate()
-    await _gate(agent)
-    check("the answer is remembered, for self-eval and for the gate alike",
-          http.sent == [("m", False), ("m", False)], repr(http.sent))
 
 
 def test_a_call_that_cannot_ask_goes_by_what_is_known_of_the_endpoint() -> None:
@@ -1668,69 +1125,6 @@ def test_k2s_one_temperature_is_given_only_to_a_caller_that_asks() -> None:
                        k2_temperature=True)["temperature"] == 0)
 
 
-async def test_the_gate_keeps_its_temperature_on_a_k2_model(tmp: Path) -> None:
-    """With thinking off K2 is given one temperature by self-eval, vision and
-    the doctor's probes (tests/test_deployment.py). Moving them onto the
-    replies' switch gave it to every caller, so the gate's 0.3, chosen to keep
-    the decision to speak steady, went out as 0.6."""
-    from types import SimpleNamespace
-
-    off = {"type": "disabled"}
-    verdict = _answer('{"reply": "ok", "score": 3, "reason": "fine", '
-                      '"tacky": false}', tokens=1)
-
-    def k2_agent(name: str, base_url: str, model: str) -> tuple:
-        agent = isolated_agent(tmp / name, base_url=base_url)
-        agent.model = agent.llm_fallback_model = agent.llm_judge_model = model
-        agent.eval_model = model
-        agent.examples_seed_file = tmp / name / "examples.seed.jsonl"
-        http = _Scripted(*[verdict] * 4)
-        agent._http = http
-        return agent, http
-
-    async def evaluate(agent: Agent) -> None:
-        await agent._evaluate_reply("g", "called", "question", "a reply", None,
-                                    "chat", ["Alice: question"])
-
-    moonshot = "https://api.moonshot.cn/v1"
-    agent, http = k2_agent("moonshot", moonshot, "kimi-k2.6")
-    await agent._gate(SimpleNamespace(gate_system="sys", user="hi"))
-    p = http.payloads[-1]
-    check("the gate: thinking off, at the temperature it chose",
-          len(http.payloads) == 1 and p.get("thinking") == off
-          and p["temperature"] == 0.3, repr(p))
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                          model="kimi-k2.6", max_tokens=50, enable_search=False,
-                          disable_thinking=True)
-    p = http.payloads[-1]
-    check("a thinking-off call that sets no temperature is not given one",
-          p.get("thinking") == off and "temperature" not in p, repr(p))
-
-    await evaluate(agent)
-    p = http.payloads[-1]
-    check("self-eval: thinking off at K2's temperature",
-          len(http.payloads) == 3 and p.get("thinking") == off
-          and p["temperature"] == 0.6, repr(p))
-    agent.vision_model, agent.vision_api_key = "kimi-k2.6", "vision-key"
-    agent.vision_base_url = moonshot
-    await agent._judge_sticker_aesthetic(_noise_png())
-    p = http.payloads[-1]
-    check("a vision call: thinking off at K2's temperature",
-          len(http.payloads) == 4 and p.get("thinking") == off
-          and p["temperature"] == 0.6, repr(p))
-
-    openrouter = "https://openrouter.ai/api/v1"
-    agent, http = k2_agent("openrouter", openrouter, "moonshotai/kimi-k2")
-    await evaluate(agent)
-    agent.vision_model, agent.vision_api_key = "moonshotai/kimi-k2", "vision-key"
-    agent.vision_base_url = openrouter
-    await agent._judge_sticker_aesthetic(_noise_png())
-    check("on OpenRouter both get its switch and keep their own temperature",
-          [(p.get("reasoning"), "thinking" in p, p["temperature"])
-           for p in http.payloads] == [({"enabled": False}, False, 0)] * 2,
-          repr(http.payloads)[:400])
-
-
 class _ByModel:
     """Fake `agent._http`: each model answers with its own scripted callable,
     which returns a JSON body or raises."""
@@ -1769,7 +1163,7 @@ async def test_an_error_inside_a_200_goes_to_the_fallback(tmp: Path, caplog) -> 
     agent._http = http
     with caplog.at_level(logging.INFO, logger="agent"):
         out = await agent._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                    model="primary", max_tokens=50, enable_search=False)
+                                    model="primary", max_tokens=50)
     lines = [r.getMessage() for r in caplog.records]
     check("an error body is answered by the fallback",
           out == "from the backup" and http.models == ["primary", "fallback"],
@@ -1785,7 +1179,7 @@ async def test_an_error_inside_a_200_goes_to_the_fallback(tmp: Path, caplog) -> 
     with caplog.at_level(logging.ERROR, logger="agent"):
         try:
             await billing._call_llm("sys", [{"role": "user", "content": "hi"}],
-                                    model="primary", max_tokens=50, enable_search=False)
+                                    model="primary", max_tokens=50)
         except Exception:
             pass
     lines = [r.getMessage() for r in caplog.records]
@@ -1815,8 +1209,7 @@ async def test_a_hanging_main_model_hands_the_turn_to_the_backup(tmp: Path) -> N
     agent._http = http
     started = time.monotonic()
     out = await agent._within_turn_budget(agent._call_llm(
-        "sys", [{"role": "user", "content": "hi"}], model="primary", max_tokens=50,
-        enable_search=False))
+        "sys", [{"role": "user", "content": "hi"}], model="primary", max_tokens=50))
     check("the backup answers within the turn",
           out == "from the backup" and http.models == ["primary", "fallback"],
           repr((out, http.models)))
@@ -1829,7 +1222,7 @@ async def test_a_hanging_main_model_hands_the_turn_to_the_backup(tmp: Path) -> N
     solo._http = http
     try:
         await solo._call_llm("sys", [{"role": "user", "content": "hi"}], model="primary",
-                             max_tokens=50, enable_search=False)
+                             max_tokens=50)
     except httpx.TimeoutException:
         pass
     check("without a backup a timeout keeps today's retry",
@@ -1848,7 +1241,7 @@ async def test_each_answers_usage_is_counted_per_model_and_day(tmp: Path) -> Non
     agent._http = http
     for model in ("primary", "primary", "fallback"):
         await agent._call_llm("sys", [{"role": "user", "content": "hi"}], model=model,
-                              max_tokens=50, enable_search=False)
+                              max_tokens=50)
     path = tmp / usage.USAGE_FILE
     pending = agent.__dict__["_usage_book"]._pending
     if pending is not None:
@@ -1860,10 +1253,11 @@ async def test_each_answers_usage_is_counted_per_model_and_day(tmp: Path) -> Non
     today = usage.load(path)[usage.day_of(time.time())]
     check("two answers with usage are summed for their model", today["primary"] == {
         "calls": 2, "prompt_tokens": 200, "completion_tokens": 40, "cached_tokens": 120,
-        "cost": 0.004, "costed": 2, "purposes": {"other": 2}}, repr(today["primary"]))
+        "cost": 0.004, "costed": 2, "purposes": {"other": 2},
+        "in_by": {"other": 200}, "out_by": {"other": 40}}, repr(today["primary"]))
     check("an answer without usage is a call with no tokens", today["fallback"] == {
         "calls": 1, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0,
-        "purposes": {"other": 1}}, repr(today["fallback"]))
+        "purposes": {"other": 1}, "in_by": {"other": 0}, "out_by": {"other": 0}}, repr(today["fallback"]))
     shown = usage.read_summary(path)
     check("the summary adds today's models up",
           shown["today"]["calls"] == 3 and shown["today"]["tokens"] == 240
@@ -1880,48 +1274,14 @@ async def test_each_request_is_counted_under_what_it_was_for(tmp: Path) -> None:
     for label in ("reply", "reply", "gate", "made-up"):
         with llm.purpose(label):
             await agent._call_llm("sys", [{"role": "user", "content": "hi"}], model="primary",
-                                  max_tokens=50, enable_search=False)
+                                  max_tokens=50)
     await agent._call_llm("sys", [{"role": "user", "content": "hi"}], model="fallback",
-                          max_tokens=50, enable_search=False)
+                          max_tokens=50)
     book = agent.__dict__["_usage_book"]
     book.flush(time.time())
     shown = usage.read_summary(tmp / usage.USAGE_FILE)
     check("today's requests are split by purpose, unknown and unlabeled as other",
           shown["todayPurposes"] == {"reply": 2, "gate": 1, "other": 2}, repr(shown))
-
-
-async def test_the_gate_and_the_start_up_check_name_their_purpose(tmp: Path) -> None:
-    import types
-
-    from persona_agent import llm
-
-    agent = _two_model_agent(tmp)
-    seen = []
-
-    async def fake_llm(*_a, **_kw):
-        seen.append(llm._call_purpose.get())
-        return '{"reply": "[PASS]"}'
-
-    agent._call_llm = fake_llm
-    await agent._gate(types.SimpleNamespace(gate_system="s", user="u"))
-
-    async def fake_post(*_a, **_kw):
-        seen.append(llm._call_purpose.get())
-        raise httpx.ConnectError("down")
-
-    agent._post_chat = fake_post
-    agent.embedding_model = ""
-    await agent.probe_models()
-    check("the gate counts as gate and the probe as the check",
-          seen[0] == "gate" and set(seen[1:]) == {"check"}, repr(seen))
-    check("outside any call the purpose is other", llm._call_purpose.get() == "other")
-    check("a failed start-up probe marks the model unreachable",
-          agent.__dict__.get("model_unreachable") is True)
-    del agent._post_chat, agent._call_llm
-    agent._http = _ByModel(primary=_ok("a"), fallback=_ok("b"))
-    await agent._call_llm("sys", [{"role": "user", "content": "hi"}], model="primary",
-                          max_tokens=50, enable_search=False)
-    check("an answer from the model clears it", agent.__dict__.get("model_unreachable") is False)
 
 
 def test_a_usage_file_from_before_purposes_still_loads(tmp: Path) -> None:
@@ -1961,21 +1321,3 @@ def test_the_tally_is_written_at_most_once_a_minute(tmp: Path) -> None:
         old.add("m", {}, 1_000_000.0 + 86400 * back)
     old.flush(2_000_000.0)
     check("only the last eight days are kept", len(usage.load(tmp / "old.json")) == 8)
-
-
-def test_the_busy_warning_names_no_switch_without_a_backup(caplog) -> None:
-    import logging
-    from collections import deque
-
-    with tempfile.TemporaryDirectory() as d:
-        a = isolated_agent(Path(d))
-        a.model = a.llm_fallback_model = "solo"
-        a.llm_rate_window_s, a.llm_rate_threshold, a.llm_fallback_duration_s = 60, 5, 300
-        a.model_calls = deque([time.time()] * 6)
-        with caplog.at_level(logging.WARNING, logger="agent"):
-            picked = [a._pick_group_model("followup") for _ in range(3)]
-        lines = [r.getMessage() for r in caplog.records]
-        check("the same model is used", picked == ["solo"] * 3, repr(picked))
-        check("one warning that names no switch and says what to set",
-              len(lines) == 1 and "fall back to" not in lines[0]
-              and "LLM_FALLBACK_MODEL" in lines[0], repr(lines))

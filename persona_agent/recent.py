@@ -1,4 +1,4 @@
-"""The recent lines of each chat on disk (runtime/recent.json), so a restart
+"""The recent turns of each chat on disk (runtime/recent.json), so a restart
 does not lose the conversation. Rebuildable: written without fsync, and a
 damaged file is moved aside and every chat starts empty."""
 from __future__ import annotations
@@ -14,19 +14,12 @@ from .storage import num as _num
 FORMAT = 1
 KEEP_HOURS = 72.0
 MAX_CONVS = 256
-LINES_MAX = 60
-SPILL_MAX = 240
 DM_MAX = 60
 DM_SPILL_MAX = 120
 UNANSWERED_MAX = 3
 
 #: Each list of a chat's entry and how many of its newest rows are kept.
-CAPS = {"lines": LINES_MAX, "spill": SPILL_MAX, "dm": DM_MAX,
-        "dm_spill": DM_SPILL_MAX, "unanswered": UNANSWERED_MAX}
-
-#: Times kept per chat beside its lines (see clean_entry).
-MARKS = ("reply", "opener", "proactive")
-
+CAPS = {"dm": DM_MAX, "dm_spill": DM_SPILL_MAX, "unanswered": UNANSWERED_MAX}
 
 
 def clean_entry(entry: dict) -> tuple[dict, int]:
@@ -35,11 +28,6 @@ def clean_entry(entry: dict) -> tuple[dict, int]:
     out: dict = {"seq": _num(entry.get("seq"), int),
                  "folded_upto": _num(entry.get("folded_upto"), int),
                  "last_at": _num(entry.get("last_at"))}
-    marks = entry.get("marks")
-    # When it last spoke, opened, or tried to open there: a restart must not
-    # make it speak first again where it was just ignored.
-    out["marks"] = {k: _num(v) for k, v in marks.items()
-                    if k in MARKS and _num(v) > 0} if isinstance(marks, dict) else {}
     lost = 0
     for key, cap in CAPS.items():
         rows = entry.get(key)
@@ -49,7 +37,7 @@ def clean_entry(entry: dict) -> tuple[dict, int]:
         else:
             rows = [r for r in rows if isinstance(r, dict)]
         if len(rows) > cap:
-            if key in ("spill", "dm_spill"):
+            if key == "dm_spill":
                 lost += len(rows) - cap
             rows = rows[-cap:]
         out[key] = rows

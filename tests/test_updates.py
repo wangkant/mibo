@@ -1,15 +1,14 @@
-"""The update notice: asking PyPI, remembering the answer, and how to update."""
+"""The update notice: asking the release page and remembering the answer."""
 from __future__ import annotations
 
 import json
-import sys
 import threading
 import time
 
 import httpx
 import pytest
 
-from persona_agent import __version__, doctor, home as homes, updates, welcome
+from persona_agent import __version__, updates, welcome
 
 
 def _no_network(url, **kw):
@@ -31,7 +30,7 @@ class _Answer:
         pass
 
     def json(self) -> dict:
-        return {"info": {"version": self.version}}
+        return {"tag_name": "v" + self.version}
 
 
 def _remember(home, latest: str, checked: float | None = None, failed: bool = False) -> None:
@@ -63,7 +62,7 @@ def test_a_check_remembers_the_answer_and_a_failure_keeps_the_last_one(tmp_path,
     monkeypatch.setattr(httpx, "get", lambda url, **kw: asked.append((url, kw)) or _Answer("99.0.0"))
     assert updates.check(tmp_path) == "99.0.0"
     url, kw = asked[0]
-    assert url == updates.PYPI_URL
+    assert url == updates.LATEST_URL
     # Only the version travels: no key, no home, nothing from .env.
     assert kw["headers"] == {"User-Agent": f"personagent/{__version__}"}
     found = updates.notice(tmp_path)
@@ -85,7 +84,6 @@ def test_a_check_remembers_the_answer_and_a_failure_keeps_the_last_one(tmp_path,
 def test_no_notice_when_current_or_switched_off(tmp_path, monkeypatch):
     _remember(tmp_path, __version__)
     assert updates.notice(tmp_path) is None
-    assert updates.line(None) == ""
     _remember(tmp_path, "99.0.0")
     (tmp_path / ".env").write_text("UPDATE_CHECK_ENABLED=false\n", encoding="utf-8")
     monkeypatch.delenv("UPDATE_CHECK_ENABLED")
@@ -133,61 +131,6 @@ def test_an_unwritable_cache_does_not_turn_polling_into_requests(tmp_path, monke
         updates.refresh_soon(tmp_path)
         _wait_idle()
     assert len(asked) == 1
-
-
-@pytest.mark.parametrize("marker, command", [
-    ("uv-receipt.toml", "uv tool upgrade personagent"),
-    ("pipx_metadata.json", "pipx upgrade personagent"),
-])
-def test_tool_environments_are_told_apart_by_their_marker_files(tmp_path, monkeypatch, marker, command):
-    monkeypatch.setattr(homes, "is_checkout", lambda path=None: False)
-    monkeypatch.setattr(sys, "prefix", str(tmp_path))
-    (tmp_path / marker).write_text("", encoding="utf-8")
-    assert updates.how_to_update() == (command, False)
-
-
-def test_uvx_uv_venvs_and_pip(tmp_path, monkeypatch):
-    monkeypatch.setattr(homes, "is_checkout", lambda path=None: False)
-    monkeypatch.setattr(sys, "prefix", "C:/Users/a/AppData/Local/uv/cache/archive-v0/abc")
-    assert updates.how_to_update() == ("uvx personagent@latest", True)
-    # A folder that merely starts with "archive-v" is not uv's cache.
-    monkeypatch.setattr(sys, "prefix", str(tmp_path / "Archive-Videos" / ".venv"))
-    command, opens = updates.how_to_update()
-    assert command.endswith("-m pip install -U personagent") and not opens
-    (tmp_path / "pyvenv.cfg").write_text("home = /usr/bin\nuv = 0.8.3\n", encoding="utf-8")
-    monkeypatch.setattr(sys, "prefix", str(tmp_path))
-    assert updates.how_to_update()[0].startswith("uv pip install -U personagent --python ")
-
-
-def test_a_clone_pulls_and_reinstalls_and_a_source_zip_downloads(tmp_path, monkeypatch):
-    monkeypatch.setattr(homes, "is_checkout", lambda path=None: True)
-    monkeypatch.setattr(homes, "CHECKOUT", tmp_path)
-    assert updates.how_to_update() == ("", False)
-    (tmp_path / ".git").mkdir()
-    pull, install = updates.how_to_update()[0].splitlines()
-    assert pull.startswith("git -C ") and pull.endswith(" pull")
-    assert install.endswith(f"-m pip install -e {tmp_path}")
-
-
-def test_the_terminal_line_ends_with_the_command():
-    base = {"version": "9.9.9", "url": "https://example.invalid/v9.9.9"}
-    assert updates.line({**base, "command": "", "opens": False}).endswith(base["url"])
-    opens = updates.line({**base, "command": "uvx personagent@latest", "opens": True}, sub="up")
-    assert opens.endswith("\n  uvx personagent@latest up")
-    two = updates.line({**base, "command": "git -C x pull\npython -m pip install -e x", "opens": False})
-    assert two.endswith("\n  git -C x pull\n  python -m pip install -e x")
-
-
-def test_doctor_asks_only_when_the_answer_is_stale(tmp_path, monkeypatch):
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    asked = []
-    monkeypatch.setattr(updates, "check", lambda home, timeout=0: asked.append(timeout) or "99.0.0")
-    _remember(tmp_path, "99.0.0")
-    assert doctor.update_notice()["version"] == "99.0.0"
-    assert not asked
-    _remember(tmp_path, "", checked=time.time() - updates.CHECK_EVERY_S - 60)
-    assert doctor.update_notice()["version"] == "99.0.0"
-    assert asked and asked[0] <= 10
 
 
 def test_the_local_page_carries_the_notice_once_set_up(tmp_path, monkeypatch):

@@ -41,8 +41,7 @@ for you. Your risk depends on what the connection logs in as.
   - **WhatsApp, Signal, Messenger, Instagram, Google Messages and others
     through a mautrix bridge**, which is how the Matrix connector reaches
     them. The bridge is an unofficial client of each network, and some of
-    these networks address automated messaging in their terms. See
-    [the Matrix connector's notes](../integrations/matrix/README.md#terms-of-each-network).
+    these networks address automated messaging in their terms.
   - Anything else that logs in as a person.
 
 If you use one of these, use a dedicated account you can afford to lose, never

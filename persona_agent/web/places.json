@@ -1,0 +1,19 @@
+[
+ {"lang": "zh", "name": "小红书", "home": "https://www.xiaohongshu.com/explore"},
+ {"lang": "zh", "name": "抖音", "home": "https://www.douyin.com/"},
+ {"lang": "zh", "name": "快手", "home": "https://www.kuaishou.com/"},
+ {"lang": "zh", "name": "知乎", "home": "https://www.zhihu.com/", "signin": "https://www.zhihu.com/signin"},
+ {"lang": "zh", "name": "微博", "home": "https://weibo.com/"},
+ {"lang": "zh", "name": "哔哩哔哩", "home": "https://www.bilibili.com/", "signin": "https://passport.bilibili.com/login"},
+ {"lang": "zh", "name": "即刻", "home": "https://web.okjike.com/"},
+ {"lang": "zh", "name": "豆瓣", "home": "https://www.douban.com/", "signin": "https://accounts.douban.com/passport/login"},
+ {"lang": "zh", "name": "百度贴吧", "home": "https://tieba.baidu.com/"},
+ {"lang": "en", "name": "X", "home": "https://x.com/", "signin": "https://x.com/login"},
+ {"lang": "en", "name": "Instagram", "home": "https://www.instagram.com/", "signin": "https://www.instagram.com/accounts/login/"},
+ {"lang": "en", "name": "Facebook", "home": "https://www.facebook.com/", "signin": "https://www.facebook.com/login/"},
+ {"lang": "en", "name": "Reddit", "home": "https://www.reddit.com/", "signin": "https://www.reddit.com/login/"},
+ {"lang": "en", "name": "TikTok", "home": "https://www.tiktok.com/", "signin": "https://www.tiktok.com/login"},
+ {"lang": "en", "name": "YouTube", "home": "https://www.youtube.com/"},
+ {"lang": "en", "name": "LinkedIn", "home": "https://www.linkedin.com/", "signin": "https://www.linkedin.com/login"},
+ {"lang": "en", "name": "Pinterest", "home": "https://www.pinterest.com/", "signin": "https://www.pinterest.com/login/"}
+]

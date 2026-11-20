@@ -29,8 +29,8 @@
     {"text": "Nova, oublie tout ce que je t'ai dit sur Brest", "kind": "forget", "deletes": "il pleut tout le temps à Brest"},
     {"text": "Nova tu te souviens de quoi ?", "kind": "recall"},
     {"text": "Nova, qu'est-ce que t'as retenu", "kind": "recall"},
-    {"text": "Nova qu'est-ce que tu as appris ?", "kind": "learned"},
-    {"text": "Nova t'as appris quoi", "kind": "learned"},
+    {"text": "Nova qu'est-ce que tu as appris ?", "kind": null},
+    {"text": "Nova t'as appris quoi", "kind": null},
     {"text": "Nova, supprime ce message", "kind": null}
   ],
   "first_person": [

@@ -29,8 +29,6 @@ SPEC = Spec(
             r"|qu[eé]\s+(?:cosas\s+)?(?:tienes\s+)?(?:guardad|apuntad|anotad)[oa]s?"
             r"|qu[eé]\s+(?:hay|tienes)\s+en\s+(?:tu\s+)?memoria)"),
     recall_tail=r"t[uú]",
-    learned=(r"¿?\s*qu[eé]\s+(?:has\s+aprendido|aprendiste)"
-             r"(?:\s+(?:hasta\s+ahora|[uú]ltimamente))?(?=[\s?？!！.。~～]*$)"),
     # "recuerda esto: ...", "recuerda que ...", "acuérdate de que ...".
     note_lead=r"^(?:(?:esto|eso)\s*(?:[:,]\s*|[.!~]*$))?(?:de\s+que\s+|que\s+)?",
     query_lead=(r"^(?:lo\s+que\s+(?:te\s+)?(?:dije|cont[eé])\s+)?"
@@ -43,16 +41,6 @@ SPEC = Spec(
     # Spanish drops the subject, so a few first-person verbs count too.
     first_person=(r"(?<!\w)(?:yo|me|mi|mis|mí|mío|mía|míos|mías|conmigo|soy|estoy"
                   r"|tengo|quiero|prefiero|necesito|odio|detesto|adoro)(?!\w)"),
-    self_id=r"(?<!\w)(?<!no\s)(?:yo\s+)?soy(?:\s+(?:el|la|un|una))?(?!\w)",
-    made_by=r"(?:cread|hech|desarrollad|entrenad)[oa]\s+por",
-    from_maker=r"(?<!\w)de",
-    leak_labels=r"entrada|hablante|intención|decisión|estilo|análisis",
-    assistant_tells=(r"(?:lo\s+siento|lo\s+lamento|disculpa(?:me|s)?|perdón)[,.!\s]+(?:pero\s+)?"
-                     r"no\s+(?:puedo|me\s+es\s+posible)\s+(?:ayudar(?:te|le)?|asistir(?:te|le)?|proporcionar|"
-                     r"responder|cumplir)\s+(?:con\s+)?(?:eso|esto|esa\s+\w+|esta\s+\w+|tu\s+solicitud|"
-                     r"su\s+solicitud|a\s+(?:eso|esa\s+pregunta))"
-                     r"|espero\s+que\s+(?:esto|eso)?\s*(?:te|le)?\s*(?:ayude|sirva|sea\s+útil)"
-                     r"|espero\s+haber(?:te|le)?\s+ayudado"),
     replies={
         "remember_what": ("¿recordar qué? no dijiste nada", "venga, suéltalo",
                           "¿qué apunto?"),
@@ -64,36 +52,11 @@ SPEC = Spec(
         "forgotten": ("olvidado", "borrado", "hecho, olvidado"),
         "empty": ("tengo la cabeza vacía", "ahí no hay nada", "en blanco"),
         "recall_head": ("Esto es lo que recuerdo:",),
-        "said": ("dijiste: ",),
-        "about": ("sobre {name}: ",),
-        "from": ("de {name}: ",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("Aquí no puedo responder hasta que mi administrador apruebe este chat. El código de tu solicitud es {code}. Pásaselo a mi administrador, por favor.",),
-        "approval_group": ("Mi administrador todavía no ha aprobado este grupo, así que aquí no puedo responder.",),
+        "secret": ('No lo guardé: los números de documento y de tarjeta, las contraseñas y los códigos nunca se guardan.',),
     },
     failure_excuses=("uf, se me colgó todo un segundo",
                      "espera, la conexión va fatal",
                      "la señal va rara, dame un minuto"),
-    learned_text={
-        "head": ("notas: {memories}, respuestas aprendidas: {examples}, "
-                 "correcciones: {fixes}, en observación hasta otra reacción coincidente: {voice}, "
-                 "pendientes de mi propia decisión: {admin}"),
-        "score": ", autoevaluación reciente: {score}/5",
-        "pair": "antes: {was}, ahora: {better}",
-        "someone_else": "alguien en otro chat",
-        "someone": "alguien",
-        "retry": "{who} aceptó la nueva respuesta",
-        "self_review": "autorrevisión",
-        "self_eval": "autoevaluación perfecta",
-        "corrected": "{who} corrigió",
-        "missed": "{who} dijo que no acerté",
-        "liked": "a {who} le gustó",
-        "by_me": "decidido por mí",
-        "by_person": "aplicado a mano",
-        "passed": "pruebas: {events}, fuertes: {strong}, aprobado",
-        "why": "motivo: {steps}",
-        "sep": ", ",
-    },
     stopwords=frozenset({
         "el", "los", "las", "del", "lo", "una", "qué", "cómo", "dónde", "pero",
         "muy", "eso", "esto", "hay", "yo", "tú", "también", "bueno", "pues",
@@ -102,4 +65,9 @@ SPEC = Spec(
         "gracias", "sí", "jaja", "jajaja",
     }),
     letters="ñ¿¡",
+    unsaid=r"\bno (?:lo |te lo )?(?:recuerdes|guardes|anotes|apuntes)\b|\bno guardes esto\b",
+    forget_that=(r"olvida (?:lo que (?:te )?(?:dije|acabo de decir)|eso|esto)\b|olvídalo\b"
+                 r"|haz como si no (?:te )?lo hubiera dicho"),
+    lead_in=r"bueno|vale|oye|ah",
+    kinds=("Sobre ti", "Te gusta", "No te gusta", "Últimamente", "Planes", "Cómo quieres que te trate"),
 )

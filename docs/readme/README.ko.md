@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 설치 프로그램은 자체 Python을 함께 가져와 personagent를 설치하고 엽니다. Windows에서는 바탕 화면에 아이콘도 만듭니다. PyPI나 GitHub 접속이 느리면 자동으로 중국 본토의 미러로 전환합니다. 다시 실행하면 personagent가 업데이트됩니다.
 
-Python 3.10 이상이 이미 설치되어 있다면 `python -m pip install personagent`를 실행한 후 `personagent`를 실행해도 되고, [uv](https://docs.astral.sh/uv/)가 있다면 `uvx personagent`로 별도 설치 없이 실행할 수 있습니다. Windows에서는 소스 ZIP을 내려받아 `start.bat`을 더블클릭해도 되며, 컴퓨터에 Python이 없으면 이 스크립트가 Python도 가져옵니다.
+Python 3.10 이상이 이미 설치되어 있다면 `python -m pip install personagent`를 실행한 후 `personagent`를 실행해도 되고, [uv](https://docs.astral.sh/uv/)가 있다면 `uvx personagent`로 별도 설치 없이 실행할 수 있습니다.
 
 Windows에서는 전용 창에서 열리고, macOS와 Linux에서는 브라우저에서 열립니다. **OpenRouter로 로그인**을 누르고 브라우저에서 승인하거나, 모델 API 키를 붙여 넣고 **확인 후 채팅 시작**을 누르십시오. 미리 선택된 OpenRouter의 무료 모델도 계정이나 키가 필요하지만, 둘 다 무료입니다. `personagent demo`는 키 없이 대본이 있는 장면 세 개를 보여 줍니다. [시작 가이드](https://github.com/wangkant/personagent/blob/main/docs/start.ko.md)가 페이지를 화면별로 안내합니다.
 
@@ -139,7 +139,7 @@ personagent는 무료입니다. 비용은 선택한 모델 서비스에, 그 서
 
 그 밖의 모든 것에는 같은 페이지의 **기타 소프트웨어**가 있습니다. 켜고 주소, 키, 모델 이름을 OpenAI 호환 주소를 입력할 수 있는 앱에 복사하면, 그 앱에서 캐릭터와 대화할 수 있으며 기억도 다른 곳과 같습니다. 자세한 내용은 [가이드](https://github.com/wangkant/personagent/blob/main/docs/guide.ko.md#기타-소프트웨어)에 있으며, 터미널에서는 `personagent connect api`로 같은 작업을 할 수 있습니다.
 
-이미 AstrBot, Koishi, Matrix를 운영 중입니까? personagent를 그 뒤에서 에이전트로 실행할 수 있습니다. [직접 실행하는 브리지](https://github.com/wangkant/personagent/blob/main/docs/guide.ko.md#직접-실행하는-브리지), [Satori 커넥터](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.ko.md), [Matrix 커넥터](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.ko.md)를 참고하십시오.
+이미 AstrBot을 운영 중입니까? personagent를 그 뒤에서 에이전트로 실행할 수 있습니다. [직접 실행하는 브리지](https://github.com/wangkant/personagent/blob/main/docs/guide.ko.md#직접-실행하는-브리지)를 참고하십시오.
 
 ## 서버에서
 
@@ -182,7 +182,6 @@ personagent가 저장하는 모든 것은 사용자 컴퓨터의 personagent 폴
 - [사용자 가이드](https://github.com/wangkant/personagent/blob/main/docs/guide.ko.md): 설정, 커넥터, 가르치기, 활동 화면, 문제 해결.
 - [배포 가이드](https://github.com/wangkant/personagent/blob/main/docs/deploy.ko.md): 실제 운영하기, 비용, 봇이 조용해졌을 때 확인할 것.
 - [커넥터 프로토콜](https://github.com/wangkant/personagent/blob/main/docs/connectors.ko.md): 직접 커넥터를 만들 때 참고하십시오.
-- [도구](https://github.com/wangkant/personagent/blob/main/docs/tools.ko.md): 클론한 저장소에서 실행하는 `tools/`의 스크립트.
 - [변경 기록](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [기여하기](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [보안 정책](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [면책 조항](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.ko.md)
 
 ## 라이선스

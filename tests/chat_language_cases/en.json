@@ -13,7 +13,7 @@
     {"text": "Luna forget it", "kind": null},
     {"text": "Luna forget that", "kind": null},
     {"text": "Luna what do you remember", "kind": "recall"},
-    {"text": "Luna what have you learned", "kind": "learned"}
+    {"text": "Luna what have you learned", "kind": null}
   ],
   "first_person": [
     {"text": "I hate cilantro", "mine": true},

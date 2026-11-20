@@ -23,8 +23,7 @@ if (-not (Test-Path $py)) { Run $Python -m venv $venv }
 Run $py -m pip install --quiet --upgrade pip
 # Installed, not editable: the wheel's persona_agent/_bundled is what the build reads.
 # app brings nothing more on Windows; web is Playwright, which drives the browser already there.
-# uv goes into the build for the AstrBot install.
-Run $py -m pip install --quiet --upgrade "$root[app,web]" "pyinstaller>=6.10,<7" "uv>=0.8,<1"
+Run $py -m pip install --quiet --upgrade "$root[app,web]" "pyinstaller>=6.10,<7"
 
 Push-Location $here
 try {

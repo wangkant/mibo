@@ -1,6 +1,6 @@
-"""Whether a newer personagent is on PyPI. Asked at most once a day, in the
-background (doctor asks itself when the answer is older), and the request
-carries only the version number."""
+"""Whether a newer personagent is out. Asked at most once a day, in the
+background, and the request carries only the version number. A new release
+comes as a new installer on the release page."""
 from __future__ import annotations
 
 import json
@@ -11,17 +11,16 @@ import threading
 import time
 from pathlib import Path
 
-from . import __version__, home as homes, langs
+from . import __version__
 from .config_env import env_bool
 from .storage import atomic_write_text
 
-PYPI_URL = "https://pypi.org/pypi/personagent/json"
-# A container is updated by pulling the new image, never from inside.
-CONTAINER_UPDATE = "docker compose pull && docker compose up -d"
+# The newest release on the release page, through GitHub's API.
+LATEST_URL = "https://api.github.com/repos/wangkant/personagent/releases/latest"
 RELEASE_URL = "https://github.com/wangkant/personagent/releases/tag/v{version}"
 CHECK_EVERY_S = 24 * 3600
 RETRY_AFTER_S = 3600
-# Generous: through some proxies PyPI's TLS handshake alone takes seconds.
+# Generous: through some proxies the TLS handshake alone takes seconds.
 TIMEOUT_S = 15.0
 
 _lock = threading.Lock()
@@ -83,20 +82,20 @@ def stale(home: Path) -> bool:
 
 
 def check(home: Path, timeout: float = TIMEOUT_S) -> str:
-    """Ask PyPI now and remember the answer; a failure keeps the last one."""
+    """Ask the release page now and remember the answer; a failure keeps the last one."""
     import httpx
 
     latest = ""
     try:
-        response = httpx.get(PYPI_URL, timeout=timeout, follow_redirects=True,
+        response = httpx.get(LATEST_URL, timeout=timeout, follow_redirects=True,
                              headers={"User-Agent": f"personagent/{__version__}"})
         response.raise_for_status()
-        latest = str(response.json()["info"]["version"])
+        latest = str(response.json()["tag_name"]).removeprefix("v")
     except Exception:  # offline, blocked, or an answer of another shape
         pass
     failed = not latest
     latest = latest or str(_read(home).get("latest") or "")
-    if home.is_dir():  # doctor may name a home that does not exist yet
+    if home.is_dir():
         try:
             atomic_write_text(_cache(home), json.dumps(
                 {"checked": time.time(), "latest": latest, "failed": failed}), fsync=False)
@@ -127,129 +126,6 @@ def refresh_soon(home: Path) -> None:
     threading.Thread(target=run, name="personagent-update-check", daemon=True).start()
 
 
-def how_to_update() -> tuple[str, bool]:
-    """The command that updates this installation ('' for an unpacked source
-    ZIP; a clone's has two lines), and whether it also starts personagent."""
-    from .pageaccess import in_container
-    from .setup_wizard import _program, _quote
-
-    if in_container():
-        return CONTAINER_UPDATE, False
-    if getattr(sys, "frozen", False):
-        return "", False  # the installer's build: replaced by the next installer
-    if homes.is_checkout():
-        if not (homes.CHECKOUT / ".git").exists():
-            return "", False
-        root = _quote(str(homes.CHECKOUT))
-        # A pull can bring new dependencies.
-        return f"git -C {root} pull\n{_program(_python())} -m pip install -e {root}", False
-    prefix = Path(sys.prefix)
-    if langs.under_uvx():
-        return "uvx personagent@latest", True
-    if (prefix / "uv-receipt.toml").is_file():
-        return "uv tool upgrade personagent", False
-    if (prefix / "pipx_metadata.json").is_file():
-        return "pipx upgrade personagent", False
-    try:
-        config = (prefix / "pyvenv.cfg").read_text(encoding="utf-8")
-    except OSError:
-        config = ""
-    if re.search(r"^uv\s*=", config, re.MULTILINE):  # uv's venvs have no pip
-        return f"uv pip install -U personagent --python {_quote(_python())}", False
-    return f"{_program(_python())} -m pip install -U personagent", False
-
-
-BROWSER_SUPPORT = "playwright>=1.49,<2"
-
-
-def how_to_add_browser_support() -> str:
-    """The command that adds the `web` extra (Playwright) to this installation,
-    told apart as how_to_update tells it apart. Playwright drives the browser
-    already installed, so no browser is downloaded."""
-    from .pageaccess import in_container
-    from .setup_wizard import _program, _quote
-
-    wanted = f'"{BROWSER_SUPPORT}"'
-    if in_container():
-        return 'pip install "personagent[web]"'
-    if homes.is_checkout():
-        # Quoted always: a shell such as zsh reads the brackets as a pattern.
-        return f'{_program(_python())} -m pip install -e "{homes.CHECKOUT}[web]"'
-    prefix = Path(sys.prefix)
-    if langs.under_uvx():
-        # uvx builds its environment for each start: the extra goes in the start command.
-        return 'uvx --from "personagent[web]" personagent'
-    if (prefix / "uv-receipt.toml").is_file():
-        return 'uv tool install --reinstall "personagent[web]"'
-    if (prefix / "pipx_metadata.json").is_file():
-        return f"pipx inject personagent {wanted}"
-    try:
-        config = (prefix / "pyvenv.cfg").read_text(encoding="utf-8")
-    except OSError:
-        config = ""
-    if re.search(r"^uv\s*=", config, re.MULTILINE):
-        return f"uv pip install {wanted} --python {_quote(_python())}"
-    return f"{_program(_python())} -m pip install {wanted}"
-
-
-def plan() -> tuple[str, list[list[str]]]:
-    """How this installation came to be, and the commands that update it for
-    the app to run after it quits. A source ZIP and uvx have none: the first
-    is replaced by hand, the second fetches the new version when started."""
-    from .pageaccess import in_container
-
-    python = _python()
-    if in_container():
-        return "container", []
-    if getattr(sys, "frozen", False):
-        # The installer's build has no pip: a new installer replaces it.
-        return "installer", []
-    if homes.is_checkout():
-        if not (homes.CHECKOUT / ".git").exists():
-            return "zip", []
-        root = str(homes.CHECKOUT)
-        # Fast-forward only: a clone someone changed is theirs to merge.
-        return "git", [["git", "-C", root, "pull", "--ff-only"],
-                       [python, "-m", "pip", "install", "-e", root]]
-    prefix = Path(sys.prefix)
-    if langs.under_uvx():
-        return "uvx", []
-    if (prefix / "uv-receipt.toml").is_file():
-        return "uv-tool", [["uv", "tool", "upgrade", "personagent"]]
-    if (prefix / "pipx_metadata.json").is_file():
-        return "pipx", [["pipx", "upgrade", "personagent"]]
-    try:
-        config = (prefix / "pyvenv.cfg").read_text(encoding="utf-8")
-    except OSError:
-        config = ""
-    if re.search(r"^uv\s*=", config, re.MULTILINE):
-        return "uv-pip", [["uv", "pip", "install", "-U", "personagent", "--python", python]]
-    return "pip", [[python, "-m", "pip", "install", "-U", "personagent"]]
-
-
-def blocked(kind: str, commands: list[list[str]]) -> str:
-    """Why the app cannot run this update itself, as a code, or ''."""
-    import shutil
-    import subprocess
-
-    if not commands:
-        return "update_by_hand"
-    tool = commands[0][0]
-    if tool in ("git", "uv", "pipx") and not shutil.which(tool):
-        return "update_tool_missing"
-    if kind == "git":
-        try:
-            changed = subprocess.run(
-                ["git", "-C", str(homes.CHECKOUT), "status", "--porcelain", "--untracked-files=no"],
-                capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except (OSError, subprocess.TimeoutExpired):
-            return "update_tool_missing"
-        if changed.returncode or changed.stdout.strip():
-            return "update_clone_changed"
-    return ""
-
-
 def _python() -> str:
     """This interpreter as someone would type it. The desktop icon starts
     pythonw.exe, which prints nothing in a terminal."""
@@ -259,34 +135,12 @@ def _python() -> str:
 
 
 def notice(home: Path, latest: str | None = None, *, always: bool = False) -> dict | None:
-    """The newer release the last check found, and how to install it.
+    """The newer release the last check found, and its release page.
     `always`: also with the daily check turned off, for someone who asked."""
     if not (always or enabled(home)):
         return None
     latest = str(_read(home).get("latest") or "") if latest is None else latest
     if not newer(latest):
         return None
-    from .pageaccess import in_container
+    return {"version": latest, "url": RELEASE_URL.format(version=latest)}
 
-    command, opens = how_to_update()
-    return {"version": latest, "command": command, "opens": opens,
-            "url": RELEASE_URL.format(version=latest), "container": in_container()}
-
-
-def line(found: dict | None, sub: str = "") -> str:
-    """The notice for a terminal, the command last so it copies cleanly;
-    `sub` follows a command that starts personagent, such as `up`."""
-    if not found:
-        return ""
-    head = f"personagent {found['version']} is available."
-    if found.get("container"):
-        return (f"{head} This copy runs in a container: where it was started, pull the new image and "
-                f"start the container again:\n  {found['command']}")
-    if not found["command"]:
-        if getattr(sys, "frozen", False):
-            return f"{head} Download and run the new installer from {found['url']}"
-        return f"{head} Download the new source from {found['url']}"
-    if found["opens"]:
-        return f"{head} Quit personagent, then start the new version with:\n  {found['command']} {sub}".rstrip()
-    commands = "\n  ".join(found["command"].splitlines())
-    return f"{head} Quit personagent, run this, then start it again:\n  {commands}"

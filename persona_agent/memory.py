@@ -5,23 +5,19 @@ import logging
 import random
 import re
 import time
-from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional
 
 from .storage import num as _num
-from . import access
 from . import channels
+from .channels import PAGE_PLATFORM
 from . import chatlangs
 from . import chatlog
-from . import embeddings
-from . import episodes as episodes_mod
 from . import memstate
 from . import memstore
-from . import memtrash
-from . import people
-from . import ranking
-from .addressing import _HAS_CJK, mentions_name, names_regex
-from .textproc import _FULL_STOP_RE, _focus_tokens
+from . import person
+from . import timewords
+from .addressing import _HAS_CJK, names_regex
+from .textproc import _FULL_STOP_RE, _focus_tokens, _strip_web_desc
 
 logger = logging.getLogger("agent")
 
@@ -37,83 +33,32 @@ def _is_question(content: str, spec: chatlangs.Spec) -> bool:
     return bool(re.search(spec.question_end, content.strip(), re.IGNORECASE))
 
 
-def _bare(text) -> str:
-    """Letters and digits only: a note read back loses its punctuation."""
-    return re.sub(r"[\W_]+", "", str(text or "").casefold())
-
-
-def _same_word(a: str, b: str) -> bool:
-    """Two forms of one word: "кота" and "кот", "cats" and "cat"; never "tea" and "steak"."""
-    n = min(len(a), len(b))
-    if n < 3 or abs(len(a) - len(b)) > 3:
-        return a == b
-    shared = 0
-    for x, y in zip(a, b):
-        if x != y:
-            break
-        shared += 1
-    return shared >= max(3, n - 1)
-
-
-def _loosely_names(query: str, text: str, stop: frozenset) -> bool:
-    """Whether `text` holds the query's words in some form: at least half of
-    its words of two or more characters, stopwords aside. Only ever used to
-    find the one note a forget can mean."""
-    if len(query) == 1 and _HAS_CJK.search(query):
-        return query in text
-    words = [w for w in re.findall(r"\w+", query.casefold()) if len(w) >= 2 and w not in stop]
-    if not words:
-        return False
-    there = re.findall(r"\w+", text.casefold())
-    found = sum(any(_same_word(w, x) for x in there) for w in words)
-    return found >= 1 and found * 2 >= len(words)
+def _asks(content: str, spec: chatlangs.Spec) -> bool:
+    """A question, whole or in its first clause: "记住了吗，别叫我鱼片"."""
+    return _is_question(content, spec) or _is_question(re.split(r"[，,。;；]", content.strip(), 1)[0], spec)
 
 
 def _forget_query(content: str, spec: chatlangs.Spec) -> str:
     query = content.strip()
     if spec.query_lead:
         query = re.sub(spec.query_lead, "", query, flags=re.IGNORECASE)
+    # "忘掉挂科的事": the thing is 挂科.
+    query = re.sub(r"(?<=[一-鿿])(?:的|那|这|這)?件?(?:事情|事儿|事兒|事)$", "", query.strip(_QUERY_TRIM))
     return query.strip(_QUERY_TRIM)
 
 
-# When a new auto-memory rewrites an older one (see `_restated_memory`): it may
-# drop almost none of the old note's tokens, must share a few, and only within
-# one sitting.
-_MEMORY_MERGE_MAX_DROPPED = 0.05
+def today_runtime(agent):
+    """The runtime folder the profile lives in."""
+    from . import today
+    return today.runtime_of(agent)
 
-_MEMORY_MERGE_MIN_SHARED = 4
 
-_MEMORY_MERGE_WINDOW_S = 6 * 3600.0
-
-# Where a core note may be cut by a forget; "3.5 hours" is one sentence.
+# Where a summary may be cut by a forget; "3.5 hours" is one sentence.
 _SENTENCE_END = re.compile(r"(?<=[.!?;])\s+|(?<=[。！？；\n])\s*")
 
 # Beside memory.json, so a home moved by MEMORY_FILE keeps them together.
-TRASH_FILE = "memory_trash.jsonl"
-EPISODES_FILE = "episodes.json"
 STATE_FILE = "memory_state.json"
 LOG_DIR = "log"
-
-# A core rewrite that keeps too little of a long note is a truncation.
-_CORE_SHRINK_MIN_OLD = 120
-_CORE_SHRINK_LEN = 0.5
-_CORE_SHRINK_TOKENS = 0.4
-_CORE_OPEN = re.compile(r"\[\s*CORE_UPDATE\s*\]", re.IGNORECASE)
-_CORE_CLOSE = re.compile(r"\[\s*/\s*CORE_UPDATE\s*\]", re.IGNORECASE)
-
-#: The newest lines a note written while replying may cite as its cause.
-_CAUSE_LINES = 30
-_CAUSE_SHARE = 0.6
-
-#: Events a recall lists after the facts.
-_RECALL_EVENTS = 3
-
-#: A reply's note about a member is another's claim when that one's last
-#: lines carry at least this share of its words, and more than the member's own.
-_CLAIM_LINES = 30
-_CLAIM_SHARE = 0.5
-
-_TEXT_KEY = re.compile(r"[0-9a-f]{32}")
 
 
 def _shapes(*patterns: str) -> tuple[re.Pattern, ...]:
@@ -248,29 +193,9 @@ class Memory:
     # ---- the stores ---------------------------------------------------------
 
     @property
-    def memory_trash(self) -> memtrash.MemoryTrash:
-        return self._sidecar("_memory_trash", memtrash.MemoryTrash,
-                             self.memory_file.with_name(TRASH_FILE))
-
-    @property
     def memory_state(self) -> memstate.MemoryState:
         return self._sidecar("_memory_state", memstate.MemoryState,
                              self.memory_file.with_name(STATE_FILE))
-
-    @property
-    def episode_store(self) -> episodes_mod.EpisodeStore:
-        """Loaded on first use; a damaged file raises MemoryFileDamaged, and
-        rows that are not events go to the trash."""
-        store = self._sidecar("_episode_store", episodes_mod.EpisodeStore,
-                              self.memory_file.with_name(EPISODES_FILE))
-        if store._data is None:
-            store.load()
-            dropped, store.unreadable = store.unreadable, []
-            for conv, row in dropped:
-                self._trash_put(conv, "episode", row, "unreadable", "load")
-            if dropped:
-                self._save_episodes()
-        return store
 
     @property
     def chat_log(self) -> chatlog.ChatLog:
@@ -307,34 +232,6 @@ class Memory:
                 out.append(dict(row, self=bot))
         return out
 
-    def _cause_refs(self, conv: str, text: str, uid: str = "") -> list[int]:
-        """The log lines a note written now cites: the newest two human
-        lines (by `uid` when given) that share its words; [] when none do."""
-        tokens = _focus_tokens(str(text or ""), "zh")
-        if not tokens:
-            return []
-        uids = self._same_person(uid) if uid else frozenset()
-        rows = [r for r in self._log_rows(conv) if not r.get("self")
-                and isinstance(r.get("text"), str)
-                and (not uids or str(r.get("user_id") or "") in uids)][-_CAUSE_LINES:]
-        # A shared name or two is not evidence: the line must carry most of the note.
-        need = max(1, round(len(tokens) * _CAUSE_SHARE))
-        scored = sorted(((len(tokens & _focus_tokens(r["text"], "zh")), _num(r.get("seq"), int))
-                         for r in rows), reverse=True)
-        return chatlog.merge_refs(seq for n, seq in scored[:2] if n >= need)
-
-    def _log_command(self, conv: str, uid: str, name: str, text: str) -> list[int]:
-        """Write a memory command said one to one into the chat's log and
-        return its line: such a command is answered outside the turns, so
-        nothing else would record the words the note rests on."""
-        if not self.chat_log.on or not channels.dm_user(conv):
-            return []
-        seq = self._next_seq(conv)
-        self._log_chat(conv)
-        self.chat_log.take(conv, [{"seq": seq, "t": time.time(), "user_id": uid,
-                                   "name": name, "text": text}])
-        return [seq]
-
     def _log_chat(self, conv: str) -> int:
         """Append what the chat's log lacks; never raises, never waits long."""
         log = self.chat_log
@@ -342,47 +239,11 @@ class Memory:
             return 0
         return log.take(conv, self._log_rows(conv))
 
-    def _load_memories(self) -> dict:
-        """memory.json, migrated once (memstore.migrate); a damaged file, or a
-        damaged episodes.json, stops the start naming the daily copy."""
-        memories = memstore.load_memory_file(self.memory_file)
-        memstore.migrate(memories, self.memory_trash, self.memory_state,
-                         self.memory_file)
-        self.episode_store
-        return memories
-
-    def _backup_today(self, path) -> None:
-        try:
-            memstore.daily_backup(path, self.memory_state)
-        except OSError as e:
-            logger.warning("[Agent] daily copy of %s failed: %s", path.name, e)
-
-    def _save_memories(self) -> None:
-        self._backup_today(self.memory_file)
-        self._save_json(self.memory_file, self.memories, "memory")
-
-    def _save_episodes(self) -> None:
-        self._backup_today(self.episode_store.path)
-        try:
-            self.episode_store.save()
-        except OSError as e:
-            logger.warning("[Agent] episodes save failed: %s", e)
-
     def _save_memory_state(self, force: bool = True) -> None:
         try:
             self.memory_state.save(force=force)
         except OSError as e:
             logger.warning("[Agent] memory state save failed: %s", e)
-
-    def _trash_put(self, conv: str, kind: str, item: dict, why: str, by: str,
-                   ref: str = "") -> str:
-        """Keep a removed item restorable; appended before its store is
-        rewritten. A failed append is logged and the removal goes on."""
-        try:
-            return self.memory_trash.put(conv, kind, dict(item), why, by, ref)
-        except OSError as e:
-            logger.warning("[Agent] memory trash append failed: %s", e)
-            return ""
 
     def _memory_gen(self, conv: str) -> int:
         """How many forgets this chat has had since the start."""
@@ -393,536 +254,53 @@ class Memory:
         gens = self.__dict__.setdefault("_forget_gens", {})
         gens[conv] = gens.get(conv, 0) + 1
 
-    def _final_copies(self, keep: Callable[[str, dict], bool]) -> None:
-        """After a final forget: the daily copies become the files as they are
-        now, and the migration copy loses every note `keep` refuses."""
-        for path in (self.memory_file, self.core_memory_file, self.episode_store.path):
-            try:
-                memstore.refresh_backup(path)
-            except OSError as e:
-                logger.warning("[Agent] daily copy of %s not refreshed: %s", path.name, e)
-        try:
-            memstore.scrub_migration_copy(self.memory_file, keep)
-        except OSError as e:
-            logger.warning("[Agent] migration copy not rewritten: %s", e)
+    def _final_copies(self) -> None:
+        """After a final forget the recent file is written now."""
         flush = getattr(self, "_maybe_flush_recent", None)
         if callable(flush) and getattr(self, "_recent", None) is not None:
             flush(force=True)
 
-    def _note_ids(self, conv: str) -> set[str]:
-        return {str(it["id"]) for it in self.memories.get(conv, []) if it.get("id")}
-
-    def _append_memory(self, group_id: str, item: dict) -> None:
-        items = self.memories.setdefault(group_id, [])
-        if not item.get("id"):
-            item["id"] = memstore.new_id("m", self._note_ids(group_id))
-        items.append(item)
-        if len(items) > self.memory_max_per_conversation:
-            dropped = self._evict_memory(items)
-            if dropped is not None:
-                self._trash_put(group_id, "note", dropped, "evicted", "cap")
-        self._save_memories()
-
-    def _load_core_memory(self) -> dict[str, str]:
-        return memstore.load_core_file(self.core_memory_file)
-
-    def _save_core_memory(self) -> None:
-        self._backup_today(self.core_memory_file)
-        self._save_json(self.core_memory_file, self.core_memory, "core_memory")
-
-    def _operator_ids(self) -> frozenset[str]:
-        return people.operator_ids(self._admins(), self.memories)
-
-    def _same_person(self, uid: str) -> frozenset[str]:
-        return people.same_person(uid, self._operator_ids())
-
     # ---- hooks the turn and recall code fills in ---------------------------
-
-    def _maybe_consolidate(self, conv: str, reason: str) -> None:
-        """Start a consolidation of this chat when one is due (consolidate.py)."""
-        return None
 
     def _mark_used(self, conv: str, reply_text: str) -> None:
         """Count the remembered items a sent reply drew on (retrieval.py)."""
         return None
 
-    def _extract_core_update(self, reply: str) -> tuple[str, str]:
-        """Split off [CORE_UPDATE]...[/CORE_UPDATE] notes: (reply, note). An
-        unclosed block runs to the end; words after a closed one stay in the
-        reply; the last non-empty note wins. Parse only, so a reply the filter
-        blocks never commits its note."""
-        if not _CORE_OPEN.search(reply):
-            return reply, ""
-        kept: list[str] = []
-        new_note, rest = "", reply
-        while (m := _CORE_OPEN.search(rest)) is not None:
-            kept.append(rest[:m.start()])
-            rest = rest[m.end():]
-            close = _CORE_CLOSE.search(rest)
-            body, rest = (rest[:close.start()], rest[close.end():]) if close else (rest, "")
-            body = _CORE_CLOSE.sub("", _CORE_OPEN.sub("", body)).strip()
-            if body:
-                new_note = body
-        kept.append(rest)
-        reply = " ".join(p.strip() for p in kept if p.strip())
-        if len(new_note) > self.CORE_MEMORY_MAX_CHARS:
-            new_note = new_note[:self.CORE_MEMORY_MAX_CHARS] + "..."
-        return reply, new_note
-
-    def _commit_core_memory(self, group_id: str, new_note: str) -> None:
-        """Persist a note extracted by _extract_core_update. Empty notes skip."""
-        # At the core note's own cap (plus a capped note's "...").
-        note = self._validate_memory_candidate(
-            new_note, max_chars=self.CORE_MEMORY_MAX_CHARS + 3)
-        if not note:
-            return
-        old = self.core_memory.get(group_id, "")
-        if old == note:
-            return
-        if old and self._core_shrunk(old, note):
-            logger.warning("[Agent] core_memory rewrite refused as a probable "
-                           "truncation (group=%s, %d -> %d chars)",
-                           group_id, len(old), len(note))
-            return
-        if old:
-            self._trash_put(group_id, "core", {
-                "text": old, "at": self.memory_state.core_at(group_id) or 0.0},
-                "rewritten", "reply")
-        self.core_memory[group_id] = note
-        self._save_core_memory()
-        self.memory_state.set_core_at(group_id, time.time())
-        self._save_memory_state()
-        logger.info("[Agent] core_memory updated (group=%s, %d chars)",
-                    group_id, len(note))
-
-    @staticmethod
-    def _core_shrunk(old: str, new: str) -> bool:
-        """A long note rewritten to under half its length that keeps few of
-        its words: a cut-off reply, not a decision to forget."""
-        if len(old) < _CORE_SHRINK_MIN_OLD or len(new) >= _CORE_SHRINK_LEN * len(old):
-            return False
-        old_tokens = _focus_tokens(old, "zh")
-        if not old_tokens:
-            return False
-        kept = len(old_tokens & _focus_tokens(new, "zh")) / len(old_tokens)
-        return kept < _CORE_SHRINK_TOKENS
-
     def _parse_memory_command(self, text: str) -> Optional[tuple[str, str, str]]:
         """(kind, what follows the keyword, chat language) when `text` is a
-        memory command: learned, remember, forget or recall. None for
-        conversation. Every language is tried; when two read it, the one the
-        message looks written in wins."""
-        table = self._memory_cmd_patterns()
-
-        def pick(found: list[tuple[str, str]]) -> Optional[tuple[str, str]]:
-            if len(found) < 2:
-                return found[0] if found else None
-            guess = chatlangs.detect(text, self.chat_lang)
-            return next((f for f in found if f[0] == guess), found[0])
-
-        hit = pick([(code, "") for code, _spec, pats in table
-                    if pats["learned"].search(text)])
-        if hit:
-            return "learned", "", hit[0]
-        found = []
-        for code, spec, pats in table:
-            for pat in pats["remember"]:
-                m = pat.search(text)
-                # A question is reminiscing ("Luna remember the party?").
-                if m and not _is_question(m.group(1), spec):
-                    found.append((code, m.group(1)))
-                    break
-        hit = pick(found)
-        if hit:
-            return "remember", hit[1], hit[0]
-        found = []
-        for code, spec, pats in table:
+        memory command: remember, forget or recall; a forget naming nothing
+        ("把刚才那件事忘了") is "forget_that". None for conversation. The
+        character's name may lead it or be left out. Every language is tried;
+        when two read it, the one the message looks written in wins."""
+        code = chatlangs.detect(text, self.chat_lang)
+        if person.forget_that(text):
+            return "forget_that", "", code
+        for lang, spec, pats in self._memory_cmd_patterns():
             for pat in pats["forget"]:
                 m = pat.search(text)
-                if (m and not _is_question(m.group(1), spec)
-                        and not (spec.asking and re.search(spec.asking, m.group(1)))
-                        and _forget_query(m.group(1), spec).lower() not in spec.deictic):
-                    found.append((code, m.group(1)))
-                    break
-        hit = pick(found)
-        if hit:
-            return "forget", hit[1], hit[0]
-        hit = pick([(code, "") for code, _spec, pats in table
-                    if pats["recall"].search(text)])
-        if hit:
-            return "recall", "", hit[0]
-        return None
+                if m and _forget_query(m.group(1), spec).lower() in spec.deictic:
+                    return "forget_that", "", lang
+        hit = None
+        for lang, spec, pats in self._memory_cmd_patterns():
+            for kind in ("remember", "forget"):
+                for pat in pats[kind]:
+                    m = pat.search(text)
+                    if m and not _asks(m.group(1), spec) and (
+                            kind == "remember" or not (spec.asking and re.search(spec.asking, m.group(1)))):
+                        hit = hit or (kind, m.group(1), lang)
+                        if lang == code:
+                            return kind, m.group(1), lang
+            if pats["recall"].search(text):
+                hit = hit or ("recall", "", lang)
+        return hit
 
-    def _is_memory_command(self, text: str) -> bool:
-        return self._parse_memory_command(text) is not None
-
-    def _handle_memory_command(
-        self,
-        group_id: str,
-        text: str,
-        user_id: str = "",
-        user_name: str = "",
-    ) -> Optional[str]:
+    def _handle_memory_command(self, conv: str, text: str) -> Optional[str]:
+        """Carry out the memory command `text` in the chat `conv`; its answer,
+        or None when it is not one."""
         parsed = self._parse_memory_command(text)
         if parsed is None:
             return None
-        kind, arg, code = parsed
-        spec = chatlangs.spec(code)
-        is_admin = access.is_admin(user_id, self._admins())
-        caller = str(user_id or "")
-        reader = channels.dm_user(group_id)
-        # Recall lists other chats' notes only in a DM: in a room it would
-        # read one member's notes out to everyone. Deleting cannot leak.
-        elsewhere = reader
-        forget_elsewhere = reader or (caller if self.memory_share_rooms else "")
-
-        def say(key: str) -> str:
-            return self._memory_reply(key, code)
-        if kind == "learned":
-            return self._learned_summary(group_id, code)
-
-        if kind == "remember":
-            content = arg.strip()
-            if spec.note_lead:
-                content = re.sub(spec.note_lead, "", content, flags=re.IGNORECASE)
-            # "Luna, remember!" names nothing to keep.
-            if not content.strip(_QUERY_TRIM):
-                return say("remember_what")
-            content = self._validate_memory_candidate(content)
-            if not content:
-                return say("not_instructions")
-            now = time.time()
-            item: dict = {"text": content, "time": now, "born": now,
-                          "imp": memstore.IMP_COMMAND, "uses": 0, "used": 0.0,
-                          "src": "command"}
-            if caller and not is_admin:
-                # The saver may forget it; the subject's presence brings it into prompts.
-                item["saved_by"] = caller
-                if user_name:
-                    item["saved_by_name"] = user_name
-                uid, name = self._note_subject(group_id, content, caller, user_name,
-                                               spec)
-                if uid:
-                    item["user_id"] = uid
-                    if name:
-                        item["user_name"] = name
-                    if uid != caller:
-                        # One member's word about another: reported speech,
-                        # which never travels to another chat.
-                        item["said_by"] = caller
-                        if user_name:
-                            item["said_by_name"] = user_name
-            refs = (self._cause_refs(group_id, content, caller)
-                    or self._log_command(group_id, caller, user_name, text))
-            if refs:
-                item["refs"] = refs
-            same = " ".join(content.split()).casefold()
-            if any(" ".join(str(it.get("text") or "").split()).casefold() == same
-                   for it in self.memories.get(group_id, [])):
-                return say("noted")  # already kept: a second copy would only crowd out others
-            self._append_memory(group_id, item)
-            return say("noted")
-
-        callers = self._same_person(caller) if caller else frozenset()
-
-        def owns(it: dict) -> bool:
-            if is_admin:
-                return True
-            if not caller:
-                return not it.get("user_id") and not it.get("saved_by")
-            return caller in (str(it.get("user_id") or ""), str(it.get("saved_by") or ""))
-
-        if kind == "forget":
-            query = _forget_query(arg, spec)
-            # Short queries over-delete: a spaced script needs 3+ characters
-            # and whole words ("tea" not "steak"), CJK a 2+ character substring.
-            # A shorter one can only name the caller's one note that holds it.
-            by_word = not _HAS_CJK.search(query)
-            if not query or query.lower() in spec.everything:
-                return say("forget_what")
-            short = len(query) < (3 if by_word else 2)
-            edge = "A-Za-z0-9_" if query.isascii() else r"\w"
-            word = re.compile(rf"(?<![{edge}]){re.escape(query)}(?![{edge}])",
-                              re.IGNORECASE)
-
-            def hit(text: str) -> bool:
-                if short:
-                    return False
-                return bool(word.search(text)) if by_word else query in text
-
-            items = self.memories.get(group_id, [])
-            if short or not any(hit(str(it.get("text") or "")) for it in items):
-                # Not said word for word ("forget about the cats" for "I have a
-                # cat", an inflected name): the caller's one note that holds
-                # the words in some form, and only when it is one.
-                loose = [it for it in items if owns(it) and _loosely_names(
-                    query, str(it.get("text") or ""), spec.stopwords)]
-                if len(loose) > 1 or (short and not loose):
-                    return say("forget_what")
-                if loose:
-                    exact = str(loose[0]["text"])
-
-                    def hit(text: str) -> bool:
-                        return exact in text
-            elsewhere_about = self._about_elsewhere(forget_elsewhere, group_id)
-
-            def note_gone(conv: str, it: dict) -> bool:
-                # Query in text, never the reverse. Only the admin deletes
-                # others' notes; an anonymous caller owns only unowned ones.
-                text = it.get("text")
-                if not isinstance(text, str) or not hit(text):
-                    return False
-                return owns(it) if conv == group_id else elsewhere_about(conv, it)
-
-            removed = [it for it in items if note_gone(group_id, it)]
-            if removed:
-                self.memories[group_id] = [it for it in items
-                                           if not any(it is r for r in removed)]
-            rooms = {group_id} if removed else set()
-            for room, it in self._room_notes_about(forget_elsewhere, group_id):
-                if hit(it["text"]):
-                    self.memories[room].remove(it)
-                    removed.append(it)
-                    rooms.add(room)
-            changed = bool(removed)
-            if changed:
-                self._save_memories()
-
-            # The core note has no owner line: it is the reader's in a DM, in a
-            # room the admin's or that of whoever a sentence names.
-            def mine(sentence: str) -> bool:
-                return bool(is_admin or reader or not caller or (
-                    len(user_name) >= 2 and user_name in sentence))
-
-            def event_mine(ep: dict) -> bool:
-                return bool(is_admin or reader or (
-                    callers and ep.get("who")
-                    and all(str(u) in callers for u in ep["who"])))
-
-            if self._forget_in_core(group_id, hit, mine):
-                changed = True
-            # Final: nothing of it goes to the trash, and a tombstone keeps
-            # old chat lines from bringing it back.
-            gone_events = self._forget_events(group_id, hit, event_mine)
-            thread_cut = self._forget_in_thread(group_id, hit, mine)
-            # The command's own line names the thing too: it goes, but it is
-            # not something forgotten.
-            lines_cut = self._purge_lines(group_id, hit, lambda row: bool(
-                is_admin or reader or (callers and str(row.get("user_id") or "")
-                                       in callers)), aside=self._asks_to_forget)
-
-            def trash_gone(row: dict) -> bool:
-                # Older versions too: restore must not bring it back.
-                item = row.get("item") or {}
-                text = item.get("text")
-                if not isinstance(text, str):
-                    return False
-                if row.get("kind") == "note":
-                    return note_gone(str(row.get("conv") or ""), item)
-                if row.get("conv") != group_id:
-                    return False
-                if row.get("kind") == "episode":
-                    return hit(text) and event_mine(item)
-                return any(hit(p) and mine(p) for p in _SENTENCE_END.split(text))
-            try:
-                trashed = self.memory_trash.drop_where(trash_gone)
-            except OSError as e:
-                logger.warning("[Agent] memory trash rewrite failed: %s", e)
-                trashed = []
-            changed = changed or bool(gone_events or thread_cut or lines_cut or trashed)
-            if changed:
-                hashes = set(memstore.token_hashes(query))
-                for room in rooms | {group_id}:
-                    for row in removed + gone_events:
-                        self.memory_state.add_tombstone(
-                            room, memstore.token_hashes(row.get("text", "")))
-                    self.memory_state.add_tombstone(room, hashes)
-                self._save_memory_state()
-                for row in removed + gone_events + [r.get("item") or {} for r in trashed]:
-                    self._drop_vector(row.get("text", ""))
-                for room in rooms | {group_id}:
-                    self._purge_echoes(room, [row.get("text", "")
-                                              for row in removed + gone_events])
-                    self._forgot(room)
-                self._final_copies(lambda conv, row: not note_gone(conv, row))
-            return say("forgotten" if changed else "nothing_to_forget")
-
-        items = self.memories.get(group_id, [])
-        if not is_admin:
-            # A note about someone is shown only to them and its saver.
-            items = [it for it in items if not it.get("user_id") or (
-                caller and caller in (str(it.get("user_id")),
-                                      str(it.get("saved_by") or "")))]
-        items = items + [it for _, it in self._room_notes_about(elsewhere, group_id)]
-        events = self._recall_events(group_id, callers, everyone=bool(reader))
-        if not items and not events:
-            return say("empty")
-        # No brackets or list markers: the character policy refuses them.
-        lines: list[str] = []
-        first = spec.first_person and re.compile(spec.first_person, re.IGNORECASE)
-        for it in items:
-            owner = str(it.get("user_id") or "")
-            own_words = bool(first and first.search(it["text"]))
-            if own_words and (owner in callers or (reader and not owner)):
-                # "I'm allergic" read back bare would be the character's allergy.
-                tag = say("said")
-            elif own_words and it.get("user_name"):
-                tag = say("from").format(name=it["user_name"])
-            elif owner and it.get("user_name"):
-                tag = say("about").format(name=it["user_name"])
-            elif it.get("saved_by_name"):
-                tag = say("from").format(name=it["saved_by_name"])
-            else:
-                tag = ""
-            lines.append(f"{tag}{it['text']}")
-        lines += events
-        # One note, one line: a full stop inside a note must not start a new message.
-        lines = [_FULL_STOP_RE.sub(" ", line).strip() for line in lines]
-        return say("recall_head") + "\n" + "\n".join(lines)
-
-    def _recall_events(self, conv: str, callers: frozenset[str],
-                       everyone: bool) -> list[str]:
-        """Up to three events of this chat the caller took part in (every
-        event of a DM), newest first, as "YYYY-MM-DD text"."""
-        rows = [ep for ep in self.episode_store.episodes(conv)
-                if everyone or (callers and callers & {str(u) for u in ep.get("who", [])})]
-        rows.sort(key=lambda ep: _num(ep.get("t1")), reverse=True)
-        tz = self._prompt_tz() if hasattr(self, "_prompt_tz") else None
-        return [f"{datetime.fromtimestamp(_num(ep.get('t0')), tz):%Y-%m-%d} {ep['text']}"
-                for ep in rows[:_RECALL_EVENTS]]
-
-    def _room_notes_about(self, uid: str, besides: str = "") -> list[tuple[str, dict]]:
-        """(chat, note) for each note another chat than `besides` keeps about
-        `uid`'s person. A DM's notes never leave it, except among the
-        operator's own DMs; reported speech never leaves its chat."""
-        about = self._about_elsewhere(uid, besides)
-        return [(key, it) for key, items in self.memories.items()
-                for it in items if about(key, it)]
-
-    def _about_elsewhere(self, uid: str, besides: str = "") -> Callable[[str, dict], bool]:
-        """The test `_room_notes_about` puts each (chat, note) to."""
-        if not uid:
-            return lambda key, it: False
-        operator = self._operator_ids()
-        uids = people.same_person(uid, operator)
-        among_operator = people.is_operator_dm(besides, operator)
-
-        def about(key: str, it: dict) -> bool:
-            if key == besides or not isinstance(it, dict) or it.get("said_by"):
-                return False
-            dm = channels.is_dm(key)
-            if dm and not (among_operator and people.is_operator_dm(key, operator)):
-                return False
-            subject = str(it.get("user_id") or "")
-            # An unattributed note of a DM is about that DM's reader.
-            return subject in uids or (dm and not subject)
-        return about
-
-    def _notes_from_rooms(self, conv: str) -> list[tuple[str, dict]]:
-        """What other rooms' notes reach `conv`: about a DM's reader always;
-        in a room, about whoever talks there once MEMORY_SHARE_ROOMS is on."""
-        reader = channels.dm_user(conv)
-        if reader:
-            uids = {reader}
-        elif self.memory_share_rooms:
-            uids = {str(m["user_id"]) for m in self.buffers.get(conv, [])
-                    if m.get("user_id")}
-        else:
-            return []
-        return [note for uid in uids for note in self._room_notes_about(uid, conv)]
-
-    def _forget_in_core(self, group_id: str, hit: Callable[[str], bool],
-                        mine: Callable[[str], bool]) -> bool:
-        """Cut the sentences of the core note that match; did any go?"""
-        parts = _SENTENCE_END.split(self.core_memory.get(group_id, ""))
-        kept = [p for p in parts if not (hit(p) and mine(p))]
-        if len(kept) == len(parts):
-            return False
-        if any(p.strip() for p in kept):
-            self.core_memory[group_id] = " ".join(kept).strip()
-        else:
-            del self.core_memory[group_id]
-        self._save_core_memory()
-        return True
-
-    def _forget_in_thread(self, conv: str, hit: Callable[[str], bool],
-                          mine: Callable[[str], bool]) -> bool:
-        """Cut the matching sentences of the chat's running summary."""
-        store = self.episode_store
-        thread = store.thread(conv)
-        if not thread:
-            return False
-        parts = _SENTENCE_END.split(thread.get("text", ""))
-        kept = [p for p in parts if not (hit(p) and mine(p))]
-        if len(kept) == len(parts):
-            return False
-        text = " ".join(kept).strip()
-        if text:
-            thread["text"] = text
-        else:
-            store.drop_thread(conv)
-        self._save_episodes()
-        return True
-
-    def _forget_events(self, conv: str, hit: Callable[[str], bool],
-                       allowed: Callable[[dict], bool]) -> list[dict]:
-        """Delete this chat's matching events the caller may delete."""
-        store = self.episode_store
-        rows = store.episodes(conv)
-        gone = [ep for ep in rows if hit(ep.get("text", "")) and allowed(ep)]
-        if gone:
-            rows[:] = [ep for ep in rows if not any(ep is g for g in gone)]
-            self._save_episodes()
-        return gone
-
-    def _purge_seqs(self, conv: str, seqs) -> int:
-        """Delete the lines with these sequence numbers from this chat's
-        window, spill, their copy on disk and the log. A line not yet written
-        to the log is dropped here, so the next write cannot put it there."""
-        seqs = {int(s) for s in seqs}
-        uid = channels.dm_user(conv)
-        removed = 0
-
-        def filtered(rows):
-            nonlocal removed
-            kept = [r for r in rows
-                    if not (isinstance(r, dict) and _num(r.get("seq"), int) in seqs)]
-            removed += len(rows) - len(kept)
-            return kept
-
-        buf = getattr(self, "buffers", {}).get(conv)
-        if buf is not None:
-            kept = filtered(list(buf))
-            if len(kept) != len(buf):
-                buf.clear()
-                buf.extend(kept)
-        history = getattr(self, "dm_history", {})
-        if uid and uid in history:
-            history[uid] = filtered(history[uid])
-        by_reader = {uid, conv} if uid else set()
-        for name, keys in (("_spill", {conv}), ("_dm_spill", by_reader)):
-            spill = getattr(self, name, None) or {}
-            for key in keys:
-                if key in spill:
-                    spill[key] = filtered(list(spill[key]))
-        recent = getattr(self, "_recent", None)
-        snap = recent.snapshot(conv) if recent is not None else None
-        if snap:
-            before = removed
-            for key in ("lines", "spill", "dm", "dm_spill"):
-                snap[key] = filtered(snap.get(key, []))
-            if removed != before:
-                recent.put(conv, snap)
-        removed += self._log_forget(conv, lambda row: row["seq"] in seqs)
-        if removed:
-            dirty = getattr(self, "_recent_dirty", None)
-            if isinstance(dirty, set):
-                dirty.add(conv)
-        return removed
-
-    def _asks_to_forget(self, text: str) -> bool:
-        parsed = self._parse_memory_command(text)
-        return bool(parsed) and parsed[0] == "forget"
+        return self._person_command(conv, *parsed)
 
     def _own_line(self, row: dict) -> bool:
         """A line the character wrote, in the window's, the DM turns' or the log's shape."""
@@ -931,60 +309,33 @@ class Memory:
         return bool(row.get("self")) or (
             not row.get("user_id") and row.get("name") == self.persona_name)
 
-    def _purge_echoes(self, conv: str, texts) -> int:
-        """Delete the character's own lines that repeat a forgotten item (its
-        "here is what I remember" answers): they would keep the words in the
-        recent messages and the chat record."""
-        gone = [s for s in (_bare(t) for t in texts)
-                if len(s) >= (2 if _HAS_CJK.search(s) else 4)]
-        if not gone:
-            return 0
-
-        def hit(text: str) -> bool:
-            bare = _bare(text)
-            return any(s in bare for s in gone)
-
-        return self._purge_lines(conv, hit, self._own_line)
-
     def _purge_lines(self, conv: str, hit: Callable[[str], bool],
-                     mine: Optional[Callable[[dict], bool]] = None,
-                     aside: Optional[Callable[[str], bool]] = None) -> int:
+                     cut: Optional[Callable[[str], str]] = None) -> int:
         """Delete matching recent lines of this chat (the window, the DM turns,
         the spill and their copy on disk), so no later consolidation reads
-        them again. `mine(row)` limits it to lines the caller may delete;
-        lines `aside(text)` names go too but are left out of the count."""
-        mine = mine or (lambda row: True)
+        them again; with `cut`, a matching line keeps cut(its words) instead.
+        How many lines changed."""
         uid = channels.dm_user(conv)
-        uncounted = 0
 
         def keep(row) -> bool:
-            nonlocal uncounted
-            if not isinstance(row, dict):
-                return True
-            text = row.get("text", row.get("content", ""))
-            if not (isinstance(text, str) and hit(text) and mine(row)):
-                return True
-            if aside is not None and aside(text):
-                uncounted += 1
-            return False
+            text = row.get("text", row.get("content", "")) if isinstance(row, dict) else None
+            return not (isinstance(text, str) and hit(text))
 
         removed = 0
 
         def filtered(rows):
             nonlocal removed
-            kept = [r for r in rows if keep(r)]
-            removed += len(rows) - len(kept)
-            return kept
+            out = []
+            for row in rows:
+                if keep(row):
+                    out.append(row)
+                    continue
+                removed += 1
+                if cut is not None:
+                    key = "text" if "text" in row else "content"
+                    out.append({**row, key: cut(row[key])})
+            return out
 
-        buffers = getattr(self, "buffers", {})
-        if conv in buffers:
-            buf = buffers[conv]
-            kept = filtered(list(buf))
-            if len(kept) != len(buf):
-                buf.clear()
-                buf.extend(kept)
-        # DM state is keyed by the reader; a bare reader id is also a QQ
-        # group's key, so room state is only ever looked up by `conv`.
         history = getattr(self, "dm_history", {})
         if uid and uid in history:
             history[uid] = filtered(history[uid])
@@ -993,269 +344,44 @@ class Memory:
             unanswered[uid] = [t for t in filtered(
                 [{"role": "user", "user_id": uid, "content": t} for t in unanswered[uid]])
                 for t in [t["content"]]]
-        by_reader = {uid, conv} if uid else set()
-        for name, keys in (("_spill", {conv}), ("_dm_spill", by_reader)):
-            spill = getattr(self, name, None) or {}
-            for key in keys:
-                if key in spill:
-                    spill[key] = filtered(list(spill[key]))
+        spill = getattr(self, "_dm_spill", None) or {}
+        for key in ({uid, conv} if uid else set()):
+            if key in spill:
+                spill[key] = filtered(list(spill[key]))
         recent = getattr(self, "_recent", None)
         snap = recent.snapshot(conv) if recent is not None else None
         if snap:
             before = removed
-            for key in ("lines", "spill", "dm", "dm_spill"):
+            for key in ("dm", "dm_spill"):
                 snap[key] = filtered(snap.get(key, []))
             if removed != before:
                 recent.put(conv, snap)
-        removed += self._log_forget(conv, lambda row: not keep(row))
+        removed += self._log_forget(conv, lambda row: not keep(row) and (cut(row["text"]) if cut else True))
         if removed:
             dirty = getattr(self, "_recent_dirty", None)
             if isinstance(dirty, set):
                 dirty.add(conv)
-        return removed - uncounted
+        return removed
 
-    def _log_forget(self, conv: str, gone: Callable[[dict], bool]) -> int:
-        """Remove matching lines from the chat's log; how many went."""
+    def _log_forget(self, conv: str, gone: Callable[[dict], object]) -> int:
+        """Remove the lines `gone` is true for from the chat's log, and give
+        those it returns words for those words; how many changed."""
         try:
             return self.chat_log.forget(conv, gone)
         except (OSError, chatlog.LockUnavailable) as e:
             logger.warning("[Agent] chat log not rewritten: %s", e)
             return 0
 
-    def _drop_vector(self, text: str) -> None:
-        if not getattr(self, "embedding_model", "") or not text:
-            return
-        try:
-            self.embedding_cache.drop(self.embedding_model, embeddings.text_key(text))
-        except OSError as e:
-            logger.warning("[Agent] embedding drop failed: %s", e)
-
-    def _forget_item(self, conv: str, kind: str, item_id: str = "",
-                     by: str = "page") -> str:
-        """The page's and the terminal's forget of one item: a note by id (or
-        by the old `embeddings.text_key`, every note with that text), an event
-        by id, the summary, or the core note. Restorable for a day; returns
-        the trash id, "" when nothing matched."""
-        item_id = str(item_id or "")
-        texts: list[str] = []
-        tids: list[str] = []
-        refs: set[int] = set()
-        if kind == "note":
-            items = self.memories.get(conv, [])
-            legacy = bool(_TEXT_KEY.fullmatch(item_id))
-            hits = [it for it in items if item_id and (
-                it.get("id") == item_id
-                or (legacy and embeddings.text_key(it["text"]) == item_id))]
-            if not hits:
-                return ""
-            tids = [self._trash_put(conv, "note", it, "forgotten_page", by)
-                    for it in hits]
-            self.memories[conv] = [it for it in items if not any(it is h for h in hits)]
-            self._save_memories()
-            texts = [it["text"] for it in hits]
-            refs = {r for it in hits for r in chatlog.refs_of(it)}
-        elif kind == "episode":
-            store = self.episode_store
-            row = store.get(conv, item_id) if item_id else None
-            if row is None:
-                return ""
-            tids = [self._trash_put(conv, "episode", row, "forgotten_page", by)]
-            store.remove(conv, item_id)
-            self._save_episodes()
-            texts = [row.get("text", "")]
-            refs = set(chatlog.refs_of(row))
-        elif kind == "thread":
-            store = self.episode_store
-            thread = store.thread(conv)
-            if not thread or (item_id and thread.get("id") != item_id):
-                return ""
-            tids = [self._trash_put(conv, "thread", thread, "forgotten_page", by)]
-            store.drop_thread(conv)
-            self._save_episodes()
-            texts = [thread.get("text", "")]
-        elif kind == "core":
-            text = self.core_memory.get(conv)
-            if text is None:
-                return ""
-            tids = [self._trash_put(conv, "core", {
-                "text": text, "at": self.memory_state.core_at(conv) or 0.0},
-                "forgotten_page", by)]
-            del self.core_memory[conv]
-            self._save_core_memory()
-            texts = [text]
-        else:
-            return ""
-        for text in texts:
-            self.memory_state.add_tombstone(conv, memstore.token_hashes(text))
-            self._drop_vector(text)
-        if refs:
-            # The lines it cites go with it, so a review cannot raise it again;
-            # a line another note or event still rests on stays.
-            shared = {r for it in self.memories.get(conv, []) for r in chatlog.refs_of(it)}
-            shared |= {r for ep in self.episode_store.episodes(conv) for r in chatlog.refs_of(ep)}
-            self._purge_seqs(conv, refs - shared)
-        if kind in ("note", "episode"):
-            self._purge_echoes(conv, texts)
-        self._forgot(conv)
-        self._save_memory_state()
-        return next((t for t in tids if t), "-")
-
-    def _forget_note(self, conv: str, note_id: str) -> bool:
-        """The local page's forget: one note, by id or `embeddings.text_key`."""
-        return bool(self._forget_item(conv, "note", note_id))
-
-    def _trash_live(self, row: dict) -> bool:
-        """Is a trash row's item still in its store, unchanged: a crash came
-        between the append and the store's rewrite."""
-        conv, kind, item = row.get("conv"), row.get("kind"), row.get("item") or {}
-        text = item.get("text")
-        if kind == "note":
-            return any(it.get("id") == item.get("id") and it.get("text") == text
-                       for it in self.memories.get(conv, []) if item.get("id"))
-        if kind == "episode":
-            live = self.episode_store.get(conv, item.get("id", ""))
-            return bool(live) and live.get("text") == text
-        if kind == "thread":
-            live = self.episode_store.thread(conv)
-            return bool(live) and live.get("id") == item.get("id") \
-                and live.get("text") == text
-        if kind == "core":
-            return self.core_memory.get(conv) == text
-        return False
-
-    def _removed_items(self, conv: Optional[str] = None,
-                       now: Optional[float] = None) -> list[dict]:
-        """What can still be restored, newest first, each with its text and
-        the time it stops being restorable."""
-        rows = self.memory_trash.list(conv, now, live=self._trash_live)
-        return [dict(row, text=str((row.get("item") or {}).get("text", "")),
-                     until=memtrash.restorable_until(row)) for row in rows]
-
-    def _removed_reaching(self, conv: str, now: Optional[float] = None) -> list[dict]:
-        """What can be restored where `conv` is shown: its own removed items
-        and the removed notes of the other chats whose notes reach it."""
-        rows = self._removed_items(conv, now)
-        reader = channels.dm_user(conv)
-        if reader:
-            about = self._about_elsewhere(reader, conv)
-            rows += [r for r in self._removed_items(None, now) if r.get("kind") == "note"
-                     and about(str(r.get("conv") or ""), r.get("item") or {})]
-            rows.sort(key=lambda r: _num(r.get("at"), float) or 0.0, reverse=True)
-        return rows
-
-    def _restore(self, tid: str, by: str = "page") -> str:
-        """Bring a removed item back: "ok", "gone" (unknown, expired or already
-        restored), "exists" (it is there already) or "invalid" (it no longer
-        passes the memory checks). What it replaces goes to the trash."""
-        now = time.time()
-        row = self.memory_trash.get(str(tid or ""))
-        if row is None or "restored_at" in row or memtrash.restorable_until(row) <= now:
-            return "gone"
-        conv, kind = row["conv"], row["kind"]
-        item = dict(row["item"])
-        # A person put it back: the character leaves it alone for a while.
-        mark = {"restored": True, "restored_at": now}
-        if kind == "note":
-            text = self._validate_memory_candidate(item.get("text"))
-            if not text or text != item.get("text"):
-                return "invalid"
-            items = self.memories.setdefault(conv, [])
-            live = next((it for it in items
-                         if item.get("id") and it.get("id") == item["id"]), None)
-            if live is not None:
-                if live.get("text") == text:
-                    return "exists"
-                self._trash_put(conv, "note", live, "replaced", by, ref=item["id"])
-                live.clear()
-                live.update(item, **mark)
-                self._save_memories()
-            elif any(it.get("text") == text for it in items):
-                return "exists"
-            else:
-                self._append_memory(conv, dict(item, **mark))
-        elif kind in ("episode", "thread"):
-            limit = (episodes_mod.EPISODE_MAX_CHARS if kind == "episode"
-                     else episodes_mod.THREAD_MAX_CHARS)
-            text = self._validate_memory_text(item.get("text"), limit, markers=True)
-            if not text:
-                return "invalid"
-            store = self.episode_store
-            if kind == "episode":
-                live = store.get(conv, item.get("id", "")) if item.get("id") else None
-                if live is not None:
-                    if live.get("text") == item["text"]:
-                        return "exists"
-                    self._trash_put(conv, "episode", live, "replaced", by, ref=item["id"])
-                    live.clear()
-                    live.update(item, **mark)
-                else:
-                    store.add(conv, dict(item, **mark))
-            else:
-                live = store.thread(conv)
-                if live and live.get("text") == item["text"]:
-                    return "exists"
-                if live:
-                    self._trash_put(conv, "thread", live, "rewritten", by)
-                store._entry(conv)["thread"] = dict(item, **mark)
-            self._save_episodes()
-        elif kind == "core":
-            text = self._validate_memory_candidate(
-                item.get("text"), max_chars=self.CORE_MEMORY_MAX_CHARS + 3)
-            if not text:
-                return "invalid"
-            live = self.core_memory.get(conv)
-            if live == text:
-                return "exists"
-            if live:
-                self._trash_put(conv, "core", {
-                    "text": live, "at": self.memory_state.core_at(conv) or 0.0},
-                    "rewritten", by)
-            self.core_memory[conv] = text
-            self._save_core_memory()
-            self.memory_state.set_core_at(conv, now)
-            self._save_memory_state()
-        else:
-            return "invalid"
-        try:
-            self.memory_trash.mark_restored(row["tid"], now)
-        except OSError as e:
-            logger.warning("[Agent] memory trash append failed: %s", e)
-        return "ok"
-
     def _forget_chat(self, conv: str) -> bool:
-        """Forget this chat: every fact, event, the summary, the core note,
-        the recent lines and the chat's trash rows. Nothing is restorable."""
+        """Forget this chat's lines: the turns, the recent file and the log.
+        Nothing is restorable. Whether anything went."""
         changed = False
-        rows = self.memories.pop(conv, None)
-        if rows is not None:
-            changed = True
-            self._save_memories()
-        store = self.episode_store
-        old = store.data.get(conv) or {}
-        if store.drop_conv(conv):
-            changed = changed or bool(old.get("episodes") or old.get("thread"))
-            self._save_episodes()
-        if self.core_memory.pop(conv, None) is not None:
-            changed = True
-            self._save_core_memory()
-        try:
-            trashed = self.memory_trash.drop_where(lambda row: row["conv"] == conv)
-        except OSError as e:
-            logger.warning("[Agent] memory trash rewrite failed: %s", e)
-            trashed = []
-        changed = changed or bool(trashed)
         self._forgot(conv)
         self.memory_state.drop_conv(conv)
         self._save_memory_state()
-        # Replies awaiting a reaction hold the chat's own lines as context.
-        pending = getattr(self, "pending_reactions", None)
-        if pending is not None:
-            pending.drop_conversation(channels.learning_key(conv))
         uid = channels.dm_user(conv)
-        # A bare reader id is also a QQ group's key: DM state only by reader.
         by_reader = {uid, conv} - {""} if uid else set()
-        for name, keys in (("buffers", {conv}), ("_spill", {conv}),
-                           ("window_seq", {conv}), ("folded_upto", {conv}),
+        for name, keys in (("window_seq", {conv}), ("folded_upto", {conv}),
                            ("dm_history", by_reader), ("_dm_unanswered", by_reader),
                            ("_dm_spill", by_reader)):
             held = getattr(self, name, None)
@@ -1274,42 +400,358 @@ class Memory:
             changed = self.chat_log.drop(conv) or changed
         except (OSError, chatlog.LockUnavailable) as e:
             logger.warning("[Agent] chat log not removed: %s", e)
-        for row in (rows or []) + [r.get("item") or {} for r in trashed]:
-            self._drop_vector(row.get("text", ""))
-        for ep in old.get("episodes") or []:
-            self._drop_vector(ep.get("text", ""))
-        self._final_copies(lambda key, _row: key != conv)
+        self._final_copies()
         return changed
 
-    def _validate_memory_text(self, text, max_chars: int, markers: bool = False) -> str:
-        """The memory validator; with `markers`, the chat's own [image:...]
-        and [sticker] markers are first written as plain words."""
-        if markers:
-            text = memstore.relax_markers(text)
-        return self._validate_memory_candidate(text, max_chars=max_chars)
+    async def forget_chats(self, conversation: str, keep: list[str]) -> int:
+        """Forget the lines of the chat `conversation`, with nothing kept to
+        restore, and with it every chat the page no longer lists; the chats in
+        `keep` stay. How many chats held lines."""
+        from .dm import chat_key
+        conv = chat_key(conversation)[1]
+        kept = {chat_key(c)[1] for c in keep}
+        count = 0
+        for key in [conv, *sorted(self._page_convs() - kept - {conv})]:
+            async with self.locks[key]:
+                count += self._forget_chat(key)
+        return count
 
-    def _note_subject(self, group_id: str, text: str, saver: str,
-                      saver_name: str, spec: chatlangs.Spec) -> tuple[str, str]:
-        """Who a saved note is about: the saver when it says "I" or names them,
-        else a member it names, else nobody."""
-        first_person = spec.first_person
-        if (first_person and re.search(first_person, text, re.IGNORECASE)) or (
-                saver_name and len(saver_name) >= 2 and saver_name in text):
-            return saver, saver_name
-        return self._memory_subject(group_id, text)
+    # ---- the one person of the app's own chats (person.py) ------------------
+
+    def _person_chat(self, conv: str) -> bool:
+        """The app's own chat with its one person: what it learns of them is
+        kept once, in person.json, for every chat of theirs."""
+        return channels.platform_of(conv) == PAGE_PLATFORM and bool(channels.dm_user(conv))
+
+    @property
+    def person_store(self) -> person.Person:
+        """Loaded on first use. A damaged file raises MemoryFileDamaged."""
+        store = self._sidecar("_person_store", person.Person,
+                              self.memory_file.with_name(person.FILE))
+        if store._data is None:
+            store.load()
+        return store
+
+    def _save_person(self) -> None:
+        try:
+            self.person_store.save()
+        except OSError as e:
+            logger.warning("[Agent] person.json save failed: %s", e)
+
+    def _page_convs(self) -> set[str]:
+        """Every page chat the agent holds lines of: in the turns, the recent
+        file or a log."""
+        keys = {channels.dm_routing_key(u) for u in getattr(self, "dm_history", {})}
+        keys |= {k if k.startswith("private:") else channels.dm_routing_key(k)
+                 for k in getattr(self, "_dm_spill", {})}
+        recent = getattr(self, "_recent", None)
+        if recent is not None:
+            keys |= set(recent.convs)
+        try:
+            keys |= self.chat_log.private_chats(PAGE_PLATFORM)
+        except OSError as e:
+            logger.warning("[Agent] chat logs not listed: %s", e)
+        return {k for k in keys if self._person_chat(k)}
+
+    def _tell_profile(self, rows: list[dict], now: float) -> None:
+        """What the person said they like, do not want, or how they want to be
+        treated also goes to the profile the finds are ranked by."""
+        from . import profile
+        runtime = today_runtime(self)
+        for row in rows:
+            kind, text = row.get("kind"), row["text"]
+            try:
+                if kind == "like":
+                    profile.like(runtime, person.topic_of(text), now, words=text)
+                elif kind == "dislike" and person.refuses(text):
+                    about = person.about_of(row.get("slot", ""), text)
+                    profile.dislike(runtime, person.topic_of(text), about, now, words=text)
+                elif kind == "form":
+                    short, form_kind = person.form_of(text)
+                    if short is not None or form_kind is not None:
+                        profile.form(runtime, short, form_kind, now, words=text)
+                elif kind == "manner":
+                    profile.manner(runtime, text, now)
+            except (OSError, ValueError) as e:
+                logger.warning("[Agent] profile not told (%s): %s", kind, e)
+
+    def _person_turn(self, conv: str, said: str, reply: str, mem, *,
+                     before: str = "", refs=()) -> None:
+        """Keep what a sent reply's `mem` operations say of the person, as
+        person.apply_turn checks them; a turn they asked not to keep keeps
+        nothing, and its words only as hashes."""
+        store = self.person_store
+        now = time.time()
+        if person.unsaid(said):
+            store.tomb(said, now)
+            self._save_person()
+            logger.info("[Agent] person: a turn not kept (%s)", conv)
+            return
+        ops = []
+        for op in person.read_ops(mem):
+            text = op.get("text") or op.get("what")
+            if op["op"] == "asked" or self._validate_memory_candidate(str(text or "")):
+                ops.append(op)
+        turn = person.Turn(said=_strip_web_desc(said), before=before, reply=reply, at=now, conv=conv,
+                           refs=tuple(refs), tz=self._prompt_tz())
+        out = person.apply_turn(store, ops, turn)
+        if not (out.facts or out.asked):
+            if out.refused:
+                logger.info("[Agent] person: nothing kept, refused %s", dict(out.refused))
+            return
+        self._save_person()
+        self._tell_profile(out.facts, now)
+        # Never the text: a forgotten thing must not live on in the log.
+        logger.info("[Agent] person: %d facts, %d asked%s", len(out.facts), len(out.asked),
+                    f", refused {dict(out.refused)}" if out.refused else "")
+
+    def _drop_unsaid(self, conv: str, said: str, reply: str) -> dict:
+        """After the reply to a turn they asked not to keep: the turn, its
+        reply too (which often repeats it), leaves the turns, the recent file
+        and the log. What the page drops from its own copy."""
+        lines = [said, reply]
+        line_set = {" ".join(x.split()) for x in lines}
+        self._purge_lines(conv, lambda text: " ".join(text.split()) in line_set
+                          or any(" ".join(t.split()) in line_set for t in text.split("\n")))
+        return {"lines": lines}
+
+    def _person_command(self, conv: str, kind: str, arg: str, code: str) -> str:
+        """A memory command in a page chat, on the one person's store."""
+        spec = chatlangs.spec(code)
+        store = self.person_store
+        now = time.time()
+
+        def say(key: str) -> str:
+            return self._memory_reply(key, code)
+
+        if kind == "remember":
+            content = re.sub(spec.note_lead, "", arg.strip(), flags=re.IGNORECASE) if spec.note_lead else arg.strip()
+            if not content.strip(_QUERY_TRIM):
+                return say("remember_what")
+            if person.secret(content):
+                logger.info("[Agent] person: a secret not kept")
+                return say("secret")
+            content = self._validate_memory_candidate(content)
+            if not content:
+                return say("not_instructions")
+            # Each thing it says, typed and slotted in code as a turn's operation would be: a name names
+            # them, a new home replaces the old, a like or a dislike reaches the finds.
+            facts, kept = [], []
+            for fact_kind, slot, text in person.command_facts(content):
+                due = fact_kind == "other" and timewords.resolve_future(text, now, self._prompt_tz(), (code,))
+                if due:
+                    kept.append(store.put_plan(text, due, now, conv=conv))
+                    continue
+                row, _old = store.put_fact(fact_kind, slot, text, now, src="command", conv=conv, imp=4)
+                facts.append(row)
+                kept.append(row)
+            self._save_person()
+            self._tell_profile(facts, now)
+            colon, sep = person.marks(code)
+            return say("noted") + colon + sep.join(person.second_person(r["text"], code) for r in kept)
+        if kind == "recall":
+            lines = person.listing(store, code)
+            if not lines:
+                return say("empty")
+            lines = [_FULL_STOP_RE.sub(" ", line).strip() for line in lines]
+            return say("recall_head") + "\n" + "\n".join(lines)
+        if kind == "forget":
+            query = _forget_query(arg, spec)
+            if not query or query.lower() in spec.everything:
+                return say("forget_what")
+            if len(query) < (2 if _HAS_CJK.search(query) else 3):
+                return say("forget_what")
+            gone, lines = self._forget_everywhere(conv, [query], [], now, code=code)
+            if not (gone or lines):
+                return say("nothing_to_forget")
+            # What went, named: the kept things it took, else the words it took from the chats.
+            colon, sep = person.marks(code)
+            named = [person.second_person(r["text"], code) for r in gone][:3] or [query]
+            return say("forgotten") + colon + sep.join(named)
+        # forget_that: what they said just before.
+        lines = self._last_said(conv)
+        if not lines:
+            return say("forget_what")
+        rows = [r for r in store.facts() + store.plans("open", "asked")
+                if set(r.get("refs") or ()) & {seq for seq, _t in lines}
+                or any(len(_focus_tokens(r["text"], "zh") & _focus_tokens(t, "zh")) >= 2
+                       for _seq, t in lines)]
+        texts = [t for _seq, t in lines] + [r["text"] for r in rows]
+        words = self._telling_words([r["text"] for r in rows], conv, [t for _s, t in lines])
+        replies = self._replies_after(conv, {seq for seq, _t in lines})
+        gone, _lines = self._forget_everywhere(conv, words, texts, now, replies, code=code)
+        colon, sep = person.marks(code)
+        named = [person.second_person(r["text"], code) for r in gone][:3]
+        return say("forgotten") + (colon + sep.join(named) if named else "")
+
+    def _replies_after(self, conv: str, seqs: set[int]) -> list[str]:
+        """The character's lines that answered the lines `seqs` names."""
+        out, after = [], False
+        for row in self._log_rows(conv) or self.chat_log.read(conv):
+            if self._own_line(row):
+                if after:
+                    out.append(str(row.get("text") or ""))
+            else:
+                after = _num(row.get("seq"), int) in seqs
+        return out
+
+    def _last_said(self, conv: str) -> list[tuple[int, str]]:
+        """(seq, text) of what the person said last before this command,
+        going back over short lines ("嗯", "哎不想他了") up to three of theirs."""
+        rows = [r for r in self._log_rows(conv) if not r.get("self") and isinstance(r.get("text"), str)]
+        if not rows:
+            rows = [r for r in self.chat_log.read(conv) if not self._own_line(r)]
+        out = []
+        for row in reversed(rows):
+            text = row["text"].strip()
+            if not text or self._parse_memory_command(text) is not None:
+                continue
+            out.append((_num(row.get("seq"), int), text))
+            if len(_focus_tokens(text, "zh")) >= (8 if _HAS_CJK.search(text) else 5) or len(out) == 3:
+                break
+        return out
+
+    def _telling_words(self, texts: list[str], conv: str, said: list[str]) -> list[str]:
+        """The words that pick out a forgotten thing in other lines: the
+        two-character pieces (or whole words) of its facts that no other line
+        of this chat uses, outside what was said and the reply after it."""
+        own = set()
+        for text in texts:
+            own |= {t for t in _focus_tokens(text, "zh") if len(t) >= 2}
+        if not own:
+            return []
+        others = set()
+        rows = self._log_rows(conv) or self.chat_log.read(conv)
+        said_set = {" ".join(s.split()) for s in said}
+        skip_next = False
+        for row in rows:
+            text = str(row.get("text") or "")
+            if " ".join(text.split()) in said_set:
+                skip_next = True
+                continue
+            if skip_next and self._own_line(row):
+                skip_next = False
+                continue
+            skip_next = False
+            others |= _focus_tokens(text, "zh")
+        for fact in self.person_store.facts():
+            if fact["text"] not in texts:
+                others |= _focus_tokens(fact["text"], "zh")
+        return sorted(own - others)
+
+    def _forget_everywhere(self, conv: str, words: list[str], texts: list[str], now: float,
+                           replies: Iterable[str] = (), *, chats: bool = True,
+                           code: str = "") -> tuple[list[dict], int]:
+        """Forget at once: the store's rows and summary, the profile, the
+        trash and the daily copies; the words stay only as hashes. With
+        `chats`, in every page chat each sentence holding them (turns, recent
+        file, logs) becomes the forgotten mark of the language `code`, and
+        what the page marks in its copies is left for the answer to carry;
+        `replies` are this chat's answers to it, marked whole.
+        Returns (the store rows that went, how many chat lines changed)."""
+        store = self.person_store
+        said = person.forget_hit(words, texts)
+        replies = [r for r in replies if r.strip()]
+        whole = {" ".join(r.split()) for r in replies}
+
+        def hit(text: str) -> bool:
+            return said(text) or " ".join(text.split()) in whole
+        gone = store.forget(hit, now)
+        for text in words + texts:
+            store.tomb(text, now)
+        self._save_person()
+        try:
+            memstore.refresh_backup(store.path)
+        except OSError as e:
+            logger.warning("[Agent] person.json daily copy not refreshed: %s", e)
+        from . import profile
+        tokens = list(words) + [person.topic_of(r["text"]) for r in gone] + [r["text"] for r in gone]
+        try:
+            profile.forget(today_runtime(self), tokens)
+        except (OSError, ValueError) as e:
+            logger.warning("[Agent] profile forget failed: %s", e)
+        lines = 0
+        code = code or self.chat_lang
+        for room in self._page_convs() | {conv}:
+            if chats:
+                lines += self._purge_lines(room, hit, lambda text: person.scrub(text, hit, code))
+            self._forgot(room)
+        self._final_copies()
+        if chats:
+            self.__dict__.setdefault("_page_scrub", {})[conv] = {"words": list(words), "texts": list(texts),
+                                                                 "lines": replies, "mark": code}
+        logger.info("[Agent] forgotten: %d rows, %d chat lines", len(gone), lines)
+        return gone, lines
+
+    def _person_restore(self, tid: str) -> Optional[dict]:
+        """Put a replaced or edited fact or plan back from the person's trash;
+        a fact reaches the profile again too."""
+        now = time.time()
+        row = self.person_store.restore(tid, now)
+        if row is not None:
+            self._save_person()
+            if row.get("kind"):
+                self._tell_profile([row], now)
+        return row
+
+    # ---- the page's own view of the store (dashboard.py) ----------------------
+
+    def _person_forget(self, conv: str, item_id: str, chats: bool = False) -> Optional[dict]:
+        """Forget one fact or plan from the page's view, with no undo; with
+        `chats`, also from the chats as a forget in the chat does. What the
+        page marks in its copies ({} for none), or None when the item is
+        already gone."""
+        row = self.person_store.get(item_id)
+        if row is None:
+            return None
+        texts = [row["text"]] + ([row["said"]] if row.get("said") else [])
+        # In the chats, also the lines that name its thing ("芒果" of "我对芒果过敏").
+        words = texts + ([person.thing_of(row)] if chats and person.thing_of(row) else [])
+        self._forget_everywhere(conv, words, texts, time.time(), chats=chats)
+        return self.__dict__.get("_page_scrub", {}).pop(conv, {})
+
+    def _person_edit(self, item_id: str, text: str) -> Optional[dict]:
+        """The person's own words for one fact or plan; the old ones go to
+        the trash, to be put back. None when the item or the words fail."""
+        text = self._validate_memory_candidate(text, max_chars=person.TEXT_MAX)
+        if not text:
+            return None
+        now = time.time()
+        row = self.person_store.edit(item_id, text, now)
+        if row is None:
+            return None
+        self._save_person()
+        if not item_id.startswith("p"):
+            self._tell_profile([row], now)
+        return row
+
+    def _person_forget_all(self) -> int:
+        """Everything the store knows of the person goes, and from the profile
+        too; what they said in the chats stays until those are forgotten."""
+        from . import profile
+        store = self.person_store
+        texts = [r["text"] for r in store.facts(active=False) + store.plans()]
+        now = time.time()
+        n = store.forget_all(now)
+        self._save_person()
+        try:
+            memstore.refresh_backup(store.path)
+        except OSError as e:
+            logger.warning("[Agent] person.json daily copy not refreshed: %s", e)
+        try:
+            profile.forget(today_runtime(self), texts + [person.topic_of(x) for x in texts])
+        except (OSError, ValueError) as e:
+            logger.warning("[Agent] profile forget failed: %s", e)
+        logger.info("[Agent] person: forgot everything (%d rows)", n)
+        return n
 
     def _memory_reply(self, key: str, code: str) -> str:
         return random.choice(_COMMAND_REPLIES[code][key])
 
-    def _names_me(self, text: str) -> bool:
-        """Is this persona named in `text`: one rule for name calls, the
-        missed-mention catch-up and the memory commands."""
-        return mentions_name(text, self.persona_name,
-                             getattr(self, "persona_aliases", ()))
-
     def _memory_cmd_patterns(self) -> list:
         """[(code, spec, {kind: regex or [regexes]})] for every chat language,
-        cached per persona_name and aliases."""
+        cached per persona_name and aliases. The name may be left out, and
+        the fillers a chat language allows may come first ("算了，忘掉阿杰")."""
         names = (self.persona_name, tuple(getattr(self, "persona_aliases", ())))
         cached = getattr(self, "_mem_cmd_pats", None)
         if cached and cached[0] == names:
@@ -1320,12 +762,10 @@ class Memory:
         sep = r"\s*[：:，,]?\s*"
         table = []
         for code, spec in chatlangs.SPECS.items():
-            if name:
-                vocative = f"(?:{spec.vocative})?" if spec.vocative else ""
-                head = (lead + r"(?:@\S+\s*)*?@?" + name + vocative
-                        + r"\s*[，,:：、]?\s*")
-            else:
-                head = lead + r"(?:@\S*\s*)?[，,]?\s*"
+            vocative = f"(?:{spec.vocative})?" if spec.vocative else ""
+            filler = (rf"(?:(?:{spec.lead_in})[\s，,、:：!！.。~～]*)*" if spec.lead_in else "")
+            called = (r"(?:(?:@\S+\s*)*?@?" + name + vocative + r"\s*[，,:：、]?\s*)?") if name else ""
+            head = lead + called + filler
             remember = [re.compile(head + f"(?:{spec.remember})" + spec.not_a_note
                                    + sep + r"(.+)", re.IGNORECASE)]
             forget = [re.compile(head + f"(?:{spec.forget})" + spec.not_a_delete
@@ -1345,176 +785,9 @@ class Memory:
                 "forget": forget,
                 "recall": re.compile(head + f"(?:{spec.recall})" + tail
                                      + r"[\s?？!！.。~～]*$", re.IGNORECASE),
-                "learned": re.compile(head + f"(?:{spec.learned})", re.IGNORECASE),
             }))
         self._mem_cmd_pats = (names, table)
         return table
-
-    @staticmethod
-    def _evict_memory(items: list[dict], now: Optional[float] = None) -> Optional[dict]:
-        """Drop and return one entry for the cap: the auto memory least worth
-        keeping (`ranking.retention`; on notes without importance or use, the
-        oldest by `time`, which merges refresh), else the first entry."""
-        if not items:
-            return None
-        autos = [i for i, it in enumerate(items) if it.get("auto")]
-        if not autos:
-            return items.pop(0)
-        now = time.time() if now is None else now
-
-        def worth(i: int) -> tuple:
-            it = items[i]
-            last = max(_num(it.get("time")), _num(it.get("used")))
-            return (ranking.retention(it.get("imp"), it.get("uses"), last, now),
-                    _num(it.get("time")), i)
-        return items.pop(min(autos, key=worth))
-
-    def _save_auto_memory(self, group_id: str, text: str) -> None:
-        text = self._validate_memory_candidate(text)
-        if not text:
-            return
-        items = self.memories.get(group_id, [])
-        if any(it["text"] == text for it in items):
-            return
-        now = time.time()
-        # Before the merge, which must not cross subjects.
-        uid, name = self._memory_subject(group_id, text)
-        said_by, said_name = ("", "") if channels.is_dm(group_id) else \
-            self._claimed_by(group_id, text, uid)
-        old = self._restated_memory(items, text, now, uid,
-                                    room=not channels.is_dm(group_id), said_by=said_by)
-        # A shorter restatement is added beside the note rather than dropped.
-        if old is not None and len(text) >= len(old["text"]):
-            # Before `time` is overwritten, or `born` would move on every merge.
-            old.setdefault("born", float(old.get("time") or now))
-            old["text"] = text
-            old["time"] = now
-            old.pop("tidied", None)
-            old.pop("checked", None)
-            # Only a DM gets here with a subject the note lacked.
-            if uid and not old.get("user_id"):
-                old["user_id"], old["user_name"] = uid, name
-            if not old.get("id"):
-                old["id"] = memstore.new_id("m", self._note_ids(group_id))
-            refs = chatlog.merge_refs(chatlog.refs_of(old), self._cause_refs(group_id, text))
-            if refs:
-                old["refs"] = refs
-            self._save_memories()
-            # Never the text: a forgotten note must not live on in the log.
-            logger.info("[Agent] auto-memory updated (group=%s, %d chars)",
-                        group_id, len(text))
-            self._maybe_consolidate(group_id, "notes")
-            return
-        item: dict = {"text": text, "time": now, "born": now, "auto": True,
-                      "imp": memstore.IMP_REPLY, "uses": 0, "used": 0.0,
-                      "src": "reply"}
-        if uid:
-            item["user_id"] = uid
-            item["user_name"] = name
-        if said_by:
-            # Another member's word about them: stays in this room.
-            item["said_by"] = said_by
-            if said_name:
-                item["said_by_name"] = said_name
-        refs = self._cause_refs(group_id, text)
-        if refs:
-            item["refs"] = refs
-        self._append_memory(group_id, item)
-        logger.info("[Agent] auto-memory (group=%s%s, %d chars)", group_id,
-                    ", about a member" if "user_id" in item else "", len(text))
-        self._maybe_consolidate(group_id, "notes")
-
-    def _claimed_by(self, group_id: str, text: str, uid: str) -> tuple[str, str]:
-        """(uid, name) of the member whose recent words carry a reply's note
-        about `uid` better than `uid`'s own do, or ("", ""): then the note is
-        their claim, not the subject's fact."""
-        if not uid:
-            return "", ""
-        subject = self._same_person(uid)
-        names = {str(m.get("name") or "") for m in self.buffers.get(group_id, [])
-                 if str(m.get("user_id") or "") in subject}
-        tokens = _focus_tokens(text, "zh") - _focus_tokens(" ".join(names), "zh")
-        if not tokens:
-            return "", ""
-        said: dict[str, list[str]] = {}
-        who: dict[str, str] = {}
-        for m in list(self.buffers.get(group_id, []))[-_CLAIM_LINES:]:
-            u = str(m.get("user_id") or "")
-            if u:
-                said.setdefault(u, []).append(f"{m.get('name', '')} {m.get('text', '')}")
-                who[u] = str(m.get("name") or "")
-
-        def share(u: str) -> float:
-            hay = " ".join(said[u]).lower()
-            return sum(1 for tok in tokens if tok in hay) / len(tokens)
-        own = max((share(u) for u in said if u in subject), default=0.0)
-        others = [(share(u), u) for u in said if u not in subject]
-        best, by = max(others, default=(0.0, ""))
-        if best >= _CLAIM_SHARE and best > own:
-            return by, who[by]
-        return "", ""
-
-    def _memory_subject(self, group_id: str, text: str) -> tuple[str, str]:
-        """Who `text` is about, as (user_id, user_name), or ("", ""): only names
-        seen in the buffer (plus the admin), two characters minimum."""
-        name_to_uid: dict[str, str] = {}
-        for m in self.buffers.get(group_id, []):
-            nm = m.get("name", "")
-            uid = m.get("user_id", "")
-            if nm and len(nm) >= 2 and uid:
-                name_to_uid.setdefault(nm, uid)
-        # The admin's account on this conversation's platform.
-        admin_uid = access.admin_on(channels.platform_of(group_id),
-                                    self._admins())
-        if admin_uid and self.admin_name and len(self.admin_name) >= 2:
-            name_to_uid.setdefault(self.admin_name, admin_uid)
-        for nm, uid in name_to_uid.items():
-            if nm in text:
-                return uid, nm
-        return "", ""
-
-    @staticmethod
-    def _restated_memory(items: list[dict], text: str, now: float,
-                         subject: str = "", room: bool = False, said_by: str = ""
-                         ) -> Optional[dict]:
-        """The auto note `text` is a fuller telling of, or None.
-
-        Only a note that keeps every old token and adds some ("dog" -> "cat"
-        drops one, so it stays a second note); only auto notes, within the
-        merge window, never across two named subjects, and in a `room` never
-        an unattributed note into one that names somebody.
-        """
-        # "zh" also keeps a one-character Han run, whatever the agent speaks.
-        fresh = _focus_tokens(text, "zh")
-        if len(fresh) < _MEMORY_MERGE_MIN_SHARED:
-            return None
-        best: Optional[dict] = None
-        best_dropped = 1.0
-        for it in items:
-            if not it.get("auto"):
-                continue
-            # From when it was written; `time` resets on every merge.
-            born = float(it.get("born") or it.get("time") or 0.0)
-            if now - born > _MEMORY_MERGE_WINDOW_S:
-                continue
-            if subject and it.get("user_id") and it["user_id"] != subject:
-                continue
-            # One member's word never rewrites another's, nor a fact of their own.
-            if str(it.get("said_by") or "") != said_by:
-                continue
-            # Filing a room's shared note under one member would hide it.
-            if room and subject and not it.get("user_id"):
-                continue
-            old_tokens = _focus_tokens(it.get("text", ""), "zh")
-            shared = fresh & old_tokens
-            if len(shared) < _MEMORY_MERGE_MIN_SHARED:
-                continue
-            dropped = len(old_tokens - fresh) / len(old_tokens)
-            # It has to add something too; an equal set is a reordering.
-            if (dropped <= _MEMORY_MERGE_MAX_DROPPED
-                    and len(fresh) > len(old_tokens) and dropped < best_dropped):
-                best, best_dropped = it, dropped
-        return best
 
     @staticmethod
     def _validate_memory_candidate(text: str, *, max_chars: int = 200) -> str:
@@ -1524,6 +797,10 @@ class Memory:
         note = str(text or "").strip().replace("\r", " ").replace("\n", " ")
         note = re.sub(r"\s+", " ", note)[:max_chars]
         if not note or any(token in note for token in ("<", ">", "{", "}", "[", "]")):
+            return ""
+        # An ID or card number, a password or a code is never kept, whoever writes it.
+        if person.secret(note):
+            logger.info("[Agent] a secret not kept")
             return ""
 
         low = note.lower()

@@ -1,0 +1,469 @@
+/* What the character did for a reply (activity.js): the live line while it works, the sentence above the
+   finished reply that opens to a timeline, and the sources under it. One quiet scale: 13px, 12px for the least. */
+
+/* ---- While it works: the step under way where the typing dots are. */
+.line.typing:has(.doing:not(:empty)) .dots {
+  display: none;
+}
+.line.typing:has(.doing:not(:empty)) .doing {
+  margin-left: 0;
+}
+.act-live-icon.i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-right: var(--pa-s2);
+  color: var(--pa-faint);
+}
+.act-live-head {
+  background: linear-gradient(90deg, var(--pa-muted) 0%, var(--pa-muted) 35%, var(--pa-ink) 50%, var(--pa-muted) 65%, var(--pa-muted) 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: act-shine 2.4s linear infinite;
+}
+.act-live-what {
+  margin-left: 6px;
+  color: var(--pa-faint);
+}
+@keyframes act-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .act-live-head {
+    animation: none;
+  }
+}
+
+/* ---- When done: one sentence above the reply, and the timeline it opens to. */
+.act {
+  margin: 0 0 var(--pa-s2);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.act-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border-radius: var(--pa-r-sm);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.act-head::-webkit-details-marker {
+  display: none;
+}
+.act-head:hover {
+  background: var(--pa-hover);
+  color: var(--pa-text);
+}
+.act-head:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 1px;
+}
+.act-sentence {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.act-took {
+  flex: none;
+  color: var(--pa-faint);
+  font-variant-numeric: tabular-nums;
+}
+.act-took::before {
+  content: "·";
+  margin-right: 6px;
+}
+.act-chevron.i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--pa-faint);
+  transition: transform var(--pa-t-fast) var(--pa-ease);
+}
+.act[open] > .act-head .act-chevron {
+  transform: rotate(90deg);
+}
+.act-steps {
+  margin: var(--pa-s2) 0 var(--pa-s1);
+  padding: 0;
+  list-style: none;
+}
+.act-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: var(--pa-s3);
+  padding-bottom: var(--pa-s3);
+}
+.act-step:last-child {
+  padding-bottom: 0;
+}
+/* The thread between one step and the next. */
+.act-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 28px;
+  bottom: 4px;
+  left: 11.5px;
+  width: 1px;
+  background: var(--pa-line);
+}
+.act-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+}
+.act-mark .i {
+  width: 14px;
+  height: 14px;
+}
+.act-body {
+  min-width: 0;
+  padding-top: 2px;
+}
+.act-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  color: var(--pa-text);
+  font-weight: 500;
+}
+.act-status {
+  color: var(--pa-faint);
+  font-weight: 400;
+}
+/* 继续 after a card nobody answered in time: under the latest reply only. */
+.act-go-on {
+  margin: 0 0 var(--pa-s2);
+}
+.chat-messages > :not(:last-child) .act-go-on {
+  display: none;
+}
+.act-detail {
+  color: var(--pa-muted);
+  overflow-wrap: anywhere;
+}
+.act-page {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  min-width: 0;
+  max-width: 100%;
+  width: fit-content;
+  color: var(--pa-muted);
+  text-decoration: none;
+}
+.act-page:hover .act-page-title {
+  color: var(--pa-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.act-page-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.act-page-host {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+/* A site's icon; its first letter until the icon comes, or when it has none. */
+.act-fav,
+.lk-fav {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* Icons are drawn for a light tab bar: on a small white tile they read in the dark too. */
+.act-fav.has-img,
+.lk-fav.has-img {
+  padding: 1px;
+  background: #ffffff;
+}
+.act-fav img,
+.lk-fav img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* The raw steps, for those who want them: a second, smaller fold. */
+.act-more {
+  margin-top: 2px;
+}
+.act-more-head {
+  width: fit-content;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  cursor: pointer;
+  list-style: none;
+}
+.act-more-head::-webkit-details-marker {
+  display: none;
+}
+.act-more-head::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 0 2px 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--pa-t-fast) var(--pa-ease);
+}
+.act-more[open] > .act-more-head::after {
+  transform: rotate(45deg);
+}
+.act-more-head:hover {
+  color: var(--pa-muted);
+}
+.act-more-label {
+  margin-top: 6px;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.act-more-pre,
+.act-more-text {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.act-more-pre {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+/* ---- Under the reply: the sites it drew on, opening to the pages. */
+.act-src {
+  margin-top: var(--pa-s3);
+  font-size: var(--pa-fs-xs);
+}
+.act-src-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+.act-src-head::-webkit-details-marker {
+  display: none;
+}
+.act-src-head:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+  border-radius: var(--pa-r-pill);
+}
+.act-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 6px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-surface);
+  color: var(--pa-muted);
+  white-space: nowrap;
+  transition: background var(--pa-t-fast), border-color var(--pa-t-fast);
+}
+.act-chip-more {
+  padding: 0 10px;
+}
+.act-src-head:hover .act-chip,
+.act-src[open] .act-chip {
+  border-color: var(--pa-line-strong);
+}
+.act-src-head:hover .act-chip {
+  background: var(--pa-hover);
+}
+.act-src-list {
+  max-width: 520px;
+  margin: var(--pa-s2) 0 0;
+  padding: var(--pa-s1);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  list-style: none;
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.act-src-list .act-page {
+  width: auto;
+  padding: 6px 8px;
+  border-radius: var(--pa-r-sm);
+}
+.act-src-list .act-page:hover {
+  background: var(--pa-hover);
+}
+.act-src-list .act-page-title {
+  flex: 1;
+}
+
+/* ---- Under the reply: the files it changed (本次改动), each edit's difference, and 撤销这次的改动. */
+.act-chg {
+  margin-top: var(--pa-s3);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.act-chg-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border-radius: var(--pa-r-sm);
+  color: var(--pa-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.act-chg-head::-webkit-details-marker {
+  display: none;
+}
+.act-chg-head:hover {
+  background: var(--pa-hover);
+}
+.act-chg-icon.i {
+  width: 15px;
+  height: 15px;
+  color: var(--pa-faint);
+}
+.act-chg-count {
+  color: var(--pa-faint);
+}
+.act-chg[open] .act-chevron {
+  transform: rotate(90deg);
+}
+.act-chg-list {
+  max-width: 560px;
+  margin: var(--pa-s2) 0 0;
+  padding: var(--pa-s1) var(--pa-s2);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  list-style: none;
+}
+.act-chg-row {
+  padding: 6px 0;
+}
+.act-chg-row + .act-chg-row {
+  border-top: 1px solid var(--pa-line);
+}
+.act-chg-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  min-width: 0;
+}
+.act-chg-op {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.act-chg-name {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pa-text);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.act-chg-name {
+  cursor: pointer;
+}
+button.act-chg-name:hover {
+  color: var(--pa-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.act-chg-where,
+.act-chg-lines {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.act-chg-lines {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.act-chg-foot {
+  margin-top: var(--pa-s2);
+}
+.act-chg-told {
+  margin: 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+/* A unified difference: whole lines, indentation kept, added and removed lines marked. */
+.act-diff {
+  margin: 4px 0 0;
+  padding: 6px 0;
+  max-height: 320px;
+  overflow: auto;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-xs);
+  line-height: 1.6;
+  white-space: pre;
+}
+.act-diff > span {
+  display: block;
+  padding: 0 10px;
+}
+.act-diff-add {
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+}
+.act-diff-del {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+.act-diff-hunk {
+  color: var(--pa-faint);
+}
+.shell-card .act-diff {
+  margin: 0 0 var(--pa-s3);
+}

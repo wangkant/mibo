@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>订单管理 - 小店后台</title>
+<style>
+body { margin: 0; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; background: #f0f2f5; }
+main { max-width: 900px; margin: 20px auto; background: #fff; padding: 16px 20px; border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; } th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+th { background: #fafafa; color: #666; } td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.st { padding: 1px 8px; border-radius: 10px; font-size: 12px; background: #eef; }
+</style></head>
+<body><main>
+<h2>全部订单（200）</h2>
+<table><thead><tr><th>订单号</th><th>下单时间</th><th>买家</th><th>商品</th><th>状态</th><th class="num">金额（元）</th></tr></thead><tbody id="rows"></tbody></table>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const BUYERS = ["王**", "李**", "张**", "刘**", "陈**", "杨**", "赵**", "黄**"];
+const GOODS = ["猫抓板", "猫砂 10L", "冻干零食", "逗猫棒", "猫粮 2kg", "饮水机", "猫窝", "指甲剪"];
+const STATES = ["待发货", "已发货", "已完成", "退款中"];
+// A-1143's amount changes with each reset of the site (tasks.t14_amount), so it is read, never remembered.
+fetch("/api/state").then((r) => r.json()).then(({ round }) => {
+for (let i = 0; i < 200; i++) {
+  const no = "A-" + (1001 + i);
+  const amount = no === "A-1143" ? 268.5 + 7 * ((round || 0) % 9) : ((i * 37) % 300) + 19.9;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${no}</td><td>11-${String(1 + (i % 18)).padStart(2, "0")} ${String(8 + (i % 12)).padStart(2, "0")}:${String((i * 7) % 60).padStart(2, "0")}</td>
+    <td>${BUYERS[i % 8]}</td><td>${GOODS[(i * 3) % 8]}</td><td><span class="st">${STATES[i % 4]}</span></td><td class="num">${amount.toFixed(2)}</td>`;
+  document.getElementById("rows").append(tr);
+}
+});
+</script></body></html>

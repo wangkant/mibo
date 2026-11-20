@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>圈子 · 关注动态</title>
+<style>
+body { margin: 0; font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f1f2f5; }
+.bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e5e5e5; padding: 10px 20px; font-weight: 700; color: #ff6a00; }
+.feed { max-width: 620px; margin: 16px auto; }
+.post { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.who { display: flex; align-items: center; gap: 8px; } .who b { color: #333; } .who span { color: #999; font-size: 12px; }
+.acts { display: flex; gap: 28px; margin-top: 8px; color: #888; }
+.acts button { border: 0; background: none; color: inherit; cursor: pointer; display: flex; gap: 4px; align-items: center; font: inherit; }
+.like-btn.on { color: #ff6a00; }
+.more { text-align: center; color: #999; padding: 20px; }
+</style></head>
+<body>
+<div class="bar">圈子</div>
+<div class="feed" id="feed"></div>
+<div class="more" id="more">加载中…</div>
+<script src="/t/kit.js"></script>
+<script>
+const AUTHORS = ["阿杰", "Momo", "老王说车", "小鹿", "陈一一", "大橘猫", "Kevin", "南风", "小葵", "旅行的猫"];
+const TEXTS = ["今天的晚霞好看到想尖叫", "推荐一家很好吃的面馆", "周末去爬山了，腿已经不是自己的了", "新买的键盘到了，手感一流",
+  "有没有人一起看这周的新片？", "猫又把杯子推下桌了", "终于把书看完了，结尾好意外", "地铁上看到一个超可爱的小朋友"];
+let page = 0, loading = false;
+function card(i) {
+  const author = i === 37 ? "林小雨" : (i === 12 ? "林小语" : AUTHORS[(i * 3) % AUTHORS.length]);
+  const text = i === 37 ? "第一次自己做的提拉米苏，居然成功了！" : TEXTS[i % TEXTS.length];
+  const el = document.createElement("article");
+  el.className = "post";
+  el.innerHTML = `<div class="who"><b></b><span>${1 + (i % 23)} 小时前</span></div><p></p>
+    <div class="acts"><button class="like-btn"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M2 21h4V9H2zm20-11a2 2 0 0 0-2-2h-6.3l1-4.6V3a1.5 1.5 0 0 0-.4-1L13 1 6.6 7.4A2 2 0 0 0 6 9v10a2 2 0 0 0 2 2h9a2 2 0 0 0 1.8-1.2l3-7.1c.1-.2.2-.5.2-.7z"/></svg><span class="n">${(i * 17) % 90 + 3}</span></button>
+    <button class="cmt-btn"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M21 6h-2v9H6v2a1 1 0 0 0 1 1h11l4 4V7a1 1 0 0 0-1-1zm-4 6V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v14l4-4h10a1 1 0 0 0 1-1z"/></svg><span>${i % 9}</span></button></div>`;
+  el.querySelector("b").textContent = author;
+  el.querySelector("p").textContent = text;
+  const like = el.querySelector(".like-btn");
+  like.addEventListener("click", async () => {
+    if ((await post("/api/like", { post: "p" + i })).ok) {
+      like.classList.add("on");
+      like.querySelector(".n").textContent = Number(like.querySelector(".n").textContent) + 1;
+    }
+  });
+  return el;
+}
+function more() {
+  if (loading || page >= 6) return;
+  loading = true;
+  setTimeout(() => {
+    for (let i = page * 10; i < page * 10 + 10; i++) document.getElementById("feed").append(card(i));
+    page++;
+    loading = false;
+    if (page >= 6) document.getElementById("more").textContent = "没有更多了";
+  }, 700);
+}
+new IntersectionObserver((seen) => { if (seen[0].isIntersecting) more(); }).observe(document.getElementById("more"));
+</script></body></html>

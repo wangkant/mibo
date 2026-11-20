@@ -22,7 +22,7 @@
     {"text": "小夏 do you remember the night market", "kind": null},
     {"text": "小夏, forget it", "kind": null},
     {"text": "小夏 你都記得什麼", "kind": "recall"},
-    {"text": "小夏 你學到了什麼", "kind": "learned"}
+    {"text": "小夏 你學到了什麼", "kind": null}
   ],
   "first_person": [
     {"text": "我不吃辣", "mine": true},

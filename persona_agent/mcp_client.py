@@ -1,55 +1,56 @@
-"""A small MCP client: the part of the protocol a character needs to use the
-tools of servers its admin adds. `initialize`, `notifications/initialized`,
-`tools/list` and `tools/call`, over stdio (a child process speaking
-newline-delimited JSON-RPC) and over Streamable HTTP (a POST answered with
-JSON or an SSE stream, the `Mcp-Session-Id` header).
+"""One connection to an MCP server, on the official Python SDK (`mcp`).
 
-Everything a server sends is third-party data: sizes are capped, and only
-text content is passed on (other content is named).
+The SDK speaks the protocol: stdio (a child process, in a Windows job object or
+its own process group, no console window) and Streamable HTTP, the handshake of
+every protocol version, paging, and the server's own requests: elicitation (a
+form for the person to fill, or a page for them to open) goes to the caller's
+`elicit`, which shows it on the card; sampling and roots are not declared and
+are refused. What is ours: the program's cleaned environment, its folder and
+its stderr kept for the person, one task that holds the session open until it
+is closed or the server goes away, and failures named by a short code the page
+turns into words.
+
+Everything a server sends is third-party material: text is passed on, pictures
+shrunk for a model that takes them, and other content is named.
+
+A remote server that asks for a sign-in gets the SDK's own OAuth client
+(OAuthClientProvider: metadata discovery, dynamic registration, PKCE, refresh),
+its tokens and registration kept in the system's credential store (KeptTokens).
 """
 from __future__ import annotations
 
 import asyncio
-import collections
+import base64
+import contextlib
+import io
 import json
 import logging
 import os
 import re
 import shutil
-import subprocess
-import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote
 
-import httpx
-
-from . import __version__
+from . import __version__, secretstore
 
 logger = logging.getLogger("agent.tools")
 
-#: Newest first; the first is what this client asks for.
-PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
-#: One message from a server, in bytes.
-MAX_MESSAGE_BYTES = 2_000_000
-#: Pages of `tools/list` read, and tools kept, per server.
-MAX_LIST_PAGES = 10
-MAX_TOOLS = 64
-#: Lines of a server's stderr kept to explain why it stopped.
-STDERR_LINES = 12
-STDERR_LINE_CHARS = 300
-#: Seconds a stdio server has to exit after its input closes, then after a terminate.
-EXIT_GRACE_S = 2.0
-#: SSE reconnections for one request after the server closed the stream early.
-SSE_RECONNECTS = 5
-#: Redirects followed for one request, to the same host only.
-MAX_REDIRECTS = 3
-_REDIRECTS = (301, 302, 303, 307, 308)
+#: Pages of tools/list read from one server.
+MAX_LIST_PAGES = 20
+#: Characters of a server's stderr kept to explain why it stopped.
+STDERR_TAIL = 1500
+#: Characters of a server's `instructions` kept.
+INSTRUCTIONS_CHARS = 600
+#: Pictures of one result passed on, the long side they are shrunk to, and the largest one read.
+PICTURES = 3
+PICTURE_SIDE = 1280
+PICTURE_BYTES = 20_000_000
 
-# What a server program may inherit: where things are, the language, proxies and
-# certificates, and uv's and npm's own settings (minus anything named like a secret).
+# What a server program may inherit besides the SDK's own short list: proxies and
+# certificates, and the settings of the runtimes servers are started with.
 _ENV_KEEP = frozenset({
     "PATH", "PATHEXT", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "USERNAME", "USER", "LOGNAME",
     "SHELL", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432",
@@ -61,16 +62,10 @@ _ENV_KEEP = frozenset({
 _ENV_KEEP_PREFIXES = ("LC_", "XDG_", "UV_", "NPM_CONFIG_")
 _SECRET_NAME = re.compile(r"(_KEY|_TOKEN|_SECRET)$|PASSWORD|PASSWD|SECRET|_AUTH|APIKEY")
 
-# The installers' own variable for where they put uv, not a setting of the home.
-UV_DIR_ENV = "PERSONAGENT_UV_DIR"
-
-_CREATE_SUSPENDED = 0x4
-_CREATE_NO_WINDOW = 0x08000000
-
 
 class McpError(Exception):
     """A failure the page names: `code` is one of not_found, exited, refused,
-    timeout, oauth, http, protocol, too_large, closed, sse_unsupported."""
+    timeout, oauth, http, protocol, closed."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         super().__init__(f"{code}: {detail}" if detail else code)
@@ -81,20 +76,15 @@ class McpError(Exception):
 class ToolResult:
     text: str
     is_error: bool = False
-    #: Content that was not text, by its type ("image", "audio", ...).
+    #: Content that was neither text nor a picture kept, by its type ("audio", "image", ...).
     left_out: list = field(default_factory=list)
-
-
-def _visible_ascii(value: str) -> bool:
-    return bool(value) and all(0x21 <= ord(c) <= 0x7E for c in value)
+    #: Pictures as data URLs, shrunk (picture()).
+    pictures: list = field(default_factory=list)
 
 
 def uv_dirs() -> list[Path]:
-    """Where the installers put uv when it is not on PATH."""
-    dirs = []
-    if os.environ.get(UV_DIR_ENV):
-        dirs.append(Path(os.environ[UV_DIR_ENV]))
-    dirs.append(Path.home() / ".local" / "bin")
+    """Where uv's own installer puts it when it is not on PATH."""
+    dirs = [Path.home() / ".local" / "bin"]
     if os.name == "nt":
         dirs.append(Path.home() / ".cargo" / "bin")
     return dirs
@@ -102,7 +92,7 @@ def uv_dirs() -> list[Path]:
 
 def program_env(own: Optional[dict] = None) -> dict:
     """What a server program starts with: what a program needs to run and find
-    its tools here, never this service's own settings or anything named like a
+    its tools here, never this app's own settings or anything named like a
     secret, plus the server's own `env`."""
     from .home import FROM_ENV_FILE
 
@@ -125,8 +115,7 @@ def find_program(command: str, env: Optional[dict] = None, cwd: Optional[str] = 
         return ""
     if cwd and not Path(command).is_absolute() and ("/" in command or "\\" in command):
         command = str(Path(cwd) / command)
-    path = (env or os.environ).get("PATH") if env else None
-    found = shutil.which(command, path=path)
+    found = shutil.which(command, path=(env or {}).get("PATH") if env else None)
     if found:
         return found
     if Path(command).name in ("uv", "uvx") and not Path(command).parent.name:
@@ -138,585 +127,444 @@ def find_program(command: str, env: Optional[dict] = None, cwd: Optional[str] = 
 
 
 _CMD_META = re.compile(r'([()\][%!^"`<>&|;, *?])')
+# The child's own variable holding its command line, read by cmd.exe (see batch_launch).
+BATCH_LINE = "MIBO_BATCH_LINE"
 
 
 def _batch_arg(arg: str) -> str:
-    """One argument as cmd.exe passes it on to a batch file's %*: quoted for
-    the program that reads it, then every cmd metacharacter escaped twice,
-    once for the line and once for the batch file's own expansion."""
+    """One argument as cmd.exe hands it to a batch file's %*: quoted for the program that reads it, then
+    every cmd metacharacter escaped twice, once for the line and once for the batch file's own reading."""
     if any(c in arg for c in "\r\n\0"):
-        raise McpError("exited", "a batch program cannot take an argument that spans lines")
+        raise McpError("not_found", "a batch program cannot take an argument that spans lines")
     quoted = re.sub(r'(\\*)"', r'\1\1\\"', arg)
     quoted = '"' + re.sub(r"(\\*)$", r"\1\1", quoted) + '"'
     return _CMD_META.sub(r"^\1", _CMD_META.sub(r"^\1", quoted))
 
 
-def batch_command_line(program: str, args: list, env: dict) -> str:
-    """The command line that runs a .cmd or .bat file through cmd.exe with its
-    arguments intact, `&`, `|`, `%` and quotes included."""
+def batch_launch(program: str, args: list, env: dict) -> tuple[str, list, dict]:
+    """A .cmd or .bat shim (npx, most npm servers) run through cmd.exe with its arguments intact, `&`, `|`, `%`
+    and quotes included. The SDK hands a list to CreateProcess, which cmd.exe would read with its own rules,
+    so the escaped line goes in a variable of the child's and cmd.exe is given only its name."""
     comspec = env.get("COMSPEC") or os.path.join(env.get("SYSTEMROOT") or "C:\\Windows", "System32", "cmd.exe")
     line = " ".join([_CMD_META.sub(r"^\1", program), *(_batch_arg(str(a)) for a in args)])
-    return f'"{comspec}" /d /s /c "{line}"'
+    return comspec, ["/d", "/s", "/c", f"%{BATCH_LINE}%"], {**env, BATCH_LINE: line}
+
+
+def picture(data: str) -> str:
+    """A server's base64 picture as a JPEG or PNG data URL at most PICTURE_SIDE pixels on its long side, the size
+    the app sends pictures to a model at; "" when it is not a picture."""
+    from PIL import Image
+    try:
+        raw = base64.b64decode(data, validate=True)
+        if len(raw) > PICTURE_BYTES:
+            return ""
+        with Image.open(io.BytesIO(raw)) as image:
+            image.seek(0)
+            image.thumbnail((PICTURE_SIDE, PICTURE_SIDE))
+            clear = image.mode in ("RGBA", "LA", "P")
+            image = image.convert("RGBA" if clear else "RGB")
+            out = io.BytesIO()
+            image.save(out, "PNG" if clear else "JPEG", quality=80)
+    except (ValueError, OSError, Image.DecompressionBombError):
+        return ""
+    return f"data:image/{'png' if clear else 'jpeg'};base64,{base64.b64encode(out.getvalue()).decode()}"
 
 
 def result_of(raw: dict) -> ToolResult:
-    """A `tools/call` result as text; anything else is named, not passed on."""
-    if not isinstance(raw, dict):
-        raise McpError("protocol", "the tool's result is not an object")
-    texts, left_out = [], []
+    """A tools/call result: its text, and up to PICTURES of its pictures shrunk for a model that takes them;
+    anything else is named, not passed on."""
+    texts, pictures, left_out = [], [], []
     for item in raw.get("content") or ():
         kind = item.get("type") if isinstance(item, dict) else None
+        # A picture comes as image content, or as a resource holding an image's bytes.
+        held = (item.get("resource") or {}) if kind == "resource" else item
+        data = held.get("data" if kind == "image" else "blob") if kind in ("image", "resource") else None
+        shown = picture(data) if isinstance(data, str) and str(held.get("mimeType") or "").startswith("image/") \
+            and len(pictures) < PICTURES else ""
         if kind == "text" and isinstance(item.get("text"), str):
             texts.append(item["text"])
+        elif kind == "resource" and isinstance(held.get("text"), str):
+            texts.append(held["text"])
+        elif shown:
+            pictures.append(shown)
         else:
             left_out.append(str(kind or "unknown")[:32])
     structured = raw.get("structuredContent")
     if not texts and structured is not None:
         # The spec asks servers to send it as text as well; some do not.
         texts.append(json.dumps(structured, ensure_ascii=False))
-    return ToolResult("\n".join(texts), bool(raw.get("isError")), left_out)
+    return ToolResult("\n".join(texts), bool(raw.get("isError")), left_out, pictures)
 
 
-class _Session:
-    """What both transports share: the lifecycle and the two tool methods."""
+class _ReadWatch:
+    """The session's read stream, which sets `closed` when the server's side ends."""
 
-    protocol = ""
-    server_name = ""
+    def __init__(self, stream, closed: asyncio.Event) -> None:
+        self._stream, self._closed = stream, closed
 
-    def __init__(self) -> None:
-        self.tools_changed = asyncio.Event()
+    async def receive(self):
+        import anyio
+        try:
+            return await self._stream.receive()
+        except (anyio.EndOfStream, anyio.ClosedResourceError, anyio.BrokenResourceError):
+            self._closed.set()
+            raise
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        import anyio
+        try:
+            return await self.receive()
+        except (anyio.EndOfStream, anyio.ClosedResourceError):
+            raise StopAsyncIteration from None
+
+    async def __aenter__(self):
+        await self._stream.__aenter__()
+        return self
+
+    async def __aexit__(self, *exc):
+        self._closed.set()
+        return await self._stream.__aexit__(*exc)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+@contextlib.asynccontextmanager
+async def _watched(transport, closed: asyncio.Event):
+    async with transport as (read, write):
+        yield _ReadWatch(read, closed), write
+
+
+def _flat(error: BaseException) -> BaseException:
+    """The first real failure inside an exception group (anyio's task groups raise them)."""
+    while getattr(error, "exceptions", None):
+        error = error.exceptions[0]
+    return error
+
+
+class Connection:
+    """One server, held open by a task of its own: a program (`command`, `args`, `env`, `cwd`) or an address
+    (`url`, `headers`). `closed` is set when it ends for any reason; `changed` when it says its tools changed."""
+
+    def __init__(self, spec: dict, *, folder: Path, auth=None, elicit=None) -> None:
+        self.spec = spec
+        self.folder = Path(folder)
+        #: The OAuth client of a remote server that signs in (oauth_client), or None.
+        self.auth = auth
+        #: Answers what the server asks the person during a call: async (the request as a dict) -> the
+        #: ElicitResult as a dict. Without it elicitation is not declared.
+        self.elicit = elicit
+        #: Seconds of the call under way spent waiting for the person, which its time limit does not count.
+        self.waited = 0.0
+        self.asking = False
         self.closed = asyncio.Event()
+        self.changed = asyncio.Event()
+        self.client = None
+        self.instructions = ""
+        self.server_name = ""
+        self.last_status = 0
+        self._stop = asyncio.Event()
+        self._task: Optional[asyncio.Task] = None
+        self._errlog = None
 
-    async def request(self, method: str, params: dict, timeout: float):
-        raise NotImplementedError
+    @property
+    def stderr_path(self) -> Path:
+        return self.folder / "stderr.log"
 
-    async def notify(self, method: str, params: Optional[dict] = None) -> None:
-        raise NotImplementedError
+    def stderr_tail(self) -> str:
+        try:
+            text = self.stderr_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        return "\n".join(lines)[-STDERR_TAIL:]
 
-    async def close(self) -> None:
-        raise NotImplementedError
+    def _transport(self, stack: contextlib.AsyncExitStack):
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+        from mcp.client.streamable_http import streamable_http_client
+        from mcp.shared._httpx_utils import create_mcp_http_client
 
-    def _on_server_message(self, message: dict) -> Optional[dict]:
-        """A request or notification the server sent; the answer to send, if any."""
-        method = message.get("method")
-        if "id" in message:
-            if method == "ping":
-                return {"jsonrpc": "2.0", "id": message["id"], "result": {}}
-            # No roots, sampling or elicitation were declared.
-            return {"jsonrpc": "2.0", "id": message["id"],
-                    "error": {"code": -32601, "message": "Method not found"}}
-        if method == "notifications/tools/list_changed":
-            self.tools_changed.set()
-        return None
+        if self.spec.get("command"):
+            env = program_env(self.spec.get("env"))
+            cwd = self.spec.get("cwd") or str(self.folder)
+            program = find_program(self.spec["command"], env, cwd)
+            if not program:
+                raise McpError("not_found", self.spec["command"])
+            self.folder.mkdir(parents=True, exist_ok=True)
+            self._errlog = open(self.stderr_path, "w", encoding="utf-8", errors="replace")
+            stack.callback(self._errlog.close)
+            args = list(self.spec.get("args") or [])
+            if os.name == "nt" and Path(program).suffix.lower() in (".cmd", ".bat"):
+                program, args, env = batch_launch(program, args, env)
+            params = StdioServerParameters(command=program, args=args, env=env, cwd=cwd,
+                                           encoding_error_handler="replace")
+            return stdio_client(params, errlog=self._errlog)
 
-    async def initialize(self, timeout: float) -> None:
-        result = await self.request("initialize", {
-            "protocolVersion": PROTOCOL_VERSIONS[0], "capabilities": {},
-            "clientInfo": {"name": "personagent", "version": __version__}}, timeout)
-        if not isinstance(result, dict):
-            raise McpError("protocol", "the answer to initialize is not an object")
-        version = result.get("protocolVersion")
-        if version not in PROTOCOL_VERSIONS:
-            raise McpError("protocol", f"unsupported protocol version {str(version)[:40]}")
-        self.protocol = version
-        info = result.get("serverInfo")
-        self.server_name = str(info.get("name") or "")[:80] if isinstance(info, dict) else ""
-        await self.notify("notifications/initialized")
+        headers = dict(self.spec.get("headers") or {})
+        if self.spec.get("type") == "sse":
+            from mcp.client.sse import sse_client
+            return sse_client(self.spec["url"], headers=headers, auth=self.auth)
 
-    async def list_tools(self, timeout: float) -> list[dict]:
+        async def note(response) -> None:
+            self.last_status = response.status_code
+        client = create_mcp_http_client(headers=headers, auth=self.auth)
+        client.event_hooks["response"].append(note)
+        stack.push_async_callback(client.aclose)
+        return streamable_http_client(self.spec["url"], http_client=client)
+
+    async def _on_message(self, message) -> None:
+        import mcp_types as types
+        if isinstance(message, types.ServerNotification) and getattr(message, "method", "") == \
+                "notifications/tools/list_changed":
+            self.changed.set()
+
+    async def _on_elicit(self, context, params):
+        """The server asks the person for something (a form, or a page to open): `elicit` answers."""
+        import mcp_types as types
+        began, self.asking = time.monotonic(), True
+        try:
+            answer = await self.elicit(params.model_dump(by_alias=True, mode="json", exclude_none=True))
+        finally:
+            self.asking = False
+            self.waited += time.monotonic() - began
+        return types.ElicitResult(**answer)
+
+    async def _hold(self, ready: asyncio.Future) -> None:
+        from mcp import Client
+        from mcp_types import Implementation
+        try:
+            async with contextlib.AsyncExitStack() as stack:
+                transport = _watched(self._transport(stack), self.closed)
+                client = Client(transport, mode="auto", cache=None, message_handler=self._on_message,
+                                elicitation_callback=self._on_elicit if self.elicit else None,
+                                client_info=Implementation(name="Mibo", version=__version__))
+                await stack.enter_async_context(client)
+                self.client = client
+                self.instructions = str(client.instructions or "")[:INSTRUCTIONS_CHARS]
+                self.server_name = str(getattr(client.server_info, "name", "") or "")[:80]
+                ready.set_result(None)
+                stop = asyncio.ensure_future(self._stop.wait())
+                gone = asyncio.ensure_future(self.closed.wait())
+                try:
+                    await asyncio.wait({stop, gone}, return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    stop.cancel()
+                    gone.cancel()
+        except BaseException as e:
+            if not ready.done():
+                ready.cancel() if isinstance(e, asyncio.CancelledError) else ready.set_exception(e)
+            elif not isinstance(e, asyncio.CancelledError):
+                logger.debug("[Tools] a session ended: %r", _flat(e))
+        finally:
+            self.client = None
+            self.closed.set()
+
+    async def open(self, timeout: float) -> None:
+        """Start the program or reach the address, and finish the handshake; raises McpError."""
+        ready = asyncio.get_running_loop().create_future()
+        # Read once here, so a failure that lands after a stop is not reported as never read.
+        ready.add_done_callback(lambda f: f.cancelled() or f.exception())
+        self._task = asyncio.ensure_future(self._hold(ready))
+        try:
+            await asyncio.wait_for(asyncio.shield(ready), timeout)
+        except asyncio.TimeoutError:
+            await self.close()
+            raise McpError("timeout", f"{timeout:g} s") from None
+        except BaseException as e:
+            await self.close()
+            raise self.failure(e) from None
+
+    def failure(self, error: BaseException) -> McpError:
+        """Any failure as an McpError, with the server's own words where there are some."""
+        error = _flat(error)
+        if isinstance(error, McpError):
+            return error
+        from mcp.client.auth import OAuthFlowError, OAuthRegistrationError
+        from mcp.shared.exceptions import MCPError
+        if isinstance(error, OAuthRegistrationError):
+            return McpError("oauth", "registration")
+        if isinstance(error, OAuthFlowError):
+            return McpError("oauth", str(error)[:300])
+        status = self.last_status
+        has_key = any(k.lower() == "authorization" for k in self.spec.get("headers") or {})
+        if (status == 401 or status == 403) and not has_key:
+            return McpError("oauth", str(status))
+        if status >= 400:
+            return McpError("http", str(status))
+        name = type(error).__name__
+        if self.spec.get("command"):
+            tail = self.stderr_tail()
+            if isinstance(error, FileNotFoundError):
+                return McpError("not_found", self.spec["command"])
+            if tail or isinstance(error, (MCPError, OSError)) or "Closed" in name:
+                return McpError("exited", tail or str(error)[:300])
+        if "Connect" in name or isinstance(error, ConnectionError):
+            return McpError("refused", str(error)[:300])
+        if isinstance(error, (asyncio.TimeoutError, TimeoutError)):
+            return McpError("timeout", "")
+        if isinstance(error, MCPError):
+            return McpError("protocol", str(error)[:300])
+        logger.debug("[Tools] unexpected failure: %r", error, exc_info=error)
+        return McpError("protocol", name)
+
+    async def list_tools(self, timeout: float, limit: int) -> list[dict]:
+        """Every tool the server lists, page by page, up to `limit`; plain dicts as the wire has them."""
         tools: list[dict] = []
         cursor = None
         for _ in range(MAX_LIST_PAGES):
-            result = await self.request("tools/list", {"cursor": cursor} if cursor else {}, timeout)
-            if not isinstance(result, dict):
-                raise McpError("protocol", "the tool list is not an object")
-            page = result.get("tools")
-            if not isinstance(page, list):
-                raise McpError("protocol", "the tool list has no tools")
-            tools += [t for t in page if isinstance(t, dict)]
-            cursor = result.get("nextCursor")
-            if not cursor or not isinstance(cursor, str) or len(tools) >= MAX_TOOLS:
+            page = await asyncio.wait_for(self._client().list_tools(cursor=cursor), timeout)
+            tools += [t.model_dump(by_alias=True, mode="json", exclude_none=True) for t in page.tools]
+            cursor = page.next_cursor
+            if not cursor or len(tools) >= limit:
                 break
-        self.tools_changed.clear()
-        return tools[:MAX_TOOLS]
+        self.changed.clear()
+        return tools[:limit]
 
     async def call_tool(self, name: str, arguments: dict, timeout: float) -> ToolResult:
-        return result_of(await self.request("tools/call", {"name": name, "arguments": arguments}, timeout))
-
-
-def _rpc_result(message: dict):
-    if "error" in message:
-        error = message.get("error")
-        text = str(error.get("message") or "") if isinstance(error, dict) else ""
-        raise McpError("protocol", f"the server answered with an error: {text[:300]}")
-    return message.get("result")
-
-
-# ------------------------------------------------------------------ stdio --
-
-class StdioSession(_Session):
-    """A server run as a child process of this one, ended with it."""
-
-    def __init__(self, command: str, args: list, env: Optional[dict] = None,
-                 cwd: Optional[str] = None) -> None:
-        super().__init__()
-        self.command, self.args = command, list(args or ())
-        self.env = program_env(env)
-        self.cwd = cwd or None
-        self.process: Optional[subprocess.Popen] = None
-        self._job = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._pending: dict[int, asyncio.Future] = {}
-        self._next_id = 0
-        self._stderr: collections.deque = collections.deque(maxlen=STDERR_LINES)
-        self._write_lock = threading.Lock()
-        self._threads: list[threading.Thread] = []
-
-    @property
-    def pid(self) -> int:
-        return self.process.pid if self.process else 0
-
-    def stderr_tail(self) -> str:
-        return "\n".join(self._stderr)
-
-    def start(self) -> None:
-        program = find_program(self.command, self.env, self.cwd)
-        if not program:
-            raise McpError("not_found", self.command)
-        argv = [program, *self.args]
-        if os.name == "nt" and Path(program).suffix.lower() in (".cmd", ".bat"):
-            # npx and uvx shims: cmd.exe reads the line itself, so it gets one built for it.
-            argv = batch_command_line(program, self.args, self.env)
-        self._loop = asyncio.get_running_loop()
-        options: dict = {}
-        if os.name == "nt":
-            options["creationflags"] = _CREATE_SUSPENDED | _CREATE_NO_WINDOW
-        else:
-            # Its own group, so what it starts ends with it.
-            options["start_new_session"] = True
+        """One call, given `timeout` seconds besides the time the person spends on what the server asks them."""
+        self.waited = 0.0
+        call = asyncio.ensure_future(self._client().call_tool(name, arguments))
+        began = time.monotonic()
         try:
-            self.process = subprocess.Popen(
-                argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, env=self.env, cwd=self.cwd, **options)
-        except FileNotFoundError:
-            raise McpError("not_found", self.command) from None
-        except OSError as e:
-            raise McpError("exited", str(e)[:300]) from None
-        if os.name == "nt":
-            from . import services
-            try:
-                self._job = services._bind(self.process.pid)
-            except OSError as e:
-                self.process.kill()
-                raise McpError("exited", str(e)[:300]) from None
-        for target, name in ((self._read_stdout, "out"), (self._read_stderr, "err")):
-            thread = threading.Thread(target=target, name=f"mcp-{name}-{self.process.pid}", daemon=True)
-            thread.start()
-            self._threads.append(thread)
-
-    def _hand(self, fn, *args) -> None:
-        try:
-            self._loop.call_soon_threadsafe(fn, *args)
-        except RuntimeError:
-            pass    # the loop is closed: nobody waits any more
-
-    def _read_stdout(self) -> None:
-        out = self.process.stdout
-        try:
-            while True:
-                line = out.readline(MAX_MESSAGE_BYTES + 1)
-                if not line:
-                    break
-                if len(line) > MAX_MESSAGE_BYTES and not line.endswith(b"\n"):
-                    # Drop the rest of the oversized message.
-                    while True:
-                        rest = out.readline(65536)
-                        if not rest or rest.endswith(b"\n"):
-                            break
-                    self._hand(self._fail_pending, McpError("too_large"))
-                    continue
-                self._hand(self._on_line, line)
-        except (OSError, ValueError):
-            pass
-        self._hand(self._on_exit)
-
-    def _read_stderr(self) -> None:
-        try:
-            for raw in self.process.stderr:
-                text = raw.decode("utf-8", "replace").rstrip()
-                if text:
-                    self._stderr.append(text[:STDERR_LINE_CHARS])
-        except (OSError, ValueError):
-            pass
-
-    def _on_line(self, line: bytes) -> None:
-        try:
-            message = json.loads(line)
-        except ValueError:
-            return    # stray output; servers are told not to, but some print banners
-        if not isinstance(message, dict):
-            return
-        if "method" in message:
-            answer = self._on_server_message(message)
-            if answer is not None:
-                asyncio.ensure_future(self._send_quietly(answer))
-            return
-        future = self._pending.pop(message.get("id"), None) if isinstance(message.get("id"), int) else None
-        if future is not None and not future.done():
-            future.set_result(message)
-
-    def _fail_pending(self, error: McpError) -> None:
-        pending, self._pending = self._pending, {}
-        for future in pending.values():
-            if not future.done():
-                future.set_exception(error)
-
-    def _exit_error(self) -> McpError:
-        code = self.process.poll() if self.process else None
-        detail = self.stderr_tail()
-        if code is not None:
-            detail = (f"exit code {code}\n" + detail).strip()
-        return McpError("exited", detail)
-
-    def _on_exit(self) -> None:
-        # stderr may still be draining; give it a moment for the explanation.
-        def finish() -> None:
-            self._fail_pending(self._exit_error())
-            self.closed.set()
-        try:
-            self._loop.call_later(0.2, finish)
-        except RuntimeError:
-            pass
-
-    async def _send(self, message: dict) -> None:
-        data = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n"
-
-        def write() -> None:
-            with self._write_lock:
-                self.process.stdin.write(data)
-                self.process.stdin.flush()
-        try:
-            await asyncio.to_thread(write)
-        except (OSError, ValueError):
-            raise self._exit_error() from None
-
-    async def _send_quietly(self, message: dict) -> None:
-        try:
-            await self._send(message)
+            while not call.done():
+                left = began + timeout + self.waited - time.monotonic()
+                if left <= 0 and not self.asking:
+                    raise McpError("timeout", f"{timeout:g} s")
+                await asyncio.wait({call}, timeout=max(left, 0.5))
+            raw = call.result()
         except McpError:
-            pass
-
-    async def request(self, method: str, params: dict, timeout: float):
-        if self.closed.is_set():
-            raise self._exit_error()
-        self._next_id += 1
-        request_id = self._next_id
-        future = self._loop.create_future()
-        self._pending[request_id] = future
-        await self._send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
-        try:
-            message = await asyncio.wait_for(future, timeout)
-        except asyncio.TimeoutError:
-            self._pending.pop(request_id, None)
-            if not self.closed.is_set():
-                try:
-                    await self.notify("notifications/cancelled",
-                                      {"requestId": request_id, "reason": "timed out"})
-                except McpError:
-                    pass
-            raise McpError("timeout", f"{timeout:g} s") from None
-        return _rpc_result(message)
-
-    async def notify(self, method: str, params: Optional[dict] = None) -> None:
-        message = {"jsonrpc": "2.0", "method": method}
-        if params is not None:
-            message["params"] = params
-        await self._send(message)
-
-    def _end_process(self) -> None:
-        """Close its input, then terminate, then kill: it and what it started."""
-        process = self.process
-        if process is None:
-            return
-        from . import services
-        try:
-            process.stdin.close()
-        except (OSError, ValueError):
-            pass
-        for force in (False, True):
-            try:
-                process.wait(EXIT_GRACE_S)
-                break
-            except subprocess.TimeoutExpired:
-                services._signal_child(process, force=force, job=self._job)
-        else:
-            try:
-                process.wait(EXIT_GRACE_S)
-            except subprocess.TimeoutExpired:
-                pass
-        if os.name != "nt":
-            # The server is gone; anything it left in its group goes too.
-            try:
-                import signal
-                os.killpg(process.pid, signal.SIGKILL)
-            except (OSError, AttributeError):
-                pass
-        elif self._job:
-            # Whatever the server started and left behind ends with its job.
-            kernel32 = services._win32()[0]
-            kernel32.TerminateJobObject(self._job, 1)
-            kernel32.CloseHandle(self._job)
-            self._job = None
-        for stream in (process.stdout, process.stderr):
-            try:
-                stream.close()
-            except (OSError, ValueError):
-                pass
-
-    async def close(self) -> None:
-        await asyncio.to_thread(self._end_process)
-        self._fail_pending(McpError("closed"))
-        self.closed.set()
-
-
-# ------------------------------------------------------------------- http --
-
-def _local(url: str) -> bool:
-    host = (urlsplit(url).hostname or "").lower()
-    return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost")
-
-
-class HttpSession(_Session):
-    """A remote server over Streamable HTTP."""
-
-    def __init__(self, url: str, headers: Optional[dict] = None) -> None:
-        super().__init__()
-        self.url = url
-        self.headers = dict(headers or {})
-        self.session_id = ""
-        # A local server is reached directly, never through a proxy.
-        self._client = httpx.AsyncClient(trust_env=not _local(url), follow_redirects=False)
-        self._initializing = False
-        self._next = 0
-
-    def _headers(self, accept: str = "application/json, text/event-stream") -> dict:
-        out = {**self.headers, "Accept": accept}
-        if self.session_id:
-            out["Mcp-Session-Id"] = self.session_id
-        if self.protocol:
-            out["MCP-Protocol-Version"] = self.protocol
-        return out
-
-    def _refused(self, status: int, resp: httpx.Response) -> McpError:
-        if status == 401 or (status == 403 and "bearer" in resp.headers.get("www-authenticate", "").lower()):
-            return McpError("oauth", str(status))
-        if status in (404, 405) and urlsplit(self.url).path.rstrip("/").endswith("/sse"):
-            return McpError("sse_unsupported", str(status))
-        return McpError("http", str(status))
-
-    async def initialize(self, timeout: float) -> None:
-        # The whole handshake, the notification included: a 404 inside it never starts another.
-        self._initializing = True
-        try:
-            await super().initialize(timeout)
-        finally:
-            self._initializing = False
-
-    def _redirect(self, resp: httpx.Response) -> str:
-        """Where a redirect points, when it stays on the same host; "" otherwise."""
-        target = urljoin(self.url, resp.headers.get("location", ""))
-        old, new = urlsplit(self.url), urlsplit(target)
-        if new.scheme not in ("http", "https") or (new.hostname or "").lower() != (old.hostname or "").lower():
-            return ""
-        return target
-
-    async def _post(self, message: dict, timeout: float, *, retried: bool = False, hops: int = 0):
-        deadline = time.monotonic() + timeout
-        follow = ""
-        try:
-            async with self._client.stream(
-                    "POST", self.url, json=message, timeout=timeout,
-                    headers={**self._headers(), "Content-Type": "application/json"}) as resp:
-                if message.get("method") == "initialize":
-                    sid = resp.headers.get("mcp-session-id", "")
-                    if sid and _visible_ascii(sid) and len(sid) <= 512:
-                        self.session_id = sid
-                status = resp.status_code
-                if status in _REDIRECTS and hops < MAX_REDIRECTS:
-                    follow = self._redirect(resp)
-                    if not follow:
-                        raise self._refused(status, resp)
-                elif status == 404 and self.session_id and not self._initializing and not retried:
-                    pass    # a new session, below, once the stream is closed
-                elif status == 202:
-                    return None
-                elif status >= 300:
-                    raise self._refused(status, resp)
-                else:
-                    kind = resp.headers.get("content-type", "").split(";")[0].strip().lower()
-                    if "id" not in message:
-                        return None
-                    if kind == "text/event-stream":
-                        return await self._read_stream(resp, message["id"], deadline)
-                    body = await self._read_body(resp)
-                    try:
-                        answer = json.loads(body)
-                    except ValueError:
-                        raise McpError("protocol", "the answer is not JSON") from None
-                    if isinstance(answer, list):
-                        answer = next((a for a in answer if isinstance(a, dict)
-                                       and a.get("id") == message["id"]), None)
-                    if not isinstance(answer, dict) or answer.get("id") != message["id"]:
-                        raise McpError("protocol", "the answer does not belong to the request")
-                    return answer
-        except httpx.ConnectError as e:
-            raise McpError("refused", str(e)[:200]) from None
-        except httpx.TimeoutException:
-            raise McpError("timeout", f"{timeout:g} s") from None
-        except httpx.HTTPError as e:
-            raise McpError("http", str(e)[:200]) from None
-        left = deadline - time.monotonic()
-        if left <= 0:
-            raise McpError("timeout", f"{timeout:g} s")
-        if follow:
-            # The same method and body at the new address, which later requests use too.
-            self.url = follow
-            return await self._post(message, left, retried=retried, hops=hops + 1)
-        # The server ended the session: a new one, then the same message, once.
-        self.session_id, self.protocol = "", ""
-        await self.initialize(left)
-        left = deadline - time.monotonic()
-        if left <= 0:
-            raise McpError("timeout", f"{timeout:g} s")
-        return await self._post(message, left, retried=True, hops=hops)
-
-    @staticmethod
-    async def _read_body(resp: httpx.Response) -> bytes:
-        body = bytearray()
-        async for chunk in resp.aiter_bytes():
-            body += chunk
-            if len(body) > MAX_MESSAGE_BYTES:
-                raise McpError("too_large")
-        return bytes(body)
-
-    async def _read_stream(self, resp: httpx.Response, request_id, deadline: float):
-        """Events until the one answering `request_id`; a stream closed early
-        is resumed with GET and Last-Event-ID, as the server's `retry` says."""
-        answer, last_id, retry_ms = await self._events(resp, request_id, "", 1000)
-        reconnects = 0
-        while answer is None:
-            if not last_id or reconnects >= SSE_RECONNECTS:
-                raise McpError("protocol", "the stream ended without an answer")
-            reconnects += 1
-            wait = retry_ms / 1000
-            if time.monotonic() + wait >= deadline:
-                raise McpError("timeout")
-            await asyncio.sleep(wait)
-            headers = {**self._headers("text/event-stream"), "Last-Event-ID": last_id}
-            async with self._client.stream("GET", self.url, headers=headers,
-                                           timeout=max(1.0, deadline - time.monotonic())) as again:
-                if again.status_code >= 300:
-                    raise self._refused(again.status_code, again)
-                answer, last_id, retry_ms = await self._events(again, request_id, last_id, retry_ms)
-        return answer
-
-    async def _events(self, resp, request_id, last_id: str, retry_ms: int):
-        buffer, size = b"", 0
-        async for chunk in resp.aiter_bytes():
-            size += len(chunk)
-            if size > MAX_MESSAGE_BYTES * 4:
-                raise McpError("too_large")
-            buffer += chunk.replace(b"\r\n", b"\n")
-            while b"\n\n" in buffer:
-                block, buffer = buffer.split(b"\n\n", 1)
-                data, event_id, retry = [], None, None
-                for line in block.decode("utf-8", "replace").split("\n"):
-                    if line.startswith(":"):
-                        continue
-                    name, _, value = line.partition(":")
-                    value = value[1:] if value.startswith(" ") else value
-                    if name == "data":
-                        data.append(value)
-                    elif name == "id":
-                        event_id = value
-                    elif name == "retry" and value.isdigit():
-                        retry = int(value)
-                if event_id is not None:
-                    last_id = event_id
-                if retry is not None:
-                    retry_ms = min(retry, 30_000)
-                text = "\n".join(data).strip()
-                if not text:
-                    continue
-                if len(text) > MAX_MESSAGE_BYTES:
-                    raise McpError("too_large")
-                try:
-                    message = json.loads(text)
-                except ValueError:
-                    continue
-                if not isinstance(message, dict):
-                    continue
-                if "method" in message:
-                    reply = self._on_server_message(message)
-                    if reply is not None:
-                        await self._post(reply, 10)
-                elif message.get("id") == request_id:
-                    return message, last_id, retry_ms
-        return None, last_id, retry_ms
-
-    async def request(self, method: str, params: dict, timeout: float):
-        self._next += 1
-        message = {"jsonrpc": "2.0", "id": self._next, "method": method, "params": params}
-        try:
-            answer = await asyncio.wait_for(self._post(message, timeout), timeout + 1)
-        except asyncio.TimeoutError:
-            raise McpError("timeout", f"{timeout:g} s") from None
-        except McpError as e:
-            if e.code == "refused":
-                self.closed.set()
             raise
-        if answer is None:
-            raise McpError("protocol", "no answer to the request")
-        return _rpc_result(answer)
+        except Exception as e:
+            from mcp.shared.exceptions import MCPError
+            if isinstance(_flat(e), MCPError) and not self.closed.is_set():
+                # The server answered the call with an error of its own: the call failed, not the server.
+                return ToolResult(str(_flat(e))[:1000], True)
+            raise self.failure(e) from None
+        finally:
+            call.cancel()
+        # Pictures are shrunk off the loop.
+        return await asyncio.to_thread(result_of, raw.model_dump(by_alias=True, mode="json", exclude_none=True))
 
-    async def notify(self, method: str, params: Optional[dict] = None) -> None:
-        message = {"jsonrpc": "2.0", "method": method}
-        if params is not None:
-            message["params"] = params
-        await self._post(message, 15)
+    def _client(self):
+        if self.client is None:
+            raise McpError("closed")
+        return self.client
 
     async def close(self) -> None:
-        if self.session_id:
+        self._stop.set()
+        task, self._task = self._task, None
+        if task is not None and not task.done():
             try:
-                await self._client.delete(self.url, headers=self._headers(), timeout=5)
-            except httpx.HTTPError:
-                pass
-        await self._client.aclose()
+                await asyncio.wait_for(asyncio.shield(task), 8)
+            except (asyncio.TimeoutError, Exception):
+                task.cancel()
         self.closed.set()
 
 
-async def connect(spec: dict, timeout: float) -> _Session:
-    """An initialized session to the server `spec` describes (stdio when it
-    has a `command`, else HTTP at its `url`); closed again on any failure."""
-    if spec.get("command"):
-        session: _Session = StdioSession(spec["command"], spec.get("args") or [],
-                                         spec.get("env") or {}, spec.get("cwd"))
-        session.start()
-    else:
-        session = HttpSession(spec["url"], spec.get("headers") or {})
-    try:
-        await session.initialize(timeout)
-    except BaseException:
-        await session.close()
-        raise
-    return session
+# ------------------------------------------------------------------ sign-in --
+
+class KeptTokens:
+    """The SDK's TokenStorage for one server, as one entry of the credential store:
+    {"tokens", "expires_at", "client", "revoke"}."""
+
+    def __init__(self, home: Path, server: str, redirect: str = "") -> None:
+        self.home, self.key, self.redirect = home, f"MIBO_OAUTH_{server}", redirect
+
+    def read(self) -> dict:
+        return json.loads(secretstore.get(self.home, self.key) or "{}")
+
+    def _write(self, **changes) -> None:
+        secretstore.put(self.home, self.key, json.dumps({**self.read(), **changes}))
+
+    def clear(self) -> None:
+        secretstore.delete(self.home, self.key)
+
+    def signed_in(self) -> bool:
+        return bool(self.read().get("tokens"))
+
+    async def get_tokens(self):
+        from mcp.shared.auth import OAuthToken
+        tokens = self.read().get("tokens")
+        return OAuthToken.model_validate(tokens) if tokens else None
+
+    async def set_tokens(self, tokens) -> None:
+        self._write(tokens=tokens.model_dump(mode="json", exclude_none=True),
+                    expires_at=time.time() + tokens.expires_in if tokens.expires_in else None)
+
+    async def get_client_info(self):
+        from mcp.shared.auth import OAuthClientInformationFull
+        client = self.read().get("client")
+        # A registration made for another callback address is made again.
+        if not client or (self.redirect and self.redirect not in (client.get("redirect_uris") or [])):
+            return None
+        return OAuthClientInformationFull.model_validate(client)
+
+    async def set_client_info(self, client_info) -> None:
+        self._write(client=client_info.model_dump(mode="json", exclude_none=True))
+
+    def keep_revocation(self, provider) -> None:
+        """Where the grant is ended on signing out, from the metadata the sign-in found."""
+        metadata = provider.context.oauth_metadata
+        if metadata is not None and metadata.revocation_endpoint:
+            self._write(revoke=str(metadata.revocation_endpoint))
+
+
+def oauth_client(url: str, storage: KeptTokens, redirect_handler=None, callback_handler=None):
+    """The SDK's OAuth client for `url`. Without handlers, a server that wants a new sign-in fails (the SDK
+    refuses an authorization with no handler) instead of opening anything: only a sign-in the person
+    started opens a browser."""
+    from mcp.client.auth import OAuthClientProvider
+    from mcp.shared.auth import OAuthClientMetadata
+
+    class Provider(OAuthClientProvider):
+        async def _initialize(self) -> None:
+            await super()._initialize()
+            # The SDK does not keep when a stored token expires: without it, a token from before a restart
+            # is sent stale and ends in a new sign-in where a refresh would do.
+            self.context.token_expiry_time = storage.read().get("expires_at")
+
+    # Kept tokens always come with the registration they were made for.
+    redirect = storage.redirect or storage.read()["client"]["redirect_uris"][0]
+    metadata = OAuthClientMetadata(client_name="Mibo", redirect_uris=[redirect],
+                                   grant_types=["authorization_code", "refresh_token"], response_types=["code"])
+    return Provider(url, metadata, storage, redirect_handler=redirect_handler, callback_handler=callback_handler)
+
+
+async def revoke(record: dict) -> bool:
+    """Asks the server to end the grant (RFC 7009), the refresh token first; True when it agreed."""
+    import httpx
+    url, client, tokens = record.get("revoke"), record.get("client") or {}, record.get("tokens") or {}
+    if not url or not tokens:
+        return False
+    agreed = True
+    async with httpx.AsyncClient(timeout=10) as http:
+        for hint in ("refresh_token", "access_token"):
+            if not tokens.get(hint):
+                continue
+            data, headers = {"token": tokens[hint], "token_type_hint": hint,
+                             "client_id": client.get("client_id", "")}, {}
+            secret = client.get("client_secret")
+            if secret and client.get("token_endpoint_auth_method") == "client_secret_basic":
+                pair = f"{quote(data['client_id'], safe='')}:{quote(secret, safe='')}"
+                headers["Authorization"] = "Basic " + base64.b64encode(pair.encode()).decode()
+            elif secret:
+                data["client_secret"] = secret
+            try:
+                answer = await http.post(url, data=data, headers=headers)
+            except httpx.HTTPError:
+                return False
+            agreed = agreed and answer.status_code == 200
+    return agreed
 
 
 def describe(error: BaseException) -> tuple[str, str]:
     """(code, detail) of any failure to reach a server."""
+    error = _flat(error)
     if isinstance(error, McpError):
         return error.code, error.detail
     if isinstance(error, asyncio.TimeoutError):
         return "timeout", ""
-    logger.debug("[Tools] unexpected failure: %r", error, exc_info=error)
     return "protocol", type(error).__name__

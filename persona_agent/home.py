@@ -49,13 +49,16 @@ def find_home() -> Path:
 FROM_ENV_FILE: set[str] = set()
 
 
-def load_env() -> Path:
-    """Load <home>/.env without overriding the shell, and return the home."""
+def load_env(home: Path) -> None:
+    """Take <home>/.env into this process's environment. What the file says
+    decides: the app's page saves the settings there. Called again after a
+    save, a setting the file no longer holds goes back to unset."""
     from dotenv import dotenv_values
 
-    home = find_home()
-    for key, value in dotenv_values(home / ".env").items():
-        if value is not None and key not in os.environ:
-            os.environ[key] = value
-            FROM_ENV_FILE.add(key)
-    return home
+    values = {key: value for key, value in dotenv_values(home / ".env").items()
+              if value is not None and key != "AGENT_HOME"}
+    for key in FROM_ENV_FILE - values.keys():
+        os.environ.pop(key, None)
+        FROM_ENV_FILE.discard(key)
+    os.environ.update(values)
+    FROM_ENV_FILE.update(values)

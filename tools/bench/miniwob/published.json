@@ -1,0 +1,332 @@
+{
+ "source": "Zheng et al., Synapse: Trajectory-as-Exemplar Prompting with Memory for Computer Control, ICLR 2024, arXiv:2306.07863v3, appendix table 'Per-task mean success rate comparison between Synapse, humans, and baselines' (Human from CC-Net, Humphreys et al. 2022). null = not reported there.",
+ "tasks": {
+  "click-button": {
+   "Synapse": 1.0,
+   "Human": 0.98,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "click-button-sequence": {
+   "Synapse": 1.0,
+   "Human": 0.94,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "click-link": {
+   "Synapse": 1.0,
+   "Human": 0.99,
+   "RCI": 1.0,
+   "AdaPlanner": 0.98,
+   "CC-Net": 0.99,
+   "WebGUM": 1.0
+  },
+  "click-dialog": {
+   "Synapse": 1.0,
+   "Human": 1.0,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "click-dialog-2": {
+   "Synapse": 1.0,
+   "Human": 0.99,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 0.43
+  },
+  "click-widget": {
+   "Synapse": 1.0,
+   "Human": 0.83,
+   "RCI": 0.98,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "click-option": {
+   "Synapse": 1.0,
+   "Human": 0.99,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 0.99,
+   "WebGUM": 1.0
+  },
+  "click-menu": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 1.0,
+   "AdaPlanner": 0.78,
+   "CC-Net": 0.94,
+   "WebGUM": 0.37
+  },
+  "enter-text": {
+   "Synapse": 1.0,
+   "Human": 0.98,
+   "RCI": 1.0,
+   "AdaPlanner": 0.98,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "enter-text-2": {
+   "Synapse": null,
+   "Human": 0.91,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.98,
+   "WebGUM": null
+  },
+  "enter-date": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 0.96,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "enter-time": {
+   "Synapse": 1.0,
+   "Human": 0.98,
+   "RCI": 1.0,
+   "AdaPlanner": 0.96,
+   "CC-Net": 0.97,
+   "WebGUM": 0.0
+  },
+  "form-sequence-2": null,
+  "multi-layouts": {
+   "Synapse": 0.98,
+   "Human": 0.95,
+   "RCI": 0.72,
+   "AdaPlanner": 0.84,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "multi-orderings": {
+   "Synapse": 1.0,
+   "Human": 0.96,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "login-user": {
+   "Synapse": 1.0,
+   "Human": 0.96,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "login-user-popup": {
+   "Synapse": 1.0,
+   "Human": 0.94,
+   "RCI": 0.68,
+   "AdaPlanner": 0.98,
+   "CC-Net": 1.0,
+   "WebGUM": 0.99
+  },
+  "choose-list": {
+   "Synapse": 1.0,
+   "Human": 0.98,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 0.99,
+   "WebGUM": 0.24
+  },
+  "choose-date-easy": {
+   "Synapse": null,
+   "Human": 0.99,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.99,
+   "WebGUM": 1.0
+  },
+  "choose-date": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.97,
+   "WebGUM": 0.13
+  },
+  "click-checkboxes": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 0.98,
+   "WebGUM": 1.0
+  },
+  "click-checkboxes-soft": {
+   "Synapse": 1.0,
+   "Human": 0.73,
+   "RCI": 0.72,
+   "AdaPlanner": 0.8,
+   "CC-Net": 0.95,
+   "WebGUM": 0.98
+  },
+  "click-checkboxes-transfer": {
+   "Synapse": 1.0,
+   "Human": 0.98,
+   "RCI": 1.0,
+   "AdaPlanner": 0.98,
+   "CC-Net": 0.99,
+   "WebGUM": 0.99
+  },
+  "click-tab": {
+   "Synapse": 1.0,
+   "Human": 0.99,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "click-tab-2": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 0.74,
+   "AdaPlanner": 0.85,
+   "CC-Net": 0.98,
+   "WebGUM": 0.95
+  },
+  "click-collapsible-2": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 0.62,
+   "AdaPlanner": 0.84,
+   "CC-Net": 0.98,
+   "WebGUM": 0.95
+  },
+  "navigate-tree": {
+   "Synapse": 0.98,
+   "Human": 0.98,
+   "RCI": 0.86,
+   "AdaPlanner": 0.82,
+   "CC-Net": 0.99,
+   "WebGUM": 1.0
+  },
+  "search-engine": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 0.96
+  },
+  "use-autocomplete": {
+   "Synapse": 0.98,
+   "Human": 0.98,
+   "RCI": 0.58,
+   "AdaPlanner": 0.88,
+   "CC-Net": 1.0,
+   "WebGUM": 0.98
+  },
+  "click-scroll-list": {
+   "Synapse": 1.0,
+   "Human": 0.91,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 0.6,
+   "WebGUM": 0.0
+  },
+  "scroll-text": {
+   "Synapse": null,
+   "Human": 0.97,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.96,
+   "WebGUM": null
+  },
+  "read-table": {
+   "Synapse": 1.0,
+   "Human": 0.97,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.97,
+   "WebGUM": null
+  },
+  "find-word": {
+   "Synapse": 1.0,
+   "Human": 0.96,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.88,
+   "WebGUM": null
+  },
+  "copy-paste": {
+   "Synapse": 1.0,
+   "Human": 0.94,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.79,
+   "WebGUM": null
+  },
+  "phone-book": null,
+  "email-inbox": {
+   "Synapse": 1.0,
+   "Human": 0.96,
+   "RCI": 0.98,
+   "AdaPlanner": 0.98,
+   "CC-Net": 1.0,
+   "WebGUM": 0.99
+  },
+  "email-inbox-forward-nl": {
+   "Synapse": 1.0,
+   "Human": 0.91,
+   "RCI": 1.0,
+   "AdaPlanner": 1.0,
+   "CC-Net": 1.0,
+   "WebGUM": 1.0
+  },
+  "email-inbox-reply": {
+   "Synapse": null,
+   "Human": 0.91,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 1.0,
+   "WebGUM": null
+  },
+  "social-media-some": {
+   "Synapse": 1.0,
+   "Human": 0.91,
+   "RCI": 0.9,
+   "AdaPlanner": 0.9,
+   "CC-Net": 0.85,
+   "WebGUM": 0.68
+  },
+  "book-flight": {
+   "Synapse": 1.0,
+   "Human": 0.87,
+   "RCI": null,
+   "AdaPlanner": null,
+   "CC-Net": 0.87,
+   "WebGUM": 0.98
+  }
+ },
+ "overall_other_sets": [
+  {
+   "what": "BrowserGym GenericAgent (AgentLab default), text observation, no task demos; 625 episodes over the whole MiniWoB set (125 templates; 5 a task by inference), Table 2",
+   "source": "Le Sellier De Chezelles et al., The BrowserGym Ecosystem for Web Agent Research, arXiv:2412.05467",
+   "success": {
+    "Claude-3.5-Sonnet": 0.698,
+    "o1-mini": 0.678,
+    "Llama-3.1-405B": 0.646,
+    "GPT-4o": 0.638,
+    "Llama-3.1-70B": 0.576,
+    "GPT-4o-mini": 0.566
+   }
+  },
+  {
+   "what": "Synapse (gpt-3.5-turbo-0301, exemplar memory), 64 tasks",
+   "source": "arXiv:2306.07863",
+   "success": {
+    "Synapse": 0.992
+   }
+  }
+ ]
+}

@@ -2,30 +2,70 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>personagent</title>
+    <title>Mibo</title>
     <link rel="stylesheet" href="/assets/pet.css" />
     <link rel="stylesheet" href="/assets/card.css" />
+    <link rel="stylesheet" href="/assets/petux.css" />
+    <script src="/assets/i18n.js" defer></script>
+    <script src="/locale.js" defer></script>
     <script src="/assets/card.js" defer></script>
+    <script src="/assets/activity.js" defer></script>
     <script src="/assets/pet.js" defer></script>
+    <!-- What shows round the figure besides its finds: drops; the line over its head; tucking at a side of
+         the screen; the dial; a click for the compact chat; 显示桌宠 off. -->
+    <script src="/assets/petbox.js" defer></script>
+    <script src="/assets/petline.js" defer></script>
+    <script src="/assets/petedge.js" defer></script>
+    <script src="/assets/petdial.js" defer></script>
+    <script src="/assets/petclick.js" defer></script>
+    <script src="/assets/petoff.js" defer></script>
   </head>
   <body>
     <div id="pet" class="pet" data-state="home">
       <!-- What ducks, peeks, sinks and pops up: the figure and what it shows above itself. -->
       <div class="actor">
-        <!-- The chosen figure is put here: figures/<key>.webp, a sheet of four frames, else <key>.svg. -->
+        <!-- The chosen figure is put here: a painted one's poses (figures/<key>.pet.webp), else <key>.svg. -->
         <div id="figure" class="figure-box"></div>
         <svg class="overlay" viewBox="0 0 160 190" width="160" height="190" aria-hidden="true">
-          <g class="dots" fill="#3d4f8a">
+          <g class="dots">
             <circle cx="104" cy="34" r="4" />
             <circle cx="118" cy="26" r="4" />
             <circle cx="132" cy="18" r="4" />
           </g>
-          <g class="zz" fill="#3d4f8a">
-            <text x="108" y="44">z</text>
-            <text x="120" y="30">z</text>
-            <text x="134" y="16">z</text>
+          <g class="zz">
+            <text x="110" y="40">z</text>
+            <text x="121" y="28">z</text>
+            <text x="133" y="16">Z</text>
+          </g>
+          <!-- Do not disturb, on a painted figure. -->
+          <g class="dnd-badge" transform="translate(126 16)">
+            <circle r="10" />
+            <path d="M-5 2v-1.5a5 5 0 0 1 10 0V2" />
+            <rect x="-6.6" y="0.8" width="3" height="5" rx="1.2" />
+            <rect x="3.6" y="0.8" width="3" height="5" rx="1.2" />
+          </g>
+          <!-- Out on a walk: a small sign where it stood, its footprints going off. -->
+          <g class="away-sign">
+            <rect x="77" y="146" width="6" height="40" rx="2" />
+            <rect x="56" y="128" width="48" height="26" rx="6" />
+            <g class="steps">
+              <ellipse cx="68" cy="143" rx="3" ry="4.5" /><ellipse cx="78" cy="137" rx="3" ry="4.5" />
+              <ellipse cx="86" cy="143" rx="3" ry="4.5" /><ellipse cx="94" cy="137" rx="3" ry="4.5" />
+            </g>
           </g>
         </svg>
+      </div>
+      <!-- Its small actions, beside its head while the pointer stays on it (pet.js). -->
+      <div id="quick" class="quick">
+        <button class="quick-chat" type="button">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H8l-3 2.5v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" /></svg>
+        </button>
+        <button class="quick-find" type="button">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.8l1.6 4.1 4.4.3-3.4 2.8 1.1 4.3L8 10.9l-3.7 2.4 1.1-4.3L2 6.2l4.4-.3z" /></svg>
+        </button>
+        <button class="quick-quiet" type="button">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 9.5V8a5 5 0 0 1 10 0v1.5" /><rect x="1.8" y="8.6" width="3" height="5" rx="1.2" /><rect x="11.2" y="8.6" width="3" height="5" rx="1.2" /></svg>
+        </button>
       </div>
     </div>
     <div id="card" class="card" role="button" tabindex="-1" hidden></div>

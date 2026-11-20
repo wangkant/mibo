@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 Das Installationsprogramm bringt ein eigenes Python mit, installiert personagent und öffnet es; unter Windows legt es außerdem ein Symbol auf dem Desktop an. Sind PyPI oder GitHub nur langsam erreichbar, wechselt es selbstständig zu Spiegelservern in Festlandchina. Ein erneuter Aufruf aktualisiert personagent.
 
-Ist bereits Python 3.10 oder neuer installiert, erreichen Sie dasselbe mit `python -m pip install personagent` und anschließend `personagent`; mit [uv](https://docs.astral.sh/uv/) startet `uvx personagent` das Programm ohne gesonderten Installationsschritt. Unter Windows können Sie auch das Quellcode-ZIP herunterladen und `start.bat` doppelklicken; ist auf dem Computer kein Python vorhanden, lädt es dieses ebenfalls herunter.
+Ist bereits Python 3.10 oder neuer installiert, erreichen Sie dasselbe mit `python -m pip install personagent` und anschließend `personagent`; mit [uv](https://docs.astral.sh/uv/) startet `uvx personagent` das Programm ohne gesonderten Installationsschritt.
 
 Unter Windows öffnet es sich in einem eigenen Fenster, unter macOS und Linux im Browser. Klicken Sie auf **Mit OpenRouter anmelden** und geben Sie den Zugriff im Browser frei, oder fügen Sie einen API-Schlüssel für das Modell ein und klicken Sie auf **Prüfen & Chat starten**. Die kostenlosen Modelle von OpenRouter sind vorausgewählt, brauchen aber ebenfalls ein Konto oder einen Schlüssel; beides ist kostenlos. `personagent demo` spielt drei vorgefertigte Szenen ganz ohne Schlüssel ab. Die [Einstiegsanleitung](https://github.com/wangkant/personagent/blob/main/docs/start.de.md) erläutert die Seite Ansicht für Ansicht.
 
@@ -139,7 +139,7 @@ Verbundene Plattformen werden bei jedem Start von personagent automatisch mitges
 
 Für alles andere gibt es auf derselben Seite **Andere Software**: Schalten Sie sie ein, kopieren Sie Adresse, Schlüssel und Modellnamen in eine beliebige Anwendung, die eine OpenAI-kompatible Adresse annimmt, und diese Anwendung spricht mit Ihrer Figur, mit demselben Gedächtnis wie überall sonst. Einzelheiten stehen im [Benutzerhandbuch](https://github.com/wangkant/personagent/blob/main/docs/guide.de.md#andere-software), und `personagent connect api` erledigt dasselbe im Terminal.
 
-Sie betreiben bereits AstrBot, Koishi oder Matrix? personagent kann als Agent dahinter laufen: siehe [Brücken, die Sie selbst betreiben](https://github.com/wangkant/personagent/blob/main/docs/guide.de.md#brücken-die-sie-selbst-betreiben), den [Satori-Konnektor](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.de.md) und den [Matrix-Konnektor](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.de.md).
+Sie betreiben bereits AstrBot? personagent kann als Agent dahinter laufen: siehe [Brücken, die Sie selbst betreiben](https://github.com/wangkant/personagent/blob/main/docs/guide.de.md#brücken-die-sie-selbst-betreiben).
 
 ## Auf einem Server
 
@@ -182,7 +182,6 @@ Alles, was personagent speichert, bleibt auf Ihrem Rechner, in einem personagent
 - [Benutzerhandbuch](https://github.com/wangkant/personagent/blob/main/docs/guide.de.md): Einrichtung, Konnektoren, Anleitung der Figur, die Ansicht Aktivität, Fehlerbehebung.
 - [Deployment-Anleitung](https://github.com/wangkant/personagent/blob/main/docs/deploy.de.md): dauerhafter Betrieb, Kosten und was zu prüfen ist, wenn der Bot verstummt.
 - [Konnektor-Protokoll](https://github.com/wangkant/personagent/blob/main/docs/connectors.de.md): zum Schreiben eines eigenen Konnektors.
-- [Werkzeuge](https://github.com/wangkant/personagent/blob/main/docs/tools.de.md): die Skripte in `tools/` zur Ausführung aus einem Klon.
 - [Changelog](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [Mitwirken](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [Sicherheitsrichtlinie](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [Haftungsausschluss](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.de.md)
 
 ## Lizenz

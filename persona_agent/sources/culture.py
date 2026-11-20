@@ -16,7 +16,7 @@ from xml.etree import ElementTree
 
 import httpx
 
-from .base import (PER_SOURCE, Find, Source, feed_source, find, get_json, get_text, local_to, parse_feed, plain,
+from .base import (PER_SOURCE, Find, Source, feed_source, find, get_json, get_text, local_to, parse_feed,
                    written_in)
 
 _ATOM = "{http://www.w3.org/2005/Atom}"
@@ -190,48 +190,6 @@ async def _bilibili_anime(http: httpx.AsyncClient) -> list[Find]:
 
 # ---------------------------------------------------------------- film and books
 
-_DOUBAN_FILM = re.compile(r'<li\s+id="(\d+)"\s+class="list-item"(.*?)<img src="([^"]+)"', re.S)
-_DOUBAN_ATTR = re.compile(r'data-(\w+)="([^"]*)"')
-
-
-async def _douban_films(http: httpx.AsyncClient) -> list[Find]:
-    """Films in Chinese cinemas now, in Douban's order."""
-    page = await get_text(http, "https://movie.douban.com/cinema/nowplaying/beijing/")
-    # The page also lists films coming soon below; only the now-playing block is read.
-    page = page[page.find('id="nowplaying"'):page.find('id="upcoming"')]
-    found = []
-    for ident, attrs, cover in _DOUBAN_FILM.findall(page)[:PER_SOURCE]:
-        film = {k: unescape(v) for k, v in _DOUBAN_ATTR.findall(attrs)}
-        score = film.get("score", "0")
-        bits = [f"豆瓣 {score}" if score not in ("0", "") else "暂无评分", film.get("region", ""),
-                film.get("duration", ""), f"主演 {film['actors']}" if film.get("actors") else ""]
-        found.append(find(f"https://movie.douban.com/subject/{ident}/", film.get("title", ""), site="豆瓣电影",
-                          kind="page", text=" · ".join(filter(None, bits)), author=film.get("director", ""),
-                          picture=cover))
-    return found
-
-
-_DOUBAN_BOOK = re.compile(r'<li class="media clearfix">.*?<img class="subject-cover"[^>]*src="([^"]+)".*?'
-                          r'<a class="fleft" href="(https://book\.douban\.com/subject/\d+/)">([^<]+)</a>.*?'
-                          r'<p class="subject-abstract color-gray">\s*(.*?)\s*</p>(.*?)</li>', re.S)
-_DOUBAN_SCORE = re.compile(r'<span class="font-small fleft">([\d.]+)</span>')
-
-
-async def _douban_books(http: httpx.AsyncClient) -> list[Find]:
-    """Douban's monthly chart of the books most read and rated."""
-    page = await get_text(http, "https://book.douban.com/chart")
-    found = []
-    for cover, url, title, abstract, rest in _DOUBAN_BOOK.findall(page)[:PER_SOURCE]:
-        abstract = plain(abstract)
-        score = _DOUBAN_SCORE.search(rest)
-        found.append(find(url, unescape(title), site="豆瓣读书", kind="page",
-                          text=" · ".join(filter(None, [f"豆瓣 {score.group(1)}" if score else "", abstract])),
-                          author=abstract.split(" / ")[0],
-                          # The chart shows small covers; the large one lives at the same name.
-                          picture=cover.replace("/view/subject/s/", "/view/subject/l/")))
-    return found
-
-
 async def _open_library(http: httpx.AsyncClient) -> list[Find]:
     """The books most opened on Open Library today."""
     data = await get_json(http, "https://openlibrary.org/trending/daily.json", limit=PER_SOURCE)
@@ -402,9 +360,6 @@ SOURCES: list[Source] = [
                 "https://www.animenewsnetwork.com/all/rss.xml?ann-edition=w", site="Anime News Network"),
 
     # Film and TV.
-    Source("douban-films", ("Douban · In cinemas", "豆瓣 · 正在热映"),
-           ("Films in Chinese cinemas now, with Douban scores", "正在上映的电影和豆瓣评分"), "culture", _douban_films,
-           "zh"),
     _tidy_feed("douban-film-reviews", ("Douban · Film reviews", "豆瓣 · 最受欢迎影评"),
                ("The most liked film reviews on Douban", "豆瓣上最受欢迎的影评"),
                "https://www.douban.com/feed/review/movie", "豆瓣电影"),
@@ -417,8 +372,6 @@ SOURCES: list[Source] = [
                 "culture", "https://www.theguardian.com/film/rss", site="The Guardian"),
 
     # Books.
-    Source("douban-books", ("Douban · Book chart", "豆瓣 · 热门图书榜"),
-           ("The month's most read and rated books on Douban", "豆瓣本月最受关注的图书"), "culture", _douban_books, "zh"),
     _tidy_feed("douban-book-reviews", ("Douban · Book reviews", "豆瓣 · 最受欢迎书评"),
                ("The most liked book reviews on Douban", "豆瓣上最受欢迎的书评"),
                "https://www.douban.com/feed/review/book", "豆瓣读书"),
@@ -457,7 +410,7 @@ SOURCES: list[Source] = [
 ]
 
 SOURCES = written_in("zh", SOURCES, {"netease-hot", "netease-new", "gcores", "yystv", "bangumi-today", "bangumi-season",
-                                     "bilibili-anime", "douban-films", "douban-film-reviews", "douban-books",
+                                     "bilibili-anime", "douban-film-reviews",
                                      "douban-book-reviews"})
 # The Chinese-language ones are mainland sites; the rest are read worldwide.
 SOURCES = local_to("CN", SOURCES, {s.key for s in SOURCES if s.lang == "zh"})

@@ -20,7 +20,7 @@ MAX_KEY = 4096
 
 
 class SignInError(Exception):
-    """`str()` is a code the page and the terminal explain."""
+    """`str()` is a code the page explains."""
 
 
 def new_verifier() -> str:
@@ -33,14 +33,9 @@ def challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def authorize_url(verifier: str, *, callback: str = "", state: str = "") -> str:
-    """Without `callback`, OpenRouter shows the code for the person to copy."""
-    query = {"code_challenge": challenge(verifier), "code_challenge_method": "S256"}
-    if callback:
-        query["callback_url"] = callback
-    if state:
-        query["state"] = state
-    query["key_label"] = KEY_LABEL
+def authorize_url(verifier: str, *, callback: str, state: str) -> str:
+    query = {"code_challenge": challenge(verifier), "code_challenge_method": "S256",
+             "callback_url": callback, "state": state, "key_label": KEY_LABEL}
     return f"{AUTHORIZE_URL}?{urlencode(query)}"
 
 

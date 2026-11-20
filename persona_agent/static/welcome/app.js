@@ -6,85 +6,8 @@
 // window on the first run.
 (() => {
   const $ = (id) => document.getElementById(id);
-  const WORDS = {
-    zh: {
-      someone: "你的角色",
-      newChat: "新对话",
-      recents: "最近",
-      settings: "设置",
-      setup: "设置",
-      unread: "有新消息",
-      sideOpen: "打开侧边栏",
-      sideClose: "收起侧边栏",
-      more: "{title}的更多操作",
-      rename: "重命名",
-      renameLabel: "对话名称",
-      delete: "删除",
-      deleteAsk: "删除这个对话？",
-      deleteNote: "删除后无法恢复。",
-      cancel: "取消",
-      minimize: "最小化",
-      maximize: "最大化",
-      restore: "还原",
-      close: "关闭",
-      nav: "对话",
-      chatList: "对话列表",
-      today: "今天",
-      week: "前 7 天",
-      earlier: "更早",
-      renameChat: "重命名对话",
-      connected: "{n} 个连接",
-      now: {
-        out: "外出中 · {where}",
-        outSomewhere: "外出中",
-        answering: "正在回消息",
-        asleep: "休息中",
-        asleepUntil: "休息至 {time}",
-        back: "刚回来 · 带回 {count} 条内容",
-        home: "在家",
-        off: "离线",
-      },
-    },
-    en: {
-      someone: "Your character",
-      newChat: "New chat",
-      recents: "Recents",
-      settings: "Settings",
-      setup: "Settings",
-      unread: "New messages",
-      sideOpen: "Open sidebar",
-      sideClose: "Close sidebar",
-      more: "More for {title}",
-      rename: "Rename",
-      renameLabel: "Chat name",
-      delete: "Delete",
-      deleteAsk: "Delete this chat?",
-      deleteNote: "This can't be undone.",
-      cancel: "Cancel",
-      minimize: "Minimize",
-      maximize: "Maximize",
-      restore: "Restore",
-      close: "Close",
-      nav: "Chats",
-      chatList: "Chats",
-      today: "Today",
-      week: "Previous 7 days",
-      earlier: "Earlier",
-      renameChat: "Rename chat",
-      connected: "{n} connected",
-      now: {
-        out: "Out looking around {where}",
-        outSomewhere: "Out looking around",
-        answering: "Replying to a message",
-        asleep: "Asleep",
-        asleepUntil: "Asleep until {time}",
-        back: "Just back with {count} finds",
-        home: "At home",
-        off: "Not around right now",
-      },
-    },
-  };
-  const FIGURES = ["pico", "deepseek", "chatgpt", "claude", "sprout"];
+  // As welcome.PET_FIGURES: the four characters' (one's own is Mibo too).
+  const FIGURES = ["mibo", "chatgpt", "deepseek", "claude"];
   const MAIN = "main";
   // The list of chats, and whether the main chat has something new, are asked for this often; in
   // its own window the page is told when a chat changes (paChats, window.py) and asks only now and then.
@@ -104,34 +27,34 @@
   // A painted figure is a sheet of four frames: in a row, two by two, or in a column.
   const SHEETS = [4, 2, 1];
 
-  // The token and the window's key come once in the fragment, as on the earlier page.
+  // The token and the window's key come once in the fragment.
   const fragment = new URLSearchParams(location.hash.slice(1));
   const token = fragment.get("token") || sessionStorage.getItem("personagent-setup-token") || "";
   const frameKey = fragment.get("frame") || sessionStorage.getItem("personagent-frame") || "";
   if (fragment.has("frame")) sessionStorage.setItem("personagent-frame", frameKey);
   if (fragment.has("token")) sessionStorage.setItem("personagent-setup-token", token);
   if (fragment.has("token") || fragment.has("frame")) history.replaceState(null, "", location.pathname);
-  // Without the token the page asks as a signed-in device; a cross-site request cannot add this header.
-  const authHeaders = () => (token ? { "X-Personagent-Setup-Token": token } : { "X-Personagent-Session": "1" });
+  // A cross-site request cannot add this header.
+  const authHeaders = () => ({ "X-Personagent-Setup-Token": token });
 
   // `keepalive`: the request still goes out while the page closes.
-  async function api(path, body, { keepalive = false } = {}) {
+  // A Blob body (a picture) goes as it is.
+  // `signal`: an AbortSignal that ends the wait (a chat reply's stop button).
+  async function api(path, body, { keepalive = false, signal } = {}) {
+    const raw = body instanceof Blob;
     const response = await fetch(`/api/${path}`, {
       keepalive,
+      signal,
       method: body === undefined ? "GET" : "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": raw ? "application/octet-stream" : "application/json",
         ...authHeaders(),
-        ...(frameKey && path === "window" ? { "X-Personagent-Window": frameKey } : {}),
+        // Settings › Other programs grants a permission only from this window's own page.
+        ...(frameKey && (path === "window" || path === "programs") ? { "X-Personagent-Window": frameKey } : {}),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       credentials: "same-origin",
     });
-    // A device whose session ended goes back to the sign-in page, which "/" then serves.
-    if (!token && response.status === 401) {
-      location.reload();
-      throw new Error("signin_required");
-    }
     const value = await response.json().catch(() => ({}));
     if (!response.ok || value.error) throw new Error(value.error || value.detail || "generic");
     return value;
@@ -143,14 +66,11 @@
     if (!response.ok) throw new Error("picture_gone");
     return URL.createObjectURL(await response.blob());
   }
-
-  // The earlier page holds setup for now; the token and key go along in its fragment.
-  function settingsUrl() {
-    const pass = new URLSearchParams();
-    if (token) pass.set("token", token);
-    if (frameKey) pass.set("frame", frameKey);
-    const hash = pass.toString();
-    return hash ? `/classic#${hash}` : "/classic";
+  // A text file attached to a message, the same way.
+  async function attachedText(path) {
+    const response = await fetch(path, { headers: authHeaders(), credentials: "same-origin" });
+    if (!response.ok) throw new Error("file_gone");
+    return response.text();
   }
 
   // Remembered in this browser only: a lost value costs a dot or an open sidebar, nothing more.
@@ -169,28 +89,23 @@
     }
   }
 
-  // The page's language as the earlier page chose it, else the character's, else the browser's.
-  function pickLang(state) {
-    const code = stored("personagent-page-language") || state?.lang || navigator.language || "en";
-    return code.toLowerCase().startsWith("zh") ? "zh" : "en";
-  }
-
-  let lang = "zh";
   let state = null;
   let frame = { frameless: false, maximized: false, figure: "", goto: "" };
   // Pages are shown once the language is known and the first run is over; a goto that comes sooner waits.
   let ready = false,
     waiting = "";
-  // What is open: {page: "chat", chat: id} or {page: "setup"}.
+  // What is open: {page: "chat", chat: id}, {page: "finds"} or {page: "setup"}.
   let current = null;
   let setupMounted = false;
   const views = new Map();
+  // 推荐记录 (finds.js), made when first opened.
+  let finds = null;
   // The main chat as the list says it, the plain chats newest first, and the newest main message seen here.
   let main = { id: MAIN, name: "", last: 0 };
   let chats = [];
   let listed = false;
   let read = Number(stored("personagent-main-read")) || 0;
-  const say = (key) => WORDS[lang][key];
+  const say = (key) => paI18n.t(`app.${key}`);
 
   // The figure: as just picked on this page, else as the window says, else the character's own, else the first.
   let picked = "";
@@ -216,20 +131,57 @@
             );
             resolve({ src: probe.src, cols });
           });
-          probe.addEventListener("error", () => resolve({ src: `/assets/figures/${key}.svg`, cols: 1 }));
-          probe.src = `/assets/figures/${key}.webp`;
+          const drawing = () =>
+            resolve({ src: `/assets/figures/${key}.svg${key === "mibo" && paint ? `?c=${paint}` : ""}`, cols: 1 });
+          probe.addEventListener("error", drawing);
+          // Mibo is only ever a drawing: no sheet is looked for.
+          if (key === "mibo") drawing();
+          else probe.src = `/assets/figures/${key}.webp`;
         }),
       );
     return sheets.get(key);
   }
+  // Mibo is drawn in the colours chosen for it (panels/colors.py): asked for again when they change.
+  let paint = "";
+  async function repaint() {
+    try {
+      const value = await api("look/colors");
+      const now = `${value.accent}${value.shell}`.replaceAll("#", "");
+      const changed = paint && now !== paint;
+      paint = now;
+      if (!changed) return;
+      sheets.delete("mibo");
+      for (const box of document.querySelectorAll('[data-figure="mibo"]')) draw(box);
+    } catch {
+      // Not let in yet: it stays as it was drawn.
+    }
+  }
+  // A character with a picture of its own (PERSONA_AVATAR "own") has it for a face; the whole figure stays.
+  const owned = new Map();
+  function wanted(box) {
+    // A box drawn for one named figure (a choice on the first run) keeps it.
+    if (box.dataset.fixed) return box.dataset.fixed;
+    const own = state?.avatar === "own" && state.ownAvatar;
+    return own && !box.classList.contains("pa-figure") ? `own:${state.ownAvatar}` : figure();
+  }
+  function ownSheet(key) {
+    if (!owned.has(key))
+      owned.set(
+        key,
+        picture("/api/avatar").then(
+          (src) => ({ src, cols: 1, own: true }),
+          () => sheet(figure()),
+        ),
+      );
+    return owned.get(key);
+  }
   // The figure's first frame in `box`: whole, or cropped to the head in a square.
   async function draw(box) {
-    // A box drawn for one named figure (a choice on the first run) keeps it.
-    const key = box.dataset.fixed || figure();
+    const key = wanted(box);
     box.dataset.figure = key;
-    const { src, cols } = await sheet(key);
+    const { src, cols, own } = key.startsWith("own:") ? await ownSheet(key) : await sheet(key);
     if (box.dataset.figure !== key) return;
-    const crop = box.classList.contains("pa-face") ? HEAD : box.classList.contains("pa-bust") ? BUST : null;
+    const crop = own ? null : box.classList.contains("pa-face") ? HEAD : box.classList.contains("pa-bust") ? BUST : null;
     const width = crop ? 100 / crop.size : 100;
     let img = box.querySelector("img");
     if (!img) {
@@ -240,6 +192,8 @@
       box.append(img);
     }
     img.style.width = `${cols * width}%`;
+    img.style.height = own ? "100%" : "";
+    img.style.objectFit = own ? "cover" : "";
     img.style.left = crop ? `${-crop.left * width}%` : "0";
     img.style.top = crop ? `${-crop.top * width * FRAME_TALL}%` : "0";
     if (img.getAttribute("src") !== src) {
@@ -258,18 +212,19 @@
   // The window's figure changed: every face on the page follows, and the page takes its colour.
   function redraw() {
     document.documentElement.dataset.figure = figure();
-    for (const box of document.querySelectorAll("[data-figure]"))
-      if (box.dataset.figure !== (box.dataset.fixed || figure())) draw(box);
+    for (const box of document.querySelectorAll(".pa-face, .pa-figure, .pa-bust"))
+      if (box.dataset.figure !== wanted(box)) draw(box);
   }
 
   const ctx = {
     api,
     confirm: confirmBox,
     picture,
+    attachedText,
     // In its own window: told when a chat changes ("pa-chats"), so the chat asks only now and then.
     told: Boolean(frameKey),
     get lang() {
-      return lang;
+      return paI18n.lang;
     },
     get figure() {
       return figure();
@@ -289,10 +244,17 @@
       redraw();
     },
     // The first run asks the language before anything else; the page follows at once.
-    setLang(code) {
-      store("personagent-page-language", code);
-      lang = code.toLowerCase().startsWith("zh") ? "zh" : "en";
+    async setLang(code) {
+      await paI18n.use(code);
       renderText();
+      renderFrame();
+    },
+    // Settings saved another language for the screens: every open window starts again in it, this one back
+    // where it was.
+    relang() {
+      paI18n.told();
+      sessionStorage.setItem("mibo-goto", "setup/language");
+      location.reload();
     },
     get state() {
       return state;
@@ -312,7 +274,6 @@
       if (!ready) waiting = page;
       else follow(page);
     },
-    settingsUrl,
     openSettings() {
       ctx.go("setup");
     },
@@ -338,6 +299,12 @@
     gone(id) {
       forget(id);
       loadChats();
+    },
+    // What a reply on its way is doing ("正在搜索：…"), in the line under its name; "" when it is done.
+    doing(line) {
+      if (line === doingLine) return;
+      doingLine = line;
+      renderSide();
     },
     // The main chat's last words from the character, for the card when what it does is not known.
     said(id, text) {
@@ -369,18 +336,55 @@
     current = { page: "chat", chat: id };
     $("setup-view").hidden = true;
     $("chat-view").hidden = false;
-    let view = views.get(id);
-    if (!view) {
-      view = window.paChat.create(id, ctx, hooks);
-      views.set(id, view);
-      $("chat-view").append(view.node);
-    }
+    const view = viewOf(id);
     for (const [key, other] of views) other.node.hidden = key !== id;
+    if (finds) finds.node.hidden = true;
     renderSide();
     closeDrawer();
     const shown = view.show();
     then?.(view, shown);
   }
+  // A chat's view, made out of sight the first time it is needed.
+  function viewOf(id) {
+    if (!views.has(id)) {
+      const view = window.paChat.create(id, ctx, hooks);
+      view.node.hidden = true;
+      views.set(id, view);
+      $("chat-view").append(view.node);
+    }
+    return views.get(id);
+  }
+
+  // 推荐记录 in the chats' place: its finds drawn by the main chat, a reply to one written there.
+  function openFinds() {
+    current = { page: "finds" };
+    $("setup-view").hidden = true;
+    $("chat-view").hidden = false;
+    finds ??= window.paFinds.create(ctx, {
+      card: (card) => viewOf(MAIN).findCard(card),
+      reply: () => openChat(MAIN, async (view, shown) => {
+        await shown;
+        view.focus();
+      }),
+    });
+    if (!finds.node.isConnected) $("chat-view").append(finds.node);
+    for (const view of views.values()) view.node.hidden = true;
+    finds.node.hidden = false;
+    renderSide();
+    closeDrawer();
+    finds.show();
+  }
+
+  // The browser's 问角色 (browse.js): the chat on screen, else the main one, with `text` in its box.
+  window.paAsk = (text) =>
+    openChat(current?.page === "chat" ? current.chat : MAIN, async (view, shown) => {
+      await shown;
+      const input = view.node.querySelector(".chat-input");
+      if (!input) return;
+      input.value = input.value ? `${input.value}\n${text}` : text;
+      input.dispatchEvent(new Event("input"));
+      input.focus();
+    });
 
   function openSetup(part) {
     current = { page: "setup" };
@@ -401,6 +405,7 @@
     if (name === "settings" || name === "setup") return openSetup(part || undefined);
     if (name === "places" || name === "connect") return openSetup("connect");
     if (name === "chat" && part) return openChat(part);
+    if (name === "finds") return openFinds();
     if (name === "feed" && part) return openChat(MAIN, (view, shown) => view.bring(part, shown));
     openChat(MAIN);
   }
@@ -429,23 +434,24 @@
     clearTimeout(nowTimer);
     if (!document.hidden) nowTimer = setTimeout(pollNow, NOW_MS);
   }
+  let doingLine = "";
   function nowWords() {
+    if (doingLine) return doingLine;
     if (!now) return lastLine;
-    const words = say("now");
+    const words = paI18n.words("app").now;
     const where = String(now.where || "").trim();
     if (now.state === "out") return where ? words.out.replace("{where}", where) : words.outSomewhere;
     if (now.state === "answering") return words.answering;
     if (now.state === "asleep") {
       const until = Number(now.until) ? new Date(Number(now.until) * 1000) : null;
-      const time = until?.toLocaleTimeString(lang === "zh" ? "zh-CN" : "en", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+      const time = until?.toLocaleTimeString(paI18n.locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
       return time ? words.asleepUntil.replace("{time}", time) : words.asleep;
     }
-    if (now.state === "back") return Number(now.count) ? words.back.replace("{count}", now.count) : words.home;
-    if (now.state === "off") return words.off;
+    if (now.state === "back") return Number(now.count) ? paI18n.t("app.now.back", { count: Number(now.count) }) : words.home;
     return words.home;
   }
-  // The dot on its face: about (green), asleep (grey), or none when the character is off or unknown.
-  const liveState = () => (!now || now.state === "off" ? "off" : now.state === "asleep" ? "asleep" : "on");
+  // The dot on its face: about (green), asleep (grey), or none while it is not known.
+  const liveState = () => (!now ? "off" : now.state === "asleep" ? "asleep" : "on");
 
   async function loadChats() {
     try {
@@ -522,9 +528,9 @@
     mainButton.setAttribute("aria-label", [mainName(), doing, fresh ? say("unread") : ""].filter(Boolean).join(" · "));
     mainButton.dataset.tip = mainName();
     $("side-settings").classList.toggle("active", current?.page === "setup");
-    const linked = state?.platforms?.length || 0;
-    $("side-note").hidden = !linked;
-    $("side-note").textContent = say("connected").replace("{n}", linked);
+    $("side-finds").classList.toggle("active", current?.page === "finds");
+    if (current?.page === "finds") $("side-finds").setAttribute("aria-current", "page");
+    else $("side-finds").removeAttribute("aria-current");
 
     // A chat not written in yet stays out of the list: 新对话 itself stands for it while it is open.
     const blankOpen = chats.some((chat) => chat.id === open && !chat.title);
@@ -651,8 +657,9 @@
     menu.from = null;
   }
 
-  // One question in the middle of the window before something that cannot be undone: true on its yes.
-  function confirmBox({ title, text = "", ok }) {
+  // One question in the middle of the window before something that cannot be undone: true on its yes. With
+  // `also`, a tick for a further step, unticked: its yes is { also } with the tick's state.
+  function confirmBox({ title, text = "", ok, also = "" }) {
     const box = document.createElement("dialog");
     box.className = "confirm";
     const words = document.createElement("h2");
@@ -672,13 +679,19 @@
       button.addEventListener("click", () => box.close(answer));
       actions.append(button);
     }
-    box.append(words, note, actions);
+    const tick = document.createElement("label");
+    tick.className = "confirm-also";
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    tick.append(check, also);
+    tick.hidden = !also;
+    box.append(words, note, tick, actions);
     // A click on the dimmed page around it is a no.
     box.addEventListener("click", (event) => event.target === box && box.close(""));
     return new Promise((resolve) => {
       box.addEventListener("close", () => {
         box.remove();
-        resolve(box.returnValue === "ok");
+        resolve(box.returnValue === "ok" && (also ? { also: check.checked } : true));
       });
       document.body.append(box);
       box.showModal();
@@ -784,12 +797,20 @@
 
   $("side-main").addEventListener("click", () => openChat(MAIN));
   $("side-new").addEventListener("click", newChat);
+  $("side-finds").addEventListener("click", openFinds);
   $("side-settings").addEventListener("click", () => openSetup());
 
   // ---- The rail: below 1000px, or folded by hand, the sidebar is a strip of icons;
   // opening it from there lays the whole sidebar over the page.
   let collapsed = stored("personagent-side") === "collapsed";
-  const railed = () => NARROW.matches || collapsed;
+  // A page in front on a screen with no room for the sidebar beside it folds the sidebar too (browse.js), unless
+  // the person folded or unfolded it themselves once; not kept, and the fold button unfolds it.
+  let paged = false;
+  const railed = () => NARROW.matches || collapsed || paged;
+  window.paSideFold = (on) => {
+    paged = on && !stored("personagent-side");
+    renderSideState();
+  };
   function renderSideState() {
     const rail = railed();
     document.body.classList.toggle("side-rail", rail);
@@ -823,13 +844,12 @@
       closeDrawer();
     } else if (railed() && NARROW.matches) openDrawer();
     else {
-      collapsed = !collapsed;
+      collapsed = !railed();
+      paged = false;
       store("personagent-side", collapsed ? "collapsed" : "open");
       renderSideState();
     }
   });
-  // The rail's list button opens the whole sidebar over the page.
-  $("side-history").addEventListener("click", openDrawer);
   $("side-scrim").addEventListener("click", () => closeDrawer());
   NARROW.addEventListener("change", renderSideState);
   document.addEventListener("keydown", (event) => {
@@ -853,12 +873,11 @@
   });
 
   function renderText() {
-    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
     for (const node of document.querySelectorAll("[data-t]")) node.textContent = say(node.dataset.t);
     $("side").setAttribute("aria-label", say("nav"));
     for (const [id, key] of [
       ["side-new", "newChat"],
-      ["side-history", "chatList"],
+      ["side-finds", "finds"],
       ["side-settings", "settings"],
     ])
       $(id).dataset.tip = say(key);
@@ -889,6 +908,8 @@
     const was = figure();
     try {
       const value = await api("window");
+      // The window's figure moved (the pet's menu, a choice in Settings): it wins over one picked here before.
+      if (String(value.figure || "") !== frame.figure) picked = "";
       frame = {
         frameless: Boolean(value.frameless),
         maximized: Boolean(value.maximized),
@@ -900,6 +921,7 @@
     }
     renderFrame();
     if (figure() !== was) redraw();
+    if (figure() === "mibo") repaint();
     if (frame.goto && ready) follow(frame.goto);
     else if (frame.goto) waiting = frame.goto;
   }
@@ -936,7 +958,21 @@
     }
     renderSide();
   });
-  window.addEventListener("focus", () => loadFrame());
+  // Coming to the front, the window hands focus to the first control it finds: a ring nobody asked for.
+  // A button that gets focus in that moment, with no key pressed, lets it go.
+  let arrived = performance.now();
+  let tabbed = false;
+  document.addEventListener("keydown", (event) => (tabbed = event.key === "Tab"), true);
+  document.addEventListener("pointerdown", () => (tabbed = false), true);
+  document.addEventListener("visibilitychange", () => (arrived = performance.now()));
+  document.addEventListener("focusin", (event) => {
+    if (!tabbed && performance.now() - arrived < 400 && event.target.matches("button, a")) event.target.blur();
+  });
+  window.addEventListener("focus", () => {
+    arrived = performance.now();
+    tabbed = false;
+    loadFrame();
+  });
   // window.py: a game or something full screen is in front (quiet), or went. Meanwhile the page
   // counts as hidden, here and in chat.js, so it asks nothing, as in the tray.
   let quietNow = false;
@@ -969,7 +1005,9 @@
     } catch {
       // The pages say for themselves what they cannot reach.
     }
-    lang = pickLang(state);
+    // Back where a change of language left it.
+    waiting = sessionStorage.getItem("mibo-goto") || waiting;
+    sessionStorage.removeItem("mibo-goto");
     // The character is known now: the page takes its colour and its faces.
     redraw();
     renderText();

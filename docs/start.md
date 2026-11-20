@@ -33,9 +33,7 @@ On Windows the page opens in a window of its own. On macOS and Linux it opens in
 
 A coding agent can do the setup for you: ask it to read [setup-for-agents.md](setup-for-agents.md) and set up personagent.
 
-On Windows you can also download the source ZIP, unpack it and double-click `start.bat`. It creates its own Python environment in the folder, fetching Python first when the computer has none, and opens the same page. The first time, it also puts a personagent icon on your desktop and in the Start menu.
-
-To run it from a clone, give it a venv of its own: `python -m venv .venv`, then `.venv/bin/python -m pip install -e .` and `.venv/bin/python -m persona_agent`. On Windows the interpreter is `.venv\Scripts\python.exe`, or you can double-click `start.bat`.
+To run it from a clone, give it a venv of its own: `python -m venv .venv`, then `.venv/bin/python -m pip install -e .` and `.venv/bin/python -m persona_agent`. On Windows the interpreter is `.venv\Scripts\python.exe`.
 
 ## Sign in and chat
 

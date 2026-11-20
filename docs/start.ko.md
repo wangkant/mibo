@@ -33,9 +33,7 @@ Windows에서는 페이지가 전용 창에서 열립니다. macOS와 Linux에�
 
 코딩 어시스턴트에게 설정을 맡길 수도 있습니다. [setup-for-agents.md](setup-for-agents.md)를 읽고 personagent를 설정해 달라고 요청하십시오.
 
-Windows에서는 소스 ZIP을 내려받아 압축을 풀고 `start.bat`을 더블 클릭해도 됩니다. 폴더 안에 전용 Python 환경을 만들고(컴퓨터에 Python이 없으면 먼저 Python을 가져옵니다) 같은 페이지를 엽니다. 처음 실행할 때는 바탕 화면과 시작 메뉴에 personagent 아이콘도 만듭니다.
-
-클론에서 실행하려면 전용 venv를 만드십시오. `python -m venv .venv`를 실행한 다음 `.venv/bin/python -m pip install -e .`와 `.venv/bin/python -m persona_agent`를 실행합니다. Windows의 인터프리터는 `.venv\Scripts\python.exe`이고, `start.bat`을 더블 클릭해도 됩니다.
+클론에서 실행하려면 전용 venv를 만드십시오. `python -m venv .venv`를 실행한 다음 `.venv/bin/python -m pip install -e .`와 `.venv/bin/python -m persona_agent`를 실행합니다. Windows의 인터프리터는 `.venv\Scripts\python.exe`입니다.
 
 ## 로그인하고 채팅하기
 

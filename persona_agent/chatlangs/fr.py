@@ -35,8 +35,6 @@ SPEC = Spec(
             rf"|(?:tu\s+as|t{_A}\s*as|vous\s+avez)\s+(?:retenu|quoi)\s+(?:quoi|en\s+mémoire)"
             r"|(?:ta|votre)\s+mémoire\s*\?"),
     recall_tail=r"(?:jusqu{_A}ici|pour\s+l{_A}instant|en\s+fait)".replace("{_A}", _A),
-    learned=(rf"qu{_A}(?:est-ce\s+que\s+(?:tu\s+as|t{_A}\s*as|vous\s+avez)|as-tu|avez-vous)"
-             rf"\s+appris|(?:tu\s+as|t{_A}\s*as|vous\s+avez)\s+appris\s+quoi|appris\s*\?"),
     # The question mark, a tag ("..., non", "hein") or an opening "est-ce que".
     question_end=(r"[?？][\s?？!！.~～]*$|(?:,\s*(?:non|nan|ou\s+pas|ou\s+quoi)|[\s,]hein)[\s!.~]*$"
                   r"|^est-ce\s+qu"),
@@ -55,16 +53,6 @@ SPEC = Spec(
                           "toute ta mémoire", "ta mémoire"}),
     first_person=(r"(?<![\w'’-])(?:je|moi|me|mon|ma|mes|mien|mienne|miens|miennes"
                   r"|moi-même)(?![\w'’-])|(?<![\w'’-])[jm]['’](?=\w)"),
-    self_id=r"(?<!\w)je\s+suis(?!\s+pas\b)(?:\s+(?:le|la|un|une))?(?!\w)",
-    made_by=r"(?:créé|développé|conçu|entraîné|fabriqué)e?\s+par",
-    from_maker=r"(?<!\w)(?:de|d['’])",
-    leak_labels=r"entrée|locuteur|intention|décision|style|analyse",
-    assistant_tells=(r"(?:désolée?|navrée?)[,.!\s]+(?:mais\s+)?je\s+ne\s+"
-                     r"(?:(?:peux|pourrai)\s+pas|suis\s+pas\s+en\s+mesure\s+d['’e])\s*(?:vous\s+|t['’]\s*)?"
-                     r"(?:aider|répondre|fournir|assister)\s+(?:avec\s+|à\s+)?"
-                     r"(?:cela|ça|ceci|cette\s+(?:demande|question)|votre\s+demande|ta\s+demande)"
-                     r"|j['’]esp[èe]re\s+que\s+(?:cela|ça|ceci)\s+(?:vous|t['’])\s*(?:aide|aidera|sera\s+utile)"
-                     r"|en\s+esp[ée]rant\s+(?:que\s+)?(?:cela|ça)\s+(?:vous|t['’])\s*aide"),
     replies={
         "remember_what": ("retenir quoi ? t'as rien dit", "vas-y, dis",
                           "je retiens quoi lol"),
@@ -76,36 +64,11 @@ SPEC = Spec(
         "forgotten": ("oublié", "effacé", "c'est oublié"),
         "empty": ("j'ai la tête vide", "y a rien là-dedans", "j'ai rien retenu pour l'instant"),
         "recall_head": ("Voilà ce dont je me souviens :",),
-        "said": ("tu as dit : ",),
-        "about": ("sur {name} : ",),
-        "from": ("de {name} : ",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("Je ne peux pas répondre ici tant que mon administrateur n'a pas validé cette conversation. Le code de ta demande est {code} : transmets-le-lui, s'il te plaît.",),
-        "approval_group": ("Mon administrateur n'a pas encore validé ce groupe, donc je ne peux pas répondre ici.",),
+        "secret": ("Pas gardé : les numéros d'identité et de carte, les mots de passe et les codes ne sont jamais enregistrés.",),
     },
     failure_excuses=("attends, ça rame un peu",
                      "deux secondes, la connexion fait des siennes",
                      "réseau bizarre là, laisse-moi une minute"),
-    learned_text={
-        "head": ("souvenirs : {memories}, réponses apprises : {examples}, "
-                 "corrections : {fixes}, en observation jusqu'à une autre réaction concordante : {voice}, "
-                 "soumis à ma propre décision : {admin}"),
-        "score": ", dernière auto-éval : {score}/5",
-        "pair": "avant : {was}, maintenant : {better}",
-        "someone_else": "quelqu'un dans un autre chat",
-        "someone": "quelqu'un",
-        "retry": "{who} a accepté la nouvelle réponse",
-        "self_review": "auto-bilan",
-        "self_eval": "auto-éval au max",
-        "corrected": "{who} a corrigé",
-        "missed": "{who} a dit que c'était raté",
-        "liked": "{who} a aimé",
-        "by_me": "décidé par moi",
-        "by_person": "appliqué manuellement",
-        "passed": "preuves : {events}, solides : {strong}, validé",
-        "why": "pourquoi : {steps}",
-        "sep": ", ",
-    },
     # Frequent in French, rare in English, Spanish, German, Portuguese: so not
     # "que", "de", "le", "tu" (es/pt), "du"/"des" (de), "mais"/"ou" (pt), "on".
     stopwords=frozenset({
@@ -116,4 +79,9 @@ SPEC = Spec(
         "moi", "toi", "peux", "veux", "sais", "fait", "faire", "être", "une",
     }),
     letters="èëîïûùœ",
+    unsaid=r"\bne (?:retiens|note|garde|enregistre|mémorise) pas (?:ça|cela)\b|\bne t'en souviens pas\b",
+    forget_that=r"oublie (?:ce que je (?:viens de dire|t'ai dit)|ça|cela)\b|fais comme si je n'avais rien dit",
+    lead_in=r"bon|bref|ah|enfin",
+    kinds=("À propos de toi", "Ce que tu aimes", "Ce que tu n'aimes pas", "Ces temps-ci", "Projets",
+           "Comment te parler"),
 )

@@ -36,10 +36,9 @@ personagent
 |---|---|
 | 설치 없이 실행 | `uvx personagent`([uv](https://docs.astral.sh/uv/)의 기능으로, Python도 대신 받아 줍니다) |
 | 영구적인 `personagent` 명령 | `uv tool install personagent` 또는 `pipx install personagent` |
-| Windows, 소스 ZIP에서 | 압축을 풀고 `start.bat`을 더블클릭 |
 | 클론에서 | `git clone https://github.com/wangkant/personagent.git`, `cd personagent`, `python -m venv .venv`, 그다음 `.venv/bin/python -m pip install -e .`와 `.venv/bin/python -m persona_agent`(Windows에서는 `.venv\Scripts\python.exe`) |
 
-personagent는 Python 3.10–3.14에서 실행됩니다. `start.bat`은 `.venv`를 만들고 의존성을 설치한 뒤 같은 페이지를 엽니다. 처음 실행할 때는 바탕 화면과 시작 메뉴에 personagent 아이콘도 만듭니다. `pyproject.toml`의 의존성 목록이 바뀔 때마다 다시 설치합니다.
+personagent는 Python 3.10–3.14에서 실행됩니다.
 
 **personagent 폴더**에는 설정(`.env`), 캐릭터(`persona.txt`), 학습 내용(`runtime/`), 채팅 플랫폼(`platforms/`)이 들어 있습니다. `platforms/`에는 관리형 AstrBot과, personagent가 직접 연결하는 플랫폼의 자격 증명을 저장하는 `direct.json`이 있습니다. personagent는 다음 중 처음 해당하는 폴더를 사용합니다.
 
@@ -176,11 +175,9 @@ PyPI에 새 personagent가 있으면 채팅 보기에 pip, uvx, uv tool, pipx, G
 | `personagent tools` | [MCP 서버의 도구](#도구): `list`, `add`, `remove`, `check`, `call`, `set` |
 | `personagent mcp` | 코딩 어시스턴트가 시작하는 MCP 서버. 직접 실행하지 않습니다 |
 | `personagent doctor` | 설정과 의존하는 모든 서비스 확인 |
-| `personagent learned` | 배운 것과 아직 관찰 중인 것을 표시하고, 원하면 개입 |
 | `personagent memory` | 기억하는 것을 나열하고, 항목 하나를 삭제하거나 복원 |
 | `personagent access` | [승인 대기 중인 새 대화](#답장-대상-새-대화-승인)를 나열하고 코드로 승인하거나 거절(`approve`, `admin`, `decline`, `undo`, `policy <platform> approve\|open`) |
 | `personagent eval` | 발언, 페르소나, 학습, 기억 측정 |
-| `personagent character` | [캐릭터 카드 가져오기](#캐릭터-카드와-초안)(`import FILE`), 캐릭터를 카드로 저장(`export FILE.png` 또는 `.json`), 설명으로 작성한 페르소나 초안 출력(`draft "..."`) |
 
 모든 명령은 `--help`를 받습니다.
 
@@ -401,8 +398,6 @@ LINE은 제공하지 않습니다. AstrBot이 LINE 콜백을 대시보드를 통
 |---|---|
 | 이미 실행 중인 [AstrBot](https://docs.astrbot.app) | 그 플랫폼들 |
 | [NapCat](https://github.com/NapNeko/NapCatQQ)(OneBot v11), AstrBot 경유 | 개인 QQ 계정의 QQ |
-| [Koishi](https://koishi.chat) 또는 다른 Satori 서버, [Satori 커넥터](../integrations/satori/README.ko.md) 경유 | 그 서버가 로그인한 곳 |
-| [Matrix](../integrations/matrix/README.ko.md), mautrix 브리지 경유 | Matrix 방, WhatsApp, Signal, Messenger, Instagram, Google Messages |
 
 그 밖의 것은 메시지마다 서명된 HTTP 요청 하나를 받는 [커넥터 프로토콜](connectors.ko.md)로 연결할 수 있습니다. 여러 커넥터가 하나의 personagent를 동시에 쓸 수 있습니다. 실제 운영은 [배포 가이드](deploy.ko.md)에서 다룹니다.
 
@@ -847,12 +842,6 @@ personagent eval --suite all --lang zh --repeat 5
 
 `--rejudge REPORT`는 보관한 보고서의 답장을 지금 설정한 `BENCH_JUDGE_MODEL`로, 테스트 대상 모델을 호출하지 않고 다시 판정하며, 결과를 원본 옆에 씁니다. 답장, 기준선, 승격 정책이 한 일은 그대로입니다.
 
-방법과 모든 보고서를 포함한 최신 결과는 [evals/2026-10-18](evals/2026-10-18/README.ko.md)에 있습니다. 보고서를 읽을 때 참고할 점입니다.
-
-- `speak`에서 놓친 경우의 대부분은 이름이 영화관이나 강아지처럼 다른 것을 뜻하는 줄이거나, 누군가 그것이 한 말을 다른 사람에게 전하는 줄입니다. 이름은 호출로 계산되고 모델이 그것을 뒤집는 일은 드뭅니다.
-- `persona`에서 분할은 판정자가 두 번 다 먼저(또는 나중에) 온 답장을 골랐다는 뜻입니다. 공개된 판정은 Claude Opus 5.5의 것입니다. `personagent eval` 밖에서 묶음으로 판정했고, 각 보고서의 `rejudged` 필드가 이를 기록합니다. 각 쌍의 `earlier` 필드에는 첫 판정자 Claude Haiku 5.5의 판정이 남아 있습니다.
-- `learning`에서 정책 행과 탐색 행은 다른 질문에 답합니다. 정책 행은 규칙이 올바른 교정을 승격했는지 묻습니다. 탐색 행은 승격된 교정이 이후 답장을 바꿨는지 묻습니다. `not_promoted` 탐색 행은 잡음 기준입니다. 프롬프트가 전혀 바뀌지 않았기 때문입니다.
-
 ## 동작 방식
 
 ![아키텍처: 그룹 채팅 메시지는 판단, 프롬프트 구성, 모델, 점검을 거치고 답장은 커넥터를 통해 돌아갑니다. 봇이 발언하지 않으면 아무것도 보내지 않습니다. 반응은 판정되어 증거 로그에 들어가고, 승격이 승인한 것만 프롬프트가 읽는 예시에 도달합니다](persona_llm_agent_architecture.svg)
@@ -961,8 +950,8 @@ personagent 폴더의 주요 파일과 폴더에 담긴 내용은 다음과 같�
 
 personagent 1.5.0은 PyPI에 있습니다. CI는 Linux의 Python 3.10–3.14와 Windows의 Python 3.12에서 테스트를 실행합니다. 추가 CI 작업이 패키지를 설치하고 명령과 로컬 페이지를 구동하며, Linux, macOS, Windows에서 앱 창을 엽니다.
 
-직접 OneBot 경로(`/v1/onebot`)는 폐지 예정이지만 1.x 동안 유지됩니다. `tools/`의 스크립트는 클론에서 실행하는 용도이며 [tools.md](tools.ko.md)에서 설명합니다.
+직접 OneBot 경로(`/v1/onebot`)는 폐지 예정이지만 1.x 동안 유지됩니다.
 
 - [시작하기](start.ko.md) · [배포 가이드](deploy.ko.md) · [중국어 단계별 가이드(QQ 스캔 연결과 문제 해결)](deploy.zh-CN.md)
-- 커넥터: [AstrBot 플러그인](../integrations/astrbot/astrbot_plugin_personagent/README.ko.md) · [Satori](../integrations/satori/README.ko.md) · [Matrix](../integrations/matrix/README.ko.md) · [프로토콜](connectors.ko.md)
+- 커넥터: [AstrBot 플러그인](../integrations/astrbot/astrbot_plugin_personagent/README.ko.md) · [프로토콜](connectors.ko.md)
 - [모든 설정](../.env.example) · [변경 기록](../CHANGELOG.md) · [기여](../.github/CONTRIBUTING.md) · [보안 정책](../.github/SECURITY.md)

@@ -5,6 +5,9 @@
   overflow: hidden;
   display: flex;
   background: var(--pa-canvas);
+  /* The chat lays itself out by its own width: the whole stage, the small chat beside the pet, or the column
+     beside a page in the app's browser (the @container chat rules below). */
+  container: chat / inline-size;
 }
 .chat[hidden] {
   display: none;
@@ -201,7 +204,157 @@
     opacity: 1;
   }
 }
+/* Beside the dots: what it is looking up for the reply. */
+.line.typing .doing {
+  margin-left: var(--pa-s3);
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 
+/* The character's words, drawn from their Markdown (chat.js sayNode). */
+.say.rich > * + *,
+.say.rich li > * + *,
+.say.rich blockquote > * + * {
+  margin-top: var(--pa-s2);
+}
+.say.rich p {
+  margin: 0;
+}
+.say.rich ul,
+.say.rich ol {
+  margin: 0;
+  padding-left: 1.4em;
+  white-space: normal;
+}
+.say.rich li {
+  white-space: pre-wrap;
+}
+.say.rich li + li {
+  margin-top: 2px;
+}
+.say.rich h3,
+.say.rich h4,
+.say.rich h5,
+.say.rich h6 {
+  margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 600;
+  line-height: var(--pa-lh-tight);
+}
+.say.rich h3 {
+  font-size: 19px;
+}
+.say.rich h4 {
+  font-size: var(--pa-fs-xl);
+}
+.say.rich > * + :is(h3, h4, h5, h6) {
+  margin-top: var(--pa-s4);
+}
+.say.rich strong {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.say.rich del {
+  color: var(--pa-muted);
+}
+.say.rich :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: var(--pa-r-xs);
+  background: var(--pa-sunken);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+.say.rich blockquote {
+  margin-inline: 0;
+  padding-left: var(--pa-s3);
+  border-left: 3px solid var(--pa-line-strong);
+  color: var(--pa-muted);
+}
+.say.rich hr {
+  height: 1px;
+  margin-block: var(--pa-s3);
+  border: 0;
+  background: var(--pa-line);
+}
+/* A wide table scrolls inside its own box, not the chat. */
+.say-table {
+  overflow-x: auto;
+  white-space: normal;
+}
+/* The table keeps the width its cells want (a long cell wraps at 22em), so a narrow chat scrolls it sideways
+   rather than breaking every word. */
+.say-table table {
+  width: max-content;
+  border-collapse: collapse;
+  font-size: var(--pa-fs-md);
+  line-height: var(--pa-lh);
+}
+.say-table th,
+.say-table td {
+  max-width: 22em;
+  padding: 6px 12px;
+  border: 1px solid var(--pa-line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+.say-table th {
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.say-link {
+  color: var(--pa-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.code {
+  overflow: hidden;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+  white-space: normal;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 2px 12px;
+  border-bottom: 1px solid var(--pa-line);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.code-copy {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.code-copy:hover,
+.code-copy:focus-visible {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+  outline: none;
+}
+.code pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--pa-text);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-sm);
+  line-height: 1.55;
+  white-space: pre;
+}
 /* A passing remark: no face, quieter, on the text's edge. */
 .aside {
   display: flex;
@@ -255,6 +408,65 @@
   display: block;
   margin: -4px -10px;
 }
+/* What the person attached sits above their bubble: pictures as they are, files as chips. */
+.me-att {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--pa-s2);
+  max-width: min(100%, 520px);
+}
+.me-att + .bubble {
+  margin-top: var(--pa-s2);
+}
+.me-att .pic img {
+  max-height: 240px;
+}
+.att-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--pa-s2);
+  max-width: 100%;
+}
+/* An opened file takes the row, its text under its chip. */
+.att-sent:has(.att-text) {
+  flex-basis: 100%;
+}
+.att-sent .att-file {
+  background: var(--pa-surface);
+  font: inherit;
+  text-align: left;
+}
+button.att-file {
+  cursor: pointer;
+}
+button.att-file:hover {
+  border-color: var(--pa-line-strong);
+}
+.att-text {
+  width: min(520px, 100%);
+  max-height: 280px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.att-text.gone {
+  border-style: dashed;
+  background: transparent;
+  color: var(--pa-faint);
+  font-family: inherit;
+}
 /* A find answered: the first line inside the bubble. */
 .quote {
   display: flex;
@@ -291,6 +503,19 @@
 }
 .me.unanswered .bubble {
   opacity: 0.55;
+}
+/* Stopped by the person: not an error, said in the quiet colour. */
+.me.stopped .msg-mark {
+  color: var(--pa-faint);
+}
+.notice.quiet {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.notice.quiet .notice-actions {
+  justify-content: flex-end;
+  margin-top: 0;
 }
 .msg-mark {
   display: inline-flex;
@@ -403,7 +628,7 @@
   border: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.92);
-  color: #1d1b18;
+  color: #1a1a1c;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   transition:
     transform var(--pa-t-fast),
@@ -477,6 +702,37 @@
 }
 .find-top .dot {
   color: var(--pa-line-strong);
+}
+/* Why this one, at the end of the line: a quiet pill; pressed, its menu opens under it. */
+.find-why-wrap {
+  margin-left: auto;
+  min-width: 0;
+}
+.find-why {
+  min-width: 0;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 var(--pa-s2);
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: var(--pa-hover);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 20px;
+  text-overflow: ellipsis;
+}
+button.find-why:hover,
+.find-why[aria-expanded="true"] {
+  color: var(--pa-ink);
+}
+.find-why-wrap .find-menu {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+.find-menu [aria-checked="true"],
+.find-menu [aria-checked="true"] .i {
+  color: var(--pa-accent-ink);
 }
 .find h3 {
   display: -webkit-box;
@@ -762,6 +1018,18 @@
   width: 15px;
   height: 15px;
 }
+.find-undo {
+  margin-left: auto;
+  padding: 0 var(--pa-s2);
+  border: 0;
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.find-undo:hover {
+  color: var(--pa-ink);
+  text-decoration: underline;
+}
 @keyframes chat-fade {
   from {
     opacity: 0;
@@ -909,6 +1177,179 @@
   height: 18px;
   stroke-width: 2.25;
 }
+/* While a reply is on its way: the stop button, a filled square. */
+.chat-send.stopping .i {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  stroke: none;
+}
+/* + : pictures and files; the same quiet weight as the box around it. */
+.chat .chat-attach {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--pa-muted);
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.chat-attach:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.chat-attach .i {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+/* What is attached, above the text: a thumbnail for a picture, a name and size for a file. */
+.chat-tray {
+  padding: 12px 14px 0;
+}
+.chat-tray-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+}
+.chat-composer.has-tray .chat-input {
+  padding-top: 10px;
+}
+.att {
+  position: relative;
+  flex: none;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+}
+.att-picture {
+  width: 56px;
+  height: 56px;
+}
+.att-picture img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.att-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 240px;
+  height: 56px;
+  padding: 8px 14px 8px 8px;
+}
+.att-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+}
+.att-icon .i {
+  width: 20px;
+  height: 20px;
+}
+.att-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 18px;
+}
+.att-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--pa-fs-sm);
+  font-weight: 500;
+}
+.att-size {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.chat .att-x {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid var(--pa-surface);
+  border-radius: 50%;
+  background: var(--pa-n700);
+  color: var(--pa-n0);
+}
+.att-x:hover {
+  background: var(--pa-n900);
+}
+.att-x .i {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+/* A file that could not be added: what happened and which kinds work, until closed. */
+.chat-refused {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  line-height: 1.5;
+}
+.chat-refused[hidden] {
+  display: none;
+}
+.chat-refused > .i {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--pa-error);
+}
+.chat-refused-text {
+  flex: 1;
+  min-width: 0;
+}
+/* Files dragged over the chat. */
+.chat {
+  position: relative;
+}
+.chat-drop {
+  position: absolute;
+  inset: 12px;
+  z-index: 5;
+  display: none;
+  place-items: center;
+  border: 2px dashed var(--pa-accent);
+  border-radius: var(--pa-r-2xl);
+  background: color-mix(in srgb, var(--pa-canvas) 88%, transparent);
+  color: var(--pa-accent-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 500;
+  pointer-events: none;
+}
+.chat.dropping .chat-drop {
+  display: grid;
+}
 /* The keys, said only while the box has the focus; a passing word takes the line for a moment. */
 .chat-hint {
   height: 16px;
@@ -1053,7 +1494,7 @@
   color: var(--pa-accent);
 }
 
-@media (max-width: 999.98px) {
+@container chat (max-width: 760px) {
   .chat-col {
     padding: 0 var(--pa-s5);
   }
@@ -1061,7 +1502,7 @@
     margin-left: var(--pa-s8);
   }
 }
-@media (max-width: 560px) {
+@container chat (max-width: 500px) {
   .chat-col {
     padding: 0 var(--pa-s4);
   }
@@ -1079,4 +1520,191 @@
   .chat-off h1 {
     font-size: var(--pa-fs-3xl);
   }
+}
+/* A card asking the person before something with an effect outside happens in the browser (chat.js showCard). */
+.op-card {
+  margin: 10px 0 6px;
+  padding: 16px;
+  max-width: 440px;
+  border: 1px solid var(--pa-line);
+  border-radius: 14px;
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-1);
+  color: var(--pa-text);
+  font: var(--pa-fs-sm) / 1.5 var(--pa-font);
+}
+.op-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 0 0 12px;
+}
+.op-card-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+}
+.op-card-icon .i {
+  width: 18px;
+  height: 18px;
+}
+.op-card-words {
+  min-width: 0;
+  align-self: center;
+}
+.op-card-title {
+  margin: 0 0 8px;
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--pa-ink);
+}
+.op-card-head .op-card-title {
+  margin: 0;
+}
+.op-card-meta {
+  margin: 2px 0 0;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  overflow-wrap: anywhere;
+}
+/* The request the card is for, in the person's own words. */
+.op-card-quote {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--pa-sunken);
+  overflow-wrap: anywhere;
+}
+.op-card-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+}
+.op-card-facts dt {
+  color: var(--pa-muted);
+}
+.op-card-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.op-card-text {
+  white-space: pre-wrap;
+  padding: 4px 8px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-hover);
+}
+.op-card-shot {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-sm);
+}
+.op-card-never {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0 0 8px;
+  color: var(--pa-muted);
+}
+.op-card-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+/* Answered: the buttons give way to one line saying what was decided. */
+.op-card.answered .op-card-buttons {
+  display: none;
+}
+.op-card-told {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--pa-line);
+  color: var(--pa-muted);
+}
+/* A form an MCP server asks the person to fill (toolcard.js): one labelled field a row. */
+.op-card-form {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+.op-card-field {
+  display: grid;
+  gap: 4px;
+}
+.op-card-field-name {
+  color: var(--pa-muted);
+}
+.op-card-field-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.op-card-field-check .op-card-field-name {
+  order: 2;
+}
+.op-card-field-check .op-card-meta {
+  grid-column: 1 / -1;
+  order: 3;
+}
+.op-card-field-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.op-card-field-choice {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+/* Under a memory command's answer: the way to Settings › Memory (chat.js). */
+.chat-manage {
+  margin-top: var(--pa-s1);
+  font-size: var(--pa-fs-sm);
+}
+/* A card answered beside the page (browse.js): one line in the chat. */
+.op-note {
+  margin: 6px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--pa-line-strong);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+/* A card before a command runs on this computer (chat.js showShellCard). */
+.shell-card-lines {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.shell-card-lines li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.shell-card-command {
+  margin: 0 0 8px;
+  color: var(--pa-muted);
+}
+.shell-card-command summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.shell-card-command pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-hover);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.45;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }

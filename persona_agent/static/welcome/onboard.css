@@ -264,13 +264,6 @@
 .onboard-free .onboard-icon {
   color: var(--pa-accent);
 }
-.onboard-note {
-  margin: 8px 0;
-  padding: 14px 16px;
-  border-radius: var(--pa-r-lg);
-  background: var(--pa-sunken);
-  color: var(--pa-muted);
-}
 .onboard-loading {
   height: 220px;
   border-radius: var(--pa-r-lg);
@@ -701,95 +694,10 @@
 .onboard-lang[aria-pressed="true"] .onboard-lang-tick {
   opacity: 1;
 }
-.onboard-lang-hint + .onboard-langs + .onboard-note {
-  margin-top: 14px;
-}
 
-/* ---- Step two: the characters, whole, side by side */
-.onboard-figures {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+/* ---- Step two: the characters (characters.css draws the picker) */
+.onboard-characters {
   margin-top: 12px;
-}
-.onboard-pick {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 8px 12px;
-  border: 1.5px solid var(--pa-line);
-  border-radius: var(--pa-r-lg);
-  background: var(--pa-surface);
-  color: var(--pa-text);
-  transition:
-    border-color 0.15s,
-    background 0.15s,
-    transform 0.15s;
-}
-.onboard-pick:hover {
-  border-color: var(--pa-line-strong);
-  transform: translateY(-2px);
-}
-.onboard-pick-stage {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  width: 100%;
-  height: 150px;
-  border-radius: var(--pa-r-md);
-  background: var(--pa-canvas);
-}
-.onboard-pick-figure {
-  width: 112px;
-}
-.onboard-pick-name {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--pa-ink);
-}
-.onboard-pick-tag {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--pa-accent-tint);
-  color: var(--pa-accent-ink);
-  font-size: 11.5px;
-  font-weight: 600;
-}
-.onboard-pick-tick {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 22px;
-  height: 22px;
-  padding: 4px;
-  border-radius: 50%;
-  background: var(--pa-accent);
-  fill: none;
-  stroke: var(--pa-on-accent);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0;
-  transform: scale(0.6);
-  transition:
-    opacity 0.15s,
-    transform 0.15s;
-}
-.onboard-pick[aria-pressed="true"] {
-  border-color: var(--pa-accent);
-  background: var(--pa-accent-soft);
-}
-.onboard-pick[aria-pressed="true"] .onboard-pick-stage {
-  background: var(--pa-surface);
-}
-.onboard-pick[aria-pressed="true"] .onboard-pick-tick {
-  opacity: 1;
-  transform: none;
 }
 
 /* ---- Step three: the model, a short form */
@@ -1139,4 +1047,58 @@
 }
 .onboard-look-box > .onboard-found:not(:empty) {
   margin-top: 8px;
+}
+
+/* ---- Step four, then: a few finds to mark */
+.onboard-find {
+  overflow: hidden;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  animation: onboard-pop 0.25s ease-out;
+}
+.onboard-find-media img {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+}
+.onboard-find-site {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 16px 0;
+  color: var(--pa-faint);
+  font-size: 12.5px;
+}
+.onboard-find-kind {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--pa-accent-soft);
+  color: var(--pa-accent-ink);
+  font-weight: 600;
+}
+.onboard-find-title {
+  margin: 4px 16px 0;
+  color: var(--pa-ink);
+  font-size: 16px;
+  line-height: 1.4;
+}
+.onboard-find-text {
+  display: -webkit-box;
+  margin: 6px 16px 0;
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: 13.5px;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.onboard-find > :last-child {
+  margin-bottom: 16px;
+}
+.onboard-find-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
 }

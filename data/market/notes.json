@@ -1,0 +1,16 @@
+{
+ "note": "The English of every fit_note and licence note the catalog writes, keyed by its Chinese; {product} and {runtimes} are filled in the catalog.",
+ "面向{product}的专用技能，需要该产品的账号或环境。": "Made for {product}; it needs that product's account or environment.",
+ "需要本机安装并配置 {product} 命令行工具。": "Needs the {product} command-line tool installed and set up.",
+ "面向编程智能体的代码工作流，在 Mibo 中用处有限。": "A coding agent's workflow; of limited use in Mibo.",
+ "依赖其他智能体宿主的功能（如插件、子代理或斜杠命令），在 Mibo 中无法完整使用。": "Relies on another agent host's features (plugins, subagents or slash commands); Mibo can use only part of it.",
+ "需要连接 MCP 服务器，Mibo 尚未接入该服务器时只能使用说明部分。": "Needs an MCP server; until Mibo is connected to it, only the written guidance applies.",
+ "需要第三方服务的 API 密钥。": "Needs an API key for a third-party service.",
+ "需要图像生成服务，Mibo 本身不提供。": "Needs an image generation service, which Mibo does not provide.",
+ "依赖子代理并行工作，Mibo 只能按顺序完成其中一部分。": "Relies on subagents working in parallel; Mibo does part of it in sequence.",
+ "附带的脚本需要本机安装 {runtimes}。": "Its scripts need {runtimes} installed.",
+ "开源许可，允许使用与再分发；修改后再分发须沿用相同许可。": "An open licence allowing use and redistribution; changed copies must keep the same licence.",
+ "未声明许可：作者未授予再分发许可，只能从其来源取得，仅供个人使用。": "No licence stated: the author grants no redistribution, so it is fetched from its source for personal use only.",
+ "许可禁止商业用途，此处不提供安装，请前往来源查看条款。": "The licence forbids commercial use; not installable here, see its source for the terms.",
+ "许可限定了使用范围或无法归入公开许可，此处不提供安装，请前往来源查看条款。": "The licence limits where it may be used or is not a public licence; not installable here, see its source for the terms."
+}

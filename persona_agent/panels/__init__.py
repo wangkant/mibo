@@ -8,5 +8,5 @@ local token and the same-origin check), `workspace` the page's
 knows becomes a 400 `{"error": code}`; add the code to `ERRORS` in the module
 and it is let through.
 
-The page side is `static/welcome/panels/<name>.js` and `<name>.css`.
+The page side is drawn by the app page's own scripts (setup.js and setup/<section>.js, chat.js).
 """

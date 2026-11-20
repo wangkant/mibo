@@ -6,11 +6,10 @@ visitor's browser reads, or a section page read the same way.
 """
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime, timezone
 from typing import Callable
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
 import httpx
@@ -220,43 +219,6 @@ async def _espn(http: httpx.AsyncClient) -> list[Find]:
     return found[:PER_SOURCE]
 
 
-_NATGEO_TILE = re.compile(r'href="(https://www\.nationalgeographic\.com/[\w-]+/article/[\w-]+)"[^>]*>'
-                          r'<span class="sr-only">([^<]+)</span>')
-# The page's state carries each story's summary and pictures beside its address.
-_NATGEO_FACTS = re.compile(r'"description":"((?:[^"\\]|\\.)*)","ctas":\[\{"url":"([^"]+)"[^\]]*\],'
-                           r'"img":\{"crps":\[\{[^}]*?"url":"([^"]+)"')
-
-
-async def _natgeo(http: httpx.AsyncClient) -> list[Find]:
-    page = await get_text(http, "https://www.nationalgeographic.com/latest-stories")
-    facts = {url: (json.loads(f'"{text}"'), picture) for text, url, picture in _NATGEO_FACTS.findall(page)}
-    found: list[Find] = []
-    seen: set[str] = set()
-    for url, title in _NATGEO_TILE.findall(page):
-        if url in seen:
-            continue
-        seen.add(url)
-        text, picture = facts.get(url, ("", ""))
-        found.append(find(url, title, site="National Geographic", text=text, picture=picture))
-    return found[:PER_SOURCE]
-
-
-_ZAOBAO_CARD = re.compile(r'aria-label="([^"]+)" rel="" href="(/news/world/story(\d{4})(\d\d)(\d\d)-\d+)"')
-
-
-async def _zaobao(http: httpx.AsyncClient) -> list[Find]:
-    page = await get_text(http, "https://www.zaobao.com.sg/realtime/world")
-    found: list[Find] = []
-    seen: set[str] = set()
-    for title, path, year, month, day in _ZAOBAO_CARD.findall(page):
-        if path in seen:
-            continue
-        seen.add(path)
-        found.append(find(urljoin("https://www.zaobao.com.sg/", path), title, site="联合早报",
-                          published=f"{year}-{month}-{day}"))
-    return found[:PER_SOURCE]
-
-
 def _bbc_simplified(url: str) -> str:
     # The Chinese feed links each story's traditional page; the same story has a simplified one.
     return re.sub(r"/trad$", "/simp", _clean(url))
@@ -329,8 +291,6 @@ SOURCES: list[Source] = [
     _feed("un-news-zh", ("UN News Chinese", "联合国新闻 中文"),
           ("The United Nations' news in Chinese", "联合国新闻网中文版"), "news",
           "https://news.un.org/feed/subscribe/zh/news/all/rss.xml", site="联合国新闻"),
-    Source("zaobao-world", ("Lianhe Zaobao: World", "联合早报 国际"),
-           ("World news from Singapore's Chinese daily", "新加坡《联合早报》的国际即时新闻"), "news", _zaobao),
     _feed("nhk-news", ("NHK News (Japanese)", "NHK 新闻（日文）"),
           ("Japan's public broadcaster, in Japanese", "日本公共广播的日文新闻"), "news",
           "https://www.nhk.or.jp/rss/news/cat0.xml", site="NHK"),
@@ -386,9 +346,6 @@ SOURCES: list[Source] = [
     _feed("nautilus", ("Nautilus", "鹦鹉螺"),
           ("Science told through stories", "用故事讲科学"), "science",
           "https://nautil.us/feed/"),
-    Source("natgeo-latest", ("National Geographic", "国家地理"),
-           ("Latest stories on nature, science, history and travel", "自然、科学、历史与旅行的最新故事"),
-           "science", _natgeo),
     _feed("owid", ("Our World in Data", "用数据看世界"),
           ("Research and charts on the world's largest problems", "关于世界重大问题的研究与图表"), "science",
           "https://ourworldindata.org/atom.xml"),
@@ -432,10 +389,10 @@ SOURCES: list[Source] = [
            ("The posts rising fastest across Bluesky", "Bluesky 上正在升温的帖子"), "community", _bluesky_hot, "en"),
 ]
 
-SOURCES = written_in("ja", written_in("zh", SOURCES, {"bbc-zh", "nyt-cn", "dw-zh", "rfi-zh", "un-news-zh", "zaobao-world",
+SOURCES = written_in("ja", written_in("zh", SOURCES, {"bbc-zh", "nyt-cn", "dw-zh", "rfi-zh", "un-news-zh",
                                                     "wiki-zh-featured", "wiki-zh-mostread", "wiki-zh-onthisday"}),
                    {"nhk-news"})
 # National press local to one place; world services in any language stay global.
 SOURCES = local_to("US", SOURCES, {"npr-news", "propublica", "espn-top"})
-SOURCES = local_to("JP", local_to("HK", local_to("AU", local_to("SG", SOURCES, {"zaobao-world"}), {"abc-au-news"}),
+SOURCES = local_to("JP", local_to("HK", local_to("AU", SOURCES, {"abc-au-news"}),
                                            {"scmp-news"}), {"nhk-news"})

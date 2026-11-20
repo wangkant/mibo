@@ -4,14 +4,65 @@ https://github.com/wangkant/personagent
 
 Licensed under the Apache License, Version 2.0: see LICENSE.
 
-Two parts of this repository carry licences of their own:
+One part of this repository carries a licence of its own: the character
+portraits in `persona_agent/static/characters/` are under CC BY-NC-SA 4.0,
+which does not allow commercial use: see
+`persona_agent/static/characters/LICENSE.md`.
 
-- `integrations/` (the AstrBot plugin, the connector SDK and the Matrix and
-  Satori connectors) is under the MIT License: see `integrations/LICENSE`.
-- The character portraits in `persona_agent/static/characters/` are under
-  CC BY-NC-SA 4.0, which does not allow commercial use: see
-  `persona_agent/static/characters/LICENSE.md`.
+The generic page reader (`persona_agent/web/reader.js`, `read.py`,
+`sites.py`) was written for this project; for an article's text it runs
+Mozilla's Readability, vendored as listed below.
+The official players it lets a card embed (`persona_agent/players.py`) are
+each platform's own and load from that platform under its own terms.
 
 Versions 1.4.0 and earlier were released under the MIT License, and versions
 1.4.1 to 1.5.0 under the PolyForm Noncommercial License 1.0.0. Copies of those
 versions stay under the licence they were released with.
+
+Code taken from other projects, under the licences they were released with:
+
+- `persona_agent/web/Readability.js` is Mozilla's Readability 0.6.0
+  (mozilla/readability), unchanged: Apache License, Version 2.0 (see LICENSE),
+  Copyright (c) 2010 Arc90 Inc, Copyright (c) 2010-2026 Mozilla and
+  Contributors.
+- `persona_agent/web/pageops.py` is ported from browser-use's
+  `browser_use/ax.py`: MIT License, Copyright (c) 2024 Gregor Zunic.
+- Some guidance sentences in `persona_agent/web/operate.py` are copied from
+  DeepSeek's dsh: MIT License, Copyright (c) 2026 DeepSeek.
+- `persona_agent/desk/uia.py` follows the drop rule for nameless groups and
+  the RuntimeId handles of dsh's cua-windows (`AccessibilityText.cs`,
+  `Accessibility.cs`): MIT License, Copyright (c) 2026 DeepSeek.
+- `persona_agent/review.py` adapts the layout of dsh's auto review policy
+  (`REVIEW_POLICY`: the person's words as the only authority, everything else
+  a fact) and its strict parsing of one closed answer: MIT License,
+  Copyright (c) 2026 DeepSeek.
+- `persona_agent/web/gate.py` ports the click and form rules of nanobrowser's
+  `classify.ts`: Apache License, Version 2.0 (see LICENSE), changed to add the
+  composer, Enter and password-form rules and the kinds Mibo asks about.
+- `persona_agent/shell/run.py` takes the UTF-8 output lines of dsh's
+  pwsh-local and its way of running each command in a fresh `-NoProfile`
+  PowerShell with capped output and the whole process tree ended on stop:
+  MIT License, Copyright (c) 2026 DeepSeek.
+
+The MIT License, for the parts above that carry it:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+- `persona_agent/static/welcome/providermarks.js` holds the model services' marks from
+  `@lobehub/icons-static-svg` 1.104.0 (lobehub/lobe-icons): MIT License. Each mark is the
+  trademark of its owner and is shown only to name that service.

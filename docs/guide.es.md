@@ -36,10 +36,9 @@ personagent
 |---|---|
 | Ejecutar sin instalar | `uvx personagent` (forma parte de [uv](https://docs.astral.sh/uv/), que también descarga Python por usted) |
 | Un comando `personagent` permanente | `uv tool install personagent` o `pipx install personagent` |
-| Windows, desde el ZIP de código fuente | descomprímalo y haga doble clic en `start.bat` |
 | Desde un clon | `git clone https://github.com/wangkant/personagent.git`, `cd personagent`, `python -m venv .venv`, luego `.venv/bin/python -m pip install -e .` y `.venv/bin/python -m persona_agent` (en Windows, `.venv\Scripts\python.exe`) |
 
-personagent funciona con Python 3.10–3.14. `start.bat` crea `.venv`, instala las dependencias y abre la misma página; la primera vez, también coloca un icono de personagent en el escritorio y en el menú Inicio. Vuelve a instalar las dependencias cada vez que cambia la lista de dependencias de `pyproject.toml`.
+personagent funciona con Python 3.10–3.14.
 
 La **carpeta de personagent** guarda los ajustes (`.env`), el personaje (`persona.txt`), lo que aprende (`runtime/`) y las plataformas de chat (`platforms/`). `platforms/` contiene el AstrBot gestionado y `direct.json`, que guarda las credenciales de las plataformas que personagent conecta por sí mismo. personagent utiliza la primera de estas carpetas:
 
@@ -176,11 +175,9 @@ Todo lo que hace la página también está disponible desde un terminal, lo que 
 | `personagent tools` | [herramientas de servidores MCP](#herramientas): `list`, `add`, `remove`, `check`, `call`, `set` |
 | `personagent mcp` | el servidor MCP que inicia un asistente de programación; no debe ejecutarlo usted |
 | `personagent doctor` | comprueba la configuración y todos los servicios de los que depende |
-| `personagent learned` | muestra lo aprendido y lo que todavía observa, y permite intervenir si lo desea |
 | `personagent memory` | enumera lo que recuerda, olvida un elemento o recupera uno |
 | `personagent access` | enumera los [chats nuevos pendientes de aprobación](#a-quién-responde-aprobación-de-chats-nuevos) y los aprueba o rechaza por código (`approve`, `admin`, `decline`, `undo`, `policy <platform> approve\|open`) |
 | `personagent eval` | mide el habla, el perfil, el aprendizaje y la memoria |
-| `personagent character` | [importa una tarjeta de personaje](#tarjetas-de-personaje-y-borradores) (`import FILE`), guarda el personaje como tarjeta (`export FILE.png` o `.json`) o muestra un perfil redactado a partir de una descripción (`draft "..."`) |
 
 Todos los comandos aceptan `--help`.
 
@@ -401,8 +398,6 @@ Los proyectos siguientes son software de terceros con el que personagent funcion
 |---|---|
 | Un [AstrBot](https://docs.astrbot.app) que ya ejecute | sus plataformas |
 | [NapCat](https://github.com/NapNeko/NapCatQQ) (OneBot v11), a través de AstrBot | QQ con una cuenta personal de QQ |
-| [Koishi](https://koishi.chat) u otro servidor Satori, a través del [conector de Satori](../integrations/satori/README.es.md) | las plataformas en las que ese servidor haya iniciado sesión |
-| [Matrix](../integrations/matrix/README.es.md), a través de puentes mautrix | salas de Matrix, y WhatsApp, Signal, Messenger, Instagram y Google Messages |
 
 Cualquier otro servicio puede conectarse mediante el [protocolo de conectores](connectors.es.md), que recibe una solicitud HTTP firmada por cada mensaje. Varios conectores pueden atender a un mismo personagent a la vez. La [guía de despliegue](deploy.es.md) describe su uso en producción.
 
@@ -847,12 +842,6 @@ Dos comprobaciones no necesitan modelo ni clave, y se ejecutan con las pruebas d
 
 `--rejudge REPORT` vuelve a evaluar las respuestas de un informe conservado con el `BENCH_JUDGE_MODEL` que tenga configurado en ese momento, sin llamar al modelo evaluado, y escribe el resultado junto al original. Las respuestas, las líneas base y las decisiones de la política de promoción se mantienen sin cambios.
 
-Los resultados más recientes, con el método y todos los informes, se encuentran en [evals/2026-10-18](evals/2026-10-18/README.es.md). Algunas notas para interpretar los informes:
-
-- En `speak`, la mayoría de los fallos corresponden a líneas en las que su nombre significa otra cosa, como un cine o un cachorro, o en las que alguien cuenta a otra persona lo que dijo. Un nombre cuenta como llamada, y el modelo rara vez anula esa decisión.
-- En `persona`, un empate significa que el juez eligió las dos veces la respuesta que aparecía en primer (o en segundo) lugar. Los veredictos publicados son de Claude Opus 5.5. Este evaluó fuera de `personagent eval`, por lotes, como registra el campo `rejudged` de cada informe. El campo `earlier` de cada par conserva el veredicto del primer juez, Claude Haiku 5.5.
-- En `learning`, la fila de política y las filas de sondeo responden a preguntas distintas. La fila de política pregunta si la regla promovió las correcciones adecuadas. Las filas de sondeo preguntan si una corrección promovida cambió una respuesta posterior. La fila de sondeo `not_promoted` representa el nivel de ruido, ya que nada de su prompt cambió.
-
 ## Cómo funciona
 
 ![Arquitectura: un mensaje de chat de grupo pasa por Decidir, Construir el prompt, Modelo y Comprobar, y la respuesta vuelve a través del conector; si el bot guarda silencio, no se envía nada. Las reacciones se evalúan y se guardan en la bitácora de aprendizaje, y solo lo que aprueba la promoción llega a los ejemplos que lee el prompt](persona_llm_agent_architecture.svg)
@@ -961,8 +950,8 @@ La versión 1.0 cambió el nombre de la mayoría de los ajustes, y personagent n
 
 personagent 1.5.0 está disponible en PyPI. La CI ejecuta las pruebas en Linux con Python 3.10–3.14 y en Windows con Python 3.12. Otros trabajos de CI instalan el paquete, utilizan el comando y la página local, y abren la ventana de la aplicación en Linux, macOS y Windows.
 
-La vía directa de OneBot (`/v1/onebot`) está obsoleta, pero se mantiene durante la serie 1.x. Los scripts de `tools/` están diseñados para ejecutarse desde un clon, y [tools.md](tools.es.md) los describe.
+La vía directa de OneBot (`/v1/onebot`) está obsoleta, pero se mantiene durante la serie 1.x.
 
 - [Primeros pasos](start.es.md) · [Guía de despliegue](deploy.es.md) · [Guía paso a paso en chino (QQ por escaneo y solución de problemas)](deploy.zh-CN.md)
-- Conectores: [complemento de AstrBot](../integrations/astrbot/astrbot_plugin_personagent/README.es.md) · [Satori](../integrations/satori/README.es.md) · [Matrix](../integrations/matrix/README.es.md) · [protocolo](connectors.es.md)
+- Conectores: [complemento de AstrBot](../integrations/astrbot/astrbot_plugin_personagent/README.es.md) · [protocolo](connectors.es.md)
 - [Todos los ajustes](../.env.example) · [Registro de cambios](../CHANGELOG.md) · [Contribuir](../.github/CONTRIBUTING.md) · [Política de seguridad](../.github/SECURITY.md)

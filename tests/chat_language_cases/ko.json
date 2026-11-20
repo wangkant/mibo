@@ -23,7 +23,7 @@
     {"text": "노바야 회의 얘기는 잊어 줘", "kind": "forget", "deletes": "회의는 금요일"},
     {"text": "노바 민수 생일에 대한 거 잊어버려", "kind": "forget", "deletes": "민수 생일이 5월 3일이"},
     {"text": "노바 뭐 기억해?", "kind": "recall"},
-    {"text": "노바 너 뭐 배웠어?", "kind": "learned"},
+    {"text": "노바 너 뭐 배웠어?", "kind": null},
     {"text": "노바 그 메시지 지워 줘", "kind": null}
   ],
   "first_person": [

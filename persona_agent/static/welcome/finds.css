@@ -1,0 +1,50 @@
+/* 推荐记录 (finds.js): the chat's reading column and find cards, under a title and the 全部 / 已喜欢 choice
+   (setup.css's segments). Tokens are app.css's. */
+.finds-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pa-s3) var(--pa-s4);
+  padding: var(--pa-s8) 0 var(--pa-s2);
+}
+.finds-title {
+  margin: 0;
+  color: var(--pa-ink);
+  font: 600 var(--pa-fs-2xl) / var(--pa-lh-tight) var(--pa-font-display);
+}
+.finds-list {
+  padding-bottom: var(--pa-s8);
+}
+.finds-end {
+  height: 1px;
+}
+/* Nothing yet, or the list could not be read: centred in the column. */
+.finds-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pa-s2);
+  padding: var(--pa-s10) var(--pa-s4);
+  text-align: center;
+}
+.finds-note[hidden] {
+  display: none;
+}
+.finds-note-title {
+  margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 600;
+}
+.finds-note-text {
+  max-width: 360px;
+  margin: 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+@container chat (max-width: 500px) {
+  .finds-head {
+    padding-top: var(--pa-s6);
+  }
+}

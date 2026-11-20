@@ -1,0 +1,479 @@
+/* The model control beside the composer's "+" (modelbar.js): a quiet pill with the model's short name, its
+   menu in the "+" menu's style (plus.css), and the usage popover; then Settings' ability rows and usage card. */
+.mb-wrap {
+  position: relative;
+  flex: none;
+  min-width: 0;
+}
+.mb-wrap[hidden] {
+  display: none;
+}
+.chat .mb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: var(--pa-r-pill);
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  white-space: nowrap;
+  transition: background var(--pa-t-fast), color var(--pa-t-fast);
+}
+.chat .mb-pill:hover,
+.chat .mb-wrap.open .mb-pill {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.mb-pill.busy {
+  opacity: 0.7;
+}
+.mb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--pa-text);
+}
+.mb-tag[hidden] {
+  display: none;
+}
+.mb-tag .i {
+  width: 14px;
+  height: 14px;
+}
+.mb-once {
+  margin-left: 2px;
+  padding: 0 5px;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+.mb-pill > .i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--pa-faint);
+}
+
+/* The menu: opens upward from the pill, as the "+" menu does. */
+.side-menu.mb-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -2px;
+  z-index: 30;
+  width: 272px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  cursor: default;
+}
+.side-menu.mb-menu.mb-wide {
+  width: 304px;
+}
+.mb-head {
+  padding: 8px var(--pa-s2) 4px;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-weight: 500;
+  line-height: 16px;
+}
+.mb-rule {
+  height: 1px;
+  margin: var(--pa-s1) calc(-1 * var(--pa-s1));
+  background: var(--pa-line);
+}
+.side-menu-item.mb-item {
+  height: auto;
+  min-height: 34px;
+  gap: 10px;
+  padding: 6px var(--pa-s2);
+  white-space: normal;
+}
+.mb-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.mb-label,
+.mb-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-label {
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.mb-hint {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.mb-item.on svg:last-child {
+  color: var(--pa-accent);
+  stroke-width: 2.25;
+}
+.mb-item.more svg:last-child {
+  width: 14px;
+  height: 14px;
+  color: var(--pa-faint);
+}
+/* Rows without an icon line up with the ones that have one. */
+.mb-plain .mb-text {
+  padding-left: 26px;
+}
+.mb-back .mb-label {
+  color: var(--pa-muted);
+}
+
+/* The thinking levels: one segmented row, its hint under it. */
+.mb-levels {
+  display: flex;
+  gap: 2px;
+  margin: 2px var(--pa-s1) 0;
+  padding: 2px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+}
+.side-menu-item.mb-level {
+  flex: 1;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 4px;
+  border-radius: var(--pa-r-xs);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.side-menu-item.mb-level[aria-checked="true"] {
+  background: var(--pa-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  color: var(--pa-ink);
+  font-weight: 500;
+}
+.mb-level-hint {
+  margin: 0;
+  padding: 6px var(--pa-s2) 2px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.side-menu-item.mb-once-row {
+  min-height: 30px;
+}
+.mb-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--pa-line-strong);
+  border-radius: 4px;
+}
+.mb-box.on {
+  border-color: var(--pa-ink);
+  background: var(--pa-ink);
+}
+.side-menu-item .mb-box.on svg {
+  width: 11px;
+  height: 11px;
+  color: var(--pa-surface);
+  stroke-width: 3;
+}
+
+/* The model list: a search box when long. */
+.mb-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px var(--pa-s1);
+  padding: 0 10px;
+  height: 32px;
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-canvas);
+}
+.mb-search:focus-within {
+  border-color: var(--pa-line-strong);
+}
+.mb-search .i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--pa-faint);
+}
+.mb-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--pa-ink);
+  font: inherit;
+  font-size: var(--pa-fs-sm);
+}
+/* The list scrolls inside the menu, so the menu keeps its place above the box. */
+.mb-list {
+  max-height: 296px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mb-list .mb-plain .mb-text {
+  padding-left: 0;
+}
+.mb-empty {
+  margin: 0;
+  padding: 10px var(--pa-s2);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+
+/* The usage: two figures side by side, the month split by what used it, the limit, the balance. */
+.mb-usage-wrap {
+  padding: 4px var(--pa-s2) 6px;
+}
+.mb-loading {
+  height: 120px;
+  border-radius: var(--pa-r-sm);
+}
+.mb-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mb-periods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mb-period {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+}
+.mb-period-name {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.mb-period-main {
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-period-sub {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+}
+.mb-split-title {
+  margin: 0 0 -4px;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.mb-split {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mb-split-row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--pa-fs-xs);
+  line-height: 16px;
+}
+.mb-split-name {
+  color: var(--pa-text);
+}
+.mb-split-bar {
+  height: 6px;
+  border-radius: var(--pa-r-pill);
+  background: linear-gradient(var(--pa-n400), var(--pa-n400)) left / var(--share) 100% no-repeat, var(--pa-sunken);
+}
+.mb-split-value {
+  min-width: 48px;
+  color: var(--pa-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.mb-limit-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.mb-meter {
+  height: 6px;
+  border-radius: var(--pa-r-pill);
+  background: linear-gradient(var(--pa-n600), var(--pa-n600)) left / var(--used) 100% no-repeat, var(--pa-sunken);
+}
+.mb-limit-near .mb-meter {
+  background: linear-gradient(var(--pa-amber700), var(--pa-amber700)) left / var(--used) 100% no-repeat, var(--pa-sunken);
+}
+.mb-limit-reached .mb-meter {
+  background: var(--pa-error);
+}
+.mb-balance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pa-line);
+}
+.mb-balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--pa-fs-sm);
+}
+.mb-balance-name {
+  color: var(--pa-text);
+}
+.mb-balance-value {
+  color: var(--pa-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.mb-note {
+  margin: 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 17px;
+}
+.mb-note-strong {
+  margin-top: 6px;
+  color: var(--pa-text);
+}
+.mb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  width: fit-content;
+  color: var(--pa-text);
+  font-size: var(--pa-fs-xs);
+  line-height: 17px;
+  text-decoration: underline;
+  text-decoration-color: var(--pa-line-strong);
+  text-underline-offset: 3px;
+}
+.mb-link:hover {
+  color: var(--pa-ink);
+  text-decoration-color: currentColor;
+}
+.mb-link .i {
+  width: 12px;
+  height: 12px;
+}
+
+/* A reply that failed for the balance: the sentence, then the console's link. */
+.mb-problem {
+  margin: 0;
+}
+
+/* Settings › Model. */
+.mb-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mb-card-head .setup-card-title {
+  margin: 0;
+}
+.mb-ability-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+.mb-ability {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pa-line);
+}
+.mb-ability:last-child {
+  border-bottom: 0;
+}
+.mb-ability-words {
+  min-width: 0;
+}
+.mb-ability-name {
+  margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  line-height: 20px;
+}
+.mb-ability-why {
+  margin: 2px 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  line-height: 19px;
+}
+.mb-state {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 18px;
+}
+.mb-state-yes {
+  color: var(--pa-green600);
+}
+.mb-state-no {
+  color: var(--pa-text);
+}
+.mb-state-unstable {
+  color: var(--pa-amber700);
+}
+.mb-measured {
+  margin: 4px 0 0;
+}
+.mb-usage-body {
+  margin: 6px 0 4px;
+}
+.mb-usage-body {
+  max-width: 480px;
+}
+.mb-limit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.mb-limit-form[hidden] {
+  display: none;
+}
+.setup-input.mb-limit-input {
+  width: 120px;
+}
+.setup-input.mb-limit-kind {
+  width: auto;
+}

@@ -1,70 +1,147 @@
-"""The one-on-one turn: admission done, a reply to one person."""
+"""The chat with the one person: their message read, a memory command run or
+a turn of the model, and what the character says."""
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import re
 import time
-from contextlib import asynccontextmanager
 
-from .access import ADMIN_MODE, API_PLATFORM, PAGE_PLATFORM
 from . import channels
-from . import decision_log
-from . import transport
+from . import person
+from . import today
 from .llm import purpose
-from .connector import current_sink
-from .messages import message_time
-# An emoji-only draft the sanitizer eats would come back identical from an
-# unchanged prompt, so the one retry carries a note.
+from .ingestion import reads_own_pictures
+from .messages import turn_pictures
+# A draft with nothing to send would come back identical from an unchanged
+# prompt, so the one retry carries a note.
 from .decision import EMPTY_DRAFT_RETRY_NOTE as _EMPTY_DRAFT_RETRY_NOTE
-from .decision import PASS, SEND
-from .search import tool_caller
+from .decision import PASS, SEND, is_pass_sentinel
+from .search import ChatLookups
+from .schedule_tool import run_of
+from .turns import OutOfTime, Turn, current_turn
 from .textproc import (
     TextProcessing,
-    _clean_prompt_source,
+    _as_protocol_object,
+    _detect_image_mime,
     _strip_web_desc,
-    _truncate_framed,
+    salvage_json_object,
+    strip_json_fences,
 )
 
 logger = logging.getLogger("agent")
 
-# The empty-draft note's contract, for a draft that was PASS or that a guard refused.
+# The empty-draft note's contract, for a draft that was PASS.
 _PASS_DRAFT_RETRY_NOTE = (
     "Your previous draft was PASS, but a private chat has no PASS: the person "
     "is waiting for an answer. Emit the same JSON object again — same keys, "
     "same shape — with a `reply` of at least one word."
 )
-_REFUSED_DRAFT_RETRY_NOTE = (
-    "Your previous draft was refused ({reason}) and was not sent. Emit the "
-    "same JSON object again — same keys, same shape — with a `reply` of at "
-    "least one word, in character, without what was refused."
+# A tool round answers without response_format, so a model may answer in prose:
+# the final answer is then asked for once more as the protocol object, in JSON mode.
+_OBJECT_AGAIN_NOTE = (
+    "[Note from the app, not from them] Your answer came as plain text. Give it "
+    "again as the one JSON object of <output_protocol>, with the same reply. In mem, "
+    "an operation for each lasting thing about themselves that their last message "
+    "says (who they are, where they live, family and friends, what they like or do "
+    "not want, how long or in what form they want things, health, how they want you "
+    "to treat or call them, a plan with its day words) and <about_them> does not show "
+    "yet; [] only when it says none. When it says what they think of a find you "
+    "shared, also its card operation."
 )
 
-# A refusal or a PASS is the model's answer to these words: one reader gets a
-# second draft for it this often, so an induced refusal cannot double the spend.
-_DECLINED_RETRY_GAP_S = 300.0
-
-# Platforms whose caller waits on each message: no debounce, every failure reported.
-_ANSWERED_AT_ONCE = frozenset({PAGE_PLATFORM, API_PLATFORM})
-_DECLINED_RETRY_READERS = 4096
+# The name the person's turns are kept under; the prompt calls them by the name they gave (ADMIN_NAME).
+_THEM = "you"
 
 _DM_HISTORY_MAX = 60
 _DM_HISTORY_KEEP = 40
-_UNANSWERED_KEEP_CHARS = 1500
+
+# Joined to the system prompt of the answer asked for once a turn's tools have ended without one.
+_TOOLS_OVER_NOTE = (
+    "[Note from the app, not from them] Your tools have ended for this message, and this "
+    "answer is the last thing they see for it. If the message asked for something to be "
+    "looked up or done, say plainly what was done (it is under [What you looked up this "
+    "turn] when anything was) and what was not; never say you will look, check, search or "
+    "do it, and never ask them to wait: nothing runs after this answer. If it asked for "
+    "nothing of the kind, just answer."
+)
+
+# The owner's turn on the page looks things up itself (`_reply_with_tools`); a
+# context, so no fake `_chat_dm` needs a new argument or return value. None: no tools.
+chat_lookups: contextvars.ContextVar[ChatLookups | None] = contextvars.ContextVar(
+    "chat_lookups", default=None)
+# What a tool is doing in the page's chat, which the page process reads (welcome.py).
+CHAT_DOING_FILE = "chat-doing.json"
 
 
-def _kept_unanswered(said: list[str]) -> list[str]:
-    """The newest lines within _UNANSWERED_KEEP_CHARS, and never fewer
-    than the last: what someone said during an outage waits for a reply."""
-    kept: list[str] = []
-    size = 0
-    for line in reversed(said):
-        size += len(line) + (1 if kept else 0)
-        if kept and size > _UNANSWERED_KEEP_CHARS:
-            break
-        kept.append(line)
-    return kept[::-1]
+def _wonder_of(raw: str) -> str:
+    """The protocol's optional `wonder`: a few search words the character
+    wants to look into later, or ""."""
+    data = salvage_json_object(strip_json_fences(raw or ""))
+    words = data.get("wonder") if isinstance(data, dict) else None
+    return " ".join(words.split())[:80] if isinstance(words, str) else ""
+
+
+def _mem_of(raw: str, mem: str):
+    """The protocol's `mem`: the list of operations a reply writes in the
+    app's own chat, else the plain note `_parse_model_output` read."""
+    data = salvage_json_object(strip_json_fences(raw or ""))
+    ops = data.get("mem") if isinstance(data, dict) else None
+    return ops if isinstance(ops, list) else mem
+
+
+# A prose answer's own "mem: add like 羽毛球" lines (a weak model's way of
+# writing the operations): read as `mem`, never shown.
+_PROSE_MEM = re.compile(r"^[ 	]*mem[ 	]*[:：][ 	]*(.*)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _prose_answer(text: str) -> str:
+    """A prose answer as the protocol object, its "mem:" lines as `mem`."""
+    # Prose with the protocol object written after it: the object is the answer.
+    data = salvage_json_object(text)
+    if isinstance(data, dict) and isinstance(data.get("reply"), str):
+        return json.dumps(data, ensure_ascii=False)
+    if not _PROSE_MEM.search(text):
+        return _as_protocol_object(text)
+    ops = []
+    for line in _PROSE_MEM.findall(text):
+        verb, _, rest = line.strip().partition(" ")
+        kind, _, words = rest.strip().partition(" ")
+        verb, kind = verb.lower(), kind.lower()
+        if verb == "add" and kind in person.TURN_KINDS and words.strip():
+            ops.append({"op": verb, "kind": kind, "text": words.strip()})
+    return json.dumps({"reasoning": "", "intent": "chat", "reply": _PROSE_MEM.sub("", text).strip(),
+                       "mem": ops[:person.OPS_MAX]}, ensure_ascii=False)
+
+
+def _said_before(history: list[dict]) -> str:
+    """The person's two turns before the one being answered."""
+    said = [str(t.get("content") or "") for t in history[:-2] if t.get("role") == "user"]
+    return "\n".join(said[-2:])
+
+
+def _with_found(messages: list[dict], found: str) -> list[dict]:
+    """`messages` with what this turn's lookups found ahead of the last turn,
+    for the answer asked for without tools."""
+    last = messages[-1]
+    head = f"[What you looked up this turn]\n{found}\n\n"
+    content = last["content"]
+    if isinstance(content, list):
+        content = [{**content[0], "text": head + content[0]["text"]}, *content[1:]]
+    else:
+        content = head + content
+    return messages[:-1] + [{**last, "content": content}]
+
+
+def _done_so_far(lookups: ChatLookups) -> str:
+    """What a turn had done when its time ran out: the steps in its trace, and a computer task's own note."""
+    from .shell import tool as shell_tool
+    steps = "; ".join(f"{step['tool']} {step['what']}".strip() for step in lookups.trace)
+    return "\n".join(line for line in (
+        f"(the time for this message ran out while you were working; steps taken: {steps or 'none finished'})",
+        shell_tool.out_of_steps(lookups, len(lookups.trace))) if line)
 
 
 def _trimmed_history(history: list[dict]) -> list[dict]:
@@ -88,7 +165,13 @@ def _page_turns(path, conversation: str) -> list[dict]:
         if not isinstance(message, dict) or message.get("failed"):
             continue
         role, text = message.get("role"), message.get("text")
-        if role not in ("user", "assistant") or not isinstance(text, str) or not text.strip():
+        if not isinstance(text, str):
+            continue
+        # What the person attached, as their turn named it.
+        attached = [f"[file: {a.get('file')}]" if a.get("kind") == "file" else "[image]"
+                    for a in message.get("attachments") or []]
+        text = "\n".join(t for t in (text, *attached) if t.strip())
+        if role not in ("user", "assistant") or not text.strip():
             continue
         # One turn per side in a row, as the history keeps them.
         if turns and turns[-1]["role"] == role:
@@ -101,145 +184,80 @@ def _page_turns(path, conversation: str) -> list[dict]:
     return turns[-_DM_HISTORY_KEEP:]
 
 
+def chat_key(conversation: str) -> tuple[str, str]:
+    """The names a chat of the page goes by inside: its reader and its key (channels.py)."""
+    user_id = f"{channels.PAGE_PLATFORM}:{conversation}"
+    return user_id, channels.dm_routing_key(user_id)
+
+
 class DirectMessages:
-    async def _handle_dm(self, user_id: str, payload: dict,
-                              is_admin: bool = True,
-                              proactive: bool = False) -> bool:
-        """One DM, in arrival order: a memory command, a caller's `proactive`
-        cue (never history, never the reader's), or the reader's words, which
-        take the next turn unless a newer message of theirs is waiting to."""
-        pkey = channels.dm_routing_key(user_id)
-        # Its place is taken before the first await: DMs are answered in the
-        # order they came, however long each takes to read.
-        gate, item = self._enter_line(pkey)
-        # Whatever goes wrong before it is read gives the place back: an
-        # unread place would hold up every later DM of theirs.
+    async def answer(self, conversation: str, parts: list[dict], *, choices=(),
+                     run: dict | None = None) -> list[dict]:
+        """One message of the person's in the chat `conversation`, answered: a
+        memory command carried out, or a turn of the model. `parts` as
+        `_read_message` takes them; `choices` what they chose for this message
+        (turns.TURN_CHOICES); `run` a scheduled task's run in place of words of
+        theirs. What the character says (turns.Turn.said): a line said because
+        the model did not answer carries "reason": "excuse"."""
+        user_id, pkey = chat_key(conversation)
+        turn = Turn(choices, run)
+        token = current_turn.set(turn)
         try:
-            text = await self._extract_text(payload)
-            ctrl_text = _strip_web_desc(text) if text else ""
-            # A cue is the caller's text: it cannot run a memory command.
-            is_command = (bool(text) and not proactive
-                          and self._is_memory_command(ctrl_text))
-        except BaseException:
-            self._leave_line(pkey, gate, item)
-            raise
-        if not text:
-            self._leave_line(pkey, gate, item)
-            return False
-
-        sender = payload.get("sender") or {}
-        nickname = (_clean_prompt_source(
-            sender.get("card") or sender.get("nickname")) or "?")[:8]
-
-        def run_command() -> str:
-            """Answered like a room's: no model call, no history, and it does
-            not consume the pending reply."""
-            self.last_dm_activity_at[user_id] = time.time()
-            return self._handle_memory_command(
-                pkey, ctrl_text, user_id, nickname)
-
-        async def say(answer: str, *, background: bool = False) -> bool:
-            return await self._say_dm_memory_answer(
-                user_id, answer, background=background)
-
-        # The local page and the API answer each request at once; elsewhere a
-        # burst becomes one turn.
-        debounce = (0.0 if channels.platform_of(pkey) in _ANSWERED_AT_ONCE
-                    else self.message_debounce_sec)
-
-        sent_at = message_time(payload)
-
-        def take_in() -> int:
-            """The reader's words wait for their next turn. Run in line, so a
-            reaction is matched against the replies committed before it.
-            Returns the message's number in this conversation."""
-            self.last_dm_activity_at[user_id] = time.time()
-            self._wake(pkey)
-            # The turn is dated by the newest message it answers.
-            self.__dict__.setdefault("_dm_heard_at", {})[user_id] = min(
-                sent_at or time.time(), time.time())
-            self._recent_dirty.add(pkey)
-            if self.react_learn_enabled:
-                entry = self.pending_reactions.match(
-                    channels.dm_learning_key(user_id),
-                    sender_uid=user_id, is_dm=True, now=time.time())
-                if entry:
-                    self._spawn(self._process_reaction(
-                        entry, text, nickname, user_id, is_admin,
-                        conv_id=channels.dm_learning_key(user_id),
-                        is_dm=True))
-            self._dm_unanswered.setdefault(user_id, []).append(text)
-            self._msg_seq[pkey] += 1
-            return self._msg_seq[pkey]
-
-        waiting = not is_command and not proactive and debounce > 0
-        if is_command:
-            self._ready(pkey, gate, item, run_command, message=False, say=say)
-        elif proactive:
-            # A cue is not a reaction from the reader, and joins no user turn.
-            self._ready(pkey, gate, item, lambda: True, message=False, turn=True)
-        else:
-            # Taken in now; with a debounce the turn is asked for after it.
-            self._ready(pkey, gate, item, take_in, message=True,
-                        turn=not waiting)
-        try:
-            outcome = await item.waiter
-        except BaseException:
-            # Cancelled (only at shutdown) with the turn already its own.
-            if item.granted:
-                self._end_turn(pkey, gate)
-            raise
-        if outcome is None:
-            # Overtaken by a newer message, whose turn answers this one too,
-            # or a command that is answered once the turn in flight is over.
-            return False
-        if waiting:
-            await asyncio.sleep(debounce)
-            # A newer message of theirs asks for the turn that answers both.
-            if self._msg_seq.get(pkey, 0) != outcome:
-                return False
-            gate, item = self._enter_line(pkey)
-            self._ready(pkey, gate, item, lambda: True, message=False, turn=True)
-            try:
-                if await item.waiter is None:
-                    return False
-            except BaseException:
-                if item.granted:
-                    self._end_turn(pkey, gate)
-                raise
-            # One still being read when this asked was taken in ahead of it.
-            if self._msg_seq.get(pkey, 0) != outcome:
-                self._end_turn(pkey, gate)
-                return False
-        if is_command:
-            try:
-                handled = await say(outcome)
-            except Exception as e:
-                if not item.carried:
-                    raise
-                # The response must still be given: others' answers ride in it.
-                logger.warning("[Agent] memory command answer failed "
-                               "(conversation=%s): %s", pkey, e)
-                handled = False
-            # Later commands whose answers had no way out but this response.
-            await self._say_carried(pkey, item.carried)
-            return handled
-        try:
-            return await self._dm_turn(user_id, pkey, text, is_admin, proactive,
-                                       nickname=nickname)
+            # One turn of a chat at a time; the follow-up of a plan waits its turn too.
+            async with self.turn_locks[pkey]:
+                await self._answer(user_id, pkey, parts)
         finally:
-            self._end_turn(pkey, gate)
+            current_turn.reset(token)
+        texts = [item for item in turn.said if item.get("type") == "text"]
+        if turn.thinking and texts:
+            texts[-1]["thinking"] = turn.thinking
+        if run and run.get("spent"):
+            # A run's model use, for its record on the page (panels/schedule.py).
+            turn.said.append({"type": "spent", "spent": run["spent"]})
+        return turn.said
 
-    @asynccontextmanager
-    async def _dm_sending(self, pkey: str):
-        """The DM's send lock, which `_send_dm` inside it does not take again."""
-        async with self.send_locks[pkey]:
-            self._dm_send_tasks[pkey] = asyncio.current_task()
-            try:
-                yield
-            finally:
-                if self._dm_send_tasks.get(pkey) is asyncio.current_task():
-                    self._dm_send_tasks.pop(pkey, None)
+    async def _answer(self, user_id: str, pkey: str, parts: list[dict]) -> None:
+        # A reply model that is shown pictures gets theirs itself; a vision model reads them
+        # out whole for one that is not.
+        pictures = [] if self._shows_pictures() else None
+        shown = turn_pictures.set(pictures)
+        own = reads_own_pictures.set(True)
+        try:
+            text = await self._read_message(parts)
+        finally:
+            turn_pictures.reset(shown)
+            reads_own_pictures.reset(own)
+        if not text:
+            return
+        # Without what was fetched or attached: a page or a file can run no memory command.
+        typed = _strip_web_desc(text)
+        self.last_dm_activity_at[user_id] = time.time()
+        if self._parse_memory_command(typed) is not None:
+            # No model call, no turn of the history.
+            said = self._say(self._handle_memory_command(pkey, typed) or "", by_line=True)
+            # What a forget took out of every chat: the page drops it from its own copies (welcome.py).
+            scrub = vars(self).get("_page_scrub", {}).pop(pkey, None)
+            if scrub and said:
+                said[-1]["scrub"] = scrub
+            return
+        self._wake(pkey)
+        self.__dict__.setdefault("_dm_heard_at", {})[user_id] = time.time()
+        self._recent_dirty.add(pkey)
+        # Kept until a reply to them is committed: a turn that failed leaves its words for the next.
+        self._dm_unanswered.setdefault(user_id, []).append(text)
+        if pictures:
+            self.__dict__.setdefault("_dm_pictures", {}).setdefault(user_id, []).extend(pictures)
+        await self._dm_turn(user_id, pkey, text)
+
+    @staticmethod
+    def _say(text: str, *, by_line: bool = False) -> list[dict]:
+        """The character's words into the turn being answered: one message, or
+        with `by_line` one per line (a memory command's answer). The messages said."""
+        text = TextProcessing._sanitize_reply(text)
+        lines = [line.strip() for line in text.split("\n") if line.strip()] if by_line else [text]
+        said = [{"type": "text", "text": line} for line in lines if line]
+        current_turn.get().said.extend(said)
+        return said
 
     def _commit_dm_history(self, user_id: str, pkey: str, history: list[dict]) -> None:
         """Keep `history` as the reader's turns, trimmed; the unconsolidated
@@ -261,7 +279,7 @@ class DirectMessages:
 
     def _rehydrate_page(self, user_id: str, pkey: str) -> None:
         """A page chat with no turns held reads the page's saved copy once."""
-        if user_id in self.dm_history or channels.platform_of(pkey) != PAGE_PLATFORM:
+        if user_id in self.dm_history:
             return
         done = self.__dict__.setdefault("_page_rehydrated", set())
         if pkey in done:
@@ -275,179 +293,164 @@ class DirectMessages:
             self.dm_history[user_id] = turns
             self._recent_dirty.add(pkey)
 
-    async def _say_dm_memory_answer(self, user_id: str, answer: str, *,
-                                    background: bool = False) -> bool:
-        """Send a memory command's answer to a DM. `background`: no request
-        of the conversation is open to carry it."""
-        pkey = channels.dm_routing_key(user_id)
-        # One message per line of the answer, none cut mid-sentence.
-        lines = transport.send_by_line.set(True)
-        try:
-            async with self._dm_sending(pkey):
-                if background:
-                    send_result = await self._send_background(
-                        pkey, lambda: self._send_dm(user_id, answer),
-                        reason="follow_up")
-                else:
-                    send_result = await self._send_dm(user_id, answer)
-        finally:
-            transport.send_by_line.reset(lines)
-        if not send_result.success:
-            logger.warning("[Agent] memory command delivery failed (user=%s)",
-                           user_id)
-            return send_result.partial
-        logger.info("[Agent] memory command answered (user=%s, %d chars)", user_id, len(answer))
-        return True
-
-    async def _dm_turn(self, user_id: str, pkey: str, text: str,
-                       is_admin: bool, proactive: bool, *,
-                       nickname: str = "?") -> bool:
-        """The turn the line gave this handler: one model call under the turn
-        budget, the send, the commit. Nothing of this user's enters meanwhile."""
-        # The reader's words this turn; kept for their next turn unless committed.
+    async def _dm_turn(self, user_id: str, pkey: str, text: str) -> None:
+        """One turn of the model: the call under the turn's time budget, the
+        reply said, the history committed."""
+        # The person's words this turn; kept for their next turn unless committed.
         said: list[str] = []
         committed = False
-        mode = "proactive" if proactive else ADMIN_MODE if is_admin else "called"
-
-        def silent(reason: str) -> None:
-            # Activity shows a turn that said nothing, and why.
-            asked = "\n".join(said)
-            decision_log.record(pkey, mode, False, reason, asked,
-                                answered=asked, sender=nickname)
-
+        conversation = user_id.split(":", 1)[-1]
+        lookups = ChatLookups(self.memory_file.parent / "desktop" / CHAT_DOING_FILE, conversation)
+        context = chat_lookups.set(lookups)
+        # Where the stop button finds this turn (`stop_turn`).
+        vars(self).setdefault("_page_turns", {})[conversation] = lookups
         try:
             async with self.locks[pkey]:
-                if proactive:
-                    # Shared with the agent's own proactive loop.
-                    self.last_proactive_at[
-                        channels.dm_learning_key(user_id)] = time.time()
-                self._wake(pkey)
                 self._rehydrate_page(user_id, pkey)
                 history = list(self.dm_history.get(user_id, []))
-                # A proactive turn leaves the history ending on the bot,
-                # which is what lets _build_dm_prompt add its internal cue.
-                if not proactive:
-                    # Everything let in since the last committed reply is one
-                    # user turn, so two user turns never sit in a row.
-                    said = list(self._dm_unanswered.get(user_id) or [text])
-                    heard = vars(self).get("_dm_heard_at", {}).get(user_id)
-                    history.append({"role": "user",
-                                    "content": "\n".join(said),
-                                    "name": nickname, "t": heard or time.time(),
-                                    "seq": self._next_seq(pkey)})
+                # Everything taken in since the last committed reply is one
+                # user turn, so two user turns never sit in a row.
+                said = list(self._dm_unanswered.get(user_id) or [text])
+                # Shown with this turn only: later turns read their place as [image].
+                pictures = vars(self).get("_dm_pictures", {}).pop(user_id, [])
+                heard = vars(self).get("_dm_heard_at", {}).get(user_id)
+                history.append({"role": "user",
+                                "content": "\n".join(said),
+                                "name": _THEM, "t": heard or time.time(),
+                                "seq": self._next_seq(pkey)})
                 history = _trimmed_history(history)
 
-            cue = ({"proactive": True, "proactive_cue": text}
-                   if proactive else {})
+            cue = {"pictures": pictures} if pictures else {}
+            # Only this await is stopped: the commit below runs whole or not at all.
+            lookups.work = asyncio.current_task()
+            lookups.doing("recall")
             try:
-                reply, auto_mem = await self._within_turn_budget(self._chat_dm(
-                    history, is_admin=is_admin, pkey=pkey, **cue))
-            except Exception as e:
-                logger.warning("[Agent] DM model call failed: %s", e)
-                # The page and the API report every failure: their caller turns it into an error.
-                page = channels.platform_of(pkey) in _ANSWERED_AT_ONCE
-                # Tell the waiting reader; not committed to the history.
-                if not proactive and (page or self._excuse_begin(pkey)):
-                    delivered = False
-                    sink = current_sink.get()
-                    start = len(sink.items) if sink is not None else 0
+                try:
                     try:
-                        async with self._dm_sending(pkey):
-                            delivered = (await self._send_dm(
-                                user_id, self._model_failure_excuse(text))).success
-                    finally:
-                        if not page:
-                            self._excuse_end(pkey, delivered)
-                    # Marked, so a connector can tell the excuse from a reply.
-                    for item in sink.items[start:] if sink is not None else ():
-                        item["reason"] = "excuse"
-                silent("model failed")
-                return False
+                        reply, auto_mem = await self._within_turn_budget(self._chat_dm(
+                            history, pkey=pkey, **cue))
+                    except OutOfTime:
+                        if not (lookups.trace or lookups.__dict__.get("steps")):
+                            raise
+                        # Work was under way: one more call says what was done, in place of a failure line.
+                        reply, auto_mem = await asyncio.wait_for(self._chat_dm(
+                            history, pkey=pkey, out_of_time=True, **cue), self.llm_timeout_s)
+                finally:
+                    stoppable = lookups.work
+                    lookups.work = None
+            except asyncio.CancelledError:
+                if not lookups.stopped:
+                    raise
+                # Python 3.11+ counts cancels; this one is handled here.
+                getattr(stoppable, "uncancel", lambda: None)()
+                # Stopped by the person: no excuse, and the words are not carried into the next turn.
+                logger.info("[Agent] turn stopped by the person (chat=%s)", conversation)
+                said = []
+                self._dm_unanswered.pop(user_id, None)
+                return
+            except Exception as e:
+                logger.warning("[Agent] model call failed: %s", e)
+                # Told to the waiting person in place of an answer, marked so the page shows its own
+                # error; not committed to the history.
+                for item in self._say(self._model_failure_excuse(text)):
+                    item["reason"] = "excuse"
+                return
             if not reply:
-                silent("passed")
-                return False
+                return
 
-            final = self._final_reply(reply, log_ctx=f"DM user={user_id}")
+            final = self._final_reply(reply, log_ctx=f"chat={conversation}")
             if final.verdict == PASS:
-                logger.info("[Agent] PASS (DM user=%s)", user_id)
+                logger.info("[Agent] PASS (chat=%s)", conversation)
             if final.verdict != SEND:
-                silent("passed" if final.verdict == PASS else "blocked")
-                return False
-            reply, pending_core = final.text, final.core_note
+                return
+            reply = final.text
+            texts = self._say(reply)
+            if lookups.trace and texts:
+                # Shown under the reply and kept with it (welcome.py); the trace is what it looked up.
+                texts[-1]["sources"], texts[-1]["trace"] = lookups.sources, lookups.trace
+            if texts and lookups.feedback:
+                # What the person said of finds; the page keeps it in the feed (welcome.py).
+                texts[-1]["feedback"] = lookups.feedback
+            if texts and lookups.bring:
+                # The find it brought, as a card under the reply, the way the share step posts one.
+                from . import life
+                from .library import Library
+                item = Library(today.runtime_of(self)).get(lookups.bring)
+                card = life.said(item).get("card") if item is not None else None
+                if card:
+                    texts[-1]["card"] = card
 
-            def record(spoken: str) -> None:
-                # A one-on-one chat shows in Activity what was said, as a group does.
-                decision_log.record(
-                    pkey, mode, True, "proactive" if proactive else "addressed",
-                    spoken, answered="\n".join(said))
-
-            async with self._dm_sending(pkey):
-                send_result = await self._send_dm(user_id, reply)
-            if not send_result.success:
-                logger.warning(
-                    "[Agent] DM delivery failed (user=%s, partial=%s)",
-                    user_id, send_result.partial)
-                # Commit the delivered prefix; the core note and memory are withheld.
-                if send_result.partial and send_result.delivered:
-                    async with self.locks[pkey]:
-                        history.append({"role": "assistant",
-                                        "content": send_result.delivered,
-                                        "t": time.time(), "seq": self._next_seq(pkey)})
-                        self._commit_dm_history(user_id, pkey, history)
-                        if not proactive:
-                            self._dm_unanswered.pop(user_id, None)
-                        committed = True
-                    record(send_result.delivered)
-                else:
-                    silent("delivery failed")
-                return send_result.partial
-
+            asked = "\n".join(said)
+            unsaid = bool(person.unsaid(asked))
             async with self.locks[pkey]:
                 history.append({"role": "assistant", "content": reply,
-                                "t": time.time(), "seq": self._next_seq(pkey)})
+                                "t": time.time(), "seq": self._next_seq(pkey),
+                                # What it did on the way, short: the next turns read it (prompt._recent_steps).
+                                **({"steps": [f"{s['tool']} {s.get('what') or ''}".strip()[:160]
+                                              for s in lookups.trace[-12:]]} if lookups.trace else {})})
                 self._commit_dm_history(user_id, pkey, history)
-                if not proactive:
-                    self._dm_unanswered.pop(user_id, None)
+                self._dm_unanswered.pop(user_id, None)
                 committed = True
-                self._commit_core_memory(pkey, pending_core)
-                if auto_mem:
-                    self._save_auto_memory(pkey, auto_mem)
+                if not run_of():
+                    # The one person's store, which every chat reads (person.py); a scheduled run's
+                    # request is not something they said now.
+                    self._person_turn(pkey, asked, reply, auto_mem, before=_said_before(history),
+                                      refs=[history[-2]["seq"]] if len(history) > 1 else [])
+                if unsaid:
+                    scrub = self._drop_unsaid(pkey, asked, reply)
+                    if texts:
+                        texts[-1]["scrub"] = scrub
                 self._mark_used(pkey, reply)
                 self._maybe_consolidate(pkey, "trim")
-                # A proactive reply answers no message of the reader's. On
-                # record before the line moves: the next message may react.
-                if self.react_learn_enabled and not proactive:
-                    self.pending_reactions.record(
-                        channels.dm_learning_key(user_id), reply=reply,
-                        ctx_lines=[f"{nickname}: {_truncate_framed(text, 100)}"],
-                        mode=ADMIN_MODE if is_admin else "called",
-                        target_uid=user_id, mids=send_result.message_ids,
-                        ts=time.time())
-            record(reply)
-            logger.info("[Agent] DM reply (%s): %s", user_id, reply[:80])
-            return True
+            # Never the words: what they say may be forgotten later.
+            logger.info("[Agent] reply (chat=%s, %d chars)", conversation, len(reply))
+            if lookups.wonder:
+                # Something the talk made it want to look into: a walk goes for it as soon as it may.
+                if today.wonder(self.memory_file.parent, lookups.wonder, time.time()) and getattr(self, "roam", None):
+                    self.roam.request()
         finally:
-            # No await: this also runs when the turn is cancelled.
-            if said and not committed:
-                self._dm_unanswered[user_id] = _kept_unanswered(said)
+            # No await: this also runs when the turn is cancelled. A scheduled run that said nothing
+            # leaves nothing for their next turn.
+            if said and not committed and not run_of():
+                self._dm_unanswered[user_id] = said
                 self._recent_dirty.add(pkey)
+            chat_lookups.reset(context)
+            lookups.done()
+            if vars(self).get("_page_turns", {}).get(conversation) is lookups:
+                del self._page_turns[conversation]
 
-    async def _chat_dm(self, history: list[dict], is_admin: bool = True, proactive: bool = False, pkey: str = "", proactive_cue: str = "") -> tuple[str, str]:
-        """One DM model turn (LLM_DM_MODEL): `is_admin` picks the close or
-        the friend register, `pkey` ("private:<uid>") the memory namespace,
-        and `proactive_cue` is a scheduler's note, framed as external material.
+    def stop_turn(self, conversation: str) -> bool:
+        """Cancel the reply under way in the chat `conversation`: its model
+        and tool calls stop, and nothing of it is said or kept."""
+        lookups = vars(self).get("_page_turns", {}).get(conversation)
+        if lookups is None or lookups.work is None:
+            return False
+        lookups.stopped = True
+        lookups.work.cancel()
+        return True
+
+    async def _chat_dm(self, history: list[dict], pkey: str = "", follow_up: str = "",
+                       pictures: list[bytes] = (), out_of_time: bool = False) -> tuple[str, str]:
+        """One model turn of the chat `pkey` (LLM_DM_MODEL). `follow_up`: nobody
+        wrote; the note says which plan of theirs to ask after (proactive.py),
+        and the turn uses no tools. `pictures` go with the last turn for the
+        model to see itself. `out_of_time`: the turn's time ran out with work
+        under way, so this call only says what was done, without tools.
         Returns (reply, memory)."""
         await self._prepare_retrieval(self._last_user_text(history), pkey)
-        prompt = self._build_dm_prompt(history, is_admin=is_admin,
-                                       proactive=proactive, pkey=pkey,
-                                       proactive_cue=proactive_cue)
+        prompt = self._build_dm_prompt(history, pkey=pkey, follow_up=follow_up,
+                                       pictures=len(pictures))
         system, messages = prompt.system, prompt.messages
-        # Searched once here, so the retry reuses it. Before the context joins
-        # the last turn: the search decision reads that turn as the person's.
-        if not proactive:
-            with tool_caller(is_admin):
-                messages = await self._ground_with_search(messages)
+        # A turn of the person's: the reply model looks things up itself below.
+        lookups = None if follow_up else chat_lookups.get()
         messages = prompt.messages_with_context(messages)
+        if pictures:
+            # Image parts after the words; an endpoint that refuses them gets the words alone (endpoints.py).
+            urls = [await self._vision_data_url(data, _detect_image_mime(data)) for data in pictures]
+            last = messages[-1]
+            messages = messages[:-1] + [{**last, "content": [
+                {"type": "text", "text": last["content"]},
+                *({"type": "image_url", "image_url": {"url": url}} for url in urls if url)]}]
 
         async def draft(system_text: str) -> tuple[str, str]:
             with purpose("reply"):
@@ -456,57 +459,93 @@ class DirectMessages:
                     messages=messages,
                     model=self.llm_dm_model,
                     max_tokens=4096,
-                    enable_search=False,
                     # No hidden reasoning: the protocol carries its own `reasoning` field.
                     disable_thinking=True,
                     json_object=True,
                     # `reply` is the whole schema, so recovered prose is unambiguous.
                     plain_text_fallback=True,
                 )
+            return parsed(raw)
+
+        def parsed(raw: str) -> tuple[str, str]:
             reply, reasoning, intent, mem = TextProcessing._parse_model_output(
                 raw, self.llm_dm_model)
             if reasoning:
                 logger.debug("[Agent] DM model metadata parsed (intent=%s, reasoning_chars=%d)",
                              intent or "?", len(reasoning))
-            return reply, mem
+            if lookups is not None:
+                lookups.wonder = _wonder_of(raw) or lookups.wonder
+            return reply, _mem_of(raw, mem)
 
-        reply, mem = await draft(system)
-        # A DM has no PASS, so a draft that would send nothing is retried
-        # once; a proactive turn's empty draft is the persona declining.
-        note = "" if proactive else self._draft_retry_note(reply)
-        if note and note != _EMPTY_DRAFT_RETRY_NOTE and not self._declined_retry_free(pkey):
-            note = ""
+        answer = ""
+        if out_of_time:
+            messages = _with_found(messages, _done_so_far(lookups))
+        elif lookups is not None:
+            from .skills import offer as skill_offer
+            from .skills import tool as skill_tool
+            # A market skill the message plainly fits, offered on a card first (skills/offer.py).
+            await skill_offer.offer(self, self._last_user_text(history), lookups)
+            # The skills that fit the message: listed for use_skill, or put in the prompt (skills/tool.py).
+            system = skill_tool.before(self, system, self._last_user_text(history), lookups)
+            answer, found = await self._reply_with_tools(system, messages, self.llm_dm_model, lookups,
+                                                         said=self._last_user_text(history))
+            system = skill_tool.after(self, system, lookups)
+            if found:
+                messages = _with_found(messages, found)
+            # Asked without response_format: the object once more in JSON mode, else
+            # prose is the reply, as in `_call_llm`.
+            if answer and not re.sub(r"^```(?:json)?\s*", "", answer, flags=re.IGNORECASE).startswith(("{", "[")):
+                answer = (await self._object_again(system, messages, answer, self._last_user_text(history))
+                          or _prose_answer(answer))
+        if lookups is not None and not answer:
+            system += "\n\n" + _TOOLS_OVER_NOTE
+        reply, mem = parsed(answer) if answer else await draft(system)
+        # An answer to the person has no PASS, so a draft that would say nothing is
+        # retried once; a follow-up's empty draft is the character declining.
+        # A watch whose condition does not hold says PASS (panels/schedule.py).
+        note = "" if follow_up or (run_of() or {}).get("kind") == "watch" else self._draft_retry_note(reply)
         if note:
             logger.info("[Agent] DM draft would send nothing, retrying once")
             # The protocol block ends without a newline.
             retry_reply, retry_mem = await draft(system + "\n\n" + note)
             # The first draft's memory is still a fact about the conversation.
             reply, mem = retry_reply, (retry_mem or mem)
+        if lookups is not None and isinstance(mem, list):
+            # What they said of a find, as an operation: kept the way note_reaction keeps it.
+            for op in mem:
+                if (isinstance(op, dict) and op.get("op") == "card" and op.get("verdict") in ("like", "skip")
+                        and not any(f["id"] == str(op.get("id") or "") for f in lookups.feedback)):
+                    self._note_reaction({"id": str(op.get("id") or ""), "liked": op["verdict"] == "like",
+                                         "words": self._last_user_text(history).rsplit(chr(3), 1)[-1]}, lookups)
         return reply, mem
 
-    def _declined_retry_free(self, pkey: str) -> bool:
-        """Whether this reader's declined draft may be asked for again now."""
-        asked = vars(self).setdefault("_declined_retry_at", {})
-        now = time.monotonic()
-        last = asked.get(pkey)
-        if last is not None and now - last < _DECLINED_RETRY_GAP_S:
-            return False
-        if len(asked) >= _DECLINED_RETRY_READERS:
-            asked.clear()
-        asked[pkey] = now
-        return True
+    async def _object_again(self, system: str, messages: list[dict], prose: str, said: str) -> str:
+        """The protocol object for a tool round's prose answer, asked once in
+        JSON mode with the prose as the draft; "" when the prose already
+        carries the object or its mem lines, or the second ask brings none."""
+        data = salvage_json_object(prose)
+        if (isinstance(data, dict) and isinstance(data.get("reply"), str)) or _PROSE_MEM.search(prose):
+            return ""
+        try:
+            with purpose("reply"):
+                raw = await self._call_llm(
+                    system=system,
+                    messages=messages + [{"role": "assistant", "content": prose},
+                                         {"role": "user", "content": _OBJECT_AGAIN_NOTE + "\nTheir last message: "
+                                          + json.dumps(str(said)[:300], ensure_ascii=False)}],
+                    model=self.llm_dm_model, max_tokens=4096,
+                    disable_thinking=True, json_object=True)
+        except Exception as e:
+            logger.warning("[Agent] protocol object not asked again: %s", type(e).__name__)
+            return ""
+        data = salvage_json_object(strip_json_fences(raw or ""))
+        if isinstance(data, dict) and isinstance(data.get("reply"), str) and data["reply"].strip():
+            return json.dumps(data, ensure_ascii=False)
+        return ""
 
     def _draft_retry_note(self, reply: str) -> str:
         """The note for a second draft when this one would send nothing: a
-        PASS, a guard's refusal, or a render to nothing; else ""."""
-        if re.fullmatch(r"\W*PASS\W*", (reply or "").strip(), re.IGNORECASE):
+        PASS, or no words; else ""."""
+        if is_pass_sentinel(reply):
             return _PASS_DRAFT_RETRY_NOTE
-        filtered, blocked = self._apply_output_filter(reply or "")
-        text, refusal = TextProcessing._sanitize_reply_with_reason(
-            filtered, self.agent_lang, self.reply_style)
-        if blocked or refusal:
-            return _REFUSED_DRAFT_RETRY_NOTE.format(reason=refusal or blocked)
-        text = text.strip().strip('"').strip("「」")
-        if re.sub(r'\[AT:[^\]\s]+\]', '', text).strip():
-            return ""
-        return _EMPTY_DRAFT_RETRY_NOTE
+        return "" if self._final_reply(reply, log_ctx="DM draft").verdict == SEND else _EMPTY_DRAFT_RETRY_NOTE

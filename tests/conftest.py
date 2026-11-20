@@ -8,49 +8,23 @@ from pathlib import Path
 
 import pytest
 
+from persona_agent import agent as _agent
 from persona_agent import home as _home
-
-_real_load_env = _home.load_env
-
-
-def _load_env_outside_the_checkout() -> Path:
-    """Modules load <home>/.env as they import; a developer's own .env in the
-    checkout, with its keys and language, must not reach the tests."""
-    found = _home.find_home()
-    return found if found == _home.CHECKOUT else _real_load_env()
-
-
-_home.load_env = _load_env_outside_the_checkout
-
-
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line(
-        "markers", "bare_call_wait: keep the real bare-call debounce")
-    config.addinivalue_line(
-        "markers", "typing_pace: keep the typing pace of the direct connectors")
+from persona_agent import paths as _paths
 
 
 @pytest.fixture(autouse=True)
-def _no_typing_pace(request: pytest.FixtureRequest,
-                    monkeypatch: pytest.MonkeyPatch) -> None:
-    """Direct connectors relay replies at once unless a test is marked typing_pace."""
-    if request.node.get_closest_marker("typing_pace") is None:
-        monkeypatch.setattr("persona_agent.direct.base.Bridge.paced", False)
-
-
-@pytest.fixture(autouse=True)
-def _no_bare_call_wait(request: pytest.FixtureRequest,
-                       monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip the 5 s bare-call debounce unless a test is marked bare_call_wait."""
-    if request.node.get_closest_marker("bare_call_wait") is None:
-        monkeypatch.setattr("persona_agent.turns.BARE_CALL_DEBOUNCE_S", 0.0)
-
-
-@pytest.fixture(autouse=True)
-def _no_mirror_probe(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No test probes PyPI or GitHub: both count as reachable."""
-    monkeypatch.setattr("persona_agent.mirrors.reachable", lambda url, timeout=0: True)
-    monkeypatch.delenv("PERSONAGENT_MIRROR", raising=False)
+def _one_home_at_a_time():
+    """A page a test starts builds its character for its own home (character.py): that home's .env
+    goes into the environment and its folder becomes the root of every path. Both are put back."""
+    environment, from_file, root = dict(os.environ), set(_home.FROM_ENV_FILE), _paths.ROOT
+    yield
+    for key in set(os.environ) - set(environment):
+        del os.environ[key]
+    os.environ.update(environment)
+    _home.FROM_ENV_FILE.clear()
+    _home.FROM_ENV_FILE.update(from_file)
+    _paths.ROOT = _agent.ROOT = root
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +37,16 @@ def _no_update_check(monkeypatch: pytest.MonkeyPatch) -> None:
 def _no_walks(monkeypatch: pytest.MonkeyPatch) -> None:
     """No service a test starts goes out to real sites; tests/test_roam.py turns walks on."""
     monkeypatch.setenv("ROAM_ENABLED", "false")
+
+
+@pytest.fixture(autouse=True)
+def _no_credential_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test writes to this computer's credential store (secretstore.py): a dictionary stands in."""
+    import keyring
+    held: dict = {}
+    monkeypatch.setattr(keyring, "get_password", lambda service, name: held.get((service, name)))
+    monkeypatch.setattr(keyring, "set_password", lambda service, name, value: held.__setitem__((service, name), value))
+    monkeypatch.setattr(keyring, "delete_password", lambda service, name: held.pop((service, name)))
 
 
 @pytest.fixture(autouse=True)

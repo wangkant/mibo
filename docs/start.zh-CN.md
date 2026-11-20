@@ -33,9 +33,7 @@ personagent
 
 也可以交由 AI 编程助手完成：请其阅读 [setup-for-agents.md](setup-for-agents.md)，然后代为安装并设置 personagent。
 
-在 Windows 上也可以下载源码 ZIP，解压后双击 `start.bat`。该脚本会在文件夹中建立独立的 Python 环境（电脑上没有 Python 时会先自动获取），然后打开同一个本地页面。首次运行时，还会在桌面和开始菜单中添加 personagent 图标。
-
-从 Git 仓库运行时，请为其单独创建一个虚拟环境：先运行 `python -m venv .venv`，再运行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`。Windows 上的解释器是 `.venv\Scripts\python.exe`，也可以直接双击 `start.bat`。
+从 Git 仓库运行时，请为其单独创建一个虚拟环境：先运行 `python -m venv .venv`，再运行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`。Windows 上的解释器是 `.venv\Scripts\python.exe`。
 
 ## 登录并开始聊天
 

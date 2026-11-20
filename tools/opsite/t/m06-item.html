@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>布衣小铺 - 商品</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #fbfaf7; }
+main { max-width: 640px; margin: 20px auto; background: #fff; padding: 18px 24px; border-radius: 10px; }
+.opts button { margin: 0 6px 6px 0; padding: 5px 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; }
+.opts button.on { border-color: #c40; color: #c40; } .price { color: #c40; font-size: 20px; }
+</style></head>
+<body><main>
+<p><a href="/t/m06-store.html">← 返回</a> · <a href="/t/m06-bag.html">购物袋</a></p>
+<h2 id="name"></h2><p class="price" id="price"></p>
+<p>颜色</p><div class="opts" id="colors"></div><p>尺码</p><div class="opts" id="sizes"></div>
+<p><button id="add" type="button" style="padding:8px 20px">加入购物袋</button> <span id="said"></span></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const ITEMS = { tee: ["纯棉圆领T恤", 59], hood: ["加绒连帽卫衣", 169], crew: ["圆领卫衣", 139], pants: ["束脚运动裤", 99], coat: ["轻薄羽绒服", 299], sock: ["中筒袜三双装", 29] };
+const id = new URLSearchParams(location.search).get("id") || "tee";
+const [name, price] = ITEMS[id];
+document.getElementById("name").textContent = name;
+document.getElementById("price").textContent = "¥" + price;
+let color = "", size = "";
+const pick = (box, values, set) => {
+  for (const v of values) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = v;
+    b.onclick = () => { for (const o of box.children) o.classList.toggle("on", o === b); set(v); };
+    box.append(b);
+  }
+};
+pick(document.getElementById("colors"), ["黑色", "灰色", "燕麦色"], (v) => { color = v; });
+pick(document.getElementById("sizes"), ["S", "M", "L", "XL"], (v) => { size = v; });
+document.getElementById("add").onclick = async () => {
+  if (!color || !size) { document.getElementById("said").textContent = "请选择颜色和尺码"; return; }
+  if ((await post("/api/bag", { item: id, color, size })).ok) document.getElementById("said").textContent = "已加入购物袋";
+};
+</script></body></html>

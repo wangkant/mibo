@@ -4,8 +4,8 @@
 
 For the platforms tools/window_driver.py cannot reach (macOS, and Linux with
 `personagent[app]`), and for Windows too: it runs `personagent start` in this
-process against a stand-in model, sets the page up and chats through the
-window's own JavaScript bridge, then closes the window. The exit status is the
+process against a stand-in model, walks the first run, chats and opens
+Settings through the window's own JavaScript bridge, then closes the window. The exit status is the
 number of failed checks. Nothing leaves this machine.
 
 On Qt and Cocoa the bridge runs its script with eval, which the page's own
@@ -37,6 +37,12 @@ VISIBLE = "(id => { const s = document.getElementById(id); return !!s && !s.hidd
 SET = ("((selector, value) => { const e = document.querySelector(selector); e.value = value;"
        " e.dispatchEvent(new Event('input', {bubbles: true}));"
        " e.dispatchEvent(new Event('change', {bubbles: true})); return true; })")
+# The model is connected through the page's own API: the bridge cannot wait for a promise.
+CONNECT = ("(body => { window.smokeConnected = null; fetch('/api/config', {method: 'POST', headers: {"
+           " 'Content-Type': 'application/json', 'X-Personagent-Setup-Token':"
+           " sessionStorage.getItem('personagent-setup-token') || ''}, body: JSON.stringify(body)})"
+           ".then(r => r.json()).then(v => { window.smokeConnected = v; }); return true; })")
+SKIP = "(() => { const b = document.querySelector('#onboard-view .onboard-skip'); if (b && !b.disabled) b.click(); return true; })()"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -162,9 +168,10 @@ def main(argv: list[str] | None = None) -> int:
                 seen["app"]._window.load_url(seen["app"].page_url.replace("#", "?policy=widened#", 1))
                 print("      (the bridge needs eval here: policy widened for this run)", flush=True)
                 time.sleep(2)
-            loaded = until("document.readyState === 'complete' && document.querySelectorAll('.nav').length >= 6", 60)
-            check("the page loaded in the window with its six views", loaded is True, loaded)
-            check("the page's own script ran", js("typeof window.PA === 'object' && typeof window.PA.t === 'function'") is True)
+            loaded = until("document.readyState === 'complete' && typeof window.paOnboard === 'object'"
+                           " && typeof window.paSetup === 'object'", 60)
+            check("the page loaded in the window and its own script ran", loaded is True, loaded)
+            check("a new home opens on the first run", until(f"{VISIBLE}('onboard-view')", 30) is True)
             bar = "document.body.classList.contains('frameless') && !document.getElementById('window-controls').hidden"
             if sys.platform == "win32":
                 # On Windows the window has no title bar: the page is the bar and holds its buttons.
@@ -179,23 +186,25 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 check("elsewhere the window keeps the system's title bar",
                       seen["app"].frameless is False and js(bar) is False, js(bar))
-            js("document.querySelector('.nav[data-view=settings]').click()")
-            check("the settings view opens", until(f"{VISIBLE}('setup-view')", 20) is True)
-            for selector, value in (("#provider", "other"), ("#base-url", model_url),
-                                    ("#model", "fake-model"), ("#api-key", "fake-local-key")):
-                js(f"{SET}({json.dumps(selector)}, {json.dumps(value)})")
-                time.sleep(0.3)
-            js("document.querySelector('#save').click()")
-            chat = until(f"{VISIBLE}('chat-view')", 90)
-            check("saving the model settings opens the chat", chat is True, chat)
-            time.sleep(2.5)
-            js(f"{SET}('#message', 'hello')")
-            js("document.querySelector('#chat-form').requestSubmit()")
-            answered = until(f"document.querySelector('#messages').innerText.includes({json.dumps(REPLY)})", 90)
-            check("the character answers in the window", answered is True,
-                  js("document.querySelector('#messages').innerText.slice(-300)"))
-            js("document.querySelector('.nav[data-view=app]').click()")
-            check("the App view opens", until(f"{VISIBLE}('app-view')", 20) is True)
+            body = {"provider": "other", "apiKey": "fake-local-key", "baseUrl": model_url, "model": "fake-model",
+                    "lang": "en"}
+            js(f"{CONNECT}({json.dumps(body)})")
+            connected = until("!!window.smokeConnected && window.smokeConnected.configured === true", 90)
+            check("the page connects the stand-in model", connected is True, js("JSON.stringify(window.smokeConnected)"))
+            deadline = time.time() + 120
+            while time.time() < deadline and js(f"{VISIBLE}('onboard-view')") is True:
+                js(SKIP)
+                time.sleep(1)
+            chat = until(f"!{VISIBLE}('onboard-view') && {VISIBLE}('chat-view')", 60)
+            check("walking the first run opens the chat", chat is True, chat)
+            until("!!document.querySelector('#chat-view .chat-input')", 30)
+            js(f"{SET}('#chat-view .chat-input', 'hello')")
+            js("document.querySelector('#chat-view .chat-composer').requestSubmit()")
+            messages = "document.querySelector('#chat-view .chat-messages').innerText"
+            answered = until(f"{messages}.includes({json.dumps(REPLY)})", 90)
+            check("the character answers in the window", answered is True, js(f"{messages}.slice(-300)"))
+            js("document.getElementById('side-settings').click()")
+            check("Settings opens", until(f"{VISIBLE}('setup-view')", 20) is True)
             check("nothing was sent to the system browser", not sent_to_browser, sent_to_browser)
         except Exception as error:
             check("the walk ran to its end", False, repr(error))

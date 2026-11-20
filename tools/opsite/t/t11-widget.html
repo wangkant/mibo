@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>在线客服</title>
+<style>
+body { margin: 0; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; display: flex; flex-direction: column; height: 100vh; }
+header { background: #ff4f00; color: #fff; padding: 10px 14px; } header h2 { margin: 0; font-size: 15px; }
+.log { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: #f7f7f7; }
+.m { max-width: 80%; padding: 6px 10px; border-radius: 8px; background: #fff; } .m.me { align-self: flex-end; background: #ffe2d1; }
+.in { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #eee; }
+.in textarea { flex: 1; height: 44px; resize: none; } .in button { background: #ff4f00; color: #fff; border: 0; padding: 0 14px; border-radius: 6px; }
+</style></head>
+<body>
+<header><h2>在线客服 · 小美</h2></header>
+<div class="log" id="log"><div class="m">您好，我是客服小美，请问有什么可以帮您？</div></div>
+<div class="in"><textarea id="t" placeholder="请输入您的问题"></textarea><button id="b">发送</button></div>
+<script>
+document.getElementById("b").addEventListener("click", async () => {
+  const t = document.getElementById("t"), text = t.value.trim();
+  if (!text) return;
+  const r = await fetch("/api/support", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+  if ((await r.json()).ok) {
+    const m = document.createElement("div");
+    m.className = "m me"; m.textContent = text;
+    document.getElementById("log").append(m);
+    t.value = "";
+  }
+});
+</script></body></html>

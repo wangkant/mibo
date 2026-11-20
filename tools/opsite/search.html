@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>搜索</title><link rel="stylesheet" href="/site.css"></head>
+<body><script src="/nav.js"></script>
+<main>
+  <form class="card" action="/search.html" method="get" role="search">
+    <label for="q">搜索本站</label>
+    <input type="search" id="q" name="q" placeholder="输入关键词">
+    <button class="primary" type="submit">搜索</button>
+  </form>
+  <div class="card" id="out" hidden><h2>结果</h2><ol class="results" id="results"></ol></div>
+</main>
+<script>
+const ITEMS = ["猫咪的十种睡姿", "怎样给猫剪指甲", "流浪猫救助指南", "狗狗也会做梦吗", "城市里的鸟", "猫和狗能做朋友吗"];
+const q = new URLSearchParams(location.search).get("q");
+if (q) {
+  document.getElementById("q").value = q;
+  const found = ITEMS.filter((item) => item.includes(q));
+  const list = document.getElementById("results");
+  for (const item of found) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = "/index.html#" + encodeURIComponent(item);
+    a.textContent = item;
+    li.append(a);
+    list.append(li);
+  }
+  if (!found.length) list.insertAdjacentHTML("beforeend", "<li>没有找到</li>");
+  document.getElementById("out").hidden = false;
+}
+</script></body></html>

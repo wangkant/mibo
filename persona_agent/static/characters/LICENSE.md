@@ -11,4 +11,3 @@ same licence.
 | `deepseek.webp` | The DeepSeek whale girl (鲸鱼娘) | 溟月, an original character by 上善无形 on Bilibili (CC BY-NC-SA 4.0), in the maid outfit by ZipZipPipe. Redrawn; not their artwork. |
 | `chatgpt.webp` | The GPT dragon girl (GPT 娘) | The white dragon design by ZipZipPipe. Redrawn; not their artwork. |
 | `claude.webp` | The Claude lady (Claude 娘) | A community design whose first artist is not known. Redrawn. |
-| `pico.webp` | Pico (皮可), the app's own robot | An original design for personagent. |

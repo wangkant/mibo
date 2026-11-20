@@ -14,11 +14,10 @@ from pathlib import Path
 
 import httpx
 
-from persona_agent import embeddings, health, preflight, ranking
+from persona_agent import embeddings, ranking
 from persona_agent.agent import Agent
 from persona_agent.endpoints import embedding_endpoint, embeddings_url
 from persona_agent.llm import _PooledHTTP
-from persona_agent.settings import AgentSettings
 from persona_agent.textproc import _focus_tokens
 
 from helpers import check, isolated_agent
@@ -110,35 +109,8 @@ def test_an_embedding_neighbour_with_no_shared_words_needs_embeddings() -> None:
 # ---------------------------------------------------------------------------
 
 def make_agent(tmp: Path, **settings) -> Agent:
-    """The embedding cache sits beside the redirected pool, so it is in `tmp` too."""
-    return isolated_agent(tmp, seeds=True, **{"qq_bot_id": "1", "persona_name": "B",
-                                              **settings})
-
-
-def ex(reply: str, scenario: str, context: list[str], **extra) -> dict:
-    return {"scenario": scenario, "mode": "called", "context": context,
-            "reply": reply, **extra}
-
-
-def write_jsonl(path: Path, rows: list[dict]) -> None:
-    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
-                    encoding="utf-8")
-
-
-def test_the_same_text_ranks_by_where_it_was_learned(tmp: Path) -> None:
-    a = make_agent(tmp)
-    scope = {"lang": a.agent_lang, "platform": "qq", "conv_id": "g1",
-             "persona": a.persona_name, "persona_hash": a.persona_hash,
-             "persona_version": a.persona_version}
-    same = dict(scenario="deploy broke prod", context=["[u] it broke"])
-    write_jsonl(a.examples_seed_file, [ex("SEED_ROW", **same)])
-    write_jsonl(a.examples_file, [ex("LEARNED_ROW", **same)])
-    write_jsonl(a.promoted_examples_file, [ex(
-        "PROMOTED_ROW", **same, src="promoted_candidate", candidate_id="c1", scope=scope)])
-    block = a._examples_for_prompt("deploy broke", "called", conv_id="g1", limit_good=3)
-    order = [block.index(r) for r in ("PROMOTED_ROW", "LEARNED_ROW", "SEED_ROW")]
-    check("scope: this conversation, then this persona, then the seed",
-          order == sorted(order), block)
+    """The embedding cache sits beside memory.json, so it is in `tmp` too."""
+    return isolated_agent(tmp, **{"persona_name": "B", **settings})
 
 
 # ---------------------------------------------------------------------------
@@ -150,16 +122,6 @@ EMBEDDING = dict(embedding_model="stub-embed",
 FELINE = [1.0, 0.0, 0.0]
 OTHER = [0.0, 0.0, 1.0]
 QUERY = "my kitten threw up"
-#: No row shares a word with QUERY except DEPLOY's context ("threw").
-ROWS = [
-    ex("VET_REPLY", "feline at the vet", ["[u] she hid under the bed all day"]),
-    ex("DEPLOY_REPLY", "deploy broke prod", ["[u] my build threw errors again"]),
-    ex("CHATTER_REPLY", "small talk", ["[u] nice weather out"]),
-]
-MEMORIES = [
-    {"text": "Bob threw a party on friday", "time": 1_700_000_000.0},
-    {"text": "Mochi the feline hates car rides", "time": 1_700_000_000.0},
-]
 
 
 class StubEndpoint:
@@ -188,80 +150,32 @@ def serve(agent: Agent, endpoint: StubEndpoint) -> httpx.AsyncClient:
     return client
 
 
-def seeded(tmp: Path, **settings) -> Agent:
-    a = make_agent(tmp, **settings)
-    write_jsonl(a.examples_file, ROWS)
-    a.memories["g1"] = [dict(m) for m in MEMORIES]
-    return a
-
-
 async def prepared(a: Agent, focus: str = QUERY) -> None:
-    """One turn's async half: the query now, the pool in the background."""
+    """One turn's async half: the query now, what was read in the background."""
     await a._prepare_retrieval(focus, "g1")
     if a._embedding_backfill is not None:
         await a._embedding_backfill
 
 
-def first_example(block: str) -> str:
-    return block.split("Your reply: ", 1)[1].split("\n", 1)[0] if "Your reply: " in block else ""
-
-
-async def test_examples_and_memories_use_stub_vectors(tmp: Path) -> None:
-    off = seeded(tmp / "off")
-    await off._prepare_retrieval(QUERY, "g1")
-    check("off: nothing is embedded without EMBEDDING_MODEL",
-          off._embedding_backfill is None
-          and not (tmp / "off" / "embeddings.jsonl").exists())
-    check("off: the word match leads",
-          first_example(off._examples_for_prompt(QUERY, "", conv_id="g1", limit_good=1))
-          == "DEPLOY_REPLY")
-    memories = off._memories_for_prompt("g1", QUERY)
-    check("off: the memory sharing a word leads",
-          memories.index("Bob threw") < memories.index("Mochi"))
-
-    on = seeded(tmp / "on", **EMBEDDING)
-    endpoint = StubEndpoint()
-    client = serve(on, endpoint)
-    try:
-        await prepared(on)
-    finally:
-        await client.aclose()
-    check("on: the endpoint was asked", bool(endpoint.requests))
-    check("on: the paraphrase with no shared word leads",
-          first_example(on._examples_for_prompt(QUERY, "", conv_id="g1", limit_good=1))
-          == "VET_REPLY")
-    memories = on._memories_for_prompt("g1", QUERY)
-    check("on: the memory that means the same thing leads",
-          memories.index("Mochi") < memories.index("Bob threw"), memories)
-
-
 async def test_vectors_are_cached_in_memory_and_on_disk(tmp: Path) -> None:
-    a = seeded(tmp, **EMBEDDING)
+    a = make_agent(tmp, **EMBEDDING)
     endpoint = StubEndpoint()
     client = serve(a, endpoint)
     try:
         await prepared(a)
-        sent = [t for batch in endpoint.requests for t in batch]
-        check("first run: the query, both memories and every row are embedded",
-              sent[0] == QUERY and len(sent) == 1 + len(MEMORIES) + len(ROWS), repr(sent))
-        check("first run: batches stay within the provider limit",
-              all(len(b) <= embeddings.BATCH_SIZE for b in endpoint.requests))
+        check("first run: the query is embedded", endpoint.requests == [[QUERY]], repr(endpoint.requests))
 
         endpoint.requests.clear()
         await prepared(a)
         check("second run: no request at all", endpoint.requests == [], repr(endpoint.requests))
 
-        restarted = seeded(tmp, **EMBEDDING)
+        restarted = make_agent(tmp, **EMBEDDING)
         restarted._http = a._http
         await prepared(restarted)
         check("after a restart: only the query, which is never written to disk",
               endpoint.requests == [[QUERY]], repr(endpoint.requests))
     finally:
         await client.aclose()
-    stored = (tmp / "embeddings.jsonl").read_text(encoding="utf-8")
-    check("the file holds keys and vectors, no text",
-          "feline" not in stored and "Mochi" not in stored
-          and embeddings.text_key(QUERY) not in stored)
 
 
 def test_the_cache_file_is_pruned_once_mostly_dead(tmp: Path) -> None:
@@ -278,86 +192,9 @@ def test_the_cache_file_is_pruned_once_mostly_dead(tmp: Path) -> None:
           fresh.get("other-model", "k1") is None)
 
 
-async def test_a_down_or_slow_endpoint_changes_nothing_and_says_so_once(
-        tmp: Path, caplog, monkeypatch) -> None:
-    monkeypatch.setattr(embeddings, "QUERY_TIMEOUT_S", 0.05)
-    caplog.set_level(logging.INFO, logger="agent")
-    for label, endpoint in (("down", StubEndpoint(status=503)),
-                            ("slow", StubEndpoint(delay_s=2.0))):
-        plain = seeded(tmp / label / "plain")
-        expected = (plain._examples_for_prompt(QUERY, "", conv_id="g1")
-                    + plain._memories_for_prompt("g1", QUERY))
-        a = seeded(tmp / label / "on", **EMBEDDING)
-        client = serve(a, endpoint)
-        caplog.clear()
-        try:
-            for turn in range(3):
-                started = time.monotonic()
-                await a._prepare_retrieval(QUERY, "g1")
-                check(f"{label}: turn {turn} is not held past the query timeout",
-                      time.monotonic() - started < 1.0)
-                got = (a._examples_for_prompt(QUERY, "", conv_id="g1")
-                       + a._memories_for_prompt("g1", QUERY))
-                check(f"{label}: turn {turn} ranks exactly as without embeddings",
-                      got == expected)
-        finally:
-            await client.aclose()
-        lines = [r.getMessage() for r in caplog.records
-                 if "embedding" in r.getMessage().lower()]
-        check(f"{label}: one log line for three turns", len(lines) == 1, repr(lines))
-        check(f"{label}: and one request - the endpoint is left alone after",
-              len(endpoint.requests) == 1, repr(endpoint.requests))
-        check(f"{label}: nothing backfilled against a failing endpoint",
-              a._embedding_backfill is None)
-
-
-def with_events(a: Agent) -> Agent:
-    """MEMORIES with importance and use, plus an event and a summary of g1."""
-    a.memories["g1"][0].update(imp=2, uses=1)
-    a.memories["g1"][1].update(imp=4)
-    a.episode_store.add("g1", {"text": "the kitten went to the vet",
-                               "t0": time.time() - 7200, "t1": time.time() - 3600})
-    a.episode_store.set_thread("g1", "talking about a sick kitten", 1.0, 2.0)
-    return a
-
-
-async def test_events_and_the_summary_are_embedded_too(tmp: Path) -> None:
-    a = with_events(seeded(tmp, **EMBEDDING))
-    endpoint = StubEndpoint()
-    client = serve(a, endpoint)
-    try:
-        await prepared(a)
-    finally:
-        await client.aclose()
-    sent = [t for batch in endpoint.requests for t in batch]
-    check("the event and the summary get vectors",
-          "the kitten went to the vet" in sent and "talking about a sick kitten" in sent,
-          repr(sent))
-    check("and only once each", sent.count("the kitten went to the vet") == 1, repr(sent))
-
-
-async def test_a_down_endpoint_keeps_the_memory_order_with_events(
-        tmp: Path, monkeypatch) -> None:
-    monkeypatch.setattr(embeddings, "QUERY_TIMEOUT_S", 0.05)
-    plain = with_events(seeded(tmp / "plain"))
-    expected = plain._memories_for_prompt("g1", QUERY)
-    check("the event is recalled beside the facts",
-          "kitten went to the vet" in expected and "Mochi" in expected, expected)
-    check("deterministic: the same block twice",
-          plain._memories_for_prompt("g1", QUERY) == expected)
-    a = with_events(seeded(tmp / "on", **EMBEDDING))
-    client = serve(a, StubEndpoint(status=503))
-    try:
-        await a._prepare_retrieval(QUERY, "g1")
-    finally:
-        await client.aclose()
-    check("a down endpoint ranks exactly as no embeddings",
-          a._memories_for_prompt("g1", QUERY) == expected)
-
-
 async def test_the_startup_probe_reports_an_unreachable_endpoint(tmp: Path, caplog) -> None:
     caplog.set_level(logging.INFO, logger="agent")
-    a = seeded(tmp, **EMBEDDING)
+    a = make_agent(tmp, **EMBEDDING)
     client = serve(a, StubEndpoint(status=404))
     try:
         await a._probe_embeddings()
@@ -388,29 +225,3 @@ def test_the_embeddings_endpoint_is_spelled_like_the_chat_one() -> None:
           embedding_endpoint(**primary, embedding_base_url="http://127.0.0.1:11434",
                              embedding_api_key="")
           == ("http://127.0.0.1:11434/v1/embeddings", ""))
-
-
-def test_embedding_settings_are_off_unless_named(monkeypatch) -> None:
-    check("settings: off by default",
-          AgentSettings.from_env(env={"LLM_API_KEY": "k"}).embedding_model == "")
-    s = AgentSettings.from_env(env={
-        "LLM_API_KEY": "k", "EMBEDDING_MODEL": " bge-m3 ",
-        "EMBEDDING_BASE_URL": "http://127.0.0.1:11434/v1/", "EMBEDDING_API_KEY": " ek "})
-    check("settings: read, trimmed",
-          (s.embedding_model, s.embedding_base_url, s.embedding_api_key)
-          == ("bge-m3", "http://127.0.0.1:11434/v1", "ek"))
-    for name in ("EMBEDDING_MODEL", "EMBEDDING_BASE_URL", "EMBEDDING_API_KEY"):
-        monkeypatch.setenv(name, "set")
-    check("settings: a deployment setting, not read behind an embedder's back",
-          AgentSettings(api_key="k").embedding_model == "")
-
-    findings = preflight.check_config(env={
-        "LLM_API_KEY": "k", "EMBEDDING_BASE_URL": "http://127.0.0.1:11434"})
-    check("preflight: an endpoint without a model is reported",
-          any(f.key == "EMBEDDING_BASE_URL" and f.level == "WARN" for f in findings),
-          repr(findings))
-    monkeypatch.setenv("EMBEDDING_MODEL", "")
-    check("healthcheck: not configured is skipped, not a failure",
-          health.check_embeddings()[0] is None)
-    check("healthcheck: the probe is never critical",
-          [c for n, _f, c in health.CHECKS if n == "Embeddings"] == [False])

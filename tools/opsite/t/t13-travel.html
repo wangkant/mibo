@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>去哪儿玩 - 景点门票</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: linear-gradient(#2a9df4 0 260px, #f4f6f8 260px); }
+.hero { max-width: 640px; margin: 0 auto; padding: 60px 0 0; color: #fff; }
+.sb { position: relative; margin-top: 16px; }
+.sb input { width: 100%; padding: 12px 16px; font-size: 16px; border: 0; border-radius: 8px; box-sizing: border-box; }
+.sug { position: absolute; top: 50px; left: 0; right: 0; background: #fff; color: #222; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.15); overflow: hidden; }
+.sug div { padding: 9px 16px; cursor: pointer; } .sug div:hover, .sug div.hl { background: #eef6fd; }
+.sug small { color: #999; margin-left: 8px; }
+.tip { color: #e6f3ff; }
+</style></head>
+<body>
+<div class="hero">
+  <h1>景点门票 · 低价预订</h1>
+  <div class="sb"><input id="q" placeholder="搜索城市或景点" autocomplete="off"><div class="sug" id="sug" hidden></div></div>
+  <p class="tip" id="tip">热门：杭州西湖 · 北京故宫 · 成都大熊猫基地</p>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+const PLACES = [["sh-bund", "上海外滩", "上海·黄浦"], ["sh-disney", "上海迪士尼乐园", "上海·浦东"], ["sh-zoo", "上海野生动物园", "上海·浦东"],
+  ["sh-yuyuan", "上海豫园", "上海·黄浦"], ["hz-westlake", "杭州西湖", "杭州"], ["bj-palace", "北京故宫", "北京"], ["cd-panda", "成都大熊猫基地", "成都"]];
+const q = document.getElementById("q"), sug = document.getElementById("sug");
+let timer = null;
+q.addEventListener("input", () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const w = q.value.trim();
+    sug.innerHTML = "";
+    const hits = w ? PLACES.filter(([, n, c]) => n.includes(w) || c.includes(w)) : [];
+    for (const [id, name, city] of hits) {
+      const d = document.createElement("div");
+      d.innerHTML = `<span></span><small>${city}</small>`;
+      d.querySelector("span").textContent = name;
+      d.addEventListener("mousedown", () => { location.href = "/t/t13-place.html?id=" + id; });
+      sug.append(d);
+    }
+    sug.hidden = !hits.length;
+  }, 350);
+});
+q.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("tip").textContent = "请从下拉建议中选择一个景点"; }
+});
+q.addEventListener("blur", () => setTimeout(() => { sug.hidden = true; }, 200));
+q.addEventListener("focus", () => { if (sug.children.length) sug.hidden = false; });
+</script></body></html>

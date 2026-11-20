@@ -1,0 +1,1460 @@
+"""How the character sees a page and acts in it: Chrome's accessibility tree, one
+line per control with an id the model acts by, over any Tab's `cdp`.
+
+From browser-use's browser_use/ax.py (MIT, see NOTICE), itself a port of Browser
+Use Pi's ax.ts: the state print, the settle wait, the covered-target check, the
+trusted press and release, insertText plus a real last key, and the value read
+back. Changed for Mibo: CDP goes through `Tab.cdp(method, params)` (no daemon,
+no event thread; the settle wait watches the page alone), secret fields print as
+`[secret]` with their value hidden and are never typed into, and FACTS_JS reads
+what the consent gate (gate.py) needs of a target: its form, the text box it
+belongs to, the heading over it and any money amount by it.
+
+Ours on top, for what a text-only model could not see or do: one DOM snapshot
+a look finds what is shown as clickable though the tree names no control there
+(a row, a menu entry, a date in a calendar: a pointer cursor, the outermost of
+its kind), boxes that scroll by themselves (a virtual conversation list) and
+the tooltip, icon or class of a control with no name; Playwright's ways for
+ordinary controls (date, time, colour and range fields set by value, several options of a list chosen at once,
+the click point on the first box of an element); an element can be found by the
+words it shows; scrolling goes inside a box and on until some words show; the
+settle wait holds while the page says it is busy; a control drawn again since
+the look is found again by its role, name and the text before it; and a ring
+shows for a moment where the next click or key lands.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import math
+import re
+import time
+from typing import Any
+from urllib.parse import urlsplit
+
+CONTROLS = set(
+    "button link textbox searchbox combobox listbox option checkbox radio switch slider spinbutton tab menuitem "
+    "menuitemcheckbox menuitemradio treeitem".split(" "))
+# Text inside these is one line; text across them is not joined.
+BLOCKS = {"paragraph", "listitem", "row", "LabelText"}
+NATIVE_INPUTS = {"Date", "DateTime", "InputTime", "ColorWell"}
+# Input types set by value, as Playwright fills them (injectedScript.ts fill), and the form each takes.
+SET_BY_VALUE = {"date": "YYYY-MM-DD", "time": "HH:MM, 24-hour", "datetime-local": "YYYY-MM-DDTHH:MM",
+                "month": "YYYY-MM", "week": "YYYY-Www", "color": "#rrggbb", "range": "a number"}
+# How much of a field's value and how many of a list's options a line shows.
+VALUE_MAX = 400
+OPTIONS_MAX = 40
+CONTEXT_LOSS = re.compile(r"Execution context was destroyed|Cannot find context|Cannot find default execution "
+                          r"context|Inspected target navigated|Target closed|No frame")
+CDP_TIMEOUT_MS = 15_000
+SURROGATE = re.compile("[\ud800-\udfff]")
+# What a state the model sees may hold, characters.
+STATE_MAX = 6000
+SECRET_MASK = "•••"
+# A field's own words that make it secret, whatever its type says.
+SECRET_LABEL = re.compile(r"password|passcode|passwd|card\s*number|card\s*no|cvv|cvc|security\s*code|one[-\s]?time|"
+                          r"\botp\b|verification\s*code|密码|口令|验证码|校验码|动态码|卡号|银行卡|信用卡|安全码|支付密码",
+                          re.I)
+SECRET_AUTOCOMPLETE = re.compile(r"^(?:cc-.*|one-time-code|current-password|new-password)$", re.I)
+SECRET_SELECTOR = ("input[type=password],input[autocomplete^=cc-],input[autocomplete=one-time-code],"
+                   "input[autocomplete=current-password],input[autocomplete=new-password]")
+# A pointer cursor on these says nothing new: the tree already names them, or they hold the page.
+POINTER_SKIP = {"A", "BUTTON", "INPUT", "SELECT", "TEXTAREA", "LABEL", "OPTION", "SUMMARY", "HTML", "BODY", "IFRAME",
+                "VIDEO", "AUDIO", "CANVAS"}
+# Where a control with no name keeps its words, in this order; then its class.
+HINT_ATTRS = ("data-tooltip", "data-tip", "data-title", "data-original-title", "aria-description", "title", "alt")
+# A name that says nothing by itself: empty, a count, a sign.
+NAMELESS = re.compile(r"^[\W\d_]{0,6}$")
+# How long a blank page is given to draw.
+BLANK_S = 8.0
+# How far `scroll ... until` goes, in wheels, and how long it waits for more to load at the end of a list.
+UNTIL_WHEELS = 30
+MORE_S = 2.5
+# How long the ring shows before the action.
+RING_S = 0.45
+
+
+def norm(s: Any) -> str:
+    if isinstance(s, bool):
+        s = "true" if s else "false"
+    return re.sub(r"[ \t\n\r\f﻿]+", " ", "" if s is None else str(s)).strip()
+
+
+def fold(s: str) -> str:
+    return re.sub(r"[\s﻿]+", " ", s).lower()
+
+
+def clip(s: str, n: int) -> str:
+    return f"{s[:n]}…" if len(s) > n else s
+
+
+def quote(s: str) -> str:
+    return SURROGATE.sub(lambda m: f"\\u{ord(m.group()):04x}", json.dumps(s, ensure_ascii=False))
+
+
+def well_formed(s: str) -> str:
+    return SURROGATE.sub("�", s)
+
+
+def val(o: Any) -> Any:
+    return o.get("value") if isinstance(o, dict) else None
+
+
+def prop(n: dict, name: str) -> Any:
+    return next(((p.get("value") or {}).get("value") for p in n.get("properties") or [] if p.get("name") == name),
+                None)
+
+
+def is_context_loss(e: BaseException) -> bool:
+    return bool(CONTEXT_LOSS.search(str(e)))
+
+
+def now() -> float:
+    return time.monotonic() * 1000
+
+
+DATE_YMD = re.compile(r"(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})")
+DATE_SHOWN = re.compile(r"(\d{1,2})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{4})")
+CLOCK = re.compile(r"(上午|下午|晚上)?\s*(\d{1,2})\s*[:：时点]\s*(\d{1,2})?(?:\s*[:：]\s*(\d{1,2}))?\s*分?\s*(?:([ap])\.?\s*m\.?)?",
+                   re.I)
+
+
+def as_value(kind: dict, text: str) -> str:
+    """A date, time, month, week or colour as a person writes it, in the form its field takes (SET_BY_VALUE);
+    a date given by numbers only is read in the order the field shows it. Anything else as it is."""
+    t, typ = norm(text), kind["type"]
+
+    def day(s: str) -> tuple[str | None, str]:
+        m = DATE_YMD.search(s)
+        if m:
+            y, mo, d = m.groups()
+        else:
+            m = DATE_SHOWN.search(s)
+            if not m:
+                return None, s
+            a, b, y = m.groups()
+            mo, d = (b, a) if kind["order"].startswith("d") else (a, b)
+        return f"{y}-{int(mo):02}-{int(d):02}", s[m.end():]
+
+    def clock(s: str) -> str | None:
+        m = CLOCK.search(s)
+        if not m:
+            return None
+        part, h, mi, sec, half = m.groups()
+        hour = int(h)
+        if half:
+            hour = hour % 12 + (12 if half.lower() == "p" else 0)
+        elif part in ("下午", "晚上") and hour < 12:
+            hour += 12
+        return f"{hour:02}:{int(mi or 0):02}" + (f":{int(sec):02}" if sec else "")
+    if typ == "date":
+        return day(t)[0] or t
+    if typ == "time":
+        return clock(t) or t
+    if typ == "datetime-local":
+        d, rest = day(t)
+        c = clock(rest) if d else None
+        return f"{d}T{c}" if d and c else t
+    if typ == "month":
+        m = re.search(r"(\d{4})\s*[-/.年]\s*(\d{1,2})", t)
+        return f"{m.group(1)}-{int(m.group(2)):02}" if m else t
+    if typ == "week":
+        m = re.search(r"(\d{4})\s*[-年]?\s*(?:W|第)?\s*(\d{1,2})", t, re.I)
+        return f"{m.group(1)}-W{int(m.group(2)):02}" if m else t
+    if typ == "color":
+        m = re.fullmatch(r"#?([0-9a-f]{3}|[0-9a-f]{6})", t, re.I)
+        return "#" + (m.group(1) if len(m.group(1)) == 6 else "".join(c * 2 for c in m.group(1))).lower() if m else t
+    return t
+
+
+# URL, title, document identity, a count of DOM changes and form input; same-origin frames count as the page.
+PROBE_JS = r"""() => {
+  const w = window;
+  const watch = (win, counted) => {
+    const doc = win.document;
+    if (doc.__paWatched) return;
+    doc.__paWatched = true;
+    if (counted) { w.__paLast = performance.now(); w.__paN++; }
+    const styled = new WeakMap();
+    new MutationObserver((records) => {
+      const now = performance.now();
+      let real = false;
+      for (const r of records) {
+        if (r.attributeName && r.oldValue === r.target.getAttributeNS(r.attributeNamespace, r.attributeName)) continue;
+        // The ring the app draws to show where it acts is not the page changing.
+        if ([...r.addedNodes, ...r.removedNodes].some((x) => x.dataset && 'paRing' in x.dataset)) continue;
+        if (r.attributeName !== 'style') real = true;
+        else if (now - (styled.get(r.target) ?? -1e9) > 200) real = true;
+        if (r.attributeName === 'style') styled.set(r.target, now);
+      }
+      if (real) { w.__paLast = now; w.__paN++; }
+    }).observe(doc, {subtree: true, childList: true, attributes: true, attributeOldValue: true, characterData: true});
+    for (const type of ['input', 'change']) win.addEventListener(type, () => w.__paN++, true);
+  };
+  const first = !w.__paObs;
+  if (first) { w.__paObs = true; w.__paLast = performance.now(); w.__paN = 0; w.__paDoc = Math.random(); watch(w, false); }
+  const frames = (win) => {
+    for (let i = 0; i < win.frames.length; i++) {
+      let f;
+      try { f = win.frames[i]; if (!f.document) continue; } catch { continue; }
+      watch(f, !first);
+      frames(f);
+    }
+  };
+  frames(w);
+  // Busy as the page says (aria-busy on something shown), for 10 s at most: some pages never say they are done.
+  const busy = [...document.querySelectorAll('[aria-busy=true]')].some((e) => e.checkVisibility());
+  if (!busy) w.__paBusy = null; else if (w.__paBusy == null) w.__paBusy = performance.now();
+  const el = document.scrollingElement || document.documentElement;
+  return {idle: performance.now() - w.__paLast, ready: document.readyState, url: location.href, title: document.title,
+          n: w.__paN, doc: w.__paDoc, files: !!document.querySelector('input[type=file]'),
+          busy: busy && performance.now() - w.__paBusy < 10000, sy: el.scrollTop, sh: el.scrollHeight, vh: innerHeight};
+}"""
+
+# Text actually shown, lowercased: the AX tree keeps opacity:0 text, which reads as a success that is not there.
+VISIBLE_JS = r"""() => {
+  const out = [];
+  const shown = new Map();
+  const roots = [document];
+  for (let i = 0; i < roots.length; i++) {
+    const walk = document.createTreeWalker(roots[i], NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        if (n.shadowRoot) roots.push(n.shadowRoot);
+        if (n.contentDocument) roots.push(n.contentDocument);
+        continue;
+      }
+      let e = n.parentElement;
+      if (!e || !n.textContent?.trim()) continue;
+      while (e.parentElement && getComputedStyle(e).display === 'contents') e = e.parentElement;
+      if (!shown.has(e)) shown.set(e, e.checkVisibility({checkOpacity: true, checkVisibilityCSS: true}));
+      if (shown.get(e)) out.push(n.textContent);
+    }
+  }
+  return out.join(' ').replace(/\s+/g, ' ').toLowerCase();
+}"""
+
+POINT_JS = r"""function(editableCover) {
+  const forms = """ + json.dumps(SET_BY_VALUE) + r""";
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  if (!e || !e.isConnected) throw Error('Target detached');
+  if (e.matches(':disabled') || e.closest('[inert]')) throw Error('Target disabled');
+  if (e.tagName === 'INPUT' && forms[e.type]) throw Error(`a ${e.type} field opens a picker that cannot be seen; type ` +
+    `the value into its id as ${e.type === 'range' ? `a number from ${e.min || 0} to ${e.max || 100}` : forms[e.type]}`);
+  if (!e.checkVisibility({checkOpacity:true, checkVisibilityCSS:true})) throw Error('Target hidden');
+  // Playwright's point: the middle of the first box of the element with area on screen (a link wrapped over two
+  // lines has two), and a hit anywhere in the button or link the element is part of.
+  const rects = [...e.getClientRects()].map((r) => {
+    const left = Math.max(r.left, 0), top = Math.max(r.top, 0);
+    return {x: left, y: top, w: Math.min(r.right, innerWidth) - left, h: Math.min(r.bottom, innerHeight) - top};
+  }).filter((r) => r.w > 0 && r.h > 0 && r.w * r.h > 0.99);
+  if (!rects.length) throw Error('Target outside viewport');
+  const x = rects[0].x + rects[0].w/2, y = rects[0].y + rects[0].h/2;
+  const t = e.matches('input,textarea,select') || e.isContentEditable ? e : e.closest('button,[role=button],a,[role=link]') || e;
+  const hit = e.getRootNode().elementFromPoint(x, y);
+  const textField = (n) => n && (['INPUT','TEXTAREA'].includes(n.tagName) || n.isContentEditable);
+  const covered = !t.contains(hit) && !(hit && hit.contains(e) && getComputedStyle(hit).pointerEvents !== 'none' && hit.tagName === 'LABEL') && !(editableCover && textField(e) && textField(hit));
+  // An option of a list where several can be chosen is clicked as a person adds one: with Ctrl.
+  const multi = e.tagName === 'OPTION' && !!e.closest('select[multiple]');
+  let px = x, py = y;
+  for (let w = e.ownerDocument.defaultView; w && w.frameElement; w = w.parent) {
+    const f = w.frameElement, fr = f.getBoundingClientRect(), cs = getComputedStyle(f);
+    px += fr.x + f.clientLeft + parseFloat(cs.paddingLeft);
+    py += fr.y + f.clientTop + parseFloat(cs.paddingTop);
+  }
+  return {x: px, y: py, covered, multi};
+}"""
+
+# Where an element is, in the top page's coordinates (for the ring and the marks).
+BOX_JS = r"""function() {
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  const r = e.getBoundingClientRect();
+  let x = r.x, y = r.y;
+  for (let w = e.ownerDocument.defaultView; w && w.frameElement; w = w.parent) {
+    const f = w.frameElement.getBoundingClientRect();
+    x += f.x + w.frameElement.clientLeft;
+    y += f.y + w.frameElement.clientTop;
+  }
+  return {x, y, w: r.width, h: r.height};
+}"""
+
+# The ring, drawn in a world of the app's own (the page's scripts cannot reach its script) and gone by itself.
+RING_JS = r"""(r) => {
+  for (const old of document.querySelectorAll('[data-pa-ring]')) old.remove();
+  const d = document.createElement('div');
+  d.dataset.paRing = '';
+  d.style.cssText = `position:fixed;left:${r.x - 5}px;top:${r.y - 5}px;width:${r.w + 10}px;height:${r.h + 10}px;` +
+    'box-sizing:border-box;border:3px solid #1f1f22;border-radius:10px;box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(31,31,34,.25);' +
+    'pointer-events:none;z-index:2147483647;transition:opacity .25s;';
+  document.documentElement.appendChild(d);
+  setTimeout(() => { d.style.opacity = '0'; }, 1300);
+  setTimeout(() => d.remove(), 1600);
+}"""
+# The ring held round a control while a card waits on it: it follows the control as the page scrolls or lays
+# itself out again, until the next ring or UNRING_JS takes it away.
+HOLD_JS = r"""function() {
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement, doc = e.ownerDocument;
+  for (const old of doc.querySelectorAll('[data-pa-ring]')) old.remove();
+  const d = doc.createElement('div');
+  d.dataset.paRing = '';
+  d.style.cssText = 'position:fixed;box-sizing:border-box;border:3px solid #1f1f22;border-radius:10px;' +
+    'box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(31,31,34,.25);pointer-events:none;z-index:2147483647;';
+  doc.documentElement.appendChild(d);
+  const follow = () => {
+    if (!d.isConnected) return;
+    const r = e.getBoundingClientRect();
+    Object.assign(d.style, {left: `${r.x - 5}px`, top: `${r.y - 5}px`, width: `${r.width + 10}px`,
+      height: `${r.height + 10}px`, display: e.isConnected ? '' : 'none'});
+    requestAnimationFrame(follow);
+  };
+  follow();
+}"""
+UNRING_JS = "for (const old of document.querySelectorAll('[data-pa-ring]')) old.remove()"
+
+# The element showing these words, the smallest and the one in view first; into shadow roots and same-origin
+# frames. Text is searched, then the words a control keeps in its attributes.
+LOCATE_JS = r"""(want) => {
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const w = norm(want);
+  if (!w) return null;
+  const roots = [document], found = [];
+  for (let i = 0; i < roots.length; i++) {
+    const walk = document.createTreeWalker(roots[i], NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        if (n.shadowRoot) roots.push(n.shadowRoot);
+        if (n.tagName === 'IFRAME') { try { if (n.contentDocument) roots.push(n.contentDocument); } catch (_) {} }
+        const said = norm(n.getAttribute('aria-label') || n.getAttribute('title') || n.getAttribute('placeholder') ||
+          n.getAttribute('alt') || n.getAttribute('data-tooltip') || '');
+        if (said && said.includes(w)) found.push([n, said === w ? 0 : 2]);
+        continue;
+      }
+      const e = n.parentElement;
+      if (!e || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(e.tagName) || !norm(n.textContent).includes(w)) continue;
+      found.push([e, norm(e.innerText) === w ? 0 : 1]);
+    }
+  }
+  const shown = found.filter(([e]) => e.checkVisibility({checkOpacity: true, checkVisibilityCSS: true}));
+  const away = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight ? 0 : 1; };
+  shown.sort((a, b) => a[1] - b[1] || away(a[0]) - away(b[0]));
+  return shown.length ? shown[0][0] : null;
+}"""
+
+# A control the page drew anew since it was found (a live board draws every row again each second): the one
+# element now showing the same words after the same text (letters only, as `near` keeps it). With `press` it is
+# pressed in the same moment by the page's own events, so no redraw comes between finding it and pressing it.
+AGAIN_JS = r"""(name, near, press) => {
+  const letters = (s) => String(s || '').replace(/[^\p{L}]/gu, '').toLowerCase();
+  const want = letters(name), ctx = letters(near);
+  if (!want) return null;
+  const roots = [document], all = [];
+  for (let i = 0; i < roots.length; i++) {
+    for (const e of roots[i].querySelectorAll('*')) {
+      if (e.shadowRoot) roots.push(e.shadowRoot);
+      if (e.tagName === 'IFRAME') { try { if (e.contentDocument) roots.push(e.contentDocument); } catch (_) {} }
+      if (letters(e.getAttribute('aria-label') || e.textContent || e.value) === want && e.checkVisibility()) all.push(e);
+    }
+  }
+  // The outermost of nested matches (a button and the span in it).
+  const tops = all.filter((e) => !all.some((o) => o !== e && o.contains(e)));
+  const fits = tops.filter((e) => {
+    if (!ctx) return true;
+    for (let a = e.parentElement, i = 0; a && i < 6; a = a.parentElement, i++) {
+      if (letters(a.textContent).includes(ctx)) return tops.filter((o) => a.contains(o)).length === 1;
+    }
+    return false;
+  });
+  if (fits.length !== 1) return null;
+  const e = fits[0];
+  if (press) {
+    const r = e.getBoundingClientRect();
+    const o = {bubbles: true, cancelable: true, composed: true, view: window, button: 0,
+      clientX: r.x + r.width / 2, clientY: r.y + r.height / 2};
+    e.dispatchEvent(new PointerEvent('pointerdown', {...o, pointerId: 1, isPrimary: true}));
+    e.dispatchEvent(new MouseEvent('mousedown', o));
+    if (e.focus) e.focus();
+    e.dispatchEvent(new PointerEvent('pointerup', {...o, pointerId: 1, isPrimary: true}));
+    e.dispatchEvent(new MouseEvent('mouseup', o));
+    e.click();
+  }
+  return e;
+}"""
+
+# The nearest box around an element that scrolls by itself, else the page: how far down it is.
+SCROLLER_JS = r"""function() {
+  let e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  const up = (a) => a.parentElement || (a.getRootNode() instanceof ShadowRoot ? a.getRootNode().host : null);
+  for (; e && e !== document.body && e !== document.documentElement; e = up(e)) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 8) break;
+  }
+  const el = !e || e === document.body || e === document.documentElement
+    ? (document.scrollingElement || document.documentElement) : e;
+  return {top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight};
+}"""
+
+CENTER_JS = ("function(){const e=this.nodeType===1?this:this.parentElement;"
+             "e.scrollIntoView({block:'center',inline:'center',behavior:'instant'});}")
+
+KIND_JS = ("function(){const e=this.nodeType===1?this:this.parentElement;if(!e||!e.isConnected)throw Error('Target detached');"
+           "if(e.matches(':disabled')||e.closest('[inert]'))throw Error('Target disabled');"
+           "if(!e.checkVisibility({checkVisibilityCSS:true}))throw Error('Target hidden');"
+           # The order a date field shows its parts in (mdy, dmy, ymd), as the browser's language writes a date.
+           "const order=new Intl.DateTimeFormat(navigator.language).formatToParts(new Date(2001,10,22))"
+           ".filter(p=>p.type!=='literal').map(p=>p.type[0]).join('');"
+           "return {tag:e.tagName,type:(e.type||'').toLowerCase(),min:e.min||'',max:e.max||'',order};}")
+
+# A value put into a date, time, colour or range field through the native setter, then input and change, as
+# Playwright fills them; the field's own read-back, or null (and the old value back) when it did not take it.
+SET_JS = r"""function(v) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set, old = this.value;
+  this.focus();
+  set.call(this, v);
+  if (this.value !== v && this.type !== 'range') { set.call(this, old); return null; }
+  this.dispatchEvent(new Event('input', {bubbles: true, composed: true}));
+  this.dispatchEvent(new Event('change', {bubbles: true}));
+  return this.value;
+}"""
+
+# Playwright's selectOption: one option, or for a list where several can be chosen, exactly the ones named
+# (commas between).
+SELECT_JS = r"""function(want){
+  const n = s => String(s).replace(/\s+/g,' ').trim().toLowerCase(), opts = [...this.options].filter(o => !o.disabled);
+  const pick = (w) => {
+    const pre = opts.filter(o => n(o.label).startsWith(n(w)));
+    const o = opts.find(o => n(o.label) === n(w) || n(o.value) === n(w)) ?? (pre.length === 1 ? pre[0] : undefined);
+    if (!o) throw Error((pre.length > 1 ? 'several options start with ' : 'no option ') + JSON.stringify(w) + '. Options: ' + (pre.length > 1 ? pre : opts).slice(0, 40).map(o => o.label).join(' | '));
+    return o;
+  };
+  let chosen;
+  if (this.multiple) {
+    const whole = opts.find(o => n(o.label) === n(want) || n(o.value) === n(want));
+    chosen = whole ? [whole] : String(want).split(/\s*[,，;；|、\n]\s*/).filter(Boolean).map(pick);
+    for (const o of this.options) o.selected = chosen.includes(o);
+  } else {
+    chosen = [pick(want)];
+    this.value = chosen[0].value;
+  }
+  this.dispatchEvent(new Event('input',{bubbles:true,composed:true})); this.dispatchEvent(new Event('change',{bubbles:true}));
+  return chosen.map(o => o.label).join(' | ');
+}"""
+
+MOVED_JS = ("function(){const e=this.nodeType===1?this:this.parentElement;let a=document.activeElement;"
+            "while(a&&a.shadowRoot&&a.shadowRoot.activeElement)a=a.shadowRoot.activeElement;"
+            "return !!a&&a!==e&&!e.contains(a)&&(['INPUT','TEXTAREA'].includes(a.tagName)||a.isContentEditable);}")
+
+VALUE_JS = ("function(){const e=this.nodeType===1?this:this.parentElement;"
+            "return e.isContentEditable?e.innerText:(e.value??'');}")
+
+# The element with focus, as an object CDP can name (for Enter and Space), into shadow roots and same-origin frames.
+ACTIVE_JS = ("(() => {let a = document.activeElement; for (;;) { if (a && a.shadowRoot && a.shadowRoot.activeElement) "
+             "a = a.shadowRoot.activeElement; else if (a && a.contentDocument && a.contentDocument.activeElement) "
+             "a = a.contentDocument.activeElement; else return a; }})()")
+
+# The first empty secret field of the target's form, focused for the person; its label, or null.
+SECRET_EMPTY_JS = """function (selector) {
+  const form = this.form || this.closest('form');
+  const field = form && [...form.querySelectorAll(selector)].find((e) => !e.value);
+  if (!field) return null;
+  field.focus();
+  return ((field.labels && field.labels[0] && field.labels[0].innerText) || field.getAttribute('aria-label')
+    || field.placeholder || field.name || '').trim().slice(0, 80);
+}"""
+# What the gate and the card need of a target, read off the page: its form (method, a search form, a password in
+# it, the button Enter goes through), the text box it belongs to and what that holds, the heading over that box
+# (to whom), a money amount by it, whether it is secret, and the filled fields a press sends, for the card.
+FACTS_JS = r"""function() {
+  const secretWords = new RegExp(""" + json.dumps(SECRET_LABEL.pattern) + r""", 'i');
+  const e = this.nodeType === 1 ? this : this.parentElement;
+  const tag = e.tagName.toLowerCase(), type = (e.type || '').toLowerCase(), role = e.getAttribute('role') || '';
+  const ac = (e.getAttribute('autocomplete') || '').toLowerCase();
+  const own = (n) => [n.getAttribute('aria-label'), n.getAttribute('name'), n.id, n.getAttribute('placeholder'),
+    n.getAttribute('data-placeholder'), n.title, n.labels && n.labels[0] && n.labels[0].innerText].filter(Boolean).join(' ');
+  // What an icon-only control says on hover or in its drawing.
+  const svgTitle = e.querySelector('svg title'), img = e.querySelector('img[alt]');
+  const tip = [e.getAttribute('data-tooltip'), e.getAttribute('data-tip'), e.getAttribute('data-title'),
+    e.getAttribute('data-original-title'), e.getAttribute('aria-description'), e.title, svgTitle && svgTitle.textContent,
+    img && img.alt].filter(Boolean).join(' ').trim().slice(0, 120);
+  const label = own(e);
+  const text = (e.innerText || e.value || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+  const isText = (n) => n && (n.tagName === 'TEXTAREA' || n.isContentEditable ||
+    (n.tagName === 'INPUT' && ['text', 'search', 'email', 'url', 'tel', ''].includes((n.type || '').toLowerCase())));
+  const searchy = (n) => (n.type || '').toLowerCase() === 'search' || ['searchbox', 'combobox'].includes(n.getAttribute('role') || '') ||
+    !!n.closest('[role=search],search') || /search|搜索|查找|搜一搜/i.test(own(n));
+  const form = e.form || e.closest('form');
+  let f = null;
+  if (form) {
+    const els = [...form.elements];
+    const fields = els.filter((x) => ['INPUT', 'SELECT', 'TEXTAREA'].includes(x.tagName) && !['hidden', 'submit', 'image', 'button', 'reset'].includes(x.type));
+    const subs = els.filter((x) => (x.tagName === 'BUTTON' && (!x.getAttribute('type') || x.type === 'submit')) || (x.tagName === 'INPUT' && ['submit', 'image'].includes(x.type)));
+    const method = (form.getAttribute('method') || 'get').toLowerCase();
+    f = {method, action: form.action, fields: fields.length, submit: subs.length > 0,
+      password: !!form.querySelector('input[type=password],input[autocomplete=current-password],input[autocomplete=new-password]'),
+      search: form.getAttribute('role') === 'search' || !!form.closest('[role=search],search') || els.some((x) => x.type === 'search') ||
+        // One field sent by GET is a search only when it says so: a page's script can post any form.
+        (method === 'get' && fields.length === 1 && fields[0].tagName !== 'TEXTAREA' && (searchy(fields[0]) ||
+          /^(?:q|query|keywords?|kw|wd|word|s|k|search|term)$/i.test(fields[0].name || '') ||
+          /search|find|query|搜索/i.test(form.getAttribute('action') || ''))),
+      button: subs[0] ? (subs[0].innerText || subs[0].value || subs[0].getAttribute('aria-label') || '').trim().slice(0, 80) : ''};
+  }
+  const submitter = !!form && ((tag === 'button' && (!e.getAttribute('type') || type === 'submit')) || (tag === 'input' && ['submit', 'image'].includes(type)));
+  let composer = isText(e) && !searchy(e) ? e : null;
+  // Up through a shadow root too: a button and its box may sit straight under one.
+  const up = (n) => n.parentElement || (n.parentNode instanceof ShadowRoot ? n.parentNode : n instanceof ShadowRoot ? n.host : null);
+  for (let a = up(e), i = 0; !composer && a && i < 5; a = up(a), i++) {
+    const near = [...a.querySelectorAll('textarea,[contenteditable],input')].filter((x) => isText(x) && !searchy(x) && x.checkVisibility());
+    if (near.length === 1) composer = near[0];
+    else if (near.length > 1) break;
+  }
+  const said = composer ? (composer.isContentEditable ? composer.innerText : (composer.value || '')).trim() : '';
+  const hint = composer ? own(composer) : '';
+  let to = '';
+  // `from` is the box, or the shadow host holding it once the walk has gone out of its shadow root.
+  let from = composer || e, a = from.parentElement;
+  if (!a && from.getRootNode().host) { from = from.getRootNode().host; a = from.parentElement; }
+  // Ours: a chat's header is often no heading but a short bold line at the top of its pane.
+  const before = (h) => h.checkVisibility() && !h.contains(from) && (h.compareDocumentPosition(from) & Node.DOCUMENT_POSITION_FOLLOWING);
+  const bold = (h) => [...h.childNodes].some((c) => c.nodeType === 3 && /\p{L}/u.test(c.textContent)) && h.innerText.trim().length <= 40 &&
+    parseInt(getComputedStyle(h).fontWeight) >= 600 && !h.closest('a,button,label,li,[role=button],[role=option],[role=listitem],[role=row]');
+  while (a && !to) {
+    // Ours: a pane's own short <header> holds whom a chat is with, even in plain type (a site's banner is longer).
+    let heads = [...a.querySelectorAll('h1,h2,h3,h4,[role=heading],header')].filter((h) => before(h) &&
+      (h.tagName !== 'HEADER' || h.innerText.trim().length <= 40));
+    if (!heads.length) heads = [...a.querySelectorAll('div,span,b,strong,header,p')].slice(0, 800).filter((h) => before(h) && bold(h));
+    if (heads.length) to = heads[heads.length - 1].innerText.trim().split('\n')[0].slice(0, 80);
+    if (a === document.body) break;
+    if (a.parentElement) { a = a.parentElement; continue; }
+    const host = a.getRootNode().host;
+    if (!host) break;
+    from = host;
+    a = host.parentElement;
+  }
+  const money = ((e.innerText || '') + ' ' + (e.parentElement ? e.parentElement.innerText : '')).match(
+    /(?:[$€£¥￥₹₩]\s?\d[\d.,]*|\d[\d.,]*\s?(?:USD|EUR|GBP|JPY|CNY|RMB|元|円))/);
+  const testIds = ['data-testid', 'data-test', 'data-qa'].map((a) => e.getAttribute(a) || '').join(' ');
+  // Ours: where a link goes, when it goes to another page (not "#", not a script).
+  const anchor = e.closest('a[href]');
+  const away = anchor && /^https?:/.test(anchor.href) && anchor.href.split('#')[0] !== location.href.split('#')[0] ? anchor.href : '';
+  // Ours: the item a control acts on (its post, its row), for a card with no words of its own to quote.
+  let row = '';
+  for (let a = e.parentElement, i = 0; a && i < 6 && !row; a = a.parentElement, i++) {
+    const t = (a.innerText || '').replace(/\s+/g, ' ').trim();
+    if (t.length > text.length + 4) row = t.slice(0, 160);
+  }
+  // The fields a press sends (its form's, or those in the nearest box that holds fields), filled and not secret,
+  // as [caption, value]: 就诊日期 2026-12-05, 时段 14:00.
+  const short = (t) => (t || '').replace(/\s+/g, ' ').trim();
+  const secretOf = (x) => x.type === 'password' || /^(?:cc-|one-time-code|current-password|new-password)/i.test(
+    x.getAttribute('autocomplete') || '') || secretWords.test(own(x));
+  const captionOf = (x) => {
+    const lab = x.labels && [...x.labels].find((l) => !l.contains(x));
+    let c = short(lab && lab.innerText) || short(x.getAttribute('aria-label')) || short(x.placeholder) || short(x.title);
+    let box = x;
+    if (!c && (x.type === 'radio' || x.type === 'checkbox')) {
+      const legend = x.closest('fieldset') && x.closest('fieldset').querySelector('legend');
+      c = short(legend && legend.innerText) || short((x.closest('[role=radiogroup],[role=group]') || x).getAttribute('aria-label'));
+      // The box that holds the whole group, whose words stand before it: 时段 over a row of radios.
+      const group = x.name ? [...document.getElementsByName(x.name)] : [x];
+      for (let i = 0; i < 5 && box.parentElement && !group.every((g) => box.contains(g)); i++) box = box.parentElement;
+    }
+    for (let b = box, i = 0; !c && b && i < 3; b = b.parentElement, i++) {
+      const prev = b.previousElementSibling;
+      if (prev && !prev.querySelector('input,select,textarea') && short(prev.innerText).length <= 24) c = short(prev.innerText);
+    }
+    return (c || x.name || x.id || '').slice(0, 24);
+  };
+  const valueOf = (x) => {
+    if (x.tagName === 'SELECT') return [...x.selectedOptions].map((o) => short(o.text)).join('、');
+    if (x.type === 'checkbox' || x.type === 'radio') return x.checked ? short(x.labels && x.labels[0] && x.labels[0].innerText) || x.value : '';
+    if (x.type === 'file') return [...(x.files || [])].map((f) => f.name).join('、');
+    return x.checkVisibility() ? short(x.value) : '';
+  };
+  let scope = form;
+  for (let a = e.parentElement, i = 0; !scope && a && i < 6; a = a.parentElement, i++) {
+    if (a.querySelector('input,select,textarea')) scope = a;
+  }
+  const fields = [];
+  for (const x of scope ? [...(form ? form.elements : scope.querySelectorAll('input,select,textarea'))].slice(0, 60) : []) {
+    if (!['INPUT', 'SELECT', 'TEXTAREA'].includes(x.tagName) || ['hidden', 'submit', 'image', 'button', 'reset'].includes(x.type)
+      || x.disabled || secretOf(x)) continue;
+    const value = valueOf(x).slice(0, 80), caption = captionOf(x);
+    const same = caption && fields.find((f) => f[0] === caption);
+    if (!value) continue;
+    if (same) same[1] = `${same[1]}、${value}`.slice(0, 80);
+    else if (fields.length < 10) fields.push([caption, value]);
+  }
+  return {tag, type, role, row, fields, label: label.slice(0, 200), text, tip, link: tag === 'a' || role === 'link', away: away.slice(0, 300),
+    iconOnly: !text && !e.getAttribute('aria-label') && !!e.querySelector('svg,img,i'), form: f, submitter,
+    switch: role === 'switch' || (tag === 'input' && type === 'checkbox' && e.getAttribute('role') === 'switch'),
+    textEntry: isText(e), search: searchy(e), composer: !!composer, said: said.slice(0, 2000), hint: hint.slice(0, 120),
+    to, money: money ? money[0] : '', classes: `${typeof e.className === 'string' ? e.className : ''} ${testIds} ${e.id}`.trim().slice(0, 200),
+    secret: type === 'password' || /^cc-/.test(ac) || ['one-time-code', 'current-password', 'new-password'].includes(ac)};
+}"""
+
+
+class Refused(Exception):
+    """An action the page operations will not do; its text goes back to the loop as is."""
+
+
+class Page:
+    """The state print and id-based actions on one Tab. Ids are Chrome backendNodeIds, valid until the next look."""
+
+    def __init__(self, tab):
+        self.tab = tab
+        # Role and name of every id in the last print, and which of them are secret.
+        self.last: dict[int, tuple[str, str]] = {}
+        self.secrets: set[int] = set()
+        self.interactive = 0
+        # The text line before each id (digits out: a live count moves), the print before this one, and every
+        # line of the last print before it was cut (for `grep`).
+        self.near: dict[int, str] = {}
+        self.before: tuple[dict, dict] = ({}, {})
+        self.lines: list[str] = []
+        # The whole value of each field whose line shows only its start (for `grep`).
+        self.values: dict[int, str] = {}
+        # The app's own script world in the page, for the ring: (document, context id); the last document a
+        # blank page was waited for on.
+        self._world: tuple[Any, int] | None = None
+        self._waited: Any = None
+
+    async def cdp(self, method: str, **params: Any) -> dict:
+        return await self.tab.cdp(method, params)
+
+    # --- page probes
+
+    async def _evaluate(self, fn: str) -> Any:
+        r = await self.cdp("Runtime.evaluate", expression=f"({fn})()", timeout=CDP_TIMEOUT_MS, awaitPromise=True,
+                     returnByValue=True, userGesture=True)
+        if r.get("exceptionDetails"):
+            d = r["exceptionDetails"]
+            raise RuntimeError((d.get("exception") or {}).get("description") or d.get("text"))
+        return (r.get("result") or {}).get("value")
+
+    async def probe(self) -> dict:
+        return await self._evaluate(PROBE_JS)
+
+    async def settle(self, cap_ms: float = 3000, quiet_ms: float = 120, since: float = 0) -> dict:
+        """Wait until the document is parsed and the DOM has been quiet for quiet_ms, at most cap_ms."""
+        start, probe = now(), None
+        limit = cap_ms
+        while now() - start < limit:
+            try:
+                probe = await self.probe()
+                if probe["ready"] == "loading":
+                    limit = max(cap_ms, 6000)
+                # The page says it is still answering (a lookup, a list coming): it is given up to 10 s.
+                if probe.get("busy"):
+                    limit = max(limit, 10_000)
+                probe["idle"] = min(probe["idle"], now() - (since or start))
+                if probe["ready"] != "loading" and probe["idle"] >= quiet_ms and not probe.get("busy"):
+                    return {"why": "quiet", "probe": probe}
+            except Exception as e:
+                if not is_context_loss(e):
+                    return {"why": "error"}
+                probe = None
+            await asyncio.sleep((max(20, quiet_ms - probe["idle"]) if probe and probe["ready"] != "loading" else 60) / 1000)
+        return {"why": "cap", "probe": probe}
+
+    async def visible_text(self) -> str:
+        return await self._evaluate(VISIBLE_JS) or ""
+
+    async def _capture(self) -> list[dict]:
+        """AX trees of the main frame and of every same-process child frame (a frame from another site runs in
+        its own process and is not listed here; `_layout` finds it)."""
+        for i in range(21):
+            try:
+                nodes = (await self.cdp("Accessibility.getFullAXTree"))["nodes"]
+                children: list[tuple[str, str]] = []
+
+                def walk(tree: dict) -> None:
+                    for child in tree.get("childFrames") or []:
+                        children.append((child["frame"].get("url", ""), child["frame"]["id"]))
+                        walk(child)
+                walk((await self.cdp("Page.getFrameTree"))["frameTree"])
+                frames = [{"url": "", "nodes": nodes}]
+                for url, ident in children:
+                    try:
+                        frames.append({"url": url, "nodes": (await self.cdp("Accessibility.getFullAXTree",
+                                                                     frameId=ident))["nodes"]})
+                    except Exception:
+                        frames.append({"url": url, "nodes": []})
+                return frames
+            except Exception as e:
+                if i >= 20 or not is_context_loss(e):
+                    raise
+                await asyncio.sleep(0.05)
+        raise AssertionError("unreachable")
+
+    async def _secret_ids(self) -> set[int]:
+        """Fields secret by their type or autocomplete, wherever they are in the main document."""
+        root = (await self.cdp("DOM.getDocument", depth=0))["root"]
+        found = set()
+        for node in (await self.cdp("DOM.querySelectorAll", nodeId=root["nodeId"], selector=SECRET_SELECTOR))["nodeIds"]:
+            found.add((await self.cdp("DOM.describeNode", nodeId=node))["node"]["backendNodeId"])
+        return found
+
+    async def _layout(self) -> dict:
+        """From one DOM snapshot: elements shown as clickable that the tree names no control (a pointer cursor,
+        the outermost of its kind), boxes that scroll by themselves with how far down they are, the words a
+        control with no name keeps (its tooltip, else its icon's and its class's words), the type of each date,
+        time, colour or range field, and the frames shown. Keys are backendNodeIds."""
+        snap = await self.cdp("DOMSnapshot.captureSnapshot", computedStyles=["cursor", "overflow-y", "visibility"],
+                              includeDOMRects=True)
+        strings = snap.get("strings") or []
+        out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
+
+        def text(i: int) -> str:
+            return strings[i] if isinstance(i, int) and 0 <= i < len(strings) else ""
+
+        def readable(w: str) -> bool:
+            """Words a person could read ("like-btn", "icon-share"), not machine ones ("css-1x2y3z")."""
+            return len(w) > 2 and not re.search(r"\d\D*\d|^[a-z]{1,4}-(?=[a-z]*\d)[a-z0-9]{5,}$|__", w, re.I)
+        for doc in snap.get("documents") or []:
+            nodes, layout = doc.get("nodes") or {}, doc.get("layout") or {}
+            parent, backend = nodes.get("parentIndex") or [], nodes.get("backendNodeId") or []
+            names, kinds = nodes.get("nodeName") or [], nodes.get("nodeType") or []
+            attrs = nodes.get("attributes") or []
+            inner = set((nodes.get("contentDocumentIndex") or {}).get("index") or [])
+            # What an icon is called in its drawing (svg <use href="#icon-trash">, an image's file name, data-icon),
+            # given to the elements up to four over it; "" for a drawing with no such word.
+            icon: dict[int, str] = {}
+            for i in range(len(names)):
+                tag = text(names[i]).upper()
+                pairs = attrs[i] if i < len(attrs) else []
+                found = {text(pairs[j]).lower(): text(pairs[j + 1]) for j in range(0, len(pairs) - 1, 2)}
+                word = found.get("data-icon", "")
+                if not word and tag == "USE":
+                    word = (found.get("href") or found.get("xlink:href") or "").rsplit("#", 1)[-1]
+                if not word and tag == "IMG" and not found.get("src", "").startswith("data:"):
+                    word = re.sub(r"\.\w+$", "", found.get("src", "").split("?")[0].rstrip("/").rsplit("/", 1)[-1])
+                if not word and tag not in ("SVG", "IMG", "I"):
+                    continue
+                word = word if readable(word) else ""
+                a = i
+                for _ in range(5):
+                    if a < 0:
+                        break
+                    if not icon.get(a):
+                        icon[a] = word
+                    a = parent[a] if a < len(parent) else -1
+            style: dict[int, list] = {}
+            box: dict[int, int] = {}
+            for k, i in enumerate(layout.get("nodeIndex") or []):
+                style[i] = [text(v) for v in (layout.get("styles") or [[]])[k]]
+                box[i] = k
+            bounds = layout.get("bounds") or []
+            scrolls, clients = layout.get("scrollRects") or [], layout.get("clientRects") or []
+
+            def styled(i: int) -> int:
+                """The nearest node at or over i that has a layout, or -1."""
+                while i >= 0 and i not in style:
+                    i = parent[i] if i < len(parent) else -1
+                return i
+            for i, k in box.items():
+                if i >= len(kinds) or kinds[i] != 1:
+                    continue
+                cursor, overflow, seen = (style[i] + ["", "", ""])[:3]
+                b = bounds[k] if k < len(bounds) else [0, 0, 0, 0]
+                if seen == "hidden" or not (b[2] > 0 and b[3] > 0):
+                    continue
+                name = text(names[i]).upper()
+                if cursor == "pointer" and name not in POINTER_SKIP:
+                    up = styled(parent[i]) if i < len(parent) else -1
+                    if up < 0 or style[up][0] != "pointer":
+                        out["click"][backend[i]] = True
+                if overflow in ("auto", "scroll", "overlay") and k < len(scrolls) and k < len(clients):
+                    whole, shown = scrolls[k], clients[k]
+                    if len(whole) == 4 and len(shown) == 4 and shown[3] > 40 and whole[3] > shown[3] + 8:
+                        down = whole[1] / max(1.0, whole[3] - shown[3])
+                        out["scroll"][backend[i]] = ("at the top" if down < 0.02 else "at the end" if down > 0.98
+                                                     else f"{round(down * 100)}% down")
+                pairs = attrs[i] if i < len(attrs) else []
+                found = {text(pairs[j]): text(pairs[j + 1]) for j in range(0, len(pairs) - 1, 2)}
+                if name == "INPUT" and found.get("type", "").lower() in SET_BY_VALUE:
+                    out["type"][backend[i]] = found["type"].lower()
+                if name == "SELECT" and "multiple" in found:
+                    out["type"][backend[i]] = "multiple"
+                if name in ("IFRAME", "FRAME") and b[2] >= 20 and b[3] >= 20 and i not in inner:
+                    # A frame shown whose document this snapshot does not hold: from another site, in its own process.
+                    out["frame"][backend[i]] = urlsplit(found.get("src", "")).hostname or "?"
+                hint = next((found[a] for a in HINT_ATTRS if found.get(a, "").strip()), "")
+                if not hint:
+                    words = [icon.get(i, ""), *(w for w in re.split(r"\s+", found.get("class", "")) if readable(w))]
+                    hint = " ".join([w for w in dict.fromkeys(words) if w][:3]) or ("icon" if i in icon else "")
+                if re.search(r"(^|\s)(on|active|is-active|is-on|liked|starred|selected|checked|pressed|faved)(\s|$)",
+                             found.get("class", "")):
+                    # An icon's own state, shown only by its class (a star filled in).
+                    hint = f"{hint} · on".strip(" ·")
+                if hint:
+                    out["hint"][backend[i]] = norm(hint)[:40]
+        return out
+
+    async def state(self, max: int = STATE_MAX) -> str:
+        """The page as one list in page order: `[id] role "name" = value states`, `## headings` and visible
+        text, with `*` on ids new since the last look and secret fields masked. `[id] clickable "words"` is
+        shown as clickable with no control named there; `[id] scrollable (…)` is a box that scrolls by itself;
+        `{words}` after a control with no name is its tooltip, icon or class; `(form)` after a date, time, colour,
+        range or several-choice field is what to type into it; a frame from another site is one line."""
+        settled = await self.settle()
+        probe = settled.get("probe") or await self._evaluate("() => ({url: location.href, title: document.title})")
+        frames = await self._capture()
+        # A blank page is still drawing (its script comes late): it is given a few seconds.
+        began = time.monotonic()
+        while self._waited != probe.get("doc") and (not any(len(f["nodes"]) > 3 for f in frames) or not await self._evaluate(
+                "() => !!(document.body && document.body.innerText.trim())")) and time.monotonic() - began < BLANK_S:
+            await asyncio.sleep(0.5)
+            settled = await self.settle()
+            probe = settled.get("probe") or probe
+            frames = await self._capture()
+        self._waited = probe.get("doc")
+        try:
+            layout = await self._layout()
+        except Exception:
+            layout = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
+        try:
+            visible = await self.visible_text()
+        except Exception:
+            visible = None
+        try:
+            secret = await self._secret_ids()
+        except Exception:
+            secret = set()
+        previous = self.last
+        self.before = (self.last, self.near)
+        self.last, self.secrets, self.interactive, self.near, self.values = {}, set(), 0, {}, {}
+        lines: list[str] = []
+        text: list[str] = []
+        clickable, scrollable, hints, types = layout["click"], layout["scroll"], layout["hint"], layout["type"]
+        here = urlsplit(probe.get("url", "")).hostname
+        away = {k: host for k, host in layout["frame"].items() if host != here}
+
+        def flush() -> None:
+            if text:
+                lines.append(" ".join(text))
+                text.clear()
+
+        def context() -> str:
+            """The text just before a control, digits out, to find it again once the page draws it anew."""
+            here = " ".join(text) if text else next((x for x in reversed(lines) if not x.startswith(("[", "*["))), "")
+            return re.sub(r"[\d\s.,:%+-]+", " ", here).strip()[-60:]
+
+        for frame in frames:
+            by_id = {n["nodeId"]: n for n in frame["nodes"]}
+            start = len(lines)
+
+            def words_in(n: dict | None, out: list[str], depth: int = 0) -> bool:
+                """The shown words under n into out; whether a control is under it."""
+                if not n or depth > 40:
+                    return False
+                role = str(val(n.get("role")) or "")
+                if role == "StaticText":
+                    t = norm(val(n.get("name")))
+                    if t and (visible is None or fold(t) in visible):
+                        out.append(t)
+                    return False
+                found = False
+                for c in n.get("childIds") or []:
+                    child = by_id.get(c)
+                    if child and not child.get("ignored") and (
+                            str(val(child.get("role")) or "") in CONTROLS or child.get("backendDOMNodeId") in clickable):
+                        found = True
+                    found = words_in(child, out, depth + 1) or found
+                return found
+
+            def walk(n: dict | None, inside: str) -> None:
+                if not n:
+                    return
+                role = val(n.get("role"))
+                role = "" if role is None else str(role)
+                name = norm(val(n.get("name")))
+                kids = n.get("childIds") or []
+                ident = n.get("backendDOMNodeId")
+                if ident in scrollable and ident not in self.last:
+                    # A box that scrolls by itself: a conversation list, a feed in a column.
+                    flush()
+                    self.near[ident] = context()
+                    self.last[ident] = ("scrollable", name)
+                    lines.append(("*" if previous and ident not in previous else "")
+                                 + f"[{ident}] scrollable" + (f' "{clip(name, 60)}"' if name else "")
+                                 + f" ({scrollable[ident]}; scroll it by this id)")
+                if ident in away:
+                    # Shown where it sits, so the model can say what it cannot reach (a chat widget, a comment box).
+                    flush()
+                    lines.append(f"--- frame {away[ident]}: from another site, cannot be read")
+                    return
+                if (ident in clickable and ident not in self.last and role not in CONTROLS
+                        and not (prop(n, "focusable") and role != "RootWebArea")):
+                    # Shown as clickable though the tree names no control: a row, a menu entry, a day.
+                    said: list[str] = []
+                    holds = words_in(n, said)
+                    shown = clip(name or norm(" ".join(said)), 40 if holds else 100)
+                    # An icon with no words (a trash can, a heart) is named by its tooltip, drawing or class.
+                    hint = "" if shown else hints.get(ident, "")
+                    if shown or holds or hint:
+                        flush()
+                        self.near[ident] = context()
+                        self.last[ident] = ("clickable", shown)
+                        self.interactive += 1
+                        lines.append(("*" if previous and ident not in previous else "") + f"[{ident}] clickable"
+                                     + (f' "{shown}"' if shown else f" {{{hint}}}" if hint else ""))
+                        if not holds:
+                            return
+                        for c in kids:
+                            walk(by_id.get(c), fold(f"{inside} {shown}"))
+                        return flush()
+                if n.get("ignored"):
+                    for c in kids:
+                        walk(by_id.get(c), inside)
+                    return
+                if role == "StaticText":
+                    t = fold(name)
+                    if t and t not in inside and (visible is None or t in visible):
+                        text.append(name)
+                    return
+                if role == "heading" and name:
+                    flush()
+                    lines.append(f"## {name}")
+                    for c in kids:
+                        walk(by_id.get(c), fold(name))
+                    return
+                focusable = (prop(n, "focusable") and role != "RootWebArea"
+                             and (name or val(n.get("value")) or prop(n, "editable")))
+                if not ident or not (role in CONTROLS or role in NATIVE_INPUTS or focusable):
+                    if role not in BLOCKS:
+                        for c in kids:
+                            walk(by_id.get(c), inside)
+                        return
+                    flush()
+                    for c in kids:
+                        walk(by_id.get(c), inside)
+                    return flush()
+                near = context()
+                flush()
+                if lines and lines[-1].lower() == name.lower():
+                    lines.pop()
+                value = norm(val(n.get("value")))
+                is_secret = ident in secret or (role in ("textbox", "searchbox", "generic") and bool(
+                    SECRET_LABEL.search(name)))
+                checked, expanded = prop(n, "checked"), prop(n, "expanded")
+                states = [s for s in [
+                    "" if checked is None else "unchecked" if checked == "false" else "checked",
+                    "" if expanded is None else "expanded" if expanded else "collapsed",
+                    # aria-haspopup: a menu or a list opens from it, on a click or under the pointer.
+                    "has menu" if prop(n, "hasPopup") not in (None, False, "false") else "",
+                    "selected" if prop(n, "selected") else "",
+                    "disabled" if prop(n, "disabled") and not prop(n, "focusable") else "",
+                    "focused" if prop(n, "focused") else ""] if s]
+                popup = next((c for c in map(by_id.get, kids) if c and val(c.get("role")) == "MenuListPopup"), None)
+                options: list[str] = []
+
+                def collect(c: dict | None) -> None:
+                    if not c:
+                        return
+                    if val(c.get("role")) == "option":
+                        options.append(norm(val(c.get("name"))))
+                    else:
+                        for k in c.get("childIds") or []:
+                            collect(by_id.get(k))
+                collect(popup)
+                kind = types.get(ident, "")
+                shown = ("select" if popup else "file" if role == "button" and value
+                         else "textbox" if role == "generic" and prop(n, "editable")
+                         else kind if kind not in ("", "range", "multiple") else role)
+                # What to type into a field set by value, or into a list where several can be chosen.
+                form = (f"a number from {prop(n, 'valuemin')} to {prop(n, 'valuemax')}" if kind == "range"
+                        else SET_BY_VALUE.get(kind) or ('several: "a, b"' if kind == "multiple" else ""))
+                self.last[ident] = (shown, name)
+                self.near[ident] = near
+                self.interactive += 1
+                hint = hints.get(ident, "") if NAMELESS.match(name) and shown in ("button", "link", "generic") else ""
+                if not hint and hints.get(ident, "").endswith("· on") and shown in ("button", "link", "generic"):
+                    states = [*states, "on"]
+                if is_secret:
+                    self.secrets.add(ident)
+                    value = SECRET_MASK if value else ""
+                elif len(value) > VALUE_MAX:
+                    self.values[ident] = value
+                more = f" | … {len(options) - OPTIONS_MAX} more" if len(options) > OPTIONS_MAX else ""
+                lines.append(("*" if previous and ident not in previous else "") + f"[{ident}] {shown}"
+                             + (" [secret]" if is_secret else "")
+                             + (f' "{clip(name, 150)}"' if name else "")
+                             + (f" {{{hint}}}" if hint and fold(hint) != fold(name) else "")
+                             + (f" ({form})" if form else "")
+                             + (f" = {quote(clip(value, VALUE_MAX))}" if value else "")
+                             + (" " + " ".join(states) if states else "")
+                             + ("  options: " + " | ".join(options[:OPTIONS_MAX]) + more if options else ""))
+                if popup or role in NATIVE_INPUTS or is_secret:
+                    return
+                inside = fold(f"{inside} {clip(name, 150)} {value}")
+                for c in kids:
+                    walk(by_id.get(c), inside)
+                flush()
+
+            walk(frame["nodes"][0] if frame["nodes"] else None, "")
+            flush()
+            if frame["url"] and len(lines) > start:
+                lines.insert(start, f"--- frame {frame['url']} ---")
+        header = f"[state] {probe.get('title', '')} | {probe.get('url', '')}"
+        if probe.get("sh") and probe.get("vh") and probe["sh"] > probe["vh"] + 40:
+            # How much of the page is above and below the screen.
+            down = probe.get("sy", 0) / (probe["sh"] - probe["vh"])
+            header += (" | page at the top, more below" if down < 0.02 else " | page at the end" if down > 0.98
+                       else f" | page {round(down * 100)}% down")
+        self.lines = lines
+
+        def fit(src: list[str], budget: float) -> int:
+            size = 0
+            for i, line in enumerate(src):
+                size += len(line) + 1
+                if size > budget:
+                    return i
+            return len(src)
+
+        body = lines or ["(nothing in the accessibility tree: the page is blank or still loading)"]
+        # Over max, keep the top and the last fifth: a dialog's Send is usually its last line.
+        if fit(lines, max) < len(lines):
+            head = fit(lines, max * 0.8)
+            tail = fit(lines[::-1], max * 0.2)
+            body = [*lines[:head], f"... {len(lines) - head - tail} lines cut here", *lines[len(lines) - tail:]]
+        return well_formed(f"{header}\n" + "\n".join(body) + "\n[/state]")
+
+    # --- one node
+
+    async def on_node(self, ident: int, fn: str, argument: Any = None) -> Any:
+        obj = (await self.cdp("DOM.resolveNode", backendNodeId=ident))["object"]
+        if not obj.get("objectId"):
+            raise RuntimeError("Node unavailable.")
+        try:
+            r = await self.cdp("Runtime.callFunctionOn", objectId=obj["objectId"], functionDeclaration=fn,
+                         arguments=[{} if argument is None else {"value": argument}], returnByValue=True,
+                         awaitPromise=True)
+            if r.get("exceptionDetails"):
+                d = (r["exceptionDetails"].get("exception") or {}).get("description")
+                raise RuntimeError(("Node operation failed." if d is None else d).split("\n    at ")[0])
+            return (r.get("result") or {}).get("value")
+        finally:
+            try:
+                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+            except Exception:
+                pass
+
+    async def facts(self, ident: int) -> dict:
+        return await self.on_node(ident, FACTS_JS) or {}
+
+    async def value(self, ident: int) -> str:
+        return str(await self.on_node(ident, VALUE_JS) or "")
+
+    async def secret_unfilled(self, ident: int) -> str | None:
+        """The form of `ident` holds a secret field still empty (a password, a card number, a code): that field
+        gets the focus, for the person to type into, and its label comes back; None when there is none."""
+        return await self.on_node(ident, SECRET_EMPTY_JS, SECRET_SELECTOR)
+
+    async def active(self) -> int | None:
+        """The backendNodeId of the element with focus, or None."""
+        r = await self.cdp("Runtime.evaluate", expression=ACTIVE_JS)
+        obj = r.get("result") or {}
+        if not obj.get("objectId"):
+            return None
+        try:
+            return (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
+        finally:
+            try:
+                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+            except Exception:
+                pass
+
+    async def secret(self, ident: int) -> bool:
+        """A field never typed into: by its type, autocomplete, or its own words (read off the DOM each time)."""
+        node = (await self.cdp("DOM.describeNode", backendNodeId=ident))["node"]
+        attrs = node.get("attributes") or []
+        at = {attrs[i - 1].lower(): attrs[i] for i in range(1, len(attrs), 2)}
+        if at.get("type", "").lower() == "password" or SECRET_AUTOCOMPLETE.match(at.get("autocomplete", "")):
+            return True
+        words = " ".join(at.get(k, "") for k in ("name", "id", "placeholder", "aria-label", "title"))
+        return ident in self.secrets or bool(SECRET_LABEL.search(f"{words} {self.last.get(ident, ('', ''))[1]}"))
+
+    def describe(self, ident: int) -> str:
+        n = self.last.get(ident)
+        if not n:
+            return f"[{ident}]"
+        return f"[{ident}] {n[0]}" + (f' "{clip(n[1], 60)}"' if n[1] else "")
+
+    def grep(self, words: str) -> str:
+        """The lines of the last look (before it was cut) that hold these words, each with the line before it;
+        and in a field's whole value, the part around them."""
+        want = [w for w in fold(words).split() if w]
+        hits: list[str] = []
+        for i, line in enumerate(self.lines):
+            if want and all(w in fold(line) for w in want):
+                hits += [x for x in (self.lines[i - 1] if i else "", line) if x and x not in hits]
+        for ident, value in self.values.items():
+            if not want or all(w in fold(value[:VALUE_MAX]) for w in want):
+                continue
+            at = fold(value).find(want[0]) if all(w in fold(value) for w in want) else -1
+            if at >= 0:
+                hits.append(f"{self.describe(ident)} = …{quote(value[max(0, at - 150):at + 250])}…")
+        return clip("\n".join(hits), 1500)
+
+    async def locate(self, words: str) -> int | None:
+        """The element showing these words (see LOCATE_JS), as an id an action takes; it joins the last look
+        as role "text" so the gate and the card can name it."""
+        r = await self.cdp("Runtime.evaluate", expression=f"({LOCATE_JS})({json.dumps(words)})")
+        obj = r.get("result") or {}
+        if not obj.get("objectId"):
+            return None
+        try:
+            ident = (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
+        finally:
+            try:
+                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+            except Exception:
+                pass
+        if ident is not None and ident not in self.last:
+            self.last[ident] = ("text", clip(norm(words), 80))
+        return ident
+
+    async def alive(self, ident: int) -> bool:
+        try:
+            return bool(await self.on_node(ident, "function(){return (this.nodeType===1?this:this.parentElement)"
+                                                  ".isConnected;}"))
+        except Exception:
+            return False
+
+    async def relocate(self, ident: int) -> int | None:
+        """A control the page drew again since the look (a live list redraws every second): a fresh look, and
+        the one control there with the same role and name, or among several the one after the same text."""
+        role, name = self.last.get(ident) or self.before[0].get(ident) or ("", "")
+        near = self.near.get(ident, self.before[1].get(ident, ""))
+        if not role:
+            return None
+        await self.state()
+        same = [i for i, (r, n) in self.last.items() if r == role and fold(n) == fold(name)]
+        if len(same) > 1:
+            same = [i for i in same if self.near.get(i, "") == near] or same[:0]
+        return same[0] if len(same) == 1 else None
+
+    async def again(self, ident: int, press: bool = False) -> int | None:
+        """`ident` drawn anew since the look, found in one step in the page (AGAIN_JS) by its name and the text
+        before it; the new id joins the last look. With `press` it is pressed in that same step. None when not
+        exactly one is found."""
+        role, name = self.last.get(ident) or self.before[0].get(ident) or ("", "")
+        near = self.near.get(ident, self.before[1].get(ident, ""))
+        if not name:
+            return None
+        r = await self.cdp("Runtime.evaluate", userGesture=True, expression=f"({AGAIN_JS})("
+                           f"{json.dumps(name)}, {json.dumps(near)}, {json.dumps(press)})")
+        obj = r.get("result") or {}
+        if not obj.get("objectId"):
+            return None
+        try:
+            found = (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
+        finally:
+            try:
+                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+            except Exception:
+                pass
+        if found is not None:
+            self.last[found], self.near[found] = (role, name), near
+        return found
+
+    async def click_again(self, ident: int) -> str:
+        """A click on a control the page keeps drawing anew: found and pressed in one step (`again`), so the
+        press cannot land on another row that moved under the pointer."""
+        async def body() -> str:
+            if await self.again(ident, press=True) is None:
+                raise RuntimeError("it was drawn anew and could not be found again; nothing was clicked")
+            return " (drawn anew since the look: pressed where it is now)"
+        return await self._act("click", ident, body)
+
+    async def box(self, ident: int) -> dict:
+        return await self.on_node(ident, BOX_JS)
+
+    async def _ring_world(self) -> int:
+        """The app's own script world in the page now, made once per document."""
+        probe = await self.probe()
+        if self._world is None or self._world[0] != probe.get("doc"):
+            frame = (await self.cdp("Page.getFrameTree"))["frameTree"]["frame"]["id"]
+            world = await self.cdp("Page.createIsolatedWorld", frameId=frame, worldName="mibo-ring")
+            self._world = (probe.get("doc"), world["executionContextId"])
+        return self._world[1]
+
+    async def ring(self, rect: dict) -> None:
+        """A ring for a moment around where the next click or key lands, drawn by the app in a world of its own
+        (the page's scripts cannot reach it), so a person watching sees it coming and can stop it in time."""
+        try:
+            await self.cdp("Runtime.evaluate", expression=f"({RING_JS})({json.dumps(rect)})",
+                           contextId=await self._ring_world())
+        except Exception:
+            # The ring is for the person watching; a page that will not take it is still worked.
+            self._world = None
+            return
+        await asyncio.sleep(RING_S)
+
+    async def hold_ring(self, ident: int | None) -> None:
+        """A ring that stays round `ident` while a card waits on it, in the app's own world; None takes it away.
+        Only for the person watching: a page that will not take it is left as it is."""
+        try:
+            world = await self._ring_world()
+            if ident is None:
+                await self.cdp("Runtime.evaluate", expression=UNRING_JS, contextId=world)
+                return
+            obj = (await self.cdp("DOM.resolveNode", backendNodeId=ident, executionContextId=world))["object"]
+            await self.cdp("Runtime.callFunctionOn", objectId=obj["objectId"], functionDeclaration=HOLD_JS)
+            await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+        except Exception:
+            self._world = None
+
+    def find(self, role: str, name: str) -> int | None:
+        """The id in the last look with this role and name (the name compared without case or spaces), or None."""
+        want = fold(name).strip()
+        hits = [i for i, (r, n) in self.last.items() if r == role and fold(n).strip() == want]
+        return hits[0] if len(hits) == 1 else None
+
+    async def screenshot(self) -> str:
+        """The viewport as a small JPEG, base64, for the card."""
+        metrics = await self.cdp("Page.getLayoutMetrics")
+        view = metrics.get("cssVisualViewport") or metrics.get("visualViewport") or {}
+        wide, high = float(view.get("clientWidth") or 1280), float(view.get("clientHeight") or 800)
+        return (await self.cdp("Page.captureScreenshot", format="jpeg", quality=60,
+                        clip={"x": float(view.get("pageX") or 0), "y": float(view.get("pageY") or 0),
+                              "width": wide, "height": high, "scale": min(1.0, 720 / max(wide, 1))}))["data"]
+
+    # --- actions
+
+    async def _point(self, ident: int, editable_cover: bool = False) -> dict:
+        """Scroll into view and return an unobstructed centre point, or raise why not."""
+        try:
+            await self.cdp("DOM.scrollIntoViewIfNeeded", backendNodeId=ident)
+        except Exception:
+            pass
+        p = await self.on_node(ident, POINT_JS, editable_cover)
+        if not p["covered"]:
+            return p
+        try:
+            await self.on_node(ident, CENTER_JS)
+            p = await self.on_node(ident, POINT_JS, editable_cover)
+        except Exception:
+            pass
+        if not p["covered"]:
+            return p
+        raise RuntimeError("Target covered by another element; nothing was clicked")
+
+    async def _click_at(self, x: float, y: float, modifiers: int = 0) -> None:
+        if not all(math.isfinite(v) for v in (x, y)):
+            raise ValueError("Coordinates must be finite.")
+        await self.cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button="left", clickCount=1,
+                       modifiers=modifiers)
+        await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button="left", clickCount=1,
+                       modifiers=modifiers)
+
+    async def _act(self, op: str, ident: int | None, body) -> str:
+        """Runs one action and returns one line: navigated to <url> / page changed / no change."""
+        try:
+            before = await self.probe()
+        except Exception:
+            before = None
+        what = self.describe(ident) if ident is not None else ""
+        try:
+            detail = await body()
+        except Refused:
+            raise
+        except Exception as e:
+            return well_formed(f"[failed] {op} {what}: {e}")
+        settled = await self.settle(since=now())
+        return well_formed(f"[ok] {op} {what}{detail} -> {await self.change(before, settled.get('probe'))}")
+
+    async def change(self, before: dict | None, after: dict | None = None) -> str:
+        if after is None:
+            try:
+                after = await self.probe()
+            except Exception:
+                after = None
+        if not before or not after:
+            return "page changed"
+        if after["doc"] != before["doc"] or after["url"] != before["url"]:
+            return f"navigated to {after['url']}"
+        return "page changed" if after["n"] != before["n"] else "no change"
+
+    async def click(self, ident: int) -> str:
+        async def body() -> str:
+            try:
+                p = await self._point(ident)
+            except Exception:
+                if await self.alive(ident):
+                    raise
+                # Drawn anew between the look and now: found and pressed in one step.
+                if await self.again(ident, press=True) is None:
+                    raise
+                return " (drawn anew since the look: pressed where it is now)"
+            # Ctrl (2) adds an option to a list where several can be chosen, as a person does.
+            await self._click_at(p["x"], p["y"], 2 if p["multi"] else 0)
+            return ""
+        return await self._act("click", ident, body)
+
+    async def click_point(self, x: float, y: float) -> str:
+        """A click on a point of the page as shown (a canvas has no parts to name)."""
+        async def body() -> str:
+            await self._click_at(x, y)
+            return f" at {round(x)},{round(y)}"
+        return await self._act("click", None, body)
+
+    async def type(self, ident: int, text: str, enter: bool = False) -> str:
+        """Replace the field's text with `text`: a list's option (several, commas between, where several can be
+        chosen), a date, time, colour or range field's value, else typed keys; never into a secret field (Refused)."""
+        if await self.secret(ident):
+            raise Refused(f"[refused] {self.describe(ident)} is a secret field (password, payment or code): "
+                          f"it is for the person to fill")
+
+        async def body() -> str:
+            kind = await self.on_node(ident, KIND_JS)
+            if kind["tag"] == "SELECT":
+                return f" = {quote(await self.on_node(ident, SELECT_JS, text))}"
+            form = SET_BY_VALUE.get(kind["type"]) if kind["tag"] == "INPUT" else None
+            if form:
+                # A date, time, colour or range field: its value set straight, as Playwright fills it.
+                if kind["type"] == "range":
+                    form = f"a number from {kind['min'] or 0} to {kind['max'] or 100}"
+                want = as_value(kind, text)
+                got = await self.on_node(ident, SET_JS, want)
+                if got is None:
+                    raise RuntimeError(f"it does not take {quote(clip(text, 40))}; type it as {form}")
+                return (f" = {quote(got)}" + (f" (from {quote(clip(text, 40))})" if want != norm(text) else "")
+                        + (f" (it takes {form})" if got != want else ""))
+            p = await self._point(ident, True)
+            await self._click_at(p["x"], p["y"])
+            try:
+                moved = bool(await self.on_node(ident, MOVED_JS))
+            except Exception:
+                moved = False
+            if moved:
+                raise Refused(f"[refused] typing into {self.describe(ident)} moved to another field; look again")
+            try:
+                await self.cdp("DOM.focus", backendNodeId=ident)
+            except Exception:
+                pass
+            a = {"key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}
+            await self.cdp("Input.dispatchKeyEvent", type="rawKeyDown", **a, commands=["selectAll"])
+            await self.cdp("Input.dispatchKeyEvent", type="keyUp", **a)
+            if text == "":
+                await self.key("Backspace")
+            else:
+                *chars, last = text
+                if not last.isprintable():
+                    # A line break sent as the last real key is Enter: it would submit or send past the gate.
+                    chars, last = list(text), ""
+                if chars:
+                    await self.cdp("Input.insertText", text="".join(chars))
+                if last:
+                    await self.cdp("Input.dispatchKeyEvent", type="keyDown", key=last, text=last)
+                    await self.cdp("Input.dispatchKeyEvent", type="keyUp", key=last)
+            try:
+                actual = await self.value(ident)
+            except Exception:
+                actual = None
+            if enter:
+                await self.key("Enter")
+            return (f" = {quote(clip(text, 60))}"
+                    + (f" (field now shows {quote(clip(actual, 60))})" if actual is not None and actual != text else "")
+                    + (" — it did not take the text: a field like this is set by its picker or list; click it"
+                       if actual is not None and text.strip() and fold(text).strip() not in fold(actual) else "")
+                    + (" +Enter" if enter else ""))
+        return await self._act("type", ident, body)
+
+    KEYS = {"Enter": 13, "Escape": 27, "Tab": 9, "Backspace": 8, "ArrowDown": 40, "ArrowUp": 38, "ArrowLeft": 37,
+            "ArrowRight": 39, "PageDown": 34, "PageUp": 33, "Home": 36, "End": 35, " ": 32}
+
+    async def key(self, key: str) -> None:
+        code = self.KEYS[key]
+        k = {"key": key, "code": "Space" if key == " " else key, "windowsVirtualKeyCode": code,
+             "nativeVirtualKeyCode": code}
+        await self.cdp("Input.dispatchKeyEvent", type="rawKeyDown", **k)
+        if key in ("Enter", " "):
+            text = "\r" if key == "Enter" else " "
+            await self.cdp("Input.dispatchKeyEvent", type="char", **k, text=text, unmodifiedText=text)
+        await self.cdp("Input.dispatchKeyEvent", type="keyUp", **k)
+
+    async def press(self, key: str) -> str:
+        async def body() -> str:
+            await self.key(key)
+            return f" {key}"
+        return await self._act("press", None, body)
+
+    async def scroll(self, down: bool = True, ident: int | None = None, until: str = "") -> str:
+        """A wheel over the box `ident` (or the page's middle), as a person scrolls; with `until`, on wheel by wheel
+        until those words show, waiting at the end of a list for more to load."""
+        want = fold(until).strip()
+
+        async def where() -> dict:
+            if ident is None:
+                return await self._evaluate("() => {const el = document.scrollingElement || document.documentElement;"
+                                            " return {top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight};}")
+            return await self.on_node(ident, SCROLLER_JS)
+
+        async def body() -> str:
+            view = (await self.cdp("Page.getLayoutMetrics")).get("cssVisualViewport") or {}
+            wide, high = float(view.get("clientWidth") or 800), float(view.get("clientHeight") or 600)
+            if ident is not None:
+                b = await self.box(ident)
+                # The middle of what of the box is on screen.
+                x = min(max(b["x"], 0) + min(b["w"], wide) / 2, wide - 2)
+                top, bottom = max(b["y"], 0), min(b["y"] + b["h"], high)
+                y = (top + bottom) / 2 if bottom > top else high / 2
+                step = max(80.0, min(b["h"], high) * 0.8)
+            else:
+                x, y, step = wide / 2, high / 2, high * 0.8
+            wheels = 0
+            for wheels in range(1, (UNTIL_WHEELS if want else 1) + 1):
+                if want and want in await self.visible_text():
+                    return f" until {quote(clip(until, 40))}: it shows after {wheels - 1} wheels"
+                before = await where()
+                await self.cdp("Input.dispatchMouseEvent", type="mouseWheel", x=x, y=y, deltaX=0,
+                               deltaY=step * (1 if down else -1))
+                await self.settle(cap_ms=1500)
+                after = await where()
+                if after["top"] == before["top"] and after["height"] == before["height"]:
+                    # At the end: a feed may still be loading more.
+                    began = time.monotonic()
+                    while time.monotonic() - began < MORE_S and (await where())["height"] == before["height"]:
+                        await asyncio.sleep(0.3)
+                    if (await where())["height"] == before["height"]:
+                        if want:
+                            return (f" until {quote(clip(until, 40))}: not found, the list ended after {wheels} "
+                                    f"wheels")
+                        return " — it did not move: the end, or not the box that scrolls"
+            if want:
+                if want in await self.visible_text():
+                    return f" until {quote(clip(until, 40))}: it shows after {wheels} wheels"
+                return f" until {quote(clip(until, 40))}: not found in {wheels} wheels"
+            return " down" if down else " up"
+        return await self._act("scroll", ident, body)
+
+    async def hover(self, ident: int) -> str:
+        """The pointer over the element and left there: a menu that opens on hover opens."""
+        async def body() -> str:
+            p = await self._point(ident)
+            await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=p["x"], y=p["y"])
+            return ""
+        return await self._act("hover", ident, body)
+
+    async def wait(self) -> str:
+        """A few seconds for a page that is loading or answering."""
+        async def body() -> str:
+            await asyncio.sleep(1.0)
+            await self.settle(cap_ms=6000, quiet_ms=800)
+            return ""
+        return await self._act("wait", None, body)
+
+    async def goto(self, url: str) -> str:
+        async def body() -> str:
+            await self.cdp("Page.navigate", url=url)
+            return f" {url}"
+        return await self._act("navigate", None, body)
+
+    async def back(self) -> str:
+        async def body() -> str:
+            history = await self.cdp("Page.getNavigationHistory")
+            index = history.get("currentIndex", 0)
+            if index <= 0:
+                raise RuntimeError("no page before this one")
+            await self.cdp("Page.navigateToHistoryEntry", entryId=history["entries"][index - 1]["id"])
+            return ""
+        return await self._act("back", None, body)

@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 O instalador traz o próprio Python, instala o personagent e o abre; no Windows, também coloca um ícone na área de trabalho. Quando o PyPI ou o GitHub estão lentos, ele passa sozinho a usar espelhos na China continental. Executá-lo de novo atualiza o personagent.
 
-Com o Python 3.10 ou posterior já instalado, `python -m pip install personagent` e depois `personagent` fazem o mesmo, e com o [uv](https://docs.astral.sh/uv/), `uvx personagent` o executa sem uma etapa de instalação separada. No Windows, você também pode baixar o ZIP do código-fonte e dar dois cliques em `start.bat`, que também baixa o Python quando o computador não o tem.
+Com o Python 3.10 ou posterior já instalado, `python -m pip install personagent` e depois `personagent` fazem o mesmo, e com o [uv](https://docs.astral.sh/uv/), `uvx personagent` o executa sem uma etapa de instalação separada.
 
 No Windows, ele abre em uma janela própria; no macOS e no Linux, no navegador. Pressione **Entrar com o OpenRouter** e aprove no navegador, ou cole uma chave de API de modelo e clique em **Verificar e iniciar a conversa**. Os modelos gratuitos do OpenRouter já vêm selecionados, mas também precisam de uma conta ou de uma chave, que são gratuitas. `personagent demo` mostra três cenas roteirizadas sem chave nenhuma. O [guia de primeiros passos](https://github.com/wangkant/personagent/blob/main/docs/start.pt-BR.md) percorre a página tela por tela.
 
@@ -139,7 +139,7 @@ As plataformas conectadas são iniciadas novamente sempre que o personagent é i
 
 Para todo o resto existe **Outros programas** na mesma página: ative, copie o endereço, a chave e o nome do modelo para qualquer aplicativo que aceite um endereço compatível com OpenAI, e esse aplicativo conversa com o seu personagem, com a mesma memória de todos os outros lugares. O [guia do usuário](https://github.com/wangkant/personagent/blob/main/docs/guide.pt-BR.md#outros-programas) traz os detalhes, e `personagent connect api` faz o mesmo pelo terminal.
 
-Já usa AstrBot, Koishi ou Matrix? O personagent pode funcionar por trás de qualquer um deles como o agente: veja [pontes que você mesmo executa](https://github.com/wangkant/personagent/blob/main/docs/guide.pt-BR.md#pontes-que-você-mesmo-executa), o [conector Satori](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.pt-BR.md) e o [conector Matrix](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.pt-BR.md).
+Já usa AstrBot? O personagent pode funcionar por trás dele como o agente: veja [pontes que você mesmo executa](https://github.com/wangkant/personagent/blob/main/docs/guide.pt-BR.md#pontes-que-você-mesmo-executa).
 
 ## Em um servidor
 
@@ -182,7 +182,6 @@ Tudo o que o personagent guarda fica na sua máquina, em uma única pasta do per
 - [Guia do usuário](https://github.com/wangkant/personagent/blob/main/docs/guide.pt-BR.md): configuração, conectores, como ensiná-lo, a tela Atividade, solução de problemas.
 - [Guia de implantação](https://github.com/wangkant/personagent/blob/main/docs/deploy.pt-BR.md): execução em produção, custos e o que verificar quando o bot fica em silêncio.
 - [Protocolo de conectores](https://github.com/wangkant/personagent/blob/main/docs/connectors.pt-BR.md): para escrever seu próprio conector.
-- [Ferramentas](https://github.com/wangkant/personagent/blob/main/docs/tools.pt-BR.md): os scripts em `tools/`, para execução a partir de um clone.
 - [Changelog](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [Como contribuir](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [Política de segurança](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [Aviso legal](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.pt-BR.md)
 
 ## Licença

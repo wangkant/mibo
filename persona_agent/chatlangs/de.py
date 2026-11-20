@@ -46,8 +46,6 @@ SPEC = Spec(
             rf"|woran\s+erinnerst\s+du\s+dich{_FILL}"
             r"|was\s+ist\s+in\s+deinem\s+(?:gedächtnis|kopf|speicher)"),
     recall_tail=r"(?:so|denn|eigentlich|alles)",
-    learned=(rf"was\s+hast\s+du{_FILL}(?:\s+(?:neues|dazu))?\s+(?:dazu)?gelernt"
-             rf"(?!{_W})"),
     deictic=frozenset({"das", "dies", "dieses", "diese", "den", "die", "es",
                        "das da", "das hier", "das eben", "das gerade",
                        "das einfach", "den da", "die da", "das von eben",
@@ -57,15 +55,6 @@ SPEC = Spec(
     # Whole words: "mir" and "mich", never inside "Mirabellen" or "Michael".
     first_person=(r"(?<![\wäöüß'])(?:ich|mich|mir|mein(?:e[mnrs]?)?|meins)"
                   r"(?![\wäöüß'])"),
-    self_id=r"(?<!\w)ich\s+bin(?!\s+(?:nicht|kein\w*)\b)(?:\s+(?:der|die|das|ein|eine))?(?!\w)",
-    made_by=r"(?:entwickelt|trainiert|erstellt|gebaut|programmiert)\s+von",
-    from_maker=r"(?<!\w)von",
-    leak_labels=r"eingabe|sprecher|absicht|intention|entscheidung|stil|analyse",
-    assistant_tells=(r"(?:(?:es\s+)?tut\s+mir\s+leid|leider)[,.!\s]+(?:aber\s+)?(?:ich\s+kann|kann\s+ich)"
-                     r"(?:\s+(?:dir|ihnen|euch|dabei|damit|hierbei|leider|bei\s+dieser\s+anfrage))*"
-                     r"\s+nicht\s+(?:helfen|weiterhelfen|behilflich\s+sein|beantworten|nachkommen)"
-                     r"|ich\s+hoffe,?\s+(?:das|dies)\s+(?:hilft|war\s+hilfreich)"
-                     r"|ich\s+hoffe,?\s+ich\s+konnte\s+(?:dir|ihnen|euch)\s+helfen"),
     replies={
         "remember_what": ("was soll ich mir merken? du hast nix gesagt",
                           "na sag schon", "merken, was denn"),
@@ -78,37 +67,12 @@ SPEC = Spec(
         "forgotten": ("vergessen", "weg damit", "ist vergessen"),
         "empty": ("Kopf ist leer", "da ist nix drin", "komplett leer"),
         "recall_head": ("Das weiß ich noch:",),
-        "said": ("du hast gesagt: ",),
-        "about": ("über {name}: ",),
-        "from": ("von {name}: ",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("Hier kann ich erst antworten, wenn mein Admin diesen Chat freigegeben hat. Der Code für deine Anfrage ist {code}. Gib ihn bitte an meinen Admin weiter.",),
-        "approval_group": ("Mein Admin hat diese Gruppe noch nicht freigegeben, deshalb kann ich hier noch nicht antworten.",),
+        "secret": ('Nicht gespeichert: Ausweis- und Kartennummern, Passwörter und Codes werden nie gespeichert.',),
     },
     failure_excuses=("ugh, häng kurz fest",
                      "Moment, Verbindung spinnt",
                      "Netz ist grad komisch, gib mir ne Minute"),
     # "label: n" throughout, so no count has to agree with a noun.
-    learned_text={
-        "head": ("Erinnerungen: {memories}, gelernte Antworten: {examples}, "
-                 "Korrekturen: {fixes}, in Beobachtung bis zu einer weiteren übereinstimmenden Reaktion: {voice}, "
-                 "von mir selbst zu entscheiden: {admin}"),
-        "score": ", letzte Selbstbewertung {score}/5",
-        "pair": "vorher: {was}, besser: {better}",
-        "someone_else": "jemand in einem anderen Chat",
-        "someone": "jemand",
-        "retry": "{who} hat die neue Antwort genommen",
-        "self_review": "eigene Nachbetrachtung",
-        "self_eval": "Selbstbewertung mit voller Punktzahl",
-        "corrected": "{who} hat korrigiert",
-        "missed": "{who} meinte, das war daneben",
-        "liked": "{who} fand's gut",
-        "by_me": "von mir selbst entschieden",
-        "by_person": "von Hand übernommen",
-        "passed": "Belege: {events}, davon stark: {strong}, bestanden",
-        "why": "Grund: {steps}",
-        "sep": ", ",
-    },
     # Frequent in German, not in English, Spanish, French or Portuguese
     # ("das", "die", "was", "war", "will", "so" are left out).
     stopwords=frozenset({
@@ -119,4 +83,12 @@ SPEC = Spec(
         "dich", "nein", "bitte", "danke", "echt", "denn", "gerade",
     }),
     letters="ßäöü",
+    unsaid=r"\bmerk (?:dir|dich) das nicht\b|\bnicht (?:merken|speichern|notieren|aufschreiben)\b",
+    # "vergiss das mit dem Treffen" and "vergiss das Treffen" name a thing: a forget of it, not of
+    # what was just said.
+    forget_that=(r"vergiss (?:(?:das|es)(?:\s+(?:bitte|einfach|lieber|wieder))?\s*[.!~]*$"
+                 r"|was ich (?:gerade )?gesagt habe\b)"
+                 r"|tu so,? als hätte ich nichts gesagt"),
+    lead_in=r"ach|also|na|übrigens",
+    kinds=("Über dich", "Magst du", "Magst du nicht", "Zuletzt", "Pläne", "Wie ich mit dir umgehen soll"),
 )

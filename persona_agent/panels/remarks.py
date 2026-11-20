@@ -17,10 +17,10 @@ from datetime import datetime
 
 from fastapi import Request
 
-from .. import activity, langs, life, quiet, remarks
+from .. import activity, life, profile, quiet, remarks
 from ..config_env import parse_tz_offset
 from ..library import Library
-from ..textproc import _local_tz_offset
+from ..textproc import default_tz_offset
 
 ERRORS: frozenset[str] = frozenset({"remarks_invalid"})
 # A line the pet has not taken by then is about a moment gone.
@@ -67,8 +67,8 @@ class Remarks:
         """The character is asleep on its own clock, or out walking."""
         hours = parse_tz_offset(values.get("PERSONA_TZ_OFFSET_HOURS", ""))
         if hours is None:
-            # As textproc.default_tz_offset reads it, from the .env here.
-            hours = 8.0 if langs.content(langs.normalize(values.get("AGENT_LANG"))) == "zh" else _local_tz_offset()
+            # As the character reads it, with the language from the .env here.
+            hours = default_tz_offset(values.get("AGENT_LANG") or "")
         return bool(life.asleep_until(now, hours)) or Library(self.ws._runtime()).outing().state == "out"
 
     async def step(self, now: float) -> None:
@@ -78,18 +78,23 @@ class Remarks:
             self.pace = None
             return
         sample = await asyncio.to_thread(activity.sense, state["ignore"])
+        # The same look tells the feed's pacing what is in front (pacing.py).
+        await self.ws.pace.look(sample)
         if self.pace is None:
             # Started with the app, or when the switch was turned on.
             self.pace = remarks.Pace(max(self.started, now - remarks.EVERY_S))
         self.pace.see(now, *sample)
         count = remarks.today(state, now)
-        due = self.pace.due(now, state["at"], count)
+        known = await asyncio.to_thread(profile.load, runtime, False)
+        due = self.pace.due(now, state["at"], count, known["fewer"])
         if due is None:
             return
         values = await asyncio.to_thread(self.ws.config)
         if await asyncio.to_thread(self._quiet, values, now):
             return
-        text = await remarks.write(self.ws.home, values, due, now)
+        # How the person asked to be treated holds for the pet's lines too.
+        manner = await asyncio.to_thread(profile.manner_rule, runtime)
+        text = await remarks.write(self.ws.home, values, due, now, manner)
         # Into the main chat first; while a reply is under way there it says False, and the line waits a tick.
         if not await self.ws.remark(text):
             return

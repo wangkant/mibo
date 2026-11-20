@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>确认订单 - 喵喵宠物店</title>
+<style>body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f5f5f5; }
+main { max-width: 720px; margin: 24px auto; background: #fff; border-radius: 8px; padding: 16px 22px; }
+.row { display: flex; justify-content: space-between; padding: 6px 0; } .tot { font-size: 18px; color: #e4393c; }
+button { background: #e4393c; color: #fff; border: 0; padding: 10px 34px; border-radius: 4px; font-size: 15px; }</style></head>
+<body><main>
+<h2>确认订单</h2>
+<p>收货地址：小乐 138****1111 杭州市文三路 100 号</p>
+<div id="lines"></div>
+<div class="row"><span>运费</span><span>¥0.00</span></div>
+<div class="row"><b>应付合计</b><b class="tot" id="tot"></b></div>
+<p>支付方式：已绑定银行卡 •••• 4242</p>
+<button id="order">提交订单</button><p id="said"></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const PRICE = { scratcher: ["瓦楞纸猫抓板", 39], mug: ["陶瓷猫碗", 25] };
+fetch("/api/state").then((r) => r.json()).then(({ cart }) => {
+  let t = 0;
+  for (const [id, n] of Object.entries(cart)) {
+    const [name, p] = PRICE[id];
+    t += n * p;
+    document.getElementById("lines").insertAdjacentHTML("beforeend", `<div class="row"><span>${name} × ${n}</span><span>¥${(n * p).toFixed(2)}</span></div>`);
+  }
+  document.getElementById("tot").textContent = "¥" + t.toFixed(2);
+});
+document.getElementById("order").addEventListener("click", async () => {
+  if ((await post("/api/order", { at: Date.now() })).ok) document.getElementById("said").textContent = "订单已提交";
+});
+</script></body></html>

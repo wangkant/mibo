@@ -5,6 +5,7 @@ hand-built rows and the prompt path never waits on anything in here."""
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from operator import mul
@@ -97,6 +98,62 @@ class Lexicon:
                     norm = 1.0 - BM25_B + BM25_B * len(text) / avg
                     s += weight * idf * tf * (BM25_K1 + 1.0) / (tf + BM25_K1 * norm)
         return s
+
+
+#: Han characters too common to say what a message is about.
+_HAN_COMMON = frozenset(
+    "我你他她它们的了是在吗呢吧啊呀哦嗯么什那这个有没不也就都还要会说去来到上下得过着和与跟很太好"
+    "人一些点儿被把给让对从为以而且又再才只能可想看做咋啥呗嘛哪谁怎样多少几次回最近记小老阿大"
+    # Places in a list ("第二个"): they say which one, not what it is.
+    "第二三四五六七八九十两")
+# Pairs that frame a question about the past rather than say what it is about.
+_HAN_FILLER = frozenset({"最近", "上次", "上回", "之前", "以前", "记得", "还记", "觉得", "知道", "一直", "其实",
+                         "然后", "因为", "所以", "但是", "可是", "就是", "还是", "已经", "现在", "感觉", "来着",
+                         # and pairs that ask for more of something ("再展开讲讲", "帮我看看这个讲了啥")
+                         "展开", "讲讲", "说说", "细说", "具体", "详细", "介绍", "讲了", "讲的", "帮我", "帮忙",
+                         # or ask about a day or a kind of thing, not a topic ("今天有啥好玩的发现", "那个视频")
+                         "今天", "昨天", "上午", "下午", "早上", "晚上", "视频", "文章", "好玩", "有趣", "发现"})
+_PRONOUNS = frozenset("我你他她它咱")
+_HAN = re.compile(r"[一-鿿]")
+#: A paraphrase often keeps one character of the word it replaces (练琴, 练吉他).
+CHAR_WEIGHT = 0.3
+
+
+def plain_terms(tokens: Iterable[str]) -> set[str]:
+    """`tokens` without the Han pairs made of two common characters (什么, 那个), led by a pronoun
+    (我最) or framing a question (最近)."""
+    return {t for t in tokens if t not in _HAN_FILLER and not (
+        len(t) == 2 and (t[0] in _PRONOUNS or all(c in _HAN_COMMON for c in t)))}
+
+
+def han_chars(text: str) -> set[str]:
+    """The uncommon Han characters of `text`, each a term of its own; none from a filler pair."""
+    for pair in _HAN_FILLER:
+        text = text.replace(pair, " ")
+    return {c for c in _HAN.findall(text) if c not in _HAN_COMMON}
+
+
+class Query:
+    """One message's lexical ask of a pool: its terms, its uncommon Han
+    characters at CHAR_WEIGHT, and the turn before at `before_weight` for a
+    message that leans on it ("那个呢", "第二个"). Each part is BM25 of its own."""
+
+    def __init__(self, tokens: Iterable[str], text: str, docs: Sequence[Sequence[str]], *,
+                 before_tokens: Iterable[str] = (), before: str = "", before_weight: float = 0.0):
+        parts = [(plain_terms(tokens), 1.0), (han_chars(text.lower()), CHAR_WEIGHT)]
+        if before_weight:
+            parts += [(plain_terms(before_tokens), before_weight),
+                      (han_chars(before.lower()), before_weight * CHAR_WEIGHT)]
+        # Every other part is made of words, the rest of single characters.
+        self.parts = [(Lexicon(terms, docs), weight, n % 2 == 0)
+                      for n, (terms, weight) in enumerate(parts) if terms]
+
+    def score(self, doc: Sequence[str], field_weights: Sequence[float]) -> float:
+        return sum(weight * lexicon.score(doc, field_weights) for lexicon, weight, _ in self.parts)
+
+    def word_score(self, doc: Sequence[str], field_weights: Sequence[float]) -> float:
+        """`score` from shared words alone: single characters add up on a long page."""
+        return sum(weight * lexicon.score(doc, field_weights) for lexicon, weight, words in self.parts if words)
 
 
 def epoch(ts) -> float:

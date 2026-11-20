@@ -1,54 +1,14 @@
-"""Seed and learned data kept fresh on disk: pools, promoted views, filters, lorebook."""
+"""Seed data kept fresh on disk: the filters."""
 from __future__ import annotations
 
 import json
 import logging
 import re
-import time
-from functools import partial
 from pathlib import Path
 
-from . import candidates as candidates_mod
-from . import channels
-from . import chatlangs
-from . import evidence as evidence_mod
-from . import promotion as promotion_mod
-from .home import resource
-from .paths import parse_jsonl, read_jsonl, resolve_seed_lang_file
-from .ranking import row_fields
 from .storage import atomic_write_text
-from .textproc import _TYPOGRAPHY_MAP, TextProcessing
 
 logger = logging.getLogger("agent")
-
-# Refused outright by the reply's character policy, or rewritten by it.
-_UNSAFE = str.maketrans({c: " " for c in "[]<>{}|*`·→…"}
-                        | {";": ",", "；": "，", "。": " ", "—": " "})
-
-
-# The English promotion chain; the other chat languages bring theirs.
-_LEARNED_EN = {
-    "someone_else": "someone in another chat",
-    "someone": "someone",
-    "retry": "{who} accepted the retry",
-    "self_review": "a self-review",
-    "self_eval": "a top self-score",
-    "corrected": "{who} corrected it",
-    "missed": "{who} said it missed",
-    "liked": "{who} liked it",
-    "by_me": "decided by me",
-    "by_person": "put in use by hand",
-    "passed": "passed with {events} events, {strong} strong",
-    "why": "why: {steps}",
-    "sep": ", ",
-}
-
-
-def _clip(text, limit: int = 30) -> str:
-    """Chat text for one summary line: one line, policy-safe, at most
-    `limit` characters."""
-    s = " ".join(str(text or "").translate(_TYPOGRAPHY_MAP).translate(_UNSAFE).split())
-    return s if len(s) <= limit else s[:limit - 3].rstrip() + "..."
 
 
 class DataViews:
@@ -58,266 +18,6 @@ class DataViews:
             atomic_write_text(path, json.dumps(obj, ensure_ascii=False, indent=2))
         except OSError as e:
             logger.warning("[Agent] %s save failed: %s", label, e)
-
-    def _reload_if_stale(self, paths, stamp_attr: str, load) -> None:
-        """Run `load()` when a file in `paths` changed since the stamp kept in
-        `stamp_attr`. An error from `load` is the caller's: the stamp stays,
-        so the next turn loads again."""
-        stamp = self._pool_stamp(paths)
-        if stamp == getattr(self, stamp_attr):
-            return
-        load()
-        setattr(self, stamp_attr, stamp)
-
-    def _reload_pool_if_stale(self, files, stamp_attr: str, load, name: str) -> None:
-        """`_reload_if_stale` for a retrieval pool, which keeps its cache
-        through a read error. The promoted views must not: see there."""
-        try:
-            self._reload_if_stale(files, stamp_attr, load)
-        except OSError as e:
-            logger.warning("[Agent] %s reload failed: %s", name, e)
-
-    def _reload_examples_if_stale(self) -> None:
-        """Hot-reload the seed + runtime example pools when either file changes."""
-        files = (self.examples_seed_file, self.examples_file)
-
-        def load() -> None:
-            records = self._read_pool(*files)
-            self._examples_cache = records
-            # Rebuilt from disk so a restart remembers which replies are pooled.
-            self._auto_examples_seen = {
-                r.get("reply", "").strip() for r in records
-                if isinstance(r.get("reply"), str) and r.get("reply", "").strip()
-            }
-
-        self._reload_pool_if_stale(files, "_examples_mtime", load, "examples.jsonl")
-
-    def _reload_pairs_if_stale(self) -> None:
-        """Hot-reload the seed + runtime preference pairs (rating=better only)."""
-        files = (self.feedback_seed_file, self.feedback_file)
-
-        def load() -> None:
-            self._pairs_cache = [r for r in self._read_pool(*files)
-                                 if self._is_better_pair(r)]
-
-        self._reload_pool_if_stale(files, "_pairs_mtime", load, "feedback.jsonl")
-
-    def _live_scope(self, conv_id: str) -> dict:
-        """This turn's scope, normalised the way the ledger stores one."""
-        return evidence_mod.normalize_scope({
-            "lang": self.agent_lang,
-            "platform": channels.platform_of(conv_id) if conv_id else "",
-            "conv_id": conv_id,
-            "persona": self.persona_name,
-            "persona_hash": self.persona_hash,
-            "persona_version": self.persona_version,
-        })
-
-    def _scope_authorizes(self, scope, current_scope: dict,
-                          identity: str | None = None) -> bool:
-        """May a promoted row with ``scope`` reach a prompt in ``current_scope``?
-        Persona is compared through its lineage, everything else exactly.
-        Pass ``identity`` (self.persona_identity) when checking many rows."""
-        if identity is None:
-            # Read first: reading it registers the lineage the lookup below uses.
-            identity = self.persona_identity
-        return (all(str(scope.get(key) or "") == str(value or "")
-                    for key, value in current_scope.items() if key != "persona_hash")
-                and evidence_mod.persona_identity(scope) == identity)
-
-    def _learned_summary(self, group_id: str, lang: str = "") -> str:
-        """What this room has taught the bot, chat-sized: counts, what it still observes,
-        the latest promotion and why, in chat language `lang` (default: the
-        agent's). Reads state only."""
-        code = lang or self.chat_lang
-        # English builds its own lines, plurals and all; the rest fill templates.
-        text = {} if code == "en" else chatlangs.spec(code).learned_text
-        current_scope = self._live_scope(group_id)
-        identity = self.persona_identity
-        self._reload_views_if_stale()
-        examples = [r for r in self._view_examples_cache
-                    if self._scope_authorizes(r.get("scope"), current_scope, identity)]
-        pairs = [r for r in self._view_pairs_cache
-                 if self._scope_authorizes(r.get("scope"), current_scope, identity)]
-        voice, admin, latest = self._learning_status(current_scope)
-        scores = []
-        if self.eval_enabled:
-            scores = [int(r["score"]) for r in read_jsonl((self.eval_file,))
-                      if r.get("group_id") == group_id and isinstance(r.get("score"), int)][-10:]
-        memories = len(self.memories.get(group_id, []))
-
-        # Plain lines: the reply crosses the character policy like any other.
-        n_ex, n_pr = len(examples), len(pairs)
-        if text:
-            head = text["head"].format(memories=memories, examples=n_ex, fixes=n_pr,
-                                       voice=voice, admin=admin)
-        else:
-            head = (f"{memories} memor{'y' if memories == 1 else 'ies'}, "
-                    f"{n_ex} repl{'y' if n_ex == 1 else 'ies'} and {n_pr} fix{'' if n_pr == 1 else 'es'} learned, "
-                    f"{voice} under observation until another agreeing reaction arrives, "
-                    f"{admin} under my own review")
-        if scores:
-            score = f"{sum(scores) / len(scores):.1f}"
-            head += (text["score"].format(score=score) if text
-                     else f", recent self-score {score}/5")
-
-        def pair_line(r: dict) -> str:
-            was, better = _clip(r.get("reply")), _clip(r.get("better"))
-            return (text["pair"].format(was=was, better=better) if text
-                    else f"was: {was}, better: {better}")
-
-        lines = []
-        shown = ""
-        if latest is not None:
-            shown = str(latest.get("type") or "")
-            row = latest.get("payload") or {}
-            lines.append(pair_line(row) if shown == "preference_pair"
-                         else _clip(row.get("reply")))
-            chain = self._promotion_chain(latest, text, current_scope["conv_id"])
-            if chain:
-                lines.append(chain)
-        if shown != "preference_pair":
-            lines.extend(pair_line(r) for r in pairs[-1:])
-        if shown != "positive_example":
-            lines.extend(_clip(r.get("reply")) for r in examples[-1:])
-        return self._policy_safe(head, lines)
-
-    def _policy_safe(self, head: str, lines: list[str]) -> str:
-        """`head` plus each learned line the character policy passes whole, so
-        one bad line cannot refuse the summary."""
-        def passes(text: str) -> bool:
-            return TextProcessing._sanitize_reply(
-                text, self.agent_lang, self.reply_style) == text
-
-        kept = [head]
-        for line in lines:
-            if passes("\n".join(kept + [line])):
-                kept.append(line)
-        return "\n".join(kept)
-
-    def _learning_status(self, current_scope: dict):
-        """(waiting for a second voice, under the character's own review,
-        latest active candidate) for this conversation, in one pass over each
-        ledger. With automatic learning stopped nothing waits on anyone, so
-        neither is counted. A liked reply counts only once the character
-        could decide it: a person's approval is among its evidence."""
-        cands = self.candidate_ledger.all()
-        events = self.evidence_log.all()
-        waiting = [c for c in cands
-                   if c.get("state") == candidates_mod.STATE_PROPOSED
-                   and self._scope_authorizes(c.get("scope"), current_scope)]
-        voice = admin = 0
-        if waiting and self.promotion_policy.auto_promote:
-            index = promotion_mod.EvidenceIndex(events, cands)
-            now, admins = time.time(), self._admins()
-            for c in waiting:
-                strong = evidence_mod.can_be_strong(str(c.get("type") or ""))
-                # Cheap first: an example no person approved cannot be decided.
-                if not strong and not any(
-                        e.get("kind") == evidence_mod.KIND_REACTION
-                        and e.get("reaction_type") == "positive"
-                        for e in index.linked(c)):
-                    continue
-                decision = promotion_mod.decide(
-                    c, linked_events=index.linked(c), related_events=index.related(c),
-                    peers=index.peers(c), now=now,
-                    policy=self.promotion_policy, admin_ids=admins)
-                if promotion_mod.needs_character(decision, c):
-                    # With its own decisions switched off the character reviews nothing.
-                    admin += 1 if self._judging_on() else 0
-                elif strong and not any(
-                        e.get("kind") == evidence_mod.KIND_SELF_REVIEW
-                        for e in index.linked(c)):
-                    # The agent's own rewrite: no person's event can make it strong.
-                    voice += 1
-        active = [c for c in cands
-                  if c.get("state") == candidates_mod.STATE_PROMOTED
-                  and self._scope_authorizes(c.get("scope"), current_scope)]
-
-        def promoted_at(c: dict) -> str:
-            return max((str(h.get("ts") or "") for h in c.get("history") or ()
-                        if h.get("state") == candidates_mod.STATE_PROMOTED),
-                       default="")
-
-        latest = max(active, key=promoted_at) if active else None
-        return voice, admin, latest
-
-    def _promotion_chain(self, cand: dict, text: dict, conv_id: str) -> str:
-        """One line: who argued for `cand`, how, and why it passed (only people
-        in `conv_id` are named). `text` is a chat language's learned-summary
-        templates; empty means English."""
-        say = text or _LEARNED_EN
-        linked = self.evidence_log.many(cand.get("evidence") or [])
-        steps: list[str] = []
-        strong = 0
-        supporting = [e for e in linked if promotion_mod.supports_candidate(
-            e, cand, policy=self.promotion_policy)]
-        for e in supporting:
-            if str(e.get("conv_id") or "") != conv_id:
-                who = say["someone_else"]
-            else:
-                who = _clip(e.get("speaker_name"), 16) or say["someone"]
-            kind, rtype = e.get("kind"), e.get("reaction_type")
-            if kind == evidence_mod.KIND_RETRY_ACCEPTANCE:
-                step = say["retry"].format(who=who)
-            elif kind == evidence_mod.KIND_SELF_REVIEW:
-                step = say["self_review"]
-            elif kind == evidence_mod.KIND_SELF_EVAL:
-                step = say["self_eval"]
-            elif rtype == "correction":
-                step = say["corrected"].format(who=who)
-            elif rtype == "rejection":
-                step = say["missed"].format(who=who)
-            else:
-                step = say["liked"].format(who=who)
-            steps.append(step)
-            if promotion_mod.anchors(e, cand):
-                strong += 1
-        history = [h for h in cand.get("history") or ()
-                   if h.get("state") == candidates_mod.STATE_PROMOTED]
-        last = history[-1].get("actor") if history else "auto"
-        if last == candidates_mod.ACTOR_CHARACTER:
-            steps.append(say["by_me"])
-        elif last != "auto":
-            steps.append(say["by_person"])
-        else:
-            steps.append(say["passed"].format(events=len(supporting), strong=strong))
-        return say["why"].format(steps=say["sep"].join(steps))
-
-    def _reload_views_if_stale(self) -> None:
-        """Hot-reload the promoted views, the only rows automatic learning can
-        put in a prompt; a rollback takes effect on the next turn. A read
-        error is raised, never met by keeping rows that may be rolled back."""
-        def load(path: Path, attr: str, pairs_only: bool) -> None:
-            rows = read_jsonl((path,))
-            if pairs_only:
-                rows = [r for r in rows if self._is_better_pair(r)]
-            setattr(self, attr + "_cache", self._tag_rows(rows))
-
-        for path, attr, pairs_only in (
-            (self.promoted_examples_file, "_view_examples", False),
-            (self.promoted_feedback_file, "_view_pairs", True),
-        ):
-            self._reload_if_stale(
-                (path,), attr + "_stamp", partial(load, path, attr, pairs_only))
-
-    @staticmethod
-    def _is_better_pair(r: dict) -> bool:
-        return bool(r.get("rating") == "better" and r.get("better") and r.get("reply"))
-
-    @staticmethod
-    def _tag_rows(rows: list) -> list:
-        """Precompute the per-row retrieval fields once at load, not per turn."""
-        for rec in rows:
-            rec["_rt"] = row_fields(rec)
-        return rows
-
-    @staticmethod
-    def _read_seed(path: Path) -> list:
-        rows = read_jsonl((path,))
-        for rec in rows:
-            rec["_seed"] = True  # ranked below what this deployment learned
-        return rows
 
     @staticmethod
     def _pool_stamp(paths, *, strict: bool = False) -> tuple:
@@ -335,16 +35,6 @@ class DataViews:
                     raise
                 out.append((0, 0, 0, 0))
         return tuple(out)
-
-    @classmethod
-    def _read_pool(cls, seed: Path, runtime: Path) -> list:
-        """Seed rows then runtime rows, tagged. A runtime read error raises,
-        so the caller keeps its cache and retries on the next turn."""
-        try:
-            blob = runtime.read_bytes()
-        except FileNotFoundError:
-            blob = b""
-        return cls._tag_rows(cls._read_seed(seed) + parse_jsonl(blob))
 
     def _reload_json_if_stale(self, path: Path, attr: str, parse,
                               name: str, unit: str) -> None:
@@ -373,29 +63,17 @@ class DataViews:
         self._reload_json_if_stale(self.output_filter_file, "_filters", parse_filters,
                                    "output_filter", "rules")
 
-    def _apply_output_filter(self, reply: str) -> tuple[str, str]:
-        """Pre-send regex net: (filtered_reply, blocked_reason); a reason drops
-        the whole reply."""
+    def _apply_output_filter(self, reply: str) -> str:
+        """The reply with the person's own rules applied: each rule's matches
+        replaced by its `replacement`. The app ships no rules."""
         self._reload_filters_if_stale()
-        if not self._filters_cache or not reply:
-            return reply, ""
         for f in self._filters_cache:
-            m = f["regex"].search(reply)
-            if not m:
-                continue
-            if f["action"] == "reject":
-                return "", f"{f['name']} ({f['reason']})"
-            if f["action"] == "replace":
-                reply = f["regex"].sub(f.get("replacement", ""), reply)
-        return reply.strip(), ""
-
-    def _reload_lorebook_if_stale(self) -> None:
-        self._reload_json_if_stale(self.lorebook_file, "_lorebook", parse_lorebook,
-                                   "lorebook", "entries")
-
+            reply = f["regex"].sub(f["replacement"], reply)
+        return reply
 
 def parse_filters(data) -> list:
-    """The output filter rules the agent applies; a rule whose pattern does
+    """The output filter rules the agent applies: a pattern and what replaces
+    its matches (nothing, unless the rule says). A rule whose pattern does
     not compile is left out. A file of the wrong shape raises."""
     raw = data.get("filters", []) if isinstance(data, dict) else data
     compiled = []
@@ -407,73 +85,9 @@ def parse_filters(data) -> list:
             compiled.append({
                 "name": f.get("name", "?"),
                 "regex": re.compile(pat, re.IGNORECASE | re.DOTALL),
-                "action": f.get("action", "reject"),
                 "replacement": f.get("replacement", ""),
-                "reason": f.get("reason", ""),
             })
         except re.error as e:
             logger.warning("[Agent] output_filter '%s' regex compile failed: %s",
                            f.get("name"), e)
     return compiled
-
-
-def parse_lorebook(data) -> list:
-    """The lorebook entries the agent uses, highest priority first; an entry
-    without keywords or content is left out. A file of the wrong shape raises."""
-    raw = data.get("entries", []) if isinstance(data, dict) else data
-    entries = []
-    for e in raw:
-        kws = e.get("keywords", [])
-        if not kws or not e.get("content"):
-            continue
-        entries.append({
-            "name": e.get("name", "?"),
-            "keywords": [str(k).lower() for k in kws],
-            "content": e["content"],
-            "priority": int(e.get("priority", 100)),
-        })
-    entries.sort(key=lambda x: -x["priority"])
-    return entries
-
-
-# (stem, extension) of the data files a home may replace, as the page names them.
-DATA_FILES = {"lorebook": ("lorebook", "json"), "filters": ("output_filter", "json"),
-              "examples": ("examples", "jsonl")}
-
-
-def data_file_status(root: Path, lang: str, kind: str) -> dict:
-    """Where one kind of data file comes from and how much of it the agent can
-    use: {path, own, count, skipped, error}; `error` is {} or {reason, line, column}."""
-    stem, ext = DATA_FILES[kind]
-    path = resolve_seed_lang_file(stem, ext, lang, root)
-    own_dir = (Path(root) / "data").resolve()
-    own = path.parent.resolve() == own_dir and own_dir != resource("data").resolve()
-    found = {"path": str(path), "own": own, "count": 0, "skipped": 0, "error": {}}
-    try:
-        blob = path.read_bytes()
-    except OSError:
-        found["error"] = {"reason": "unreadable"}
-        return found
-    if kind == "examples":
-        lines = [line for line in blob.decode("utf-8", "replace").splitlines() if line.strip()]
-        found["count"] = len(parse_jsonl(blob))
-        found["skipped"] = len(lines) - found["count"]
-        return found
-    try:
-        data = json.loads(blob.decode("utf-8-sig"))
-    except UnicodeDecodeError:
-        found["error"] = {"reason": "encoding"}
-        return found
-    except json.JSONDecodeError as exc:
-        found["error"] = {"reason": "syntax", "line": exc.lineno, "column": exc.colno}
-        return found
-    try:
-        used = (parse_lorebook if kind == "lorebook" else parse_filters)(data)
-        raw = data.get("entries" if kind == "lorebook" else "filters", []) \
-            if isinstance(data, dict) else data
-    except Exception:
-        found["error"] = {"reason": "shape"}
-        return found
-    found["count"] = len(used)
-    found["skipped"] = max(0, len(raw) - len(used))
-    return found

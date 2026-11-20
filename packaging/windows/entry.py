@@ -1,6 +1,6 @@
 """The program of the installer's build: `personagent` as the command line has
-it, and the `python -m module ...` and `python -c code ...` lines the app starts
-its own parts with, since here the program is also the Python."""
+it, and the `python -m module ...` line the app starts a part of its own with
+(the screen snip, panels/compose.py), since here the program is also the Python."""
 import runpy
 import sys
 
@@ -10,10 +10,6 @@ def main() -> int:
     if args[:1] == ["-m"] and len(args) > 1:
         sys.argv = args[1:]
         runpy.run_module(args[1], run_name="__main__", alter_sys=True)
-        return 0
-    if args[:1] == ["-c"] and len(args) > 1:
-        sys.argv = ["-c", *args[2:]]
-        exec(compile(args[1], "<string>", "exec"), {"__name__": "__main__"})
         return 0
     from persona_agent import cli
 

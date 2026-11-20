@@ -39,10 +39,9 @@ personagent
 |---|---|
 | 不安裝，直接執行 | `uvx personagent`（`uvx` 隨 [uv](https://docs.astral.sh/uv/) 提供，uv 會自動下載適用的 Python） |
 | 安裝為常駐的 `personagent` 指令 | `uv tool install personagent` 或 `pipx install personagent` |
-| Windows，使用原始碼 ZIP | 解壓縮後按兩下 `start.bat` |
 | 從原始碼 | `git clone https://github.com/wangkant/personagent.git`、`cd personagent`，然後 `python -m venv .venv`，再執行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`（Windows 上為 `.venv\Scripts\python.exe`） |
 
-支援 Python 3.10–3.14。`pip` 下載速度較慢時，可以加上 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。`start.bat` 會建立 `.venv`、安裝相依套件並開啟同一個頁面，首次執行時還會在桌面和「開始」功能表中新增 personagent 圖示；`pyproject.toml` 中的相依套件清單有變更時，它會重新安裝。
+支援 Python 3.10–3.14。`pip` 下載速度較慢時，可以加上 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。
 
 **personagent 資料夾**存放設定（`.env`）、人設（`persona.txt`）、學到的內容（`runtime/`）和聊天平台（`platforms/`）。`platforms/` 中包含託管的 AstrBot 和 `direct.json`，後者儲存 personagent 直接連線之平台的憑證。personagent 依下列順序選用第一個符合條件的資料夾：
 
@@ -181,11 +180,9 @@ PyPI 上有新版本時，「開始聊天」頁面會顯示提示，並提供適
 | `personagent tools` | [MCP 伺服器提供的工具](#工具)：`list`、`add`、`remove`、`check`、`call`、`set` |
 | `personagent mcp` | 由程式設計助理啟動的 MCP 服務，無須自行執行 |
 | `personagent doctor` | 檢查設定及其所依賴的每個服務 |
-| `personagent learned` | 檢視角色學到的內容和仍在觀察的內容，並可在需要時介入 |
 | `personagent memory` | 列出角色記住的內容，刪除某一項或將其還原 |
 | `personagent access` | 列出[等候核准的新對話](#回覆對象新對話須經核准)，並依代碼核准或拒絕（`approve`、`admin`、`decline`、`undo`、`policy <平台> approve\|open`） |
 | `personagent eval` | 評測發言時機、人設、學習效果和記憶 |
-| `personagent character` | [匯入角色卡](#角色卡與草稿)（`import 檔案`）、將角色儲存為角色卡（`export 檔案.png` 或 `.json`），或根據描述起草人設並輸出（`draft "……"`） |
 
 每個指令都支援 `--help`。
 
@@ -421,8 +418,6 @@ QQ 連接完成後，可在手機 QQ 的「聯絡人 → 機器人」中找到�
 |---|---|
 | 你已在執行的 [AstrBot](https://docs.astrbot.app) | 它已接入的平台 |
 | 經由 AstrBot 接入 [NapCat](https://github.com/NapNeko/NapCatQQ)（OneBot v11） | 以個人 QQ 帳號接入 QQ |
-| [Koishi](https://koishi.chat) 或其他 Satori 伺服器，經由 [Satori 聯結器](../integrations/satori/README.zh-TW.md) | 該伺服器已登入的平台 |
-| [Matrix](../integrations/matrix/README.zh-TW.md)，經由 mautrix 橋接 | Matrix 聊天室，以及 WhatsApp、Signal、Messenger、Instagram 和 Google Messages |
 
 其他平台可以依[聯結器協定](connectors.zh-TW.md)接入，每則訊息對應一個經簽章的 HTTP 請求。一個 personagent 可以同時連接多個聯結器。長期執行的注意事項請參閱[部署指南](deploy.zh-TW.md#部署參考)。
 
@@ -865,12 +860,6 @@ personagent eval --suite all --lang zh --repeat 5
 
 **更換裁判重新判定。** `--rejudge 報告路徑` 會以你目前設定的 `BENCH_JUDGE_MODEL` 重新判定既有報告中的回覆，不再呼叫受測模型，結果寫在原報告旁。回覆、對照回覆和採用規則當時的決定均維持原樣。
 
-**解讀結果。** 最近一次的結果、測試方法和全部報告，均位於 [evals/2026-10-18](evals/2026-10-18/README.zh-TW.md)。閱讀報告時請注意：
-
-- `speak` 的錯誤大多是名稱指涉其他事物（影城、寵物），或有人在向他人轉述它說過的話。模型往往將出現名稱視為點名，且很少推翻此判斷。
-- `persona` 中的平手，表示裁判兩次都選擇了同一位置的回覆。公開的判定來自 Claude Opus 5.5，它是在 `personagent eval` 之外分批判定的，做法記載於每份報告的 `rejudged` 欄位中；每一組的 `earlier` 欄位保留了第一位裁判 Claude Haiku 5.5 的判定。
-- `learning` 的規則列與探測列回答的是兩個不同的問題：前者檢查規則是否讓正確的糾正生效，後者檢查生效的糾正是否改變了此後的回覆。探測中的 `not_promoted` 列為雜訊基準，因為其提示詞沒有任何變化。
-
 `learning` 本身從不讓任何變更生效，預期結果也取決於你的採用設定：設定比預設更嚴格時，每個場景都應被擱置。除 `memory` 外，每次執行都會實際呼叫你的模型；所有測試集都使用一份用畢即刪的狀態副本（加上 `--keep` 可以保留副本並輸出其位置）。
 
 ## 工作原理
@@ -981,8 +970,8 @@ personagent 資料夾中的主要檔案和資料夾及其儲存的內容如下�
 
 personagent 1.5.0 已發布至 PyPI。CI 在 Linux 上以 Python 3.10–3.14、在 Windows 上以 Python 3.12 執行測試，另有數項作業會安裝套件，實際執行指令和本機頁面，並在 Linux、macOS 和 Windows 上開啟應用程式視窗。
 
-OneBot 直連入口（`/v1/onebot`）已棄用，於 1.x 期間保留。`tools/` 中的腳本供從原始碼執行時使用，說明請參閱[工具腳本](tools.zh-TW.md)。
+OneBot 直連入口（`/v1/onebot`）已棄用，於 1.x 期間保留。
 
 - [入門指南](start.zh-TW.md) · [部署教學與參考](deploy.zh-TW.md)
-- 聯結器：[AstrBot 外掛程式](../integrations/astrbot/astrbot_plugin_personagent/README.zh-TW.md) · [Satori](../integrations/satori/README.zh-TW.md) · [Matrix](../integrations/matrix/README.zh-TW.md) · [協定](connectors.zh-TW.md)
+- 聯結器：[AstrBot 外掛程式](../integrations/astrbot/astrbot_plugin_personagent/README.zh-TW.md) · [協定](connectors.zh-TW.md)
 - [全部設定](../.env.example) · [更新紀錄](../CHANGELOG.md) · [貢獻指南](../.github/CONTRIBUTING.md) · [安全性政策](../.github/SECURITY.md)（英文）

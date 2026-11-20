@@ -1,13 +1,5 @@
-"""Tests for few-shot retrieval and its hot-reloaded datasets.
-
-examples.jsonl / feedback.jsonl are read on the reply hot path; the pools
-reparse whenever a file's stamp changes, and
-the reload cases below check that what a running agent holds equals what a
-cold process would load.
-
-Retrieval has a third source: the materialized view of promoted candidates,
-which is where automatic learning lands (tests/test_ledger.py owns the
-promotion rules; the case here checks it reaches the prompt).
+"""The output filter's hot reload: a running agent applies what a cold
+process would load from the same file.
 
 Run from the repo root:
 
@@ -18,98 +10,15 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import time
 from pathlib import Path
 
-from persona_agent import evidence as evidence_mod
-from persona_agent import evolution
-from persona_agent import lineage as lineage_mod
 from persona_agent.agent import Agent
 
 from helpers import check, isolated_agent
 
 
 def make_agent(tmp: Path) -> Agent:
-    """Retrieval reads a read-only data/ seed plus a learned runtime/ file; both
-    are redirected, and the seeds are left absent unless a test writes one, so
-    row counts reflect only what the test put there."""
-    return isolated_agent(tmp, seeds=True, qq_bot_id="1", persona_name="B")
-
-
-def ex(reply: str, *, scenario: str = "s", mode: str = "called",
-       context: list[str] | None = None, ts: str = "") -> dict:
-    rec = {"scenario": scenario, "mode": mode,
-           "context": context if context is not None else ["[u|qq=2] hi"],
-           "reply": reply}
-    if ts:
-        rec["ts"] = ts
-    return rec
-
-
-def write_jsonl(path: Path, records: list[dict], trailing_newline: bool = True) -> None:
-    body = "\n".join(json.dumps(r, ensure_ascii=False) for r in records)
-    path.write_text(body + ("\n" if trailing_newline and body else ""),
-                    encoding="utf-8")
-
-
-def append_jsonl(path: Path, records: list[dict]) -> None:
-    with path.open("a", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    # Coarse mtime resolution on some filesystems would otherwise hide the
-    # append from the staleness check; the size change catches it either way,
-    # but bump mtime so the test exercises the same signal production does.
-    os.utime(path, None)
-
-
-def replies(agent: Agent) -> list[str]:
-    return [r.get("reply") for r in agent._examples_cache]
-
-
-def cold_replies(tmp: Path) -> list[str]:
-    """What a freshly started process would load from the same file."""
-    fresh = make_agent(tmp)
-    fresh._reload_examples_if_stale()
-    return replies(fresh)
-
-
-# ---------------------------------------------------------------------------
-# Reload: a running agent sees what a cold load would
-# ---------------------------------------------------------------------------
-
-def test_same_mtime_append_is_still_seen() -> None:
-    """Filesystem mtime resolution is coarse enough that an append can land in
-    the same tick as the previous read. Staleness must key on size too, or a
-    freshly banked reply sits unseen until some later write moves the clock."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex("r0")])
-        a._reload_examples_if_stale()
-        frozen = a.examples_file.stat().st_mtime
-
-        with a.examples_file.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(ex("r1")) + "\n")
-        os.utime(a.examples_file, (frozen, frozen))   # pin mtime to the old value
-        a._reload_examples_if_stale()
-        check("reload: append with an unchanged mtime is still picked up",
-              replies(a) == ["r0", "r1"])
-
-
-def test_atomic_replacement_with_preserved_metadata_is_seen() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex("old")])
-        a._reload_examples_if_stale()
-        old_stat = a.examples_file.stat()
-        replacement = tmp / "replacement.jsonl"
-        write_jsonl(replacement, [ex("new")])
-        os.utime(replacement, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns))
-        os.replace(replacement, a.examples_file)
-        a._reload_examples_if_stale()
-        check("reload: atomic replacement with same size and time is visible",
-              replies(a) == ["new"], repr(replies(a)))
+    return isolated_agent(tmp, persona_name="B")
 
 
 def test_json_config_reload_tracks_restores_and_failed_edits() -> None:
@@ -117,23 +26,16 @@ def test_json_config_reload_tracks_restores_and_failed_edits() -> None:
         tmp = Path(d)
         a = make_agent(tmp)
         a.output_filter_file = tmp / "filters.json"
-        a.lorebook_file = tmp / "lorebook.json"
 
         def write_configs(word, stamp):
             a.output_filter_file.write_text(json.dumps([
-                {"name": "block", "pattern": word, "action": "reject"},
+                {"name": "block", "pattern": word},
             ]), encoding="utf-8")
-            a.lorebook_file.write_text(json.dumps([
-                {"name": "fact", "keywords": ["tea"], "content": word},
-            ]), encoding="utf-8")
-            for path in (a.output_filter_file, a.lorebook_file):
-                os.utime(path, ns=(stamp, stamp))
+            os.utime(a.output_filter_file, ns=(stamp, stamp))
 
         def verify(word, label):
             check(f"config reload: filter {label}",
-                  a._apply_output_filter(word)[0] == "")
-            check(f"config reload: lorebook {label}",
-                  word in a._lorebook_for_prompt([], focus_text="tea"))
+                  a._apply_output_filter(word) == "")
 
         stamp = 1_700_000_000_000_000_000
         write_configs("first", stamp)
@@ -143,17 +45,13 @@ def test_json_config_reload_tracks_restores_and_failed_edits() -> None:
         write_configs("changed-size", stamp - 10_000_000_000)
         verify("changed-size", "accepts size change with same mtime")
 
-        for path in (a.output_filter_file, a.lorebook_file):
-            path.write_text("{broken", encoding="utf-8")
+        a.output_filter_file.write_text("{broken", encoding="utf-8")
         verify("changed-size", "retains last valid config after malformed edit")
         write_configs("repaired", stamp + 10_000_000_000)
         verify("repaired", "recovers after malformed edit")
-        for path in (a.output_filter_file, a.lorebook_file):
-            path.unlink()
+        a.output_filter_file.unlink()
         check("config reload: deleted filter clears cache",
-              a._apply_output_filter("repaired") == ("repaired", ""))
-        check("config reload: deleted lorebook clears cache",
-              a._lorebook_for_prompt([], focus_text="tea") == "")
+              a._apply_output_filter("repaired") == "repaired")
         write_configs("recreated", stamp)
         verify("recreated", "loads recreated file")
 
@@ -165,477 +63,19 @@ def test_json_config_stat_failure_preserves_valid_cache() -> None:
         tmp = Path(d)
         a = make_agent(tmp)
         a.output_filter_file = tmp / "filters.json"
-        a.lorebook_file = tmp / "lorebook.json"
         a.output_filter_file.write_text(json.dumps([
-            {"name": "block", "pattern": "blocked", "action": "reject"},
+            {"name": "block", "pattern": "blocked"},
         ]), encoding="utf-8")
-        a.lorebook_file.write_text(json.dumps([
-            {"name": "tea", "keywords": ["tea"], "content": "Alice likes tea"},
-        ]), encoding="utf-8")
-        check("config I/O: initial filter rejects", a._apply_output_filter("blocked")[0] == "")
-        check("config I/O: initial lorebook loads",
-              "Alice likes tea" in a._lorebook_for_prompt([], focus_text="tea"))
+        check("config I/O: initial filter trims", a._apply_output_filter("blocked") == "")
         original_stat = Path.stat
 
         def unavailable(path, *args, **kwargs):
-            if path in (a.output_filter_file, a.lorebook_file):
+            if path == a.output_filter_file:
                 raise PermissionError("temporarily unavailable")
             return original_stat(path, *args, **kwargs)
 
         with patch.object(Path, "stat", unavailable):
             check("config I/O: stat failure does not disable a loaded filter",
-                  a._apply_output_filter("blocked")[0] == "")
-            check("config I/O: stat failure preserves loaded lorebook",
-                  "Alice likes tea" in a._lorebook_for_prompt([], focus_text="tea"))
+                  a._apply_output_filter("blocked") == "")
         check("config I/O: filter recovers when readable",
-              a._apply_output_filter("blocked")[0] == "")
-
-
-def test_shrink_and_rewrite_fall_back_to_full_reload() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex(f"r{i}") for i in range(30)])
-        a._reload_examples_if_stale()
-
-        # Shrink: what a trim does when the pool is over budget.
-        time.sleep(0.01)
-        write_jsonl(a.examples_file, [ex(f"r{i}") for i in range(8)])
-        a._reload_examples_if_stale()
-        check("reload: shrink triggers a full reload",
-              replies(a) == [f"r{i}" for i in range(8)] == cold_replies(tmp))
-
-        # In-place rewrite that leaves the file longer with a different prefix.
-        time.sleep(0.01)
-        write_jsonl(a.examples_file, [ex(f"z{i}") for i in range(20)])
-        a._reload_examples_if_stale()
-        check("reload: grown-but-rewritten file reloaded",
-              replies(a) == [f"z{i}" for i in range(20)] == cold_replies(tmp))
-
-        # Same-size in-place rewrite (reordering), newer mtime.
-        time.sleep(0.01)
-        write_jsonl(a.examples_file, [ex(f"z{i}") for i in reversed(range(20))])
-        a._reload_examples_if_stale()
-        check("reload: same-size rewrite reloaded",
-              replies(a) == [f"z{i}" for i in reversed(range(20))])
-
-
-def test_force_reload_and_malformed_lines() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex(f"r{i}") for i in range(6)])
-        a._reload_examples_if_stale()
-
-        # `_examples_mtime = 0.0` is the force-reload switch tools/ and tests use.
-        a._examples_cache = []
-        a._examples_mtime = 0.0
-        a._reload_examples_if_stale()
-        check("reload: mtime=0.0 forces a full reparse", len(a._examples_cache) == 6)
-
-        # A corrupted line must not freeze the pool at its pre-corruption state.
-        with a.examples_file.open("a", encoding="utf-8") as f:
-            f.write("{ not json at all\n")
-            f.write(json.dumps(ex("after_garbage")) + "\n")
-        os.utime(a.examples_file, None)
-        a._reload_examples_if_stale()
-        check("reload: malformed line skipped, following line kept",
-              replies(a) == [f"r{i}" for i in range(6)] + ["after_garbage"])
-
-        # A deleted runtime file resets the cache rather than serving stale entries.
-        a.examples_file.unlink()
-        a._reload_examples_if_stale()
-        check("reload: missing file clears the cache", a._examples_cache == [])
-
-        # The seed alone must still load once the runtime file is gone.
-        write_jsonl(a.examples_seed_file, [ex("seed_only")])
-        a._reload_examples_if_stale()
-        check("reload: seed loads with no runtime file", replies(a) == ["seed_only"])
-
-
-def test_hand_edited_lines_padded_with_unicode_spaces_still_load() -> None:
-    from persona_agent.paths import parse_jsonl
-
-    blob = ' {"a": 1}\n{"b": 2}　\n\x1f{"c": 3}\n'.encode("utf-8")
-    check("padded rows load", parse_jsonl(blob) == [{"a": 1}, {"b": 2}, {"c": 3}])
-
-
-def test_file_without_trailing_newline_is_fully_parsed() -> None:
-    """Hand-edited datasets may lack the final newline; that last entry must
-    still load."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex(f"r{i}") for i in range(4)],
-                    trailing_newline=False)
-        a._reload_examples_if_stale()
-        check("reload: newline-less final line still parsed",
-              replies(a) == [f"r{i}" for i in range(4)])
-
-        # An append must not glue itself onto that unterminated last line —
-        # which would destroy a hand-curated entry AND the new one.
-        evolution.append_jsonl(a.examples_file, [ex("r4")])
-        os.utime(a.examples_file, None)
-        a._reload_examples_if_stale()
-        check("reload: appending onto a newline-less file preserves both records",
-              replies(a) == [f"r{i}" for i in range(5)] == cold_replies(tmp))
-
-
-def test_auto_example_dedup_set_tracks_appends() -> None:
-    """_auto_examples_seen gates runtime example banking; a reload has to
-    extend it, not leave it stale."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex("first one")])
-        a._reload_examples_if_stale()
-        check("dedup set: built from disk", a._auto_examples_seen == {"first one"})
-
-        append_jsonl(a.examples_file, [ex("second one")])
-        a._reload_examples_if_stale()
-        check("dedup set: extended on append",
-              a._auto_examples_seen == {"first one", "second one"})
-
-        # A rewrite that removes an entry must drop it from the set too.
-        time.sleep(0.01)
-        write_jsonl(a.examples_file, [ex("second one")])
-        a._reload_examples_if_stale()
-        check("dedup set: rebuilt on full reload", a._auto_examples_seen == {"second one"})
-
-
-def test_feedback_append_onto_unterminated_file() -> None:
-    """Same hazard on the feedback side: evolution.append_jsonl must not merge
-    its record into an unterminated last line."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        curated = dict(ex("curated bad"), rating="better", better="curated good")
-        write_jsonl(a.feedback_file, [curated], trailing_newline=False)
-        evolution.append_jsonl(
-            a.feedback_file,
-            [dict(ex("new bad"), rating="better", better="new good")])
-        a._reload_pairs_if_stale()
-        check("pairs: append onto a newline-less file preserves both",
-              [p["reply"] for p in a._pairs_cache] == ["curated bad", "new bad"])
-
-
-def test_feedback_pairs_reload() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        pair = dict(ex("bad reply"), rating="better", better="good reply")
-        write_jsonl(a.feedback_file, [pair, dict(ex("x"), rating="worse")])
-        a._reload_pairs_if_stale()
-        check("pairs: only rating=better rows kept",
-              [p["reply"] for p in a._pairs_cache] == ["bad reply"])
-
-        append_jsonl(a.feedback_file,
-                     [dict(ex("bad two"), rating="better", better="good two"),
-                      dict(ex("skipped"), rating="worse")])
-        a._reload_pairs_if_stale()
-        check("pairs: append filtered",
-              [p["reply"] for p in a._pairs_cache] == ["bad reply", "bad two"])
-
-
-def test_seed_pool_always_leads_the_retrieved_pool() -> None:
-    """The read-only data/ seed is never rewritten and always comes first."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_seed_file, [ex(f"seed{i}") for i in range(3)])
-        seed_bytes = a.examples_seed_file.read_bytes()
-        write_jsonl(a.examples_file, [dict(ex(f"a{i}"), score=5) for i in range(40)])
-        a._reload_examples_if_stale()
-        got = replies(a)
-        check("seed: untouched on disk",
-              a.examples_seed_file.read_bytes() == seed_bytes)
-        check("seed: leads the retrieved pool",
-              got[:3] == ["seed0", "seed1", "seed2"] and len(got) == 43)
-
-
-def test_promoted_views_are_a_third_retrieval_source() -> None:
-    """Promoted candidates reach the prompt from their own view files, and are
-    ranked by the same scorer as seed and learned rows. Keeping them separate is
-    what lets a rollback rewrite the view atomically without touching a single
-    hand-approved row."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        scope = {
-            "lang": a.agent_lang, "platform": "qq", "conv_id": "g1",
-            "persona": a.persona_name, "persona_hash": a.persona_hash,
-            "persona_version": a.persona_version,
-        }
-        write_jsonl(a.examples_file, [ex("learned reply")])
-        write_jsonl(a.feedback_file,
-                    [dict(ex("learned bad"), rating="better",
-                          better="learned good")])
-        write_jsonl(a.promoted_examples_file,
-                    [dict(ex("promoted reply"), src="promoted_candidate",
-                          candidate_id="c1", scope=scope)])
-        write_jsonl(a.promoted_feedback_file,
-                    [dict(ex("promoted bad"), rating="better",
-                          better="promoted good", src="promoted_candidate",
-                          candidate_id="c2", scope=scope)])
-        block = a._examples_for_prompt("hi", "called", conv_id="g1")
-        for label in ("learned reply", "learned good", "promoted reply",
-                      "promoted good"):
-            check(f"view: {label} reaches the prompt", label in block)
-        check("view: learned pool cache is unaffected by the views",
-              replies(a) == ["learned reply"], str(replies(a)))
-
-        # A rewritten view is picked up; a rewritten view of nothing empties it.
-        time.sleep(0.01)
-        write_jsonl(a.promoted_feedback_file, [])
-        block = a._examples_for_prompt("hi", "called", conv_id="g1")
-        check("view: an emptied view drops out of retrieval",
-              "promoted good" not in block)
-        check("view: the learned pool survives the view rewrite",
-              "learned good" in block)
-
-        # Rows that are not usable pairs must not be read as pairs.
-        time.sleep(0.01)
-        write_jsonl(a.promoted_feedback_file,
-                    [dict(ex("half a pair"), rating="better", better="")])
-        a._reload_views_if_stale()
-        check("view: unusable pair rows are skipped", a._view_pairs_cache == [])
-
-
-def test_persona_edit_keeps_promoted_rows_in_scope() -> None:
-    """A one-byte persona edit used to orphan the whole learned corpus. Every
-    hash seen under one PERSONA_VERSION is one character; a new version is a
-    new one."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        a.persona_lineage  # record the first revision
-        scope = {
-            "lang": a.agent_lang, "platform": "qq", "conv_id": "g1",
-            "persona": a.persona_name, "persona_hash": a.persona_hash,
-            "persona_version": a.persona_version,
-        }
-        write_jsonl(a.promoted_examples_file,
-                    [dict(ex("promoted reply"), src="promoted_candidate",
-                          candidate_id="c1", scope=scope)])
-        b = make_agent(tmp)
-        b.persona_hash = "edited000000"
-        block = b._examples_for_prompt("hi", "called", conv_id="g1")
-        check("lineage: a persona edit keeps promoted rows in scope",
-              "promoted reply" in block, block)
-        check("lineage: both revisions are recorded",
-              set(b.persona_lineage.hashes(b.persona_version))
-              == {a.persona_hash, "edited000000"},
-              str(b.persona_lineage.versions()))
-        check("lineage: the file lives beside the ledgers",
-              (tmp / "persona_lineage.json").is_file())
-        c = make_agent(tmp)
-        c.persona_hash = "third0000000"
-        c.persona_version = "v2"
-        block = c._examples_for_prompt("hi", "called", conv_id="g1")
-        check("lineage: a new PERSONA_VERSION starts a clean slate",
-              "promoted reply" not in block, block)
-
-
-def _refuse_to_write(*_args, **_kwargs) -> None:
-    raise OSError("simulated: disk full")
-
-
-def test_a_failed_lineage_save_can_still_be_retried() -> None:
-    """A write that did not land must not look like one that did.
-
-    The hash goes into memory before the save; leaving it there on failure made
-    the `already recorded` early return swallow every retry, so the revision was
-    gone at restart — the orphaned-learning bug this module exists to prevent."""
-    with tempfile.TemporaryDirectory() as d:
-        path = Path(d) / "persona_lineage.json"
-        lin = lineage_mod.PersonaLineage(path)
-        real = lineage_mod.atomic_write_text
-        lineage_mod.atomic_write_text = _refuse_to_write
-        try:
-            root, extended = lin.extend("v1", "hash_a")
-        finally:
-            lineage_mod.atomic_write_text = real
-        check("lineage: a failed save still returns a usable root",
-              root == "hash_a", root)
-        check("lineage: a failed save is not reported as an extension",
-              extended is False, str(extended))
-        check("lineage: a failed save leaves no file", not path.exists())
-        check("lineage: a failed save is rolled back in memory",
-              lin.hashes("v1") == [], str(lin.hashes("v1")))
-
-        root2, _ = lin.extend("v1", "hash_a")
-        check("lineage: the retry actually persists", path.is_file())
-        check("lineage: the retry agrees on the root", root2 == "hash_a", root2)
-        check("lineage: the hash is recorded exactly once",
-              lin.hashes("v1") == ["hash_a"], str(lin.hashes("v1")))
-        check("lineage: a cold reload sees the retried write",
-              lineage_mod.PersonaLineage(path).hashes("v1") == ["hash_a"])
-
-
-def test_a_failed_lineage_save_keeps_the_running_persona_in_scope() -> None:
-    """extend() rolls the hash back when the save fails; the running agent must
-    still register itself, or its earlier revisions fall out of scope."""
-    with tempfile.TemporaryDirectory() as d:
-        agent = make_agent(Path(d))
-        agent.persona_hash = "revision-never-saved"
-        scope_key = (agent.persona_version or "", agent.persona_hash)
-        evidence_mod._PERSONA_LINEAGE.pop(scope_key, None)
-        real = lineage_mod.atomic_write_text
-        lineage_mod.atomic_write_text = _refuse_to_write
-        try:
-            _ = agent.persona_lineage
-        finally:
-            lineage_mod.atomic_write_text = real
-        check("lineage: the running hash is in scope after a failed save",
-              scope_key in evidence_mod._PERSONA_LINEAGE)
-        evidence_mod._PERSONA_LINEAGE.pop(scope_key, None)
-
-
-def test_an_unreadable_lineage_file_is_never_overwritten() -> None:
-    """docs/deploy.md sends operators to this file, so a hand-edit that breaks
-    the JSON is a real state. Replacing it with our empty view would turn
-    "unreadable" into "gone", and the history cannot be rebuilt."""
-    with tempfile.TemporaryDirectory() as d:
-        path = Path(d) / "persona_lineage.json"
-        path.write_text('{"lineages": {"v1": ["aaa", "bbb"]',
-                        encoding="utf-8")           # truncated on purpose
-        before = path.read_text(encoding="utf-8")
-        lin = lineage_mod.PersonaLineage(path)
-
-        root, extended = lin.extend("v1", "ccc")
-        check("lineage: extend does not overwrite an unreadable file",
-              path.read_text(encoding="utf-8") == before)
-        check("lineage: extend still answers with a usable root",
-              root == "ccc", root)
-        check("lineage: the refused hash is not left in memory",
-              lin.hashes("v1") == [], str(lin.hashes("v1")))
-
-        raised = False
-        try:
-            lin.adopt("v1", "ccc")
-        except OSError:
-            raised = True
-        check("lineage: adopt refuses an unreadable file LOUDLY", raised)
-        check("lineage: adopt did not touch the file either",
-              path.read_text(encoding="utf-8") == before)
-        check("lineage: adopt rolled its hash back too",
-              lin.hashes("v1") == [], str(lin.hashes("v1")))
-
-
-def test_promoted_views_enforce_full_scope() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        base_scope = {
-            "lang": a.agent_lang,
-            "platform": "qq",
-            "persona": a.persona_name,
-            "persona_hash": a.persona_hash,
-            "persona_version": a.persona_version,
-        }
-        write_jsonl(a.promoted_examples_file, [
-            dict(ex("ROOM_A_ONLY"), src="promoted_candidate",
-                 candidate_id="c-a",
-                 scope=dict(base_scope, conv_id="room-a")),
-            dict(ex("ROOM_B_ONLY"), src="promoted_candidate",
-                 candidate_id="c-b",
-                 scope=dict(base_scope, conv_id="room-b")),
-        ])
-        room_a = a._examples_for_prompt(
-            "room", "called", conv_id="room-a")
-        no_scope = a._examples_for_prompt("room", "called")
-        check("view scope: matching room is retrieved",
-              "ROOM_A_ONLY" in room_a, room_a)
-        check("view scope: other room is excluded",
-              "ROOM_B_ONLY" not in room_a, room_a)
-        check("view scope: scoped authority is excluded without context",
-              "ROOM_A_ONLY" not in no_scope and "ROOM_B_ONLY" not in no_scope,
-              no_scope)
-
-
-# ---------------------------------------------------------------------------
-# Ranking: what the retrieved block is expected to prefer
-# ---------------------------------------------------------------------------
-
-def test_relevance_outranks_recency() -> None:
-    """A stale entry that matches the focus text beats a fresh irrelevant one —
-    the recency bonus is a tiebreaker, not a ranking signal of its own."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [
-            ex("OLD_MATCH", scenario="deploy broke prod", ts="2020-01-01T00:00:00"),
-            ex("NEW_MISS", scenario="unrelated chatter", ts="2099-01-01T00:00:00"),
-        ])
-        block = a._examples_for_prompt(focus_text="the deploy broke again", mode="",
-                                       limit_good=1)
-        check("rank: content match beats recency",
-              "OLD_MATCH" in block and "NEW_MISS" not in block)
-
-
-def test_future_timestamp_cannot_outrank_a_match() -> None:
-    """The recency bonus is capped at +0.3; a future-dated entry must not be
-    able to exceed that and jump the queue."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [
-            ex("MATCH", scenario="gacha pulls", ts="2020-01-01T00:00:00"),
-            ex("FUTURE", scenario="nothing alike", ts="2999-01-01T00:00:00"),
-        ])
-        block = a._examples_for_prompt(focus_text="gacha", mode="", limit_good=1)
-        check("rank: future timestamp stays under the +0.3 cap",
-              "MATCH" in block and "FUTURE" not in block)
-
-
-def test_no_signal_falls_back_to_the_newest_entries() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.examples_file, [ex(f"r{i}") for i in range(10)])
-        block = a._examples_for_prompt(focus_text="", mode="", limit_good=2)
-        check("rank: no focus/mode signal takes the tail of the pool",
-              "r9" in block and "r8" in block and "r7" not in block)
-
-
-def test_pair_rewrite_not_repeated_as_a_positive_example() -> None:
-    """The [OK] side of a contrastive pair shouldn't also show up in the
-    positive-examples section — that wastes prompt budget on a duplicate."""
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        write_jsonl(a.feedback_file, [dict(
-            ex("bad line", scenario="gacha pulls"), rating="better",
-            better="the good line")])
-        write_jsonl(a.examples_file, [ex("the good line", scenario="gacha pulls")])
-        block = a._examples_for_prompt(focus_text="gacha pulls", mode="called")
-        check("rank: pair rewrite excluded from positives",
-              block.count("the good line") == 1)
-
-
-def test_empty_pool_returns_nothing() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        a = make_agent(Path(d))
-        check("rank: empty pool yields no examples block",
-              a._examples_for_prompt(focus_text="anything", mode="called") == "")
-
-
-def test_a_lorebook_entry_names_the_admin_instead_of_its_placeholder() -> None:
-    with tempfile.TemporaryDirectory() as d:
-        tmp = Path(d)
-        a = make_agent(tmp)
-        a.lorebook_file = tmp / "lorebook.json"
-        a.lorebook_file.write_text(json.dumps([
-            {"name": "owner", "keywords": ["your dad", "{admin_name}"],
-             "content": "Someone is teasing {admin_name}."},
-        ]), encoding="utf-8")
-        a.admin_name = "Morgan"
-        check("the placeholder is filled with the admin's name",
-              "teasing Morgan." in a._lorebook_for_prompt([], focus_text="your dad"))
-        check("and the admin's name is a keyword",
-              "teasing Morgan." in a._lorebook_for_prompt([], focus_text="morgan again"))
-        a.admin_name = ""
-        got = a._lorebook_for_prompt([], focus_text="your dad")
-        check("without a name the entry speaks of the admin", "teasing the admin." in got, got)
-        check("and the bare placeholder matches nothing",
-              a._lorebook_for_prompt([], focus_text="{admin_name}") == "")
+              a._apply_output_filter("blocked") == "")

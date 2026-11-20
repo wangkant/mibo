@@ -253,19 +253,27 @@ class ChatLog:
                             "name": "", "text": "", "gone": True}]
         atomic_write_text(path, _dump(kept))
 
-    def forget(self, conv: str, gone: Callable[[dict], bool]) -> int:
-        """Remove the lines `gone` matches; how many went."""
+    def forget(self, conv: str, gone: Callable[[dict], object]) -> int:
+        """Remove the lines `gone` is true for; a line it returns words for
+        keeps its place with those words. How many changed."""
         path = self.path(conv)
         if not path.is_file():
             return 0
         with append_lock(path, timeout=LOCK_WAIT_S):
             rows = self._read_path(path)
-            kept = [r for r in rows if r.get("gone") or not gone(r)]
-            if len(kept) == len(rows):
+            kept, changed = [], 0
+            for row in rows:
+                verdict = not row.get("gone") and gone(row)
+                changed += bool(verdict)
+                if not verdict:
+                    kept.append(row)
+                elif isinstance(verdict, str):
+                    kept.append({**row, "text": verdict})
+            if not changed:
                 return 0
             self._replace(path, rows, kept)
         self._marks.pop(conv, None)
-        return len(rows) - len(kept)
+        return changed
 
     def drop(self, conv: str) -> bool:
         """Forget this chat: its file goes."""

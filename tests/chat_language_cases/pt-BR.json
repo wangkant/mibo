@@ -24,7 +24,7 @@
     {"text": "Nova, note this down", "kind": null},
     {"text": "Nova, o que você aprendeu na escola hoje", "kind": null},
     {"text": "Nova, o que você lembra?", "kind": "recall"},
-    {"text": "Nova o que você aprendeu?", "kind": "learned"},
+    {"text": "Nova o que você aprendeu?", "kind": null},
     {"text": "Nova, apaga a luz", "kind": null}
   ],
   "first_person": [

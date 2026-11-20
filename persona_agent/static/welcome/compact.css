@@ -1,0 +1,80 @@
+/* The small chat beside the pet (compact.js): the main conversation alone, under a head of its own. The
+   sidebar and the window's bar go; the chat keeps its own look, a little tighter. */
+body.compact {
+  --side-col: 0px;
+  --pa-bar: 40px;
+}
+body.compact .side,
+body.compact .side-scrim,
+body.compact .titlebar {
+  display: none;
+}
+body.compact .frame {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+body.compact .stage {
+  border-left: 0;
+}
+body.compact .chat-col {
+  padding: 0 14px;
+}
+.compact-head {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--pa-bar);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 16px;
+  border-bottom: 1px solid var(--pa-line);
+  background: var(--pa-canvas);
+  user-select: none;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.compact-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-ink);
+  font: 600 var(--pa-fs-md) / 1 var(--pa-font);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.compact-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: none;
+  color: var(--pa-muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  transition:
+    background var(--pa-t-fast),
+    color var(--pa-t-fast);
+}
+.compact-button:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.compact-button:focus-visible {
+  outline: 2px solid var(--pa-focus);
+  outline-offset: -2px;
+}
+.compact-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

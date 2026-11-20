@@ -27,7 +27,7 @@
     {"text": "ノヴァ、ユミの誕生日のメモ消して", "kind": "forget", "deletes": "ユミの誕生日"},
     {"text": "ノヴァ、何覚えてる？", "kind": "recall"},
     {"text": "ノヴァちゃん、何を覚えてるの", "kind": "recall"},
-    {"text": "ノヴァ、何を学んだ？", "kind": "learned"}
+    {"text": "ノヴァ、何を学んだ？", "kind": null}
   ],
   "first_person": [
     {"text": "私はパクチーが嫌い", "mine": true},

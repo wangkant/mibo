@@ -14,11 +14,12 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from .access import ADMIN_MODE
-from .endpoints import adapt_rejected_payload, chat_completions_url, endpoint_for
+from . import abilities, schedule_tool, spend
+from .endpoints import (PROBLEMS, adapt_rejected_payload, chat_completions_url, endpoint_for,
+                        model_problem, without_pictures)
 from .usage import USAGE_FILE, UsageBook
 from .textproc import (
-    _as_protocol_object,
+    _as_protocol_object, _is_protocol_dict, salvage_json_object,
 )
 
 logger = logging.getLogger("agent")
@@ -40,14 +41,25 @@ def purpose(label: str):
 
 # Hosts known to take or refuse DeepSeek's `thinking` switch; any other is
 # asked by its first thinking-off call and the answer remembered.
-_THINKING_HOSTS = ("deepseek.com", "bigmodel.cn", "z.ai", "moonshot.cn",
-                   "moonshot.ai", "volces.com")
+# Kimi K3 refuses it where K2 took it, and Claude 5 models differ, so
+# Moonshot and Anthropic are asked.
+_THINKING_HOSTS = ("deepseek.com", "bigmodel.cn", "z.ai", "volces.com",
+                   "bytepluses.com")
+# Hosts whose switch is Qwen's `enable_thinking` (DashScope, SiliconFlow,
+# Qianfan, Tencent TokenHub): they are sent that instead.
+_ENABLE_THINKING_HOSTS = ("aliyuncs.com", "siliconflow.cn", "siliconflow.com",
+                          "baidubce.com", "tencentmaas.com", "tencentcloudmaas.com")
 _NO_THINKING_HOSTS = ("openai.com", "groq.com", "googleapis.com",
-                      "openrouter.ai", "mistral.ai", "anthropic.com")
+                      "openrouter.ai", "mistral.ai", "x.ai") + _ENABLE_THINKING_HOSTS
+# Hosts where reasoning is lowered with `reasoning_effort`, and the lowest
+# value each documents for all its models (OpenAI's older lines refuse "none"
+# and are moved to "low"). Gemini 3 and 4 and Grok cannot switch it off.
+_EFFORT_HOSTS = (("openai.com", "none"), ("googleapis.com", "low"), ("x.ai", "low"))
 
 # Words in an error that put the account, not the request, at fault.
 _BILLING_WORDS = ("payment required", "insufficient", "balance", "quota",
-                  "billing", "arrear")
+                  "billing", "arrear", "good standing", "overdue", "欠费", "余额不足",
+                  "资源包")
 
 
 def _host(url: str) -> str:
@@ -66,14 +78,39 @@ def thinking_off(payload: dict, url: str, takes_thinking, *,
     a caller that survives its refusal (`_post_chat`) passes None.
     `k2_temperature` also moves a K2 model to the one temperature it answers
     at with thinking off; a caller that chose its temperature leaves it out."""
-    if takes_thinking is not False:
+    host = _host(url)
+    model = str(payload.get("model") or "").lower()
+    if _on_host(host, _ENABLE_THINKING_HOSTS):
+        payload["enable_thinking"] = False
+    elif takes_thinking is not False:
         payload["thinking"] = {"type": "disabled"}
-        if k2_temperature and "k2" in str(payload.get("model") or "").lower():
+        if k2_temperature and "k2" in model:
             payload["temperature"] = 0.6
+    effort = next((low for domain, low in _EFFORT_HOSTS if _on_host(host, (domain,))), "")
+    # Kimi K3 always reasons, at "max" unless told; K2 took `thinking` and refuses an effort.
+    if not effort and takes_thinking is False and _on_host(host, ("moonshot.cn", "moonshot.ai")) and "k2" not in model:
+        effort = "low"
+    if effort:
+        payload["reasoning_effort"] = effort
     if "openrouter.ai" in (url or ""):
         # The exclude/max_tokens form is 400-rejected by some upstreams.
         payload["reasoning"] = {"enabled": False}
     return payload
+
+
+# Reasoning a model writes into its answer (MiniMax without reasoning_split,
+# DeepSeek-R1 and Qwen3 on a local server without a reasoning parser).
+_THINK_RE = re.compile(r"^\s*<think>.*?</think>\s*", re.S)
+
+
+def answer_text(message: dict) -> str:
+    """The answer's words: a content list (Mistral's reasoning models send
+    thinking and text parts) read for its text, a leading <think> block dropped."""
+    content = message.get("content") or ""
+    if isinstance(content, list):
+        content = "".join(str(p.get("text") or "") for p in content
+                          if isinstance(p, dict) and p.get("type") == "text")
+    return _THINK_RE.sub("", str(content)).strip()
 
 
 def known_to_take_thinking(url: str, model: str) -> bool:
@@ -119,7 +156,25 @@ def _error_text(e: BaseException, status) -> str:
     text = str(e).lower()
     if status in (None, 401, 402, 403, 429):
         text += " " + _response_text(e).lower()
+    elif status in (400, 404, 422):
+        # Only the provider's own message, where Gemini says the key is wrong
+        # and Claude or DashScope that the balance is gone.
+        text += " " + _provider_message(e).lower()
     return text
+
+
+def _provider_message(e: BaseException) -> str:
+    """The `error` object's message, code and type from a JSON error body."""
+    try:
+        body = json.loads(_response_text(e) or "{}")
+    except ValueError:
+        return ""
+    error = body.get("error") if isinstance(body, dict) else None
+    if isinstance(error, str):
+        return error[:300]
+    if not isinstance(error, dict):
+        return ""
+    return " ".join(str(error.get(k) or "") for k in ("message", "code", "type"))[:300]
 
 
 class ProviderError(Exception):
@@ -182,12 +237,6 @@ class ModelCalls:
             self._http_pool[key] = client
         return _PooledHTTP(client)
 
-    def _local_http(self, **kwargs) -> "_PooledHTTP":
-        """Pooled client for the local NapCat bridge, with `trust_env=False`:
-        httpx has no localhost proxy bypass, so an HTTP_PROXY would relay every
-        bridge call. It also keeps the bridge in its own pool."""
-        return self._http(trust_env=False, **kwargs)
-
     def _endpoint_for(self, model: str) -> tuple[str, str]:
         """(chat-completions URL, API key) for one model name; the fallback may
         have its own endpoint. Read per call, since callers reassign them."""
@@ -234,6 +283,8 @@ class ModelCalls:
     def _apply_quirks(self, url: str, payload: dict) -> None:
         """Spell `payload` the way `url` has shown it accepts."""
         quirks = self._api_quirks
+        # What the abilities check and the other process learned (abilities.py).
+        abilities.seed(self, quirks)
         model = str(payload.get("model") or "")
         if quirks.get(("thinking", url, model)) is False:
             payload.pop("thinking", None)
@@ -243,11 +294,41 @@ class ModelCalls:
             payload.pop("temperature", None)
         if ("reasoning", url, model) in quirks and payload.get("reasoning") == {"enabled": False}:
             payload["reasoning"] = {"effort": "minimal"}
+        if ("images", url, model) in quirks:
+            without_pictures(payload)
+        if ("response_format", url, model) in quirks:
+            payload.pop("response_format", None)
+        if ("enable_thinking", url, model) in quirks:
+            payload.pop("enable_thinking", None)
+        if ("reasoning_effort_none", url, model) in quirks and payload.get("reasoning_effort") == "none":
+            payload["reasoning_effort"] = "low"
+        if ("reasoning_effort", url, model) in quirks:
+            payload.pop("reasoning_effort", None)
+
+    def _reply_effort(self, url: str, model: str):
+        """(level, parameter) when this reply call should think at the level chosen
+        in the composer (abilities.py); None leaves thinking as the call asks."""
+        if _call_purpose.get() != "reply":
+            return None
+        return abilities.reply_effort(abilities.runtime_of(self), url, model)
+
+    def _shows_pictures(self) -> bool:
+        """Whether a turn's pictures go to the reply model itself: not while a
+        vision model captions them (VISION_*), nor to one that refused them."""
+        if self._vision_configured():
+            return False
+        url, _ = self._endpoint_for(self.llm_dm_model)
+        return ("images", url, self.llm_dm_model) not in self._api_quirks
 
     def _remember_refusal(self, url: str, model: str, field: str) -> None:
         self._api_quirks[(field, url, model)] = False if field == "thinking" else True
+        abilities.note_quirk(self, url, model, field, self._api_quirks[(field, url, model)])
         instead = {"max_tokens": "sending max_completion_tokens instead",
-                   "reasoning": "asking for the lowest effort instead"}.get(field, "leaving it out")
+                   "reasoning": "asking for the lowest effort instead",
+                   "images": "sending the words alone",
+                   "tools": "answering without them",
+                   "response_format": "asking for JSON in the prompt alone",
+                   "reasoning_effort_none": "asking for low effort instead"}.get(field, "leaving it out")
         logger.info("[Agent] %s does not take `%s` for model %s; %s from now on",
                     _host(url) or url, field, model, instead)
 
@@ -265,11 +346,14 @@ class ModelCalls:
                    "Content-Type": "application/json"}
         status = 200
         refused: list[str] = []
+        # OpenRouter answers 404 ("no endpoints found that support image input") for pictures to a model without eyes.
+        pictured = any(isinstance(m.get("content"), list) for m in payload.get("messages") or [])
         async with self._http(timeout=timeout) as client:
             for _ in range(4):
                 resp = await client.post(url, json=dict(payload), headers=headers)
                 status = getattr(resp, "status_code", 200)
-                if status not in (400, 422):
+                # It answers 404 the same way when no host of the model takes JSON mode.
+                if status not in (400, 422) and not (status == 404 and (pictured or "response_format" in payload)):
                     break
                 field = adapt_rejected_payload(
                     payload, str(getattr(resp, "text", "") or ""))
@@ -294,6 +378,79 @@ class ModelCalls:
                 self.__dict__["model_unreachable"] = False
         return resp
 
+    async def _tool_round(self, system: str, messages: list[dict], model: str,
+                          tools: list[dict], *, timeout: float, choice: str = "auto") -> dict | None:
+        """One reply-model call that may call `tools`, thinking off and no
+        response_format (with it, models stop calling tools): the answer's
+        message. A call that fails is retried and moved to the fallback model
+        as every model call is (`_recovered`), and raises when that fails too.
+        None when the endpoint takes no tool calls (`_refuses_tools`) or model
+        spending is paused.
+        `choice` "required": a call must be made, where the endpoint takes it."""
+        if spend.paused_for(self, _call_purpose.get()):
+            return None
+        began = time.monotonic()
+
+        def refused(resp) -> bool:
+            return getattr(resp, "status_code", 200) in (400, 404, 422)
+
+        async def ask(mdl: str, max_tokens: int = 4096) -> dict | None:
+            url, key = self._endpoint_for(mdl)
+            if ("tools", url, mdl) in self._api_quirks:
+                return None
+            payload = {"model": mdl, "max_tokens": max_tokens, "tools": tools,
+                       "tool_choice": "auto" if ("tool_choice", url, mdl) in self._api_quirks else choice,
+                       "messages": ([{"role": "system", "content": system}] if system else []) + list(messages)}
+            effort = self._reply_effort(url, mdl)
+            if effort:
+                payload["max_tokens"] += abilities.thinking_on(payload, url, *effort)
+            else:
+                self._thinking_off(payload, url)
+            resp = await self._post_chat(url, key, payload, timeout=timeout)
+            if refused(resp) and payload["tool_choice"] != "auto":
+                # Asked again with "auto", the round's own note saying it in words; taken that way, it is
+                # the required call this endpoint refuses.
+                payload["tool_choice"] = "auto"
+                resp = await self._post_chat(url, key, payload, timeout=timeout)
+                if getattr(resp, "status_code", 200) == 200:
+                    self._remember_refusal(url, mdl, "tool_choice")
+            if (refused(resp) and re.search(r"tool|function", str(getattr(resp, "text", "") or "")[:300], re.IGNORECASE)
+                    and await self._refuses_tools(url, key, mdl, timeout)):
+                self._remember_refusal(url, mdl, "tools")
+                return None
+            resp.raise_for_status()
+            body = resp.json()
+            if not isinstance(body, dict) or body.get("error") or not body.get("choices"):
+                raise ProviderError(body if isinstance(body, dict) else {})
+            return body
+
+        body, used = await self._recovered(ask, model)
+        if body is not None and body["choices"][0].get("finish_reason") == "length":
+            # Cut off at the token cap: asked once more with four times the room.
+            try:
+                body = await ask(used, 4 * 4096) or body
+            except Exception as e:
+                logger.warning("[Agent] tool round not asked again with more room (model=%s): %s",
+                               used, type(e).__name__)
+            if body["choices"][0].get("finish_reason") == "length":
+                logger.warning("[Agent] tool round answer cut off at the model's token cap (model=%s)", used)
+        if body is None:
+            return None
+        message = body["choices"][0].get("message") or {}
+        if _call_purpose.get() == "reply":
+            abilities.note_reasoning(abilities.reasoning_of(message), time.monotonic() - began)
+        return {**message, "content": answer_text(message)}
+
+    async def _refuses_tools(self, url: str, key: str, model: str, timeout: float) -> bool:
+        """Whether the endpoint refuses a tool in the plainest request: one message, one
+        tool, no history. A turn's own request can be refused for what that turn carries
+        (a malformed tool message), which says nothing of the endpoint."""
+        payload = {"model": model, "max_tokens": 16, "tools": [abilities._TOOL],
+                   "messages": [{"role": "user", "content": "hi"}]}
+        resp = await self._post_chat(url, key, payload, timeout=timeout)
+        return (getattr(resp, "status_code", 200) in (400, 404, 422)
+                and bool(re.search(r"tool|function", str(getattr(resp, "text", "") or "")[:300], re.IGNORECASE)))
+
     def _count_usage(self, model: str, resp) -> None:
         """Add one answered request to the per-model tally the page shows; a
         tally that cannot be kept never costs the call."""
@@ -312,6 +469,8 @@ class ModelCalls:
                 Path(memory_file).with_name(USAGE_FILE))
         now = time.time()
         book.add(model, body.get("usage"), now, _call_purpose.get())
+        # A scheduled run's own tally, for its record (schedule_tool.py).
+        schedule_tool.count(model, body.get("usage"))
         wait = book.due(now)
         try:
             if not wait:
@@ -377,8 +536,9 @@ class ModelCalls:
         # token count is not read as one.
         status = _status_of(e)
         msg = _error_text(e, status)
-        # Before the 429 check: OpenAI answers an exhausted quota with a 429.
-        if status == 402 or any(k in msg for k in (
+        # Before the 429 check: OpenAI, Kimi and Zhipu answer an exhausted
+        # quota with a 429; a wrong Gemini key is a 400.
+        if status == 402 or model_problem(status, msg) in ("no_balance", "key") or any(k in msg for k in (
                 "payment required", "insufficient_quota", "insufficient balance",
                 "exceeded your current quota")):
             return "fatal_auth"
@@ -394,20 +554,115 @@ class ModelCalls:
             return "fatal_request"
         return "transient"
 
+    async def _recovered(self, call, model: str):
+        """Await `call(model)` with the recovery every model call gets: transient
+        errors back off and retry; throttling arms a cooldown and switches to the
+        fallback at once; anything else but auth gets one last try on the
+        fallback. Returns (what the call returned, the model that answered)."""
+        cur_model = model
+        # A model that was throttled or unreachable is skipped by every
+        # caller while it cools down: a DM would otherwise sit through the
+        # retries each turn. One refused request does not count.
+        skipped, last_try = "", False
+        if (self.llm_fallback_model and cur_model != self.llm_fallback_model
+                and self._unreachable_until.get(cur_model, 0.0) > time.time()):
+            skipped, cur_model = cur_model, self.llm_fallback_model
+        attempt = 0
+        while True:
+            try:
+                return (await call(cur_model)), cur_model
+            except Exception as e:
+                kind = self._classify_api_error(e)
+                if kind in ("transient", "rate_limit") and self.llm_fallback_model:
+                    self._unreachable_until[cur_model] = time.time() + (
+                        self.llm_rate_limit_cooldown_s if kind == "rate_limit"
+                        else self.llm_fallback_duration_s)
+                # The fallback it started on failed too: the model that was
+                # cooling down gets its one try after all.
+                if skipped and kind != "fatal_auth" and (
+                        kind == "fatal_request" or attempt >= self.api_max_retries):
+                    cur_model, skipped, attempt = skipped, "", self.api_max_retries
+                    last_try = True
+                    self._unreachable_until.pop(cur_model, None)
+                    continue
+                # Throttled: cool down whichever model failed (the short,
+                # metering window) and switch to a distinct fallback now.
+                if kind == "rate_limit" and self.llm_fallback_model:
+                    self._fallback_until[cur_model] = max(
+                        self._fallback_until.get(cur_model, 0.0),
+                        time.time() + self.llm_rate_limit_cooldown_s)
+                    if cur_model != self.llm_fallback_model and not last_try:
+                        logger.warning(
+                            "[Agent] throttled (model=%s); cooldown %ds, switching to fallback=%s: %s",
+                            cur_model, self.llm_rate_limit_cooldown_s, self.llm_fallback_model, e)
+                        cur_model = self.llm_fallback_model
+                        attempt = 0  # give the fallback model its own retry budget
+                        continue
+                # A hang or a dropped connection: a retry on the same model
+                # would spend the turn's budget before the backup is asked.
+                if (kind == "transient" and isinstance(e, httpx.TransportError)
+                        and self.llm_fallback_model
+                        and cur_model != self.llm_fallback_model and not last_try):
+                    self._fallback_until[cur_model] = max(
+                        self._fallback_until.get(cur_model, 0.0),
+                        time.time() + self.llm_fallback_duration_s)
+                    logger.warning(
+                        "[Agent] model=%s did not answer (%s); switching to fallback=%s",
+                        cur_model, type(e).__name__, self.llm_fallback_model)
+                    cur_model = self.llm_fallback_model
+                    attempt = 0
+                    continue
+                # Transient: exponential backoff + jitter, retry same model.
+                if (kind in ("transient", "rate_limit")
+                        and attempt < self.api_max_retries):
+                    delay = (1.5 * (2 ** attempt)) * (0.7 + random.random() * 0.6)
+                    attempt += 1
+                    logger.warning(
+                        "[Agent] API %s error (attempt %d/%d, model=%s), retrying in %.1fs: %s",
+                        kind, attempt, self.api_max_retries, cur_model, delay, e)
+                    await asyncio.sleep(delay)
+                    continue
+                # Exhausted or request-level: one last try on the fallback,
+                # which can't fix auth or billing.
+                if kind != "fatal_auth" and self.llm_fallback_model:
+                    self._fallback_until[cur_model] = max(
+                        self._fallback_until.get(cur_model, 0.0),
+                        time.time() + self.llm_fallback_duration_s)
+                    if cur_model != self.llm_fallback_model and not last_try:
+                        logger.warning(
+                            "[Agent] model=%s failed (%s); last attempt on fallback=%s: %s",
+                            cur_model, kind, self.llm_fallback_model, e)
+                        cur_model = self.llm_fallback_model
+                        attempt = 0  # give the fallback model its own retry budget
+                        continue
+                if kind == "fatal_auth":
+                    self._report_fatal(e, cur_model)
+                if kind == "transient" and cur_model == self.model:
+                    self.__dict__["model_unreachable"] = True
+                # A 429's body says which limit it was; httpx's message does not.
+                logger.warning("[Agent] LLM call failed (model=%s, %s): %s %s",
+                               cur_model, kind, e,
+                               _response_text(e)[:300] if kind == "rate_limit" else "")
+                problem = model_problem(_status_of(e), _error_text(e, _status_of(e)))
+                if problem:
+                    # For the page to name in the chat (abilities.problem_since).
+                    abilities.note_problem(self, problem, self._endpoint_for(cur_model)[0])
+                if problem in ("not_found", "context", "refused"):
+                    logger.warning("[Agent] %s", PROBLEMS[problem][0])
+                raise
+
     async def _call_llm(
         self,
         system: str,
         messages: list[dict],
         model: str,
         max_tokens: int = 4096,
-        enable_search: bool = True,
         disable_thinking: bool = False,
         temperature: float | None = None,
-        search_hint: str = "",
         json_object: bool = False,
         plain_text_fallback: bool = False,
     ) -> str:
-        """OpenAI-compatible chat completion with web search, jittered retry and
+        """OpenAI-compatible chat completion with jittered retry and
         error-driven fallback. `json_object` sets response_format, without which
         a thinking model drops the JSON protocol on some turns.
 
@@ -418,6 +673,9 @@ class ModelCalls:
         if not (self.base_url and self.api_key):
             logger.warning("[Agent] missing base_url/api_key; cannot call LLM")
             return ""
+        if spend.paused_for(self, _call_purpose.get()):
+            return ""
+        began = time.monotonic()
 
         async def _do_call(mtok: int, mdl: str, force_disable_thinking: bool = False,
                            force_plain_text: bool = False):
@@ -428,7 +686,10 @@ class ModelCalls:
                 payload["temperature"] = temperature
             if json_object and not force_plain_text:
                 payload["response_format"] = {"type": "json_object"}
-            if disable_thinking or force_disable_thinking:
+            effort = None if force_disable_thinking else self._reply_effort(_url, mdl)
+            if effort:
+                payload["max_tokens"] = mtok + abilities.thinking_on(payload, _url, *effort)
+            elif disable_thinking or force_disable_thinking:
                 self._thinking_off(payload, _url)
             resp = await self._post_chat(_url, _key, payload,
                                          timeout=self.llm_timeout_s)
@@ -438,121 +699,33 @@ class ModelCalls:
                 raise ProviderError(body)
             return body
 
-        # Web search grounding; a failure never blocks the reply.
-        if enable_search:
-            messages = await self._ground_with_search(messages, hint=search_hint)
-
         # OpenAI endpoint uses a single system message; provider auto prefix-caches.
         _oai_messages = ([{"role": "system", "content": system}] if system else []) + list(messages)
 
-        # Recovery: transient errors back off and retry; throttling arms a
-        # cooldown and switches to the fallback at once; anything else but
-        # auth gets one last try on the fallback.
-        async def _call_with_recovery():
-            cur_model = model
-            # A model that was throttled or unreachable is skipped by every
-            # caller while it cools down: a DM would otherwise sit through the
-            # retries each turn. One refused request does not count.
-            skipped, last_try = "", False
-            if (self.llm_fallback_model and cur_model != self.llm_fallback_model
-                    and self._unreachable_until.get(cur_model, 0.0) > time.time()):
-                skipped, cur_model = cur_model, self.llm_fallback_model
-            attempt = 0
-            while True:
-                try:
-                    return (await _do_call(max_tokens, cur_model)), cur_model
-                except Exception as e:
-                    kind = self._classify_api_error(e)
-                    if kind in ("transient", "rate_limit") and self.llm_fallback_model:
-                        self._unreachable_until[cur_model] = time.time() + (
-                            self.llm_rate_limit_cooldown_s if kind == "rate_limit"
-                            else self.llm_fallback_duration_s)
-                    # The fallback it started on failed too: the model that was
-                    # cooling down gets its one try after all.
-                    if skipped and kind != "fatal_auth" and (
-                            kind == "fatal_request" or attempt >= self.api_max_retries):
-                        cur_model, skipped, attempt = skipped, "", self.api_max_retries
-                        last_try = True
-                        self._unreachable_until.pop(cur_model, None)
-                        continue
-                    # Throttled: cool down whichever model failed (the short,
-                    # metering window) and switch to a distinct fallback now.
-                    if kind == "rate_limit" and self.llm_fallback_model:
-                        self._fallback_until[cur_model] = max(
-                            self._fallback_until.get(cur_model, 0.0),
-                            time.time() + self.llm_rate_limit_cooldown_s)
-                        if cur_model != self.llm_fallback_model and not last_try:
-                            logger.warning(
-                                "[Agent] throttled (model=%s); cooldown %ds, switching to fallback=%s: %s",
-                                cur_model, self.llm_rate_limit_cooldown_s, self.llm_fallback_model, e)
-                            cur_model = self.llm_fallback_model
-                            attempt = 0  # give the fallback model its own retry budget
-                            continue
-                    # A hang or a dropped connection: a retry on the same model
-                    # would spend the turn's budget before the backup is asked.
-                    if (kind == "transient" and isinstance(e, httpx.TransportError)
-                            and self.llm_fallback_model
-                            and cur_model != self.llm_fallback_model and not last_try):
-                        self._fallback_until[cur_model] = max(
-                            self._fallback_until.get(cur_model, 0.0),
-                            time.time() + self.llm_fallback_duration_s)
-                        logger.warning(
-                            "[Agent] model=%s did not answer (%s); switching to fallback=%s",
-                            cur_model, type(e).__name__, self.llm_fallback_model)
-                        cur_model = self.llm_fallback_model
-                        attempt = 0
-                        continue
-                    # Transient: exponential backoff + jitter, retry same model.
-                    if (kind in ("transient", "rate_limit")
-                            and attempt < self.api_max_retries):
-                        delay = (1.5 * (2 ** attempt)) * (0.7 + random.random() * 0.6)
-                        attempt += 1
-                        logger.warning(
-                            "[Agent] API %s error (attempt %d/%d, model=%s), retrying in %.1fs: %s",
-                            kind, attempt, self.api_max_retries, cur_model, delay, e)
-                        await asyncio.sleep(delay)
-                        continue
-                    # Exhausted or request-level: one last try on the fallback,
-                    # which can't fix auth or billing.
-                    if kind != "fatal_auth" and self.llm_fallback_model:
-                        self._fallback_until[cur_model] = max(
-                            self._fallback_until.get(cur_model, 0.0),
-                            time.time() + self.llm_fallback_duration_s)
-                        if cur_model != self.llm_fallback_model and not last_try:
-                            logger.warning(
-                                "[Agent] model=%s failed (%s); last attempt on fallback=%s: %s",
-                                cur_model, kind, self.llm_fallback_model, e)
-                            cur_model = self.llm_fallback_model
-                            attempt = 0  # give the fallback model its own retry budget
-                            continue
-                    if kind == "fatal_auth":
-                        self._report_fatal(e, cur_model)
-                    if kind == "transient" and cur_model == self.model:
-                        self.__dict__["model_unreachable"] = True
-                    # A 429's body says which limit it was; httpx's message does not.
-                    logger.warning("[Agent] LLM call failed (model=%s, %s): %s %s",
-                                   cur_model, kind, e,
-                                   _response_text(e)[:300] if kind == "rate_limit" else "")
-                    raise
-
         def _pick(d: dict) -> tuple[str, str]:
             choice = (d.get("choices") or [{}])[0]
-            return (((choice.get("message") or {}).get("content") or "").strip(),
+            return (answer_text(choice.get("message") or {}),
                     choice.get("finish_reason", "?"))
 
         def _hidden_reasoning(d: dict) -> str:
             # Only to decide on a retry, never to take text from: salvaging a
             # reasoning fragment would cross the protocol boundary.
             choice = (d.get("choices") or [{}])[0]
-            return ((choice.get("message") or {}).get("reasoning_content") or "").strip()
+            message = choice.get("message") or {}
+            # `reasoning` is OpenRouter's and Ollama's spelling.
+            return str(message.get("reasoning_content") or message.get("reasoning") or "").strip()
 
-        data, used_model = await _call_with_recovery()
+        data, used_model = await self._recovered(lambda mdl: _do_call(max_tokens, mdl), model)
         try:
             text, finish = _pick(data)
             reasoning = _hidden_reasoning(data)
         except Exception as e:
             logger.warning("[Agent] failed to parse LLM response: %s; data=%.300s", e, str(data))
             return ""
+        if _call_purpose.get() == "reply":
+            # The reply's reasoning, where the service returns it, for the page's activity line.
+            abilities.note_reasoning(abilities.reasoning_of((data.get("choices") or [{}])[0].get("message") or {}),
+                                     time.monotonic() - began)
 
         def _budget_starved(t: str, fin: str) -> bool:
             # Truncation: no visible text, or a half-emitted JSON object the
@@ -581,6 +754,15 @@ class ModelCalls:
                                what, type(e).__name__, e)
                 return None
 
+        if _budget_starved(text, finish) and not disable_thinking:
+            # Thinking may have used the whole budget: with it off the answer fits.
+            logger.warning(
+                "[Agent] empty reply, finish_reason=length (model=%s, max_tokens=%d); "
+                "retrying once with thinking disabled", used_model, max_tokens)
+            again = await _once_more("retry with thinking disabled", max_tokens,
+                                     force_disable_thinking=True)
+            if again is not None:
+                text, finish = again
         if _budget_starved(text, finish):
             # A reasoning model can spend the whole budget thinking: retry once
             # with a bigger one, then say plainly what happened.
@@ -596,6 +778,8 @@ class ModelCalls:
             if again is not None:
                 text, finish = again
             if not text:
+                # What the background memory's health line reads (health.py).
+                self.__dict__["_starved_at"] = time.time()
                 logger.warning(
                     "[Agent] still empty at max_tokens=%d (model=%s). This model "
                     "cannot answer within the budget — switch to a non-reasoning "
@@ -626,9 +810,14 @@ class ModelCalls:
         if (text and json_object and plain_text_fallback
                 and not re.sub(r"^```(?:json)?\s*", "", text.lstrip(),
                                flags=re.IGNORECASE).startswith(("{", "["))):
-            logger.info("[Agent] prose answer in JSON mode, wrapped (model=%s)",
-                        used_model)
-            text = _as_protocol_object(text)
+            found = salvage_json_object(text)
+            if _is_protocol_dict(found):
+                # Prose, then the object asked for: the object, not the prose around it.
+                text = json.dumps(found, ensure_ascii=False)
+            else:
+                logger.info("[Agent] prose answer in JSON mode, wrapped (model=%s)",
+                            used_model)
+                text = _as_protocol_object(text)
         if not text and json_object and plain_text_fallback:
             logger.warning(
                 "[Agent] blank content in json_object mode (model=%s, "
@@ -707,40 +896,3 @@ class ModelCalls:
         logger.info("[Agent] embedding probe OK: model=%s dims=%d",
                     self.embedding_model, len(vectors[0]))
         self._start_embedding_backfill()
-
-    def _pick_group_model(self, mode: str = "") -> str:
-        """Primary or fallback model. Frequency-driven downgrade applies only to
-        self-initiated modes: being @-ed often must not make the bot dumber."""
-        now = time.time()
-        while self.model_calls and self.model_calls[0] < now - self.llm_rate_window_s:
-            self.model_calls.popleft()
-
-        # A real provider throttle on the primary applies to every mode.
-        if self._fallback_until.get(self.model, 0.0) > now:
-            return self.llm_fallback_model
-
-        # called/admin are exempt from the frequency downgrade.
-        if mode in ("called", ADMIN_MODE):
-            return self.model
-
-        # Self-initiated modes: still inside the frequency-downgrade cooldown
-        if self._freq_fallback_until > now:
-            return self.llm_fallback_model
-
-        # Rate threshold exceeded → arm the (self-throttling) downgrade
-        if len(self.model_calls) >= self.llm_rate_threshold:
-            self._freq_fallback_until = now + self.llm_fallback_duration_s
-            if self.llm_fallback_model == self.model:
-                logger.warning(
-                    "[Agent] busy (%d calls in %ds): unasked turns use the same model; "
-                    "set LLM_FALLBACK_MODEL to a cheaper one",
-                    len(self.model_calls), self.llm_rate_window_s)
-                return self.model
-            logger.warning(
-                "[Agent] high call rate (%d/%ds); self-initiated modes fall back to %s for %ds",
-                len(self.model_calls), self.llm_rate_window_s,
-                self.llm_fallback_model, self.llm_fallback_duration_s,
-            )
-            return self.llm_fallback_model
-
-        return self.model

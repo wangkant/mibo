@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>实时热议榜</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #fff8f2; }
+main { max-width: 560px; margin: 24px auto; }
+.it { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; }
+.rk { width: 22px; font-weight: 700; color: #f60; } .tt { flex: 1; } .hot { color: #999; font-size: 12px; width: 70px; }
+.vote { border: 1px solid #f60; color: #f60; background: #fff; border-radius: 14px; padding: 2px 12px; cursor: pointer; }
+.vote.on { background: #f60; color: #fff; }
+.live { color: #e33; font-size: 12px; }
+</style></head>
+<body><main>
+<h2>实时热议 <span class="live">● 每秒刷新</span></h2>
+<div id="list"></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const TOPICS = [["weekend", "周末去哪儿"], ["coffee", "最好喝的平价咖啡"], ["movie", "这周上映的新片"], ["rain", "下周又要降温了"],
+  ["metro", "地铁 9 号线开通"], ["cat", "猫咪冬天怎么保暖"], ["exam", "考研倒计时"], ["food", "楼下新开的面馆"]];
+const heat = Object.fromEntries(TOPICS.map(([id], i) => [id, 5000 + i * 700]));
+let voted = "";
+function draw() {
+  for (const [id] of TOPICS) heat[id] += Math.floor(Math.random() * 900);
+  const order = [...TOPICS].sort((a, b) => heat[b[0]] - heat[a[0]]);
+  // The whole list is drawn again each time, as live boards do: every row is a new element.
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  order.forEach(([id, title], i) => {
+    const el = document.createElement("div");
+    el.className = "it";
+    el.innerHTML = `<span class="rk">${i + 1}</span><span class="tt"></span><span class="hot">${heat[id]} 热度</span><button class="vote${voted === id ? " on" : ""}">${voted === id ? "已投" : "投票"}</button>`;
+    el.querySelector(".tt").textContent = title;
+    el.querySelector("button").addEventListener("click", async () => {
+      if (voted) return;
+      if ((await post("/api/vote", { topic: id })).ok) { voted = id; draw(); }
+    });
+    list.append(el);
+  });
+}
+draw();
+setInterval(draw, 1500);
+</script></body></html>

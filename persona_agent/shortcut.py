@@ -1,8 +1,7 @@
-"""`personagent shortcut`: an icon on the desktop and in the Start menu that
-opens the window with no terminal behind it. Windows only."""
+"""An icon on the desktop and in the Start menu that opens the window with no
+terminal behind it, which the desk panel makes. Windows only."""
 from __future__ import annotations
 
-import argparse
 import base64
 import html
 import json
@@ -12,8 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import home as homes
-from . import langs, window
+from . import window
 
 WINDOWS = os.name == "nt"
 LINK = "personagent.lnk"
@@ -184,26 +182,3 @@ def status(home: Path) -> dict[str, str]:
                     and str(item.get("arguments") or "") == _arguments(arguments, kind))
             result[kind] = "on" if same else "other"
     return result
-
-
-def main(argv: list[str] | None = None, prog: str = "personagent shortcut") -> int:
-    from .cli import COMMANDS
-    parser = argparse.ArgumentParser(prog=prog, description=langs.term(COMMANDS["shortcut"][2]))
-    parser.add_argument("--remove", action="store_true", help=langs.term("take the shortcuts away again"))
-    args = parser.parse_args(argv)
-    if not WINDOWS:
-        print(langs.term("Shortcuts are made on Windows only. "
-                         "Elsewhere, add `personagent` to your launcher yourself."))
-        return 1
-    if langs.under_uvx() and not args.remove:
-        print(langs.term("uvx runs personagent from a temporary copy, which a shortcut cannot "
-                         "point at. Install it first: uv tool install personagent"))
-        return 1
-    failed = run(script(homes.find_home(), remove=args.remove))
-    if failed:
-        print(langs.term(f"The shortcuts could not be removed: {failed}") if args.remove
-              else langs.term(f"The shortcut could not be made: {failed}"))
-        return 1
-    print(langs.term("The personagent shortcuts are gone.") if args.remove
-          else langs.term("personagent is on your desktop and in the Start menu."))
-    return 0

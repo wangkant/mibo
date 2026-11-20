@@ -1,0 +1,13 @@
+{
+ "documents": {"zh": "文档", "en": "Documents"},
+ "writing": {"zh": "写作", "en": "Writing"},
+ "research": {"zh": "研究", "en": "Research"},
+ "data": {"zh": "数据", "en": "Data"},
+ "design": {"zh": "设计", "en": "Design"},
+ "development": {"zh": "开发", "en": "Development"},
+ "productivity": {"zh": "效率", "en": "Productivity"},
+ "media": {"zh": "图片与视频", "en": "Media"},
+ "learning": {"zh": "学习", "en": "Learning"},
+ "life": {"zh": "生活", "en": "Life"},
+ "tools": {"zh": "工具", "en": "Tools"}
+}

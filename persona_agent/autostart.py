@@ -1,18 +1,19 @@
 """Start at sign-in, on by default: the first time the app opens it turns
 itself on, and remembers that it did, so turning it off later stays off.
 Windows: the Startup shortcut (shortcut.py). macOS: a LaunchAgent that opens
-the app behind its icon; `personagent service` is the other one, for `up`."""
+the app behind its icon."""
 from __future__ import annotations
 
+import hashlib
 import plistlib
 import sys
 import threading
 from pathlib import Path
 
-from . import langs, shortcut
+from . import home as homes, shortcut
 
 MACOS = sys.platform == "darwin"
-# service.LABEL is the LaunchAgent that runs `up`; this one opens the app.
+# The LaunchAgent that opens the app.
 LABEL = "com.github.wangkant.personagent.app"
 # Saved in runtime/desktop/app.json once the default was applied or the person chose.
 CHOSEN = "login_set"
@@ -34,9 +35,17 @@ def command(home: Path) -> list[str]:
     return [sys.executable, "-m", "persona_agent", "start", "--home", str(home), "--background"]
 
 
+def _own_suffix(home: Path) -> str:
+    """'' for the usual home, a short tag of its path for any other."""
+    home = Path(home).resolve()
+    usual = homes.CHECKOUT if homes.is_checkout() else homes.default_home()
+    if home == Path(usual).resolve():
+        return ""
+    return "-" + hashlib.sha256(str(home).encode("utf-8")).hexdigest()[:8]
+
+
 def plist_path(home: Path) -> Path:
-    from .service import name
-    return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}{name(home)[len('personagent'):]}.plist"
+    return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}{_own_suffix(home)}.plist"
 
 
 def status(home: Path) -> str:
@@ -85,9 +94,8 @@ def remember(home: Path) -> None:
 def first_run(home: Path) -> None:
     """Turn start at sign-in on the first time the app opens for the usual home.
     A --home of its own is left alone: Windows keeps one Startup link for all homes."""
-    from .service import name
     from .welcome import app_settings
-    if (not supported() or langs.under_uvx() or name(home) != "personagent"
+    if (not supported() or _own_suffix(home)
             or app_settings(home / "runtime" / "desktop").get(CHOSEN)):
         return
     if MACOS and frozen() and (sys.executable.startswith("/Volumes/") or "/AppTranslocation/" in sys.executable):

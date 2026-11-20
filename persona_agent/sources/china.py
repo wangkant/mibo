@@ -97,6 +97,14 @@ _BILI_PARTITIONS = (
     ("film", 1001, ("Film & TV", "影视"), ("film and TV commentary and edits", "影视解说与剪辑")),
     ("food", 1020, ("Food", "美食"), ("cooking, tasting and food trips", "美食制作、测评与探店")),
     ("sports", 1018, ("Sports", "体育运动"), ("sports, fitness and match highlights", "体育、健身与赛事集锦")),
+    # Checked signed out on 2026-11-19 (1009, news, answers -400): interests the other zh sources barely bring.
+    ("ai", 1011, ("AI", "人工智能"), ("AI explainers and tools", "人工智能讲解与工具")),
+    ("cars", 1013, ("Cars", "汽车"), ("cars, EVs and driving", "汽车、新能源车与驾驶")),
+    ("fitness", 1017, ("Fitness", "健身"), ("workouts and training", "健身与训练")),
+    ("travel", 1022, ("Travel", "旅游出行"), ("travel vlogs and trips", "旅行视频与出行")),
+    ("animals", 1024, ("Animals", "动物"), ("pets, wildlife and animal videos", "宠物、野生动物与动物视频")),
+    ("parenting", 1025, ("Parenting", "亲子"), ("parenting, pregnancy and kids", "育儿、孕产与亲子")),
+    ("health", 1026, ("Health", "健康"), ("health, sleep and mind", "健康、睡眠与心理")),
 )
 
 
@@ -124,36 +132,7 @@ async def _zhihu_hot(http: httpx.AsyncClient) -> list[Find]:
     return found[:PER_SOURCE]
 
 
-_ZHIHU_DAILY = re.compile(r'<a href="/story/(\d+)" class="link-button"><img src="([^"]+)"[^>]*>'
-                          r'<span class="title">([^<]+)</span>')
-
-
-async def _zhihu_daily(http: httpx.AsyncClient) -> list[Find]:
-    page = await get_text(http, "https://daily.zhihu.com/")
-    return [find(f"https://daily.zhihu.com/story/{story}", title, site="知乎日报", picture=picture)
-            for story, picture, title in _ZHIHU_DAILY.findall(page)][:PER_SOURCE]
-
-
-_DOUBAN_TOPIC = re.compile(r'<h3><a href="([^"?]+)[^"]*"[^>]*>([^<]+)</a></h3>')
-_DOUBAN_GROUP = re.compile(r'<span class="from">来自<a [^>]*>([^<]+)</a>')
 _IMG_SRC = re.compile(r'<img[^>]+src="([^"]+)"')
-
-
-async def _douban_groups(http: httpx.AsyncClient) -> list[Find]:
-    page = await get_text(http, "https://www.douban.com/group/explore")
-    found = []
-    for block in page.split('<div class="channel-item">')[1:]:
-        topic = _DOUBAN_TOPIC.search(block)
-        if not topic:
-            continue
-        group = _DOUBAN_GROUP.search(block)
-        excerpt = re.search(r"<p>(.*?)</div>", block, re.S)
-        picture = _IMG_SRC.search(block)
-        text = plain(excerpt.group(1)) if excerpt else ""
-        found.append(find(topic.group(1), topic.group(2), site="豆瓣小组", kind="post",
-                          text=f"{group.group(1)}：{text}" if group and text else text,
-                          picture=picture.group(1) if picture else ""))
-    return found[:PER_SOURCE]
 
 
 # ---------------------------------------------------------------- hot lists
@@ -238,20 +217,6 @@ async def _thepaper(http: httpx.AsyncClient) -> list[Find]:
     return found[:PER_SOURCE]
 
 
-_ZAOBAO = re.compile(r'href="(/news/china/story(\d{4})(\d{2})(\d{2})-\d+)"[^>]*><h3>([^<]+)</h3>')
-
-
-async def _zaobao(http: httpx.AsyncClient) -> list[Find]:
-    page = await get_text(http, "https://www.zaobao.com.sg/news/china")
-    found, seen = [], set()
-    for path, year, month, day, title in _ZAOBAO.findall(page):
-        if path not in seen:
-            seen.add(path)
-            found.append(find(f"https://www.zaobao.com.sg{path}", title, site="联合早报",
-                              published=f"{year}-{month}-{day}"))
-    return found[:PER_SOURCE]
-
-
 _XINHUA = re.compile(r"""<a href=['"](https://www\.news\.cn/[\w/]+/(\d{4})(\d{2})(\d{2})/[0-9a-f]{32}/c\.html)['"]"""
                      r"""[^>]*>([^<]{6,})</a>""")
 
@@ -325,8 +290,6 @@ SOURCES: list[Source] = [
     # communities
     Source("zhihu-hot", ("Zhihu Hot", "知乎热榜"), ("the questions everyone on Zhihu is answering", "知乎上大家正在讨论的问题"),
            "community", _zhihu_hot, default="zh"),
-    Source("zhihu-daily", ("Zhihu Daily", "知乎日报"), ("Zhihu's hand-picked daily stories", "知乎编辑精选的每日故事"),
-           "community", _zhihu_daily),
     Source("v2ex-hot", ("V2EX Hot", "V2EX 最热"), ("today's most-discussed V2EX topics", "V2EX 今日最热主题"),
            "community", _v2ex_hot),
     _feed("v2ex-tech", ("V2EX Tech", "V2EX 技术"), ("new topics in V2EX's tech tab", "V2EX 技术版块的新主题"),
@@ -337,8 +300,6 @@ SOURCES: list[Source] = [
           "community", "https://www.v2ex.com/feed/tab/play.xml"),
     _feed("v2ex-jobs", ("V2EX Jobs", "V2EX 酷工作"), ("job posts on V2EX", "V2EX 上的招聘帖"),
           "community", "https://www.v2ex.com/feed/tab/jobs.xml"),
-    Source("douban-groups", ("Douban Groups", "豆瓣小组精选"), ("the most-liked posts across Douban groups", "豆瓣各小组最受欢迎的帖子"),
-           "community", _douban_groups, default="zh"),
     # hot lists
     Source("baidu-hot", ("Baidu Hot Searches", "百度热搜"), ("what China is searching for now", "全网正在搜的热点"),
            "news", _baidu_hot, default="zh"),
@@ -349,8 +310,6 @@ SOURCES: list[Source] = [
            "news", _thepaper, default="zh"),
     Source("xinhua-home", ("Xinhua", "新华网"), ("the stories on Xinhua's front page", "新华网首页的报道"),
            "news", _xinhua),
-    Source("zaobao-china", ("Lianhe Zaobao: China", "联合早报·中国"), ("Zaobao's China news from Singapore", "联合早报的中国新闻"),
-           "news", _zaobao),
     _feed("initium", ("Initium Media", "端传媒"), ("long-form reporting from Initium (some paywalled)", "端传媒的深度报道（部分需付费）"),
           "news", "https://theinitium.com/rss/"),
     _feed("ft-chinese", ("FT Chinese", "FT中文网"), ("Financial Times stories in Chinese", "FT中文网的财经报道"),
@@ -388,5 +347,5 @@ SOURCES: list[Source] = [
 
 SOURCES = written_in("zh", SOURCES)
 # Mainland platforms and press; Zaobao is Singapore's paper, Initium began in Hong Kong, FT Chinese is global.
-SOURCES = local_to("CN", SOURCES, {s.key for s in SOURCES} - {"zaobao-china", "initium", "ft-chinese"})
-SOURCES = local_to("HK", local_to("SG", SOURCES, {"zaobao-china"}), {"initium"})
+SOURCES = local_to("CN", SOURCES, {s.key for s in SOURCES} - {"initium", "ft-chinese"})
+SOURCES = local_to("HK", SOURCES, {"initium"})

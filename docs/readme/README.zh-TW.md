@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 安裝程式自備 Python，會安裝 personagent 並將其開啟；在 Windows 上還會在桌面新增圖示。PyPI 或 GitHub 連線緩慢時，安裝程式會自動改用中國大陸的鏡像站。再次執行同一行指令即可更新 personagent。
 
-若已安裝 Python 3.10 或更新版本，也可以執行 `python -m pip install personagent`，再執行 `personagent`；若已安裝 [uv](https://docs.astral.sh/uv/)，`uvx personagent` 無須另行安裝即可執行。在 Windows 上，也可以下載原始碼 ZIP，再按兩下 `start.bat`；電腦上沒有 Python 時，它也會一併取得。
+若已安裝 Python 3.10 或更新版本，也可以執行 `python -m pip install personagent`，再執行 `personagent`；若已安裝 [uv](https://docs.astral.sh/uv/)，`uvx personagent` 無須另行安裝即可執行。
 
 在 Windows 上，它會在獨立的視窗中開啟；在 macOS 和 Linux 上則在瀏覽器中開啟。點選「透過 OpenRouter 登入」並在瀏覽器中核准，或貼上模型 API 金鑰，再點選「驗證並開始聊天」。預設選取的 OpenRouter 免費模型同樣需要帳號或金鑰，兩者都無須付費。`personagent demo` 無須金鑰，會播放三段預先編寫的場景。[入門指南](https://github.com/wangkant/personagent/blob/main/docs/start.zh-TW.md)逐一說明了頁面中的各個畫面。
 
@@ -139,7 +139,7 @@ personagent 本身免費。費用支付給你選擇的模型服務，依該服�
 
 其他軟體則可使用同一頁面上的「其他軟體」：開啟後，將位址、金鑰和模型名稱複製到任何可填寫 OpenAI 相容位址的軟體中，該軟體即可與你的角色對話，記憶與其他各處相同。詳情請參閱[使用手冊](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-TW.md#其他軟體)；在終端機中執行 `personagent connect api` 也可完成相同設定。
 
-若已在執行 AstrBot、Koishi 或 Matrix，personagent 可以接在其後方，僅作為 AI 代理運作：請參閱[你自己執行的橋接](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-TW.md#你自己執行的橋接)、[Satori 聯結器](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.zh-TW.md)和 [Matrix 聯結器](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.zh-TW.md)。
+若已在執行 AstrBot，personagent 可以接在其後方，僅作為 AI 代理運作：請參閱[你自己執行的橋接](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-TW.md#你自己執行的橋接)。
 
 ## 在伺服器上執行
 
@@ -182,7 +182,6 @@ personagent 儲存的所有內容都位於你自己電腦上的一個 personagen
 - [使用手冊](https://github.com/wangkant/personagent/blob/main/docs/guide.zh-TW.md)：設定、聯結器、教導角色、「動態」頁面、疑難排解。
 - [部署指南](https://github.com/wangkant/personagent/blob/main/docs/deploy.zh-TW.md)：正式上線須知、費用，以及機器人沒有回應時的檢查項目。
 - [聯結器協定](https://github.com/wangkant/personagent/blob/main/docs/connectors.zh-TW.md)：供自行撰寫聯結器的開發者參考。
-- [工具腳本](https://github.com/wangkant/personagent/blob/main/docs/tools.zh-TW.md)：`tools/` 中的腳本，從複製的原始碼執行時使用。
 - [更新紀錄](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md)（英文） · [貢獻指南](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md)（英文） · [安全性政策](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md)（英文） · [免責宣告](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.zh-TW.md)
 
 ## 授權條款

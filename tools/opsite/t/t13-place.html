@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>景点详情 - 去哪儿玩</title>
+<style>body { margin: 0; font: 15px/1.7 system-ui, "Microsoft YaHei", sans-serif; background: #f4f6f8; }
+main { max-width: 640px; margin: 30px auto; background: #fff; padding: 20px 26px; border-radius: 10px; }
+.k { color: #888; width: 80px; display: inline-block; }</style></head>
+<body><main id="m"></main>
+<script src="/t/kit.js"></script>
+<script>
+const INFO = {
+  "sh-disney": ["上海迪士尼乐园", "08:30–20:30（以当日公告为准）", "¥475 起", "上海市浦东新区川沙镇黄赵路 310 号"],
+  "sh-bund": ["上海外滩", "全天开放", "免费", "上海市黄浦区中山东一路"],
+  "sh-zoo": ["上海野生动物园", "09:00–17:00", "¥165", "上海市浦东新区南六公路 178 号"],
+  "sh-yuyuan": ["上海豫园", "09:00–16:30", "¥40", "上海市黄浦区福佑路 168 号"],
+};
+const id = new URLSearchParams(location.search).get("id");
+const [name, hours, price, addr] = INFO[id] || ["未找到该景点", "-", "-", "-"];
+document.getElementById("m").innerHTML = `<h1></h1><p><span class="k">开放时间</span>${hours}</p><p><span class="k">门票</span>${price}</p><p><span class="k">地址</span>${addr}</p>`;
+document.querySelector("h1").textContent = name;
+</script></body></html>

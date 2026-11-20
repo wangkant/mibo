@@ -12,7 +12,7 @@ personagent가 채팅 플랫폼에 닿는 방법은 두 가지입니다. QQ 공�
 - **개방형 네트워크의 전용 계정.** Matrix, Twitch, IRC에서 봇은 사용자가 봇을 위해 만드는 일반 계정입니다. personagent는 해당 네트워크의 공개 문서에 나온 인터페이스를 사용합니다. Matrix에서는 봇 계정이 있는 홈서버의 Matrix Client-Server API를 사용하고, Twitch에서는 사용자가 등록한 애플리케이션에 대해 캐릭터의 계정이 승인한 로그인으로 Twitch API를 사용하며, IRC에서는 봇 자신의 닉네임으로 TLS를 통한 IRC 프로토콜을 사용합니다. 해당 홈서버, Twitch, 각 IRC 네트워크의 약관이 적용되며, 각 방과 채널의 규칙도 적용됩니다. 봇이 참여하기 전에 허가를 요구하는 곳도 있습니다. 예를 들어 Libera.Chat에서는 AI 봇이 채널에 참여하기 전에 그 채널 운영자의 명시적인 허가를 받아야 합니다.
 - **비공식 클라이언트**는 일반 사용자 계정으로 로그인해 소프트웨어로 조작합니다. 플랫폼은 이를 허용하지 않으며 약관으로 금지할 수도 있습니다. 계정이 제한, 동결되거나 영구 정지될 수 있습니다. 다음이 여기에 속합니다.
   - **NapCat, LLOneBot, Lagrange 등 OneBot 구현을 통한 QQ**. 고급 OneBot v11 옵션입니다. QQ 공식 봇에는 이 중 아무것도 필요 없습니다. Tencent는 이를 허용하지 않으며, 클라우드나 해외 IP 주소에서는 위험이 가장 큽니다.
-  - **mautrix 브리지를 통한 WhatsApp, Signal, Messenger, Instagram, Google Messages 등**. Matrix 커넥터가 이 방식으로 닿습니다. 브리지는 각 네트워크의 비공식 클라이언트이고, 일부 네트워크는 약관에서 자동 메시지를 다룹니다. [Matrix 커넥터 안내](../integrations/matrix/README.ko.md#각-네트워크의-약관)를 보십시오.
+  - **mautrix 브리지를 통한 WhatsApp, Signal, Messenger, Instagram, Google Messages 등**. Matrix 커넥터가 이 방식으로 닿습니다. 브리지는 각 네트워크의 비공식 클라이언트이고, 일부 네트워크는 약관에서 자동 메시지를 다룹니다.
   - 그 밖에 사람으로 로그인하는 모든 것.
 
 이 중 하나를 쓴다면 잃어도 괜찮은 전용 계정을 쓰고, 주 계정은 절대 쓰지 마십시오. 가능하면 클라우드 서버 대신 가정용 네트워크에서 실행하십시오. 연결하는 모든 네트워크의 최신 약관을 읽으십시오. 계정 손실이나 제한에 대해 personagent 작성자도, 함께 쓰는 서드파티 프로젝트(AstrBot, NapCat, Koishi, mautrix 등)의 관리자도 책임지지 않습니다.

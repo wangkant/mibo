@@ -11,7 +11,7 @@
     {"text": "小夏 忘记 聚餐", "kind": "forget", "deletes": "周六聚餐"},
     {"text": "小夏 忘掉这个", "kind": null},
     {"text": "小夏 你都记得什么", "kind": "recall"},
-    {"text": "小夏 你学到了什么", "kind": "learned"}
+    {"text": "小夏 你学到了什么", "kind": null}
   ],
   "first_person": [
     {"text": "我不吃辣", "mine": true},

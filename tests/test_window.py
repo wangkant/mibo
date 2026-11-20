@@ -17,7 +17,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from persona_agent import cli, langs, shortcut, welcome, window
+from persona_agent import cli, shortcut, welcome, window
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
@@ -49,8 +49,6 @@ class _Window:
             "closing", "shown", "loaded", "minimized", "restored", "maximized", "before_show")})
         self.url = url
         self.calls: list[str] = []
-        self.asked: list[tuple[str, str]] = []
-        self.answer = True
         self._gone = gone
 
     def restore(self) -> None:
@@ -71,10 +69,6 @@ class _Window:
     def destroy(self) -> None:
         self.calls.append("destroy")
         self._gone.set()
-
-    def create_confirmation_dialog(self, title: str, message: str) -> bool:
-        self.asked.append((title, message))
-        return self.answer
 
     def press_close(self) -> bool:
         """The person clicks the X; True when the window went away."""
@@ -119,7 +113,7 @@ def webview(monkeypatch):
     module.settings = {}
     monkeypatch.setitem(sys.modules, "webview", module)
     # WebView2's own events, which the stand-in has none of.
-    monkeypatch.setattr(window, "_own_pages", lambda shown, origin: None)
+    monkeypatch.setattr(window, "_own_pages", lambda shown, origin, open_link: None)
     return module
 
 
@@ -136,7 +130,7 @@ def test_the_page_opens_in_a_private_window_with_the_app_icon(webview, tmp_path)
     assert app.run() is True and app.error == ""
     title, options = webview.created
     # Windows gets there by way of an empty first page; see AppWindow.run.
-    assert (title, seen["url"]) == ("personagent", app.page_url)
+    assert (title, seen["url"]) == ("Mibo", app.page_url)
     # The address, and after it the key only this window's page is given.
     assert app.page_url == f"http://127.0.0.1:1/#token=t&frame={app.frame_key}" and len(app.frame_key) >= 16
     assert app.is_own_page(app.frame_key) and not app.is_own_page("") and not app.is_own_page("guess")
@@ -179,28 +173,11 @@ def test_both_icons_ship_with_the_package() -> None:
         assert window.ICON.with_suffix(suffix).is_file(), suffix
 
 
-def test_closing_asks_first_only_when_there_is_a_question(webview, tmp_path) -> None:
-    answers = iter(["Close it?", "Close it?"])
-    outcomes = []
-
-    def person(shown) -> None:
-        shown.answer = False
-        outcomes.append(shown.press_close())
-        shown.answer = True
-        outcomes.append(shown.press_close())
-
-    webview.person = person
-    app = window.AppWindow("http://127.0.0.1:1/", storage=tmp_path, confirm=lambda: next(answers))
-    assert app.run() is True
-    assert outcomes == [False, True], "declined keeps the window, accepted closes it"
-    assert webview.window.asked == [("personagent", "Close it?")] * 2
-
-
-def test_quit_from_the_page_closes_without_asking(webview, tmp_path) -> None:
+def test_quit_from_the_page_closes_the_window(webview, tmp_path) -> None:
     webview.person = lambda shown: app.close()
-    app = window.AppWindow("http://127.0.0.1:1/", storage=tmp_path, confirm=lambda: "Close it?")
+    app = window.AppWindow("http://127.0.0.1:1/", storage=tmp_path)
     assert app.run() is True
-    assert webview.window.asked == [] and webview.window.calls == ["destroy"]
+    assert webview.window.calls == ["destroy"]
 
 
 def test_without_webview2_windows_gets_no_window(webview, tmp_path, monkeypatch) -> None:
@@ -287,8 +264,8 @@ def _fake_window(monkeypatch, run):
     made = []
 
     class Fake:
-        def __init__(self, url, *, storage, confirm, **options):
-            self.url, self.storage, self.confirm, self.options = url, storage, confirm, options
+        def __init__(self, url, *, storage, **options):
+            self.url, self.storage, self.options = url, storage, options
             self.error = ""
             self.closed = 0
             made.append(self)
@@ -369,15 +346,6 @@ def test_ctrl_c_before_or_after_the_window_still_stops_the_server(page, monkeypa
         assert server.should_exit and page.opened == []
 
 
-def test_the_window_asks_before_closing_only_while_a_platform_runs(page, monkeypatch) -> None:
-    server = _Server()
-    made = _fake_window(monkeypatch, lambda fake: True)
-    welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/", page.home)
-    assert made[0].confirm() == ""
-    monkeypatch.setattr(page.workspace.services, "running", lambda name: name == "direct")
-    assert "out of your chats" in made[0].confirm()
-
-
 def test_the_window_hides_instead_of_closing_only_when_the_person_chose_that(page, monkeypatch) -> None:
     server = _Server()
     made = _fake_window(monkeypatch, lambda fake: True)
@@ -386,7 +354,8 @@ def test_the_window_hides_instead_of_closing_only_when_the_person_chose_that(pag
     assert options["background"]() is False and options["start_hidden"] is False
     welcome.save_app_settings(page.home, background=True)
     assert options["background"]() is True, "read at the moment of closing, not at start"
-    assert set(options["words"]()) == {"open", "quit", "pet", "still"}
+    assert set(options["words"]()) == {"open", "quit", "pet", "still", "settings", "bring", "snooze", "unsnooze",
+                                       "characters", "hide"}
     made = _fake_window(monkeypatch, lambda fake: True)
     welcome._serve_in_window(page.app, _Server(), None, "http://127.0.0.1:1/", page.home, hidden=True)
     assert made[0].options["start_hidden"] is True
@@ -594,30 +563,6 @@ def test_the_shortcut_runs_this_install_on_this_home_with_the_icon(tmp_path) -> 
     assert "Remove-Item" in removal and "CreateShortcut" not in removal
 
 
-def test_shortcut_is_a_command(monkeypatch, capsys, tmp_path) -> None:
-    module, func, _help = cli.COMMANDS["shortcut"]
-    assert (module, func) == ("persona_agent.shortcut", "main")
-    monkeypatch.setenv("AGENT_LANG", "en")
-    monkeypatch.setenv("AGENT_HOME", str(tmp_path))
-    ran = []
-    monkeypatch.setattr(shortcut, "run", lambda source: ran.append(source) or "")
-
-    monkeypatch.setattr(shortcut, "WINDOWS", False)
-    assert shortcut.main([]) == 1 and "Windows only" in capsys.readouterr().out
-    monkeypatch.setattr(shortcut, "WINDOWS", True)
-    monkeypatch.setattr(langs, "under_uvx", lambda: True)
-    assert shortcut.main([]) == 1 and "uv tool install" in capsys.readouterr().out
-    assert ran == [], "nothing is written for a copy that will not stay"
-
-    monkeypatch.setattr(langs, "under_uvx", lambda: False)
-    assert shortcut.main([]) == 0 and "desktop" in capsys.readouterr().out
-    assert str(tmp_path) in ran[-1] and "CreateShortcut" in ran[-1]
-    assert shortcut.main(["--remove"]) == 0 and "gone" in capsys.readouterr().out
-    assert "Remove-Item" in ran[-1]
-    monkeypatch.setattr(shortcut, "run", lambda source: "access denied")
-    assert shortcut.main([]) == 1 and "access denied" in capsys.readouterr().out
-
-
 @pytest.mark.skipif(not shortcut.WINDOWS, reason="Windows writes .lnk files")
 def test_windows_writes_the_link_and_takes_it_away(tmp_path) -> None:
     home = tmp_path / "home"
@@ -649,50 +594,30 @@ def test_windows_reads_a_link_in_a_folder_no_code_page_spells(tmp_path, monkeypa
 
 # -- the page's own chat ----------------------------------------------------
 
-def test_the_page_names_its_chat_as_the_owners(tmp_path) -> None:
-    from persona_agent import access
-
+async def test_forgetting_a_chat_asks_the_character_once_then_starts_a_new_one(tmp_path, monkeypatch) -> None:
     workspace = welcome.Workspace(tmp_path)
-    try:
-        assert access.page_owner(tmp_path / "runtime") == frozenset(), "nothing named before the first save"
-        workspace.reset_chat()
-        named = access.page_owner(tmp_path / "runtime")
-        assert named == {f"browser:{workspace._conversation}"}
-        workspace.reset_chat()
-        assert access.page_owner(tmp_path / "runtime") == {f"browser:{workspace._conversation}"} != named
-        (tmp_path / "runtime" / access.PAGE_OWNER_FILE).write_text("x, qq:1", encoding="utf-8")
-        assert access.page_owner(tmp_path / "runtime") == frozenset(), "only one plain id is ever an owner"
-    finally:
-        workspace.close()
-
-
-async def test_forgetting_a_chat_asks_the_service_once_then_starts_a_new_one(tmp_path, monkeypatch) -> None:
-    workspace = welcome.Workspace(tmp_path)
-    before = workspace._conversation
-    chat = f"private:browser:{before}"
+    before = workspace._main.conversation
     calls = []
 
-    async def call(method, path, **options):
-        calls.append((method, path, options.get("json") or options.get("params")))
-        return {"ok": True, "forgotten": 3}
+    async def forget(conversation, keep):
+        calls.append((conversation, keep))
+        return 3
 
-    monkeypatch.setattr(workspace, "_activity_call", call)
-    monkeypatch.setattr(workspace.services, "start_agent", lambda: None)
+    monkeypatch.setattr(workspace.character, "forget_chat", forget)
     try:
         done = await workspace.forget_chat()
     finally:
         workspace.close()
-    # The page's chats are forgotten, earlier ones included; chats on the platforms are kept.
+    # The main chat is forgotten, the chats it replaced included; the plain chats the page lists are kept.
     assert done == {"ok": True, "forgotten": 3}
-    assert calls == [("POST", "/api/dashboard/memory/forget_chat",
-                      {"conv": chat, "earlier_page": True, "keep": []})]
-    assert workspace._conversation != before and workspace._history == []
+    assert calls == [(before, [])]
+    assert workspace._main.conversation != before and workspace._main.history == []
 
 
 # ---------------------------------------------------------------- frameless
 
 def _frameless(monkeypatch, *, regions: bool):
-    """Windows, with the two native steps stood in for; what they were asked to do."""
+    """Windows, with the native steps stood in for; what the two on the window were asked to do."""
     done = {"stripped": 0, "undone": 0}
 
     def strip(shown):
@@ -700,6 +625,7 @@ def _frameless(monkeypatch, *, regions: bool):
         return object(), lambda: done.__setitem__("undone", done["undone"] + 1)
 
     monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(window, "_own_process", lambda: None)
     monkeypatch.setattr(window, "_strip_title_bar", strip)
     monkeypatch.setattr(window, "_text_menus", lambda shown: regions)
     return done
@@ -792,4 +718,3 @@ def test_a_window_closed_before_its_page_asked_is_left_alone(webview, tmp_path, 
     assert app.run() is True
     time.sleep(0.5)
     assert done["undone"] == 0, "nothing is done to a window that is gone"
-

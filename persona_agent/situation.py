@@ -74,8 +74,6 @@ _SECOND_LEVEL = {"com", "net", "org", "co", "ne", "or", "ac", "go", "gov", "edu"
 # The person's accounts that say which catalogue sources and walk sites are theirs.
 PLATFORMS = {"youtube": (("youtube-",), "YouTube"), "bilibili": (("bili-", "bilibili-"), "Bilibili"),
              "zhihu": (("zhihu-",), ""), "weibo": (("weibo-",), ""), "github": (("gh-", "github-"), "")}
-# Where the walks go, by the host their lists are on.
-WALK_HOSTS = {"Bilibili": "bilibili.com", "YouTube": "youtube.com"}
 # Time zones that name one country (IANA, and Windows ids); "China Standard Time" covers Hong Kong too, so it is not here.
 _ZONES = {"Asia/Shanghai": "CN", "Asia/Tokyo": "JP", "Asia/Seoul": "KR", "Asia/Taipei": "TW",
           "Asia/Hong_Kong": "HK", "Europe/Moscow": "RU", "America/Sao_Paulo": "BR", "Europe/Madrid": "ES",
@@ -410,21 +408,6 @@ async def probe(runtime: Path, lang: str = "") -> None:
     await asyncio.to_thread(infer, runtime, lang)
 
 
-async def check_again(runtime: Path, lang: str = "") -> dict:
-    """The person's "check again now": every down host and the first-start ones tried at once, and every
-    blocked source let into the next round. What the page then shows."""
-    now = time.time()
-
-    def mark(state: dict) -> None:
-        state["retry_at"] = now
-
-    await asyncio.to_thread(_change, runtime, mark)
-    down = [h for h in down_hosts(runtime) if h not in {site_of(p) for p in PROBE_HOSTS}]
-    await _check(runtime, list(PROBE_HOSTS) + down)
-    await asyncio.to_thread(infer, runtime, lang)
-    return await asyncio.to_thread(view, runtime, time.time())
-
-
 async def retry_down(runtime: Path, now: Optional[float] = None) -> None:
     """Each round: the down hosts due a retry (RETRY_S after their last failure, every round with the VPN
     switch on) tried again, so one no source or walk asks for, such as a first-start probe host, comes
@@ -658,19 +641,14 @@ def supply(runtime: Path, source) -> float:
     return supplier(runtime)(source)
 
 
-def walk_prior(runtime: Path, site: str) -> float:
-    """What the situation adds to a walk site: +1 for Bilibili in mainland China and YouTube elsewhere,
-    and ACCOUNT for a platform the person connected."""
-    region = value(runtime, "region")
-    term = 1.0 if (site == "Bilibili") == (region == "CN") else 0.0
+def walk_prior(runtime: Path, site: str, region: str = "") -> float:
+    """What the situation adds to a walk site whose platform is of `region` ("" for the whole world's): +1
+    for one of the person's region, or a world platform outside mainland China; and ACCOUNT for a platform
+    the person connected."""
+    here = value(runtime, "region")
+    term = 1.0 if (region == here if region else here != "CN") else 0.0
     names = {PLATFORMS[k][1] for k in value(runtime, "accounts") if k in PLATFORMS}
     return term + (ACCOUNT if site in names else 0.0)
-
-
-def youtube_place(runtime: Path, lang: str) -> dict:
-    """YouTube search's gl= (the current region) and hl= (the page's language) for a walk."""
-    hl = {"zh": "zh-CN", "zh-TW": "zh-TW", "pt-BR": "pt-BR"}.get(lang, primary(lang))
-    return {"gl": value(runtime, "region"), "hl": hl}
 
 
 def priors(runtime: Path) -> dict[str, tuple[float, float]]:

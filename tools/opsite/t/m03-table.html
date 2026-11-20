@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>小馆 - 订座</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f7f3ee; }
+form { max-width: 520px; margin: 24px auto; background: #fff; padding: 20px 26px; border-radius: 12px; }
+fieldset { border: 0; padding: 0; margin: 12px 0; } legend { color: #555; margin-bottom: 4px; }
+.times label { display: inline-block; margin: 0 10px 6px 0; } input[type=text], input[type=tel], textarea, select { width: 100%; padding: 7px; box-sizing: border-box; }
+.step { display: flex; align-items: center; gap: 8px; } .step button { width: 30px; height: 30px; } .err { color: #c33; font-size: 12px; }
+</style></head>
+<body>
+<form id="f" method="post" action="/api/reserve">
+<h2>预订座位</h2>
+<fieldset><legend>日期</legend><select id="day" name="day" aria-label="日期"></select></fieldset>
+<fieldset class="times"><legend>时间</legend></fieldset>
+<fieldset><legend>人数</legend><div class="step"><button type="button" id="minus" aria-label="减少人数">−</button><span id="n">2</span><button type="button" id="plus" aria-label="增加人数">＋</button></div></fieldset>
+<fieldset><legend>联系人</legend><input type="text" id="who" name="name" aria-label="姓名" placeholder="姓名">
+<input type="tel" id="tel" name="phone" aria-label="手机号" placeholder="手机号" style="margin-top:6px"><div class="err" id="err"></div></fieldset>
+<fieldset><legend>备注</legend><textarea id="note" name="note" aria-label="备注"></textarea></fieldset>
+<button type="submit" id="ok">提交预订</button><p id="said"></p>
+</form>
+<script src="/t/kit.js"></script>
+<script>
+// The next fourteen days, and the times of an evening, as radio buttons.
+const day = document.getElementById("day");
+const base = new Date(2026, 10, 20);
+for (let i = 0; i < 14; i++) {
+  const d = new Date(base.getTime() + i * 86400000);
+  const o = document.createElement("option");
+  o.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  o.textContent = `${d.getMonth() + 1}月${d.getDate()}日 星期${"日一二三四五六"[d.getDay()]}`;
+  day.append(o);
+}
+const times = document.querySelector(".times");
+for (const t of ["17:30", "18:00", "18:30", "19:00", "19:30", "20:00"]) {
+  times.insertAdjacentHTML("beforeend", `<label><input type="radio" name="time" value="${t}"> ${t}</label>`);
+}
+let n = 2;
+document.getElementById("plus").onclick = () => { n = Math.min(n + 1, 12); document.getElementById("n").textContent = n; };
+document.getElementById("minus").onclick = () => { n = Math.max(n - 1, 1); document.getElementById("n").textContent = n; };
+document.getElementById("f").onsubmit = async (e) => {
+  e.preventDefault();
+  const time = (document.querySelector("input[name=time]:checked") || {}).value;
+  const phone = document.getElementById("tel").value.trim();
+  if (!/^1\d{10}$/.test(phone)) { document.getElementById("err").textContent = "请填写 11 位手机号"; return; }
+  if (!time) { document.getElementById("err").textContent = "请选择时间"; return; }
+  const body = { day: day.value, time, people: n, name: document.getElementById("who").value.trim(), phone,
+    note: document.getElementById("note").value.trim() };
+  if ((await post("/api/reserve", body)).ok) document.getElementById("said").textContent = "预订成功";
+};
+</script></body></html>

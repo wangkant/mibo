@@ -1,0 +1,140 @@
+/* Web addresses as cards (linkcard.js): plain, with a hairline round them, as the find card is. Cards in a row
+   join into one stack. */
+.links {
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  margin-top: var(--pa-s3);
+  container-type: inline-size;
+}
+.links:first-child {
+  margin-top: 0;
+}
+.lk {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s4);
+  min-height: 72px;
+  padding: var(--pa-s3) var(--pa-s3) var(--pa-s3) var(--pa-s4);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--pa-t-fast);
+}
+.lk:hover {
+  position: relative;
+  z-index: 1;
+  border-color: var(--pa-line-strong);
+}
+.lk:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: var(--pa-focus);
+  outline-offset: 1px;
+}
+.lk + .lk {
+  margin-top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.lk:has(+ .lk) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.lk + .find,
+.find + .lk,
+.find + .find {
+  margin-top: var(--pa-s2);
+}
+.lk-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lk-site {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 18px;
+}
+.lk-site-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lk-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.lk-host {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+}
+.lk:hover .lk-title {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.lk-desc {
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lk.unread .lk-desc {
+  color: var(--pa-faint);
+}
+.lk-wait {
+  width: 60%;
+  height: 14px;
+  margin: 3px 0;
+  border-radius: 4px;
+  background: var(--pa-sunken);
+}
+.lk-pic {
+  flex: none;
+  width: 104px;
+  height: 66px;
+  overflow: hidden;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+}
+.lk-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: var(--pa-cover-filter);
+}
+/* Under the person's own bubble, on their side. */
+.me .links {
+  width: min(100%, 420px);
+  margin-top: var(--pa-s2);
+}
+.me .lk-pic {
+  width: 88px;
+  height: 56px;
+}
+@container (max-width: 380px) {
+  .lk-pic {
+    width: 72px;
+    height: 48px;
+  }
+}

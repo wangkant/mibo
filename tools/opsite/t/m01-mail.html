@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>简信 - 联系人</title>
+<style>
+body { margin: 0; font: 14px/1.5 system-ui, "Microsoft YaHei", sans-serif; background: #fafafa; }
+.wrap { display: flex; height: 100vh; } nav { width: 230px; border-right: 1px solid #e5e5e5; background: #fff; overflow-y: auto; }
+nav input { margin: 10px; width: calc(100% - 20px); padding: 6px; box-sizing: border-box; }
+.c { display: flex; gap: 8px; align-items: center; padding: 8px 12px; cursor: pointer; } .c:hover { background: #f0f0f0; }
+.c img { width: 30px; height: 30px; border-radius: 50%; background: #c9d6e8; } .c.on { background: #e6eefc; }
+main { flex: 1; display: flex; flex-direction: column; } header { padding: 12px 16px; border-bottom: 1px solid #e5e5e5; }
+#log { flex: 1; padding: 16px; overflow-y: auto; } .m { background: #fff; border: 1px solid #eee; padding: 6px 10px; margin: 6px 0; border-radius: 8px; }
+footer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e5e5e5; background: #fff; }
+#ed { flex: 1; min-height: 44px; border: 1px solid #ddd; border-radius: 6px; padding: 6px; outline: none; }
+.icon { width: 40px; border: 0; background: #2f6fde; border-radius: 6px; color: #fff; cursor: pointer; }
+</style></head>
+<body><div class="wrap">
+<nav><input id="filter" placeholder="筛选联系人" aria-label="筛选联系人"><div id="people"></div></nav>
+<main><header><span id="peer">未选择联系人</span></header><div id="log"></div>
+<footer><div id="ed" contenteditable="true" role="textbox" aria-label="消息内容"></div>
+<button class="icon" id="go" title="发送 (Ctrl+Enter)"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="#fff" d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button></footer></main>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+// Sixty contacts; the names are shown only after the filter narrows them to fewer than twenty.
+const NAMES = ["王芳", "王方", "汪芳", "李雷", "韩梅梅", "张伟", "刘洋", "陈静", "杨帆", "赵磊"];
+const people = Array.from({ length: 60 }, (_, i) => ({ id: i === 7 ? "wangfang" : "u" + i,
+  name: i === 7 ? "王芳" : i === 12 ? "王方" : i === 19 ? "汪芳" : NAMES[3 + (i % 7)] + (i % 5 ? "" : "（工作）") }));
+let peer = null;
+function draw() {
+  const q = document.getElementById("filter").value.trim();
+  const list = people.filter((p) => !q || p.name.includes(q));
+  const box = document.getElementById("people");
+  box.replaceChildren();
+  for (const p of list) {
+    const row = document.createElement("div");
+    row.className = "c" + (peer === p ? " on" : "");
+    row.innerHTML = `<img alt=""><span>${list.length < 20 ? p.name : "•••"}</span>`;
+    row.onclick = () => { peer = p; document.getElementById("peer").textContent = p.name; document.getElementById("log").innerHTML = '<div class="m">' + p.name + "：好久不见</div>"; draw(); };
+    box.append(row);
+  }
+}
+document.getElementById("filter").addEventListener("input", draw);
+draw();
+document.getElementById("go").onclick = async () => {
+  const ed = document.getElementById("ed"), text = ed.innerText.trim();
+  if (!peer || !text) return;
+  if ((await post("/api/msg", { to: peer.id, text })).ok) {
+    document.getElementById("log").insertAdjacentHTML("beforeend", '<div class="m">我：' + text.replace(/</g, "&lt;") + "</div>");
+    ed.textContent = "";
+  }
+};
+</script></body></html>

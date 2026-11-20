@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>读书会报名表</title>
+<style>body { margin: 0; font: 14px/1.7 system-ui, "Microsoft YaHei", sans-serif; background: #f3efe6; }
+form { max-width: 460px; margin: 30px auto; background: #fff; padding: 22px 26px; border-radius: 8px; }
+label { display: block; margin: 10px 0 4px; } input { width: 100%; padding: 6px; box-sizing: border-box; }
+button { margin-top: 14px; background: #8a5a2b; color: #fff; border: 0; padding: 7px 22px; border-radius: 4px; }</style></head>
+<body>
+<form id="f"><h2>社区读书会 · 报名</h2><p>时间：周六 14:00 · 地点：社区图书室</p>
+  <label for="n">姓名</label><input id="n" name="name">
+  <label for="p">手机</label><input id="p" name="phone" type="tel">
+  <button type="submit">提交报名</button><p id="ok"></p></form>
+<script src="/t/kit.js"></script>
+<script>
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if ((await post("/api/rsvp", { name: document.getElementById("n").value.trim(), phone: document.getElementById("p").value.trim() })).ok)
+    document.getElementById("ok").textContent = "报名成功，周六见！";
+});
+</script></body></html>

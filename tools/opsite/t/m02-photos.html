@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>拍拍 - 发现</title>
+<style>
+body { margin: 0; font: 13px/1.4 system-ui, "Microsoft YaHei", sans-serif; background: #f4f4f4; }
+.grid { columns: 4 200px; column-gap: 12px; padding: 14px; }
+.card { break-inside: avoid; background: #fff; border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.pic { background: #d8dde6; display: grid; place-items: center; color: #667; }
+.foot { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; }
+.who { color: #555; } .heart { border: 0; background: none; cursor: pointer; color: #999; font-size: 13px; }
+.heart.on { color: #e33; }
+</style></head>
+<body><div class="grid" id="grid"></div>
+<script src="/t/kit.js"></script>
+<script>
+// Forty photos in columns; each card's caption is the picture's alt text, its author under it, a heart with a count.
+const WHO = ["陈晨", "陈辰", "林一", "周舟", "吴悠", "郑好"];
+const WHAT = ["猫", "狗", "海边", "咖啡", "山", "花"];
+for (let i = 0; i < 40; i++) {
+  const who = i === 23 ? "陈晨" : WHO[(i + 1) % 6], what = i === 23 ? "猫" : WHAT[i % 6];
+  const id = "ph" + i, n = 10 + ((i * 13) % 90);
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `<div class="pic" style="height:${120 + (i * 37) % 120}px" role="img" aria-label="${who}拍的${what}的照片">${what}</div>
+    <div class="foot"><span class="who">${who}</span><button class="heart" aria-label="${n}">♥ ${n}</button></div>`;
+  const heart = card.querySelector(".heart");
+  heart.onclick = async () => { if ((await post("/api/like", { photo: id })).ok) { heart.classList.add("on"); heart.textContent = "♥ " + (n + 1); } };
+  document.getElementById("grid").append(card);
+}
+</script></body></html>

@@ -26,9 +26,6 @@ SPEC = Spec(
             r"|o\s+que\s+(?:voc[êe]|vc|tu)\s+(?:guardou|anotou)"),
     recall_tail=r"a[ií]|hein|ent[ãa]o",
     # Anchored: "o que você aprendeu na escola" is chat, not the summary.
-    learned=(r"(?:o\s+)?que\s+(?:voc[êe]|vc|tu)\s+(?:j[áa]\s+)?aprendeu"
-             r"(?:\s+(?:at[ée]\s+agora|comigo|com\s+a\s+gente|a[ií]))?"
-             r"\s*[?!.~]*$"),
     # Questions often drop the mark and end on a tag: "né", "não é", "lembra".
     question_end=(r"[?？][\s?？!！.。~～]*$"
                   r"|\b(?:n[ée]|n[ãa]o\s+[ée]|sabe|lembra|certo|hein)[\s!.~]*$"),
@@ -43,16 +40,6 @@ SPEC = Spec(
     everything=frozenset({"tudo", "tudo isso", "tudinho", "todas", "todos",
                           "tudo que você sabe", "tudo que vc sabe"}),
     first_person=r"(?<![\w'])(?:eu|me|mim|comigo|meu|meus|minha|minhas)(?![\w'])",
-    self_id=r"(?<!\w)(?<!não\s)(?<!nao\s)(?:eu\s+)?sou(?:\s+(?:o|a|um|uma))?(?!\w)",
-    made_by=r"(?:criad|desenvolvid|treinad|feit)[oa]\s+(?:pela?|por)",
-    from_maker=r"(?<!\w)(?:da|do|de)",
-    leak_labels=r"entrada|falante|intenção|decisão|estilo|análise",
-    assistant_tells=(r"(?:desculpe|me\s+desculpe|sinto\s+muito|lamento)[,.!\s]+(?:mas\s+)?(?:eu\s+)?"
-                     r"não\s+(?:posso|consigo|sou\s+capaz\s+de)\s+(?:te\s+|lhe\s+)?"
-                     r"(?:ajudar|responder|fornecer|atender|auxiliar)\s+(?:com\s+|a\s+)?"
-                     r"(?:isso|isto|essa\s+\w+|esta\s+\w+|sua\s+solicitação|seu\s+pedido)"
-                     r"|espero\s+que\s+(?:isso|isto)\s+(?:te\s+|lhe\s+)?(?:ajude|seja\s+útil)"
-                     r"|espero\s+ter\s+ajudado"),
     replies={
         "remember_what": ("lembrar o quê? você não falou nada", "fala aí, anotar o quê",
                           "anotar o quê kkk"),
@@ -64,37 +51,12 @@ SPEC = Spec(
         "forgotten": ("esqueci", "apagado", "já era", "foi"),
         "empty": ("cabeça vazia", "não tem nada aqui", "tudo em branco"),
         "recall_head": ("Olha o que eu lembro:",),
-        "said": ("você disse: ",),
-        "about": ("sobre {name}: ",),
-        "from": ("de {name}: ",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("Só consigo responder aqui depois que meu administrador aprovar esta conversa. O código do seu pedido é {code}. Manda esse código pro meu administrador, por favor.",),
-        "approval_group": ("Meu administrador ainda não aprovou este grupo, então não posso responder aqui.",),
+        "secret": ('Não guardei: números de documento e de cartão, senhas e códigos nunca são salvos.',),
     },
     failure_excuses=("pera, travei aqui",
                      "calma, a conexão tá zoada",
                      "sinal ruim agora, me dá um minuto"),
     # "label: {n}" throughout, so no count needs singular or plural.
-    learned_text={
-        "head": ("memórias: {memories}, respostas aprendidas: {examples}, "
-                 "correções: {fixes}, em observação até mais uma reação concordante: {voice}, "
-                 "aguardando minha própria decisão: {admin}"),
-        "score": ", última autoavaliação {score}/5",
-        "pair": "antes: {was}, agora: {better}",
-        "someone_else": "alguém em outro chat",
-        "someone": "alguém",
-        "retry": "{who} aceitou a nova resposta",
-        "self_review": "revisão própria",
-        "self_eval": "autoavaliação nota máxima",
-        "corrected": "{who} corrigiu",
-        "missed": "{who} disse que errei",
-        "liked": "{who} curtiu",
-        "by_me": "decidido por mim",
-        "by_person": "aplicado manualmente",
-        "passed": "provas: {events}, fortes: {strong}, passou",
-        "why": "motivo: {steps}",
-        "sep": ", ",
-    },
     stopwords=frozenset({
         "não", "nao", "você", "voce", "vc", "tá", "ta", "tô", "né", "pra", "tenho",
         "isso", "muito", "também", "tambem", "tbm", "agora", "aqui", "gente",
@@ -104,4 +66,9 @@ SPEC = Spec(
         "acho", "aí", "bem",
     }),
     letters="ãõ",
+    unsaid=r"\bnão (?:guarda|guarde|anota|anote|lembra|lembre|salva|salve) (?:isso|disso)\b",
+    forget_that=(r"esque(?:ce|ça) (?:o que eu (?:disse|falei)|isso)\b"
+                 r"|finge que eu não (?:disse|falei) nada"),
+    lead_in=r"bom|tá|ah",
+    kinds=("Sobre você", "Gosta", "Não gosta", "Ultimamente", "Planos", "Como te tratar"),
 )

@@ -11,20 +11,15 @@ import persona_agent
 from persona_agent import cli, home, paths
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "integrations" / "astrbot" / "astrbot_plugin_personagent"
 
 
 def _pyproject() -> str:
     return (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 
-def test_one_version_for_the_package_the_metadata_and_the_plugin() -> None:
+def test_one_version_for_the_package_and_the_metadata() -> None:
     declared = re.search(r'^version = "([^"]+)"', _pyproject(), re.MULTILINE).group(1)
-    plugin = re.search(r"^version:\s*(\S+)",
-                       (PLUGIN / "metadata.yaml").read_text(encoding="utf-8"),
-                       re.MULTILINE).group(1)
-    assert declared == persona_agent.__version__ == plugin, (
-        declared, persona_agent.__version__, plugin)
+    assert declared == persona_agent.__version__, (declared, persona_agent.__version__)
 
 
 def test_the_classifiers_match_a_stable_release() -> None:
@@ -62,9 +57,9 @@ def test_the_workflows_take_pytest_and_ruff_from_the_dev_extra() -> None:
     extra = re.search(r"^dev = \[(.*?)\]", _pyproject(), re.MULTILINE).group(1)
     tools = [re.match(r"[A-Za-z0-9_.-]+", spec).group(0)
              for spec in re.findall(r'"([^"]+)"', extra)]
-    # mcp: the official SDK the tool tests run personagent's own client against;
-    # playwright: the `web` extra, so the browser-worked platforms are tested.
-    assert tools == ["pytest", "ruff", "mcp", "playwright"], tools
+    # playwright: the `web` extra, so the walks on the web are tested. (The MCP SDK is a dependency of the
+    # app itself now, so the tests have it without the extra.)
+    assert tools == ["pytest", "ruff", "playwright"], tools
     web = re.search(r"^web = \[(.*?)\]", _pyproject(), re.MULTILINE).group(1)
     assert re.findall(r'"([^"]+)"', web) == [re.findall(r'"(playwright[^"]*)"', extra)[0]]
     for name in ("ci.yml", "release.yml"):
@@ -76,17 +71,15 @@ def test_the_workflows_take_pytest_and_ruff_from_the_dev_extra() -> None:
 
 
 def test_the_wheel_bundles_the_shared_files_under_bundled() -> None:
-    """hatchling maps data/, the AstrBot plugin and .env.example under
-    persona_agent/_bundled, where home.resource() looks in an installed copy;
-    CI installs the built wheel and reads them back."""
+    """hatchling maps data/ and .env.example under persona_agent/_bundled,
+    where home.resource() looks in an installed copy; CI installs the built
+    wheel and reads them back."""
     text = _pyproject()
-    plugin = PLUGIN.relative_to(ROOT).as_posix()
-    for source in ("data", plugin):
-        assert f'"{source}" = "persona_agent/_bundled/{source}"' in text, source
+    assert '"data" = "persona_agent/_bundled/data"' in text
     assert '".env.example" = "persona_agent/_bundled/.env.example"' in text
     wheel = re.search(r"^\[tool\.hatch\.build\.targets\.wheel\]\n(.*?)\n\n", text,
                       re.MULTILINE | re.DOTALL).group(1)
-    for included in ("persona_agent", "data", plugin):
+    for included in ("persona_agent", "data"):
         assert f'"{included}"' in wheel, included
 
 
@@ -116,27 +109,27 @@ def test_a_folder_is_a_home_only_with_its_own_settings(tmp_path: Path) -> None:
 def test_seeds_prefer_the_home_then_fall_back_to_the_shipped_copy(
         monkeypatch, tmp_path: Path) -> None:
     shipped = tmp_path / "shipped"
-    (shipped / "data" / "evals").mkdir(parents=True)
-    (shipped / "data" / "lorebook.en.json").write_text("shipped", encoding="utf-8")
+    (shipped / "data" / "personas").mkdir(parents=True)
+    (shipped / "data" / "output_filter.en.json").write_text("shipped", encoding="utf-8")
     (shipped / "data" / "examples.jsonl").write_text("shipped", encoding="utf-8")
-    (shipped / "data" / "evals" / "speak.en.jsonl").write_text("", encoding="utf-8")
+    (shipped / "data" / "personas" / "mibo.en.txt").write_text("", encoding="utf-8")
     deployment = tmp_path / "home"
     (deployment / "data").mkdir(parents=True)
     monkeypatch.setattr(paths, "ROOT", deployment)
     monkeypatch.setattr(paths, "resource", lambda *parts: shipped.joinpath(*parts))
 
-    assert paths.seed_file("lorebook.en.json") == shipped / "data" / "lorebook.en.json"
-    assert paths.seed_file("evals") == shipped / "data" / "evals"
-    assert (paths.resolve_seed_lang_file("lorebook", "json", "en")
-            == shipped / "data" / "lorebook.en.json")
+    assert paths.seed_file("output_filter.en.json") == shipped / "data" / "output_filter.en.json"
+    assert paths.seed_file("personas") == shipped / "data" / "personas"
+    assert (paths.resolve_seed_lang_file("output_filter", "json", "en")
+            == shipped / "data" / "output_filter.en.json")
     assert (paths.resolve_seed_lang_file("examples", "jsonl", "zh")
             == shipped / "data" / "examples.jsonl")
 
-    (deployment / "data" / "lorebook.json").write_text("mine", encoding="utf-8")
-    assert (paths.resolve_seed_lang_file("lorebook", "json", "en")
-            == deployment / "data" / "lorebook.json"), "the home's own copy wins"
-    (deployment / "data" / "lorebook.en.json").write_text("mine", encoding="utf-8")
-    assert paths.seed_file("lorebook.en.json") == deployment / "data" / "lorebook.en.json"
+    (deployment / "data" / "output_filter.json").write_text("mine", encoding="utf-8")
+    assert (paths.resolve_seed_lang_file("output_filter", "json", "en")
+            == deployment / "data" / "output_filter.json"), "the home's own copy wins"
+    (deployment / "data" / "output_filter.en.json").write_text("mine", encoding="utf-8")
+    assert paths.seed_file("output_filter.en.json") == deployment / "data" / "output_filter.en.json"
     assert (paths.resolve_seed_lang_file("missing", "json", "en")
             == deployment / "data" / "missing.json")
 
@@ -157,18 +150,9 @@ def test_the_cli_prints_its_version(capsys) -> None:
 def test_the_subcommands_this_package_serves_resolve() -> None:
     import importlib
 
-    for name in ("start", "shortcut", "run", "doctor", "learned", "chat", "eval"):
+    for name in ("start",):
         module, func, _help = cli.COMMANDS[name]
         assert callable(getattr(importlib.import_module(module), func)), name
-
-
-def test_eval_runs_as_a_subcommand(capsys) -> None:
-    with pytest.raises(SystemExit) as stop:
-        cli.main(["eval", "--help"])
-    assert stop.value.code == 0
-    out = capsys.readouterr().out
-    assert out.startswith("usage: personagent eval")
-    assert "--suite" in out
 
 
 def test_release_notes_come_from_the_changelog_section_of_the_tag() -> None:
@@ -184,9 +168,3 @@ def test_release_notes_come_from_the_changelog_section_of_the_tag() -> None:
         notes["changelog_section"](changelog, "2.0.0")
     assert notes["project_version"](_pyproject()) == persona_agent.__version__
     assert notes["main"](["v0.0.0-not-this"]) == 1
-
-
-def test_the_package_smoke_script_names_real_health_checks() -> None:
-    from persona_agent import health
-    smoke = runpy.run_path(str(ROOT / "tools" / "package_smoke.py"))
-    assert set(smoke["CHAT_PROBES"]) <= {name for name, _fn, _crit in health.CHECKS}

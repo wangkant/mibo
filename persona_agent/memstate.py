@@ -1,14 +1,13 @@
-"""Memory bookkeeping (runtime/memory_state.json): the migration marker, the
-consolidation call budget and its backoff, tombstones of forgotten things.
-Rebuildable: losing it can only repeat or skip a call, reset a day's count or
-forget a tombstone early. No model call here."""
+"""Memory bookkeeping (runtime/memory_state.json): the fold's call budget and
+its backoff, and the lines a chat lost. Rebuildable: losing it can only repeat
+or skip a call or reset a day's count. No model call here."""
 from __future__ import annotations
 
 import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 from .storage import atomic_write_text, load_rebuildable_json
 
@@ -20,9 +19,6 @@ BACKOFF_MAX_S = 21600.0
 FAILS_BEFORE_PAUSE = 3
 PAUSE_S = 3600.0
 DAY_S = 86400.0
-TOMBSTONE_S = 30 * DAY_S
-#: Share of a new text's (or the tombstone's, if smaller) tokens it must share.
-TOMBSTONE_OVERLAP = 0.6
 
 
 def _parse(data) -> dict:
@@ -69,14 +65,6 @@ class MemoryState:
 
     # ---- small per-chat records --------------------------------------------
 
-    def core_at(self, conv: str) -> Optional[float]:
-        value = self._map("core_at").get(conv)
-        return float(value) if isinstance(value, (int, float)) else None
-
-    def set_core_at(self, conv: str, at: float) -> None:
-        self._map("core_at")[conv] = at
-        self.touch()
-
     def add_lost(self, conv: str, n: int) -> None:
         if n > 0:
             lost = self._map("lost_lines")
@@ -87,44 +75,9 @@ class MemoryState:
         return int(self._map("lost_lines").get(conv) or 0)
 
     def drop_conv(self, conv: str) -> None:
-        for key in ("per_conv", "lost_lines", "core_at", "tombstones", "review_day",
-                    "review_offered"):
+        for key in ("per_conv", "lost_lines"):
             self._map(key).pop(conv, None)
         self.touch()
-
-    # ---- tombstones ---------------------------------------------------------
-
-    def add_tombstone(self, conv: str, hashes: Iterable[str],
-                      now: Optional[float] = None) -> None:
-        hashes = sorted(set(hashes))
-        if not hashes:
-            return
-        now = time.time() if now is None else now
-        stones = self._map("tombstones").setdefault(conv, [])
-        stones[:] = [s for s in stones if isinstance(s, dict)
-                     and float(s.get("until") or 0.0) > now]
-        stones.append({"at": now, "tokens": hashes, "until": now + TOMBSTONE_S})
-        self.touch()
-
-    def tombstoned(self, conv: str, hashes: Iterable[str], before: float,
-                   now: Optional[float] = None) -> bool:
-        """Does a live tombstone of `conv`, laid after `before` (the newest
-        cited line), cover these token hashes?"""
-        new = set(hashes)
-        if not new:
-            return False
-        now = time.time() if now is None else now
-        for stone in self._map("tombstones").get(conv, []):
-            if not isinstance(stone, dict) or float(stone.get("until") or 0.0) <= now:
-                continue
-            if before >= float(stone.get("at") or 0.0):
-                continue
-            tokens = set(stone.get("tokens") or [])
-            if not tokens:
-                continue
-            if len(new & tokens) / min(len(new), len(tokens)) >= TOMBSTONE_OVERLAP:
-                return True
-        return False
 
 
 class CallBudget:

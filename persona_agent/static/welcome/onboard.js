@@ -8,174 +8,11 @@
 (() => {
   "use strict";
 
-  // The languages the character speaks, by their own names. The screens are in
-  // Chinese or English for now; the others are spoken by the character only.
-  const LANGS = [
-    ["zh", "简体中文"],
-    ["en", "English"],
-    ["zh-TW", "繁體中文"],
-    ["ja", "日本語"],
-    ["ko", "한국어"],
-    ["es", "Español"],
-    ["fr", "Français"],
-    ["de", "Deutsch"],
-    ["pt-BR", "Português (Brasil)"],
-    ["ru", "Русский"],
-  ];
+  // The languages the character speaks, by their own names; the screens follow the one picked.
+  const LANGS = paI18n.languages;
   const STEP_COUNT = 5;
   const [LANG, FIGURE, MODEL, TOPICS, ABOUT] = [0, 1, 2, 3, 4];
-  // The figures that are a written character of their own; the others take this one's ways.
-  const WRITTEN = ["pico", "deepseek", "chatgpt", "claude"];
-  // The app's own characters, not drawn after anyone's.
-  const ORIGINAL = ["pico", "sprout"];
-  const PLAIN_CHARACTER = "warm-listener";
 
-  const WORDS = {
-    zh: {
-      steps: ["语言", "角色", "模型", "喜好", "关于你"],
-      skip: "跳过",
-      back: "上一步",
-      next: "下一步",
-      finish: "完成",
-      saying: [
-        "你好！先选一个语言吧，我之后都用它和你说话。",
-        "这是我们几个。选一个陪着你的，之后在设置里也能换。",
-        "我得接上一个模型才能陪你聊天。用你自己的 key，只存在这台电脑上。",
-        "告诉我你平时爱看什么吧，我出门找东西的时候会照着挑。",
-        "最后，说说你自己吧。不想写也没关系，直接出发就行。",
-      ],
-      sayingNoModel: "最后看一眼：我是这么理解你这边的，不对就改一下。",
-      bye: "好嘞，我这就出门找找看！",
-      langHint: "角色会用这个语言和你说话，也会优先找这个语言的内容。",
-      langScreens: (name) => `界面目前只有简体中文和英文，将以简体中文显示；角色会用${name}和你说话。`,
-      figureHint: "选择一个角色。",
-      original: "原创",
-      later: {
-        [MODEL]: "可以稍后在设置中连接。连接前，角色找到的内容仍会发到对话中，但无法聊天。",
-        [TOPICS]: "可以不选，角色会从你打开的内容中学习。",
-      },
-      service: "模型服务",
-      key: "API 密钥",
-      keyPlaceholder: "粘贴你的密钥",
-      getKey: "获取密钥",
-      base: "服务地址",
-      basePlaceholder: "https://…/v1",
-      model: "模型",
-      connect: "连接",
-      connecting: "正在连接…",
-      connected: "已连接",
-      change: "更换",
-      noKey: "此服务在本机运行，无需密钥。",
-      freeNote: "OpenRouter 提供免费模型：注册后即可免费获取密钥，每天约可使用 50 次。",
-      keyStays: "密钥只保存在本机，不会发送给我们。",
-      topicsHint: "选择你感兴趣的主题，数量不限。",
-      addTopic: "添加其他主题，如摄影、咖啡",
-      add: "添加",
-      chosenTopics: (n) => (n ? `已选 ${n} 个` : "未选择"),
-      connectLater: "角色会浏览公开网站，并从你打开的内容中学习。如需读取邮箱或 Discord 消息，可稍后在设置的「连接」中添加。",
-      whereHint: "角色据此决定浏览哪些网站、查找哪些语言的内容。",
-      reads: (names) => `阅读 ${names}`,
-      listSep: "、",
-      platform: { up: "可连接", down: "无法连接", unknown: "未检查" },
-      fixWhere: "修改",
-      tellLabel: (name) => `告诉${name}你喜欢什么、最近在忙什么`,
-      tellPlaceholder: "比如：最近在学做饭，爱看科幻和纪录片，周末常去爬山。",
-      tell: (name) => `告诉${name}`,
-      telling: (name) => `${name}正在阅读…`,
-      told: "已记录",
-      toldLater: "已保存，将在下次整理时使用。",
-      tellAgain: "修改",
-      heard: "记住啦，谢谢你告诉我！",
-      tellLater: "连接模型后，可在设置的「它对你的了解」中填写。",
-      it: "它",
-      errors: {
-        profile_invalid: "请输入 1 到 1000 个字。",
-        key_required: "请输入密钥。",
-        key_again: "已更换服务，请输入该服务的密钥。",
-        key_malformed: "密钥格式不正确。请确认只粘贴了密钥本身。",
-        key_rejected: "服务未接受该密钥。请检查是否复制完整、是否仍然有效。",
-        model_limited: "该服务当前限流。请稍后重试，或更换模型。",
-        model_unreachable: "无法连接到该服务或模型。请检查地址、模型名称和网络。",
-        model_required: "请输入模型名称。",
-        invalid_provider: "请从列表中选择模型服务。",
-        busy: "上一步仍在进行。请稍后重试。",
-        offline: "无法连接到 personagent。请确认它仍在运行。",
-        generic: "操作失败。请重试。",
-      },
-    },
-    en: {
-      steps: ["Language", "Character", "Model", "Interests", "You"],
-      skip: "Skip this",
-      back: "Back",
-      next: "Next",
-      finish: "Done, off you go",
-      saying: [
-        "Hi! Pick a language first. It's the one I'll talk to you in.",
-        "Here we are. Pick the one who keeps you company; you can switch later in settings.",
-        "I need a model to chat with. It uses your own key, kept on this computer only.",
-        "Tell me what you like to read and watch, and I'll pick with that in mind.",
-        "Last thing: tell me a little about you. Or don't, and we'll just head off.",
-      ],
-      sayingNoModel: "One last look: this is how I read where you are. Change it if it's wrong.",
-      bye: "Right, I'm off to have a look!",
-      langHint: "The character talks to you in this language and looks for things written in it first.",
-      langScreens: (name) => `The screens are in Chinese or English for now, so they show in English; the character talks to you in ${name}.`,
-      figureHint: "Tap one to pick it.",
-      original: "Original",
-      later: {
-        [MODEL]: "You can leave this for now: what I find still arrives in the chat, and talking waits until a model is connected in Settings.",
-        [TOPICS]: "Fine to leave empty; I'll learn from what you open.",
-      },
-      service: "Model service",
-      key: "API key",
-      keyPlaceholder: "Paste your key",
-      getKey: "Get a key",
-      base: "Service address",
-      basePlaceholder: "https://…/v1",
-      model: "Model",
-      connect: "Connect",
-      connecting: "Trying to connect…",
-      connected: "Connected",
-      change: "Change",
-      noKey: "This service runs on your computer and needs no key.",
-      freeNote: "OpenRouter has free models: sign up and you get a key at no cost, good for about 50 requests a day.",
-      keyStays: "The key is kept on this computer only and never sent to us.",
-      topicsHint: "Tap what you're into. As many or as few as you like.",
-      addTopic: "Add your own, like photography or coffee",
-      add: "Add",
-      chosenTopics: (n) => (n ? `${n} picked` : "None yet"),
-      connectLater: "I'll wander the public web on my own and learn from what you open. Want me to read your mail or Discord too? Connect them later under Settings › Connect.",
-      whereHint: "I go by this to choose which sites to look on and which languages to bring.",
-      reads: (names) => `reads ${names}`,
-      listSep: ", ",
-      platform: { up: "reachable", down: "unreachable", unknown: "not checked yet" },
-      fixWhere: "Not right? Change it",
-      tellLabel: (name) => `Tell ${name} what you like and what you're busy with lately`,
-      tellPlaceholder: "For example: learning to cook lately, into sci-fi and documentaries, hiking most weekends.",
-      tell: (name) => `Tell ${name}`,
-      telling: (name) => `${name} is reading…`,
-      told: "Noted",
-      toldLater: "Kept for now; it gets used the next time I go over what I know.",
-      tellAgain: "Edit",
-      heard: "Got it, thanks for telling me!",
-      tellLater: "Once a model is connected, you can tell it under Settings › What it knows about you.",
-      it: "it",
-      errors: {
-        profile_invalid: "Write between 1 and 1000 characters.",
-        key_required: "Enter a key.",
-        key_again: "A new service needs its own key.",
-        key_malformed: "That key does not look right. Paste the key alone.",
-        key_rejected: "The service did not accept that key. Check it was copied whole and is still valid.",
-        model_limited: "The service is limiting requests right now. Try again shortly, or pick another model.",
-        model_unreachable: "The service or model cannot be reached. Check the address, the model name and the network.",
-        model_required: "Enter a model name.",
-        invalid_provider: "Choose a model service from the list.",
-        busy: "The last step is still running. Try again in a moment.",
-        offline: "The app itself cannot be reached. Check it is still open.",
-        generic: "That did not work. Try once more.",
-      },
-    },
-  };
   // How long the goodbye stays in the bubble before the app comes in.
   const BYE_MS = 900;
   // The first start's reachability probe takes about this long: the situation is read again after it.
@@ -185,7 +22,8 @@
   // Languages in their own words, as Settings shows them.
   const AUTONYMS = { zh: "中文", en: "English", ja: "日本語", ko: "한국어", ru: "Русский", pt: "Português", es: "Español",
                      fr: "Français", de: "Deutsch" };
-  const LINE_PLATFORMS = [["bilibili.com", ["Bilibili", "哔哩哔哩"]], ["youtube.com", ["YouTube", "YouTube"]]];
+  // The sites the "where" line checks, by their names in the catalog (onboard.platforms).
+  const LINE_PLATFORMS = [["bilibili.com", "bilibili"], ["youtube.com", "youtube"]];
   const SVG = "http://www.w3.org/2000/svg";
 
   let ctx, t, done;
@@ -193,18 +31,30 @@
   let step = 0;
   // Step one: the language the character speaks.
   let speaks = "";
-  // Step two: the figure picked, and the names the app gives the figures.
-  let figure = "";
-  let figureAtStart = "";
-  let figureNames = {};
+  // Step two: the character picker (characters.js), the characters as it last read them, and the one in
+  // use as the tour opened.
+  let picker = null;
+  let character = null;
+  let characterAtStart = "";
   // Step three: the services offered, and the model as saved.
   let catalog = null;
   let model = { configured: false, provider: "", model: "", name: "" };
   let modelForm = null;
+  // The chooser, made once for the screens' language.
+  let modelPick = null;
   // Step four: the topics offered and the ones picked (in the order picked).
   let suggested = [];
   let picked = [];
   let pickedAtStart = [];
+  // The topics as last saved.
+  let pickedSaved = [];
+  // After the topics: the finds asked for while `looking` (the ask itself, so a late answer to an earlier one is
+  // dropped), then shown one at a time while `finding`.
+  let looking = null;
+  let finding = false;
+  let finds = [];
+  let findAt = 0;
+  let findPicture = "";
   // Step five: the situation as read (false when it could not be), and the person's own words.
   let where = null;
   let whereReads = 0;
@@ -241,7 +91,7 @@
   const ASK = "M9.1 9a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4M12 18h.01";
 
   const say = (error) => t.errors[error?.message] || t.errors.generic;
-  // The screens' language for a spoken one.
+  // The language of the topics and names on offer for a spoken one: they are written in Chinese and English.
   const screens = (code) => (code.toLowerCase().startsWith("zh") ? "zh" : "en");
 
   // The language this computer asks for, as one of LANGS.
@@ -263,15 +113,14 @@
     ctx = context;
     done = finished;
     speaks = LANGS.some(([key]) => key === ctx.state?.lang) ? ctx.state.lang : guessLang();
-    t = WORDS[screens(speaks)];
+    t = paI18n.words("onboard");
     model = {
       configured: Boolean(ctx.state?.configured),
       provider: ctx.state?.provider || "",
       model: ctx.state?.model || "",
+      baseUrl: ctx.state?.baseUrl || "",
       name: ctx.state?.name || "",
     };
-    // The figure as it is now stays unless another is picked.
-    figure = figureAtStart = ctx.figure;
     root = el("div", "onboard-root");
 
     const card = el("div", "onboard-card");
@@ -294,7 +143,7 @@
     const foot = el("footer", "onboard-foot");
     backButton = el("button", "onboard-back");
     backButton.type = "button";
-    backButton.addEventListener("click", () => go(step - 1));
+    backButton.addEventListener("click", () => go(finding ? TOPICS : step - 1));
     needLine = el("p", "onboard-need");
     nextButton = el("button", "onboard-next");
     nextButton.type = "button";
@@ -304,7 +153,10 @@
         ctx.setLang(speaks);
         ctx.api("look/lang", { lang: speaks }).catch(() => {});
       }
-      if (step < ABOUT) go(step + 1);
+      // A character shown but never chosen (a new home's Mibo) is chosen as it leaves its step.
+      if (step === FIGURE && character && !character.set) picker.choose(character.chosen);
+      if (step === TOPICS) startFinds();
+      else if (step < ABOUT) go(step + 1);
       else finish();
     });
     skipButton =el("button", "onboard-skip");
@@ -317,12 +169,14 @@
     node.replaceChildren(root);
     load();
     go(LANG);
+    // The screens speak the language the character will.
+    if (speaks !== paI18n.lang) ctx.setLang(speaks).then(() => go(step));
   }
 
   // What the screens say when the language changes.
   function words() {
-    t = WORDS[screens(speaks)];
-    root.lang = screens(speaks) === "zh" ? "zh-CN" : "en";
+    t = paI18n.words("onboard");
+    root.lang = paI18n.locale;
     [...bar.children].forEach((dot, i) => (dot.querySelector(".onboard-dot-name").textContent = t.steps[i]));
     backButton.textContent = t.back;
     skipButton.textContent = t.skip;
@@ -331,13 +185,6 @@
   function load() {
     // All asked at once; a step whose answer is late draws itself when it comes.
     const lang = screens(speaks);
-    ctx
-      .api(`look?lang=${speaks}`)
-      .then((value) => {
-        figureNames = Object.fromEntries(value.figures.map((entry) => [entry.key, entry.name]));
-      })
-      .catch(() => {})
-      .finally(() => step === FIGURE && draw());
     ctx
       .api("catalog")
       .then((value) => (catalog = value.providers))
@@ -349,6 +196,7 @@
         suggested = Array.isArray(value.suggested) ? value.suggested : [];
         picked = Array.isArray(value.topics) ? [...value.topics] : [];
         pickedAtStart = [...picked];
+        pickedSaved = [...picked];
       })
       .catch(() => (suggested = []))
       .finally(() => step === TOPICS && draw());
@@ -356,6 +204,8 @@
 
   function go(index) {
     step = Math.max(0, Math.min(ABOUT, index));
+    finding = nextButton.hidden = false;
+    looking = null;
     words();
     [...bar.children].forEach((dot, i) => {
       dot.classList.toggle("onboard-dot-done", i < step);
@@ -385,14 +235,14 @@
 
   // Nothing holds the next step back; a step left as it is says what that means.
   function gate() {
-    const empty = (step === MODEL && !model.configured) || (step === TOPICS && !picked.length);
+    const empty = (step === MODEL && !model.configured) || (step === TOPICS && !finding && !looking && !picked.length);
     needLine.textContent = empty ? t.later[step] : "";
     needLine.hidden = !empty;
   }
 
   function draw() {
     const panes = [languages, figures, connect, topics, about];
-    body.replaceChildren(panes[step]());
+    body.replaceChildren((finding ? findsPane : looking ? waitPane : panes[step])());
     gate();
   }
 
@@ -407,54 +257,41 @@
       button.lang = code;
       button.setAttribute("aria-pressed", String(code === speaks));
       button.append(icon(TICK, "onboard-lang-tick"), el("span", "", name));
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         speaks = code;
-        ctx.setLang(code);
+        await ctx.setLang(code);
         // The topics on offer differ by language: asked again.
         load();
         go(LANG);
       });
       grid.append(button);
     }
-    const name = LANGS.find(([code]) => code === speaks)[1];
     pane.append(el("p", "onboard-hint onboard-lang-hint", t.langHint), grid);
-    if (!["zh", "en"].includes(speaks)) pane.append(el("p", "onboard-note", t.langScreens(name)));
     return pane;
   }
 
   // ----------------------------------------------------- step 2: character --
 
+  // The same picker as Settings': choosing one sets its personality, name and figure at once.
   function figures() {
     const pane = el("div", "onboard-pane");
-    const grid = el("div", "onboard-figures");
-    for (const key of ctx.figures) {
-      const card = el("button", "onboard-pick");
-      card.type = "button";
-      card.setAttribute("aria-pressed", String(key === figure));
-      const stage = el("span", "onboard-pick-stage");
-      stage.append(ctx.bodyOf(key, "onboard-pick-figure"));
-      const label = el("span", "onboard-pick-name", figureNames[key] || key);
-      card.append(stage, label);
-      if (ORIGINAL.includes(key)) card.append(el("span", "onboard-pick-tag", t.original));
-      card.append(icon(TICK, "onboard-pick-tick"));
-      card.addEventListener("click", () => {
-        figure = key;
-        ctx.setFigure(key);
-        // The pet takes it now; the character's own words come with the model, next.
-        ctx.api("look", { figure: key, lang: speaks }).catch(() => {});
-        for (const other of grid.children) other.setAttribute("aria-pressed", String(other === card));
-        gate();
-      });
-      grid.append(card);
-    }
-    pane.append(el("p", "onboard-hint", t.figureHint), grid);
+    const box = el("div", "onboard-characters");
+    const seen = (value) => {
+      character = value;
+      if (!characterAtStart) characterAtStart = value.chosen;
+    };
+    picker = window.paCharacters.mount(box, ctx, {
+      speaks,
+      onLoad: seen,
+      onChange: seen,
+    });
+    pane.append(box);
     return pane;
   }
 
   // --------------------------------------------------------- step 3: model --
 
   const spec = (id) => catalog?.find((entry) => entry.id === id);
-  const serviceName = (entry) => entry.name[screens(speaks) === "zh" ? 1 : 0];
 
   function connect() {
     const pane = el("div", "onboard-pane");
@@ -462,12 +299,16 @@
       pane.append(el("div", "onboard-loading"));
       return pane;
     }
+    if (!catalog.length) {
+      pane.append(el("p", "onboard-error", t.errors.offline));
+      return pane;
+    }
     if (model.configured && !modelForm) {
       const box = el("div", "onboard-connected");
       const words = el("span", "onboard-row-words");
       const known = spec(model.provider);
       words.append(
-        el("span", "onboard-row-name", known ? serviceName(known) : model.provider),
+        el("span", "onboard-row-name", known ? known.name : model.provider),
         el("span", "onboard-row-about", model.model),
       );
       const mark = el("span", "onboard-connected-mark");
@@ -482,91 +323,35 @@
       pane.append(box);
       return pane;
     }
-    const form = el("form", "onboard-form");
-    const service = el("select", "onboard-field onboard-select");
-    for (const entry of catalog) service.append(new Option(serviceName(entry), entry.id));
-    service.value = modelForm?.provider || (spec(model.provider) ? model.provider : catalog[0]?.id || "");
-    const keyField = el("input", "onboard-field");
-    keyField.type = "password";
-    keyField.autocomplete = "off";
-    keyField.spellcheck = false;
-    keyField.placeholder = t.keyPlaceholder;
-    const getKey = el("a", "onboard-link");
-    getKey.target = "_blank";
-    getKey.rel = "noopener noreferrer";
-    getKey.append(document.createTextNode(t.getKey), icon(OUT, "onboard-icon"));
-    const base = el("input", "onboard-field");
-    base.type = "url";
-    base.spellcheck = false;
-    base.placeholder = t.basePlaceholder;
-    const name = el("input", "onboard-field");
-    name.type = "text";
-    name.spellcheck = false;
-    const note = el("p", "onboard-hint");
-    const error = el("p", "onboard-error");
-    error.hidden = true;
-    const button = el("button", "onboard-add-button onboard-connect", t.connect);
-    button.type = "submit";
-
-    const row = (label, field, extra) => {
-      const line = el("label", "onboard-form-row");
-      const head = el("span", "onboard-form-label", label);
-      line.append(head, field);
-      if (extra) head.append(extra);
-      return line;
-    };
-    const keyRow = row(t.key, keyField, getKey);
-    const baseRow = row(t.base, base);
-    form.append(row(t.service, service), keyRow, baseRow, row(t.model, name), note, error, button,
-      el("p", "onboard-quiet", t.keyStays));
-
-    const fit = () => {
-      const entry = spec(service.value);
-      keyRow.hidden = entry.id === "ollama";
-      baseRow.hidden = entry.id !== "other";
-      getKey.hidden = !entry.keyUrl;
-      getKey.href = entry.keyUrl || "#";
-      name.value = entry.model || "";
-      name.placeholder = entry.model || "model-name";
-      note.textContent = entry.id === "openrouter" ? t.freeNote : entry.id === "ollama" ? t.noKey : "";
-      note.hidden = !note.textContent;
-      error.hidden = true;
-    };
-    service.addEventListener("change", fit);
-    fit();
-
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      error.hidden = true;
-      button.disabled = true;
-      button.textContent = t.connecting;
-      const entry = spec(service.value);
-      const written = WRITTEN.includes(figure);
-      try {
-        const state = await ctx.api("config", {
-          provider: entry.id,
-          apiKey: keyField.value.trim(),
-          baseUrl: entry.id === "other" ? base.value.trim() : entry.baseUrl,
-          model: name.value.trim(),
-          lang: speaks,
-          character: written ? figure : PLAIN_CHARACTER,
-          avatar: written ? figure : "",
-          ...(written ? {} : { name: figureNames[figure] || "" }),
-        });
-        model = { configured: true, provider: state.provider, model: state.model, name: state.name || "" };
-        modelForm = null;
-        keyField.value = "";
-        go(TOPICS);
-      } catch (failure) {
-        error.textContent = say(failure instanceof TypeError ? new Error("offline") : failure);
-        error.hidden = false;
-      } finally {
-        button.disabled = false;
-        button.textContent = t.connect;
-      }
-    });
-    pane.append(form);
-    setTimeout(() => (keyRow.hidden ? name : keyField).focus(), 0);
+    // The same chooser as Settings › Model (setup/model.js), so the two never drift.
+    const lang = paI18n.lang;
+    if (modelPick?.lang !== lang) {
+      modelPick = {
+        lang,
+        ui: window.paModelPick.chooser({
+          api: ctx.api,
+          catalog,
+          state: () => (model.configured ? { configured: true, ...model } : { configured: false }),
+          // The character as chosen a step ago; a new home that skipped it is Mibo.
+          who: () => ({
+            lang: speaks,
+            character: character?.chosen || "mibo",
+            ...(character?.set && character.name ? { name: character.name } : {}),
+          }),
+          done: (state) => {
+            model = { configured: true, provider: state.provider, model: state.model, baseUrl: state.baseUrl, name: state.name || "" };
+            modelForm = null;
+            go(TOPICS);
+          },
+          cancel: () => {
+            modelForm = null;
+            draw();
+          },
+        }),
+      };
+      modelPick.ui.open("");
+    }
+    pane.append(modelPick.ui.node);
     return pane;
   }
 
@@ -575,14 +360,14 @@
   function topics() {
     const pane = el("div", "onboard-pane");
     const head = el("div", "onboard-pane-head");
-    const count = el("span", "onboard-count", t.chosenTopics(picked.length));
-    head.append(el("p", "onboard-hint", t.topicsHint), count);
+    const count = el("span", "onboard-count", paI18n.t("onboard.chosenTopics", { count: picked.length }));
+    head.append(count);
     const chips = el("div", "onboard-chips");
     const names = suggested.map((topic) => topic.name);
     // What the person typed earlier is shown with the offered ones, already picked.
     const all = [...names, ...picked.filter((name) => !names.includes(name))];
     const refresh = () => {
-      count.textContent = t.chosenTopics(picked.length);
+      count.textContent = paI18n.t("onboard.chosenTopics", { count: picked.length });
       gate();
     };
     for (const name of all) chips.append(chip(name, refresh));
@@ -617,6 +402,97 @@
     return pane;
   }
 
+  // ------------------------------------------- step 4, then: a few finds --
+
+  // The topics are saved (which sends the sources out for them at once), then the finds are asked for
+  // (GET /api/feed/first, which waits for that round on a fresh install, feed.FIRST_WAIT_S at most); the wait
+  // says so, and Skip leaves it. With none even then the step goes straight on.
+  async function startFinds() {
+    const mine = {};
+    looking = mine;
+    nextButton.disabled = true;
+    speak(t.findsLooking);
+    draw();
+    if (picked.join("\n") !== pickedSaved.join("\n")) {
+      await ctx
+        .api("feed/interests", { topics: picked, lang: screens(speaks) })
+        .then(() => (pickedSaved = [...picked]))
+        .catch(() => {});
+    }
+    let items = [];
+    try {
+      items = (await ctx.api("feed/first")).items || [];
+    } catch {
+      // Nothing to show: the step goes on.
+    }
+    if (looking !== mine) return;
+    looking = null;
+    nextButton.disabled = false;
+    if (!items.length) return go(ABOUT);
+    finds = items;
+    findAt = 0;
+    finding = nextButton.hidden = true;
+    speak(t.findsSaying);
+    draw();
+  }
+
+  // Each answer is kept as a like or a skip from the first run (surface "first").
+  const reactFind = (find, action) =>
+    ctx.api("feed/react", { id: find.id, action, surface: "first", rank: findAt }).catch(() => {});
+
+  function answer(action) {
+    reactFind(finds[findAt], action);
+    findAt += 1;
+    if (findAt < finds.length) draw();
+    else go(ABOUT);
+  }
+
+  // While the finds are looked for: what it waits for and how long, over a card's outline.
+  function waitPane() {
+    const pane = el("div", "onboard-pane");
+    pane.setAttribute("aria-busy", "true");
+    const head = el("div", "onboard-pane-head");
+    head.append(el("p", "onboard-hint", t.findsWait));
+    pane.append(head, el("div", "onboard-loading"));
+    return pane;
+  }
+
+  function findsPane() {
+    const find = finds[findAt];
+    const pane = el("div", "onboard-pane");
+    const head = el("div", "onboard-pane-head");
+    head.append(el("span", "onboard-count", `${findAt + 1} / ${finds.length}`));
+    const card = el("article", "onboard-find");
+    if (findPicture) URL.revokeObjectURL(findPicture);
+    findPicture = "";
+    if (find.picture) {
+      const media = el("div", "onboard-find-media");
+      ctx
+        .picture(find.picture)
+        .then((url) => {
+          findPicture = url;
+          media.append(Object.assign(el("img"), { src: url, alt: "" }));
+        })
+        .catch(() => media.remove());
+      card.append(media);
+    }
+    const site = el("p", "onboard-find-site", find.site.replace(/^www\./, ""));
+    if (find.kind === "video") site.append(el("span", "onboard-find-kind", t.video));
+    card.append(site, el("h3", "onboard-find-title", find.title));
+    const said = find.words || find.text;
+    if (said) card.append(el("p", "onboard-find-text", said));
+    const actions = el("div", "onboard-find-actions");
+    const no = el("button", "onboard-back onboard-find-no", t.notWant);
+    const yes = el("button", "onboard-add-button onboard-find-yes", t.want);
+    no.type = yes.type = "button";
+    no.addEventListener("click", () => answer("skip"));
+    yes.addEventListener("click", () => answer("like"));
+    actions.append(no, yes);
+    pane.append(head, card, actions);
+    reactFind(find, "seen");
+    return pane;
+  }
+
   function chip(name, changed) {
     const node = el("button", "onboard-chip");
     node.type = "button";
@@ -635,7 +511,7 @@
   // --------------------------------------------------------- step 5: about --
 
   // The character's name as it is now, for the words that name it.
-  const who = () => model.name || figureNames[figure] || t.it;
+  const who = () => model.name || character?.name || t.it;
 
   function about() {
     const pane = el("div", "onboard-pane");
@@ -680,11 +556,11 @@
     const f = where.factors;
     const line = el("p", "onboard-where-line");
     const sep = () => el("span", "onboard-where-sep", "·");
-    for (const [host, names] of LINE_PLATFORMS) {
+    for (const [host, name] of LINE_PLATFORMS) {
       const state = where.platforms[host] || "unknown";
       const bit = el("span", `onboard-where-site onboard-where-${state}`);
       if (line.childElementCount) bit.append(sep());
-      bit.append(el("span", "", names[screens(speaks) === "zh" ? 1 : 0]),
+      bit.append(el("span", "", paI18n.t(`onboard.platforms.${name}`)),
         icon(state === "up" ? TICK : state === "down" ? CROSS : ASK, "onboard-icon"));
       bit.title = t.platform[state];
       bit.append(el("span", "onboard-sr", t.platform[state]));
@@ -692,7 +568,7 @@
     }
     if (f.readable.value.length) {
       const reads = el("span", "onboard-where-site");
-      reads.append(sep(), el("span", "", t.reads(f.readable.value.map((c) => AUTONYMS[c] || c).join(t.listSep))));
+      reads.append(sep(), el("span", "", paI18n.t("onboard.reads", { names: f.readable.value.map((c) => AUTONYMS[c] || c).join(t.listSep) })));
       line.append(reads);
     }
     const fix = el("button", "onboard-link onboard-where-fix", t.fixWhere);
@@ -711,7 +587,7 @@
   // A few lines in the person's own words: POST /api/profile/answer, one model call.
   function tellForm() {
     const form = el("form", "onboard-tell");
-    const label = el("label", "onboard-form-label", t.tellLabel(who()));
+    const label = el("label", "onboard-form-label", paI18n.t("onboard.tellLabel", { name: who() }));
     const field = el("textarea", "onboard-field onboard-tell-field");
     field.id = label.htmlFor = "onboard-tell";
     field.rows = 4;
@@ -726,8 +602,8 @@
     const waiting = told === "waiting";
     field.readOnly = button.disabled = waiting;
     form.setAttribute("aria-busy", String(waiting));
-    if (waiting) button.append(el("span", "onboard-spin"), document.createTextNode(t.telling(who())));
-    else button.textContent = t.tell(who());
+    if (waiting) button.append(el("span", "onboard-spin"), document.createTextNode(paI18n.t("onboard.telling", { name: who() })));
+    else button.textContent = paI18n.t("onboard.tell", { name: who() });
     const fit = () => {
       count.textContent = `${field.value.length} / ${TELL_MAX}`;
       if (!waiting) button.disabled = !field.value.trim();
@@ -784,12 +660,13 @@
 
   // Skipping a step leaves it as it was when the tour opened, then goes on.
   function skipStep() {
-    if (step === FIGURE && figure !== figureAtStart) {
-      figure = figureAtStart;
-      ctx.setFigure(figure);
-      ctx.api("look", { figure, lang: speaks }).catch(() => {});
+    if (step === FIGURE && character?.set && character.chosen !== characterAtStart) picker.choose(characterAtStart);
+    // The round of finds, or the wait for it, is skipped whole; the topics go back to as they were.
+    if (step === TOPICS && (finding || looking)) return go(ABOUT);
+    if (step === TOPICS) {
+      picked = [...pickedAtStart];
+      return startFinds();
     }
-    if (step === TOPICS) picked = [...pickedAtStart];
     // Words written but not told are dropped.
     if (step === ABOUT) draft = sent;
     if (step < ABOUT) go(step + 1);
@@ -803,7 +680,7 @@
     const said = new Promise((resolve) => setTimeout(resolve, BYE_MS));
     const lang = screens(speaks);
     const saves = [
-      picked.join("\n") !== pickedAtStart.join("\n") ? ctx.api("feed/interests", { topics: picked, lang }) : null,
+      picked.join("\n") !== pickedSaved.join("\n") ? ctx.api("feed/interests", { topics: picked, lang }) : null,
       ctx.api("look/toured", {}),
     ];
     // Words written but not told yet go along without being waited for: the app comes in meanwhile.

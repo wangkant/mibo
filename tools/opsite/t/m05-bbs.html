@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>户外驿站 - 论坛</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #eef1ec; }
+main { max-width: 760px; margin: 20px auto; background: #fff; padding: 16px 22px; border-radius: 8px; }
+.sec { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .sec a { display: block; padding: 10px; background: #f6f8f5; border-radius: 6px; color: #2c5d2c; }
+table { width: 100%; border-collapse: collapse; } td { padding: 8px 4px; border-bottom: 1px solid #eee; } td.n { color: #999; width: 60px; text-align: right; }
+form { display: flex; gap: 6px; margin-bottom: 14px; } form input { flex: 1; padding: 6px; }
+</style></head>
+<body><main>
+<h2>户外驿站</h2>
+<form id="s" action="/t/m05-bbs.html" method="get"><input name="kw" id="kw" aria-label="站内搜索" placeholder="搜帖子"><button>搜索</button></form>
+<div id="body"></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// The front page lists the boards; ?kw= lists matching threads, ten a page, links to m05-topic.html?t=.
+const T = [["gear", "新手露营装备清单（2026 版）", "山野老张", 128], ["site", "华东露营地推荐", "阿木", 86], ["rain", "雨天露营怎么防潮", "小溪", 41],
+  ["food", "露营做饭有哪些简单菜", "大熊", 63], ["kids", "带娃露营注意事项", "Lily", 22], ["gear2", "露营装备二手转让", "路人甲", 9],
+  ["night", "露营夜里太冷怎么办", "北风", 35], ["car", "自驾露营路线分享", "老周", 57]];
+const kw = new URLSearchParams(location.search).get("kw");
+const body = document.getElementById("body");
+if (!kw) {
+  body.innerHTML = '<h3>版块</h3><div class="sec"><a href="#">徒步</a><a href="#">露营</a><a href="#">骑行</a><a href="#">攀岩</a></div>';
+} else {
+  document.getElementById("kw").value = kw;
+  const hits = T.filter((t) => t[1].includes(kw));
+  body.innerHTML = `<p>“${kw.replace(/</g, "&lt;")}” 共 ${hits.length} 个结果</p><table>` + hits.map((t) =>
+    `<tr><td><a href="/t/m05-topic.html?t=${t[0]}">${t[1]}</a></td><td>${t[2]}</td><td class="n">${t[3]} 回复</td></tr>`).join("") + "</table>";
+}
+</script></body></html>

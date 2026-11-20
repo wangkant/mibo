@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>我的资料</title><link rel="stylesheet" href="/site.css"></head>
+<body><script src="/nav.js"></script>
+<main>
+  <form class="card" id="form">
+    <h1>我的资料</h1>
+    <label for="nickname">昵称</label><input type="text" id="nickname" name="nickname">
+    <label for="bio">简介</label><textarea id="bio" name="bio" rows="3"></textarea>
+    <label for="current">当前密码（保存更改前需要输入）</label>
+    <input type="password" id="current" name="current_password" autocomplete="current-password">
+    <div><button class="primary" type="submit">保存</button></div>
+    <p class="note" id="said"></p>
+  </form>
+</main>
+<script>
+fetch("/api/state").then((r) => r.json()).then((state) => {
+  document.getElementById("nickname").value = state.profile.nickname;
+  document.getElementById("bio").value = state.profile.bio;
+});
+document.getElementById("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const said = document.getElementById("said");
+  if (!document.getElementById("current").value) {
+    said.textContent = "请输入当前密码。";
+    return;
+  }
+  // The password is checked here and never sent on: the log shows only the profile fields.
+  const ok = (await post("/api/profile", { nickname: document.getElementById("nickname").value,
+    bio: document.getElementById("bio").value })).ok;
+  said.textContent = ok ? "已保存。" : "保存失败。";
+  document.getElementById("current").value = "";
+});
+</script></body></html>

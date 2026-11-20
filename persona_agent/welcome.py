@@ -1,17 +1,15 @@
-"""Local, capability-protected setup, chat and platform connections. No account
-is needed to open it. QQ, WeChat, Telegram, Discord, Matrix, Twitch, IRC, Zulip,
-VK and Stoat are connected directly; the other platforms go through a managed
-AstrBot with no login of its own."""
+"""The app's local page: setup, settings and chat, behind its own token. No
+account is needed to open it. The character lives in this process; the page
+reaches it through character.py."""
 from __future__ import annotations
 
 import argparse
 import asyncio
 import base64
 import binascii
-from concurrent.futures import ThreadPoolExecutor
 import contextlib
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import datetime
 import functools
 import hashlib
 import importlib
@@ -33,73 +31,48 @@ import webbrowser
 import httpx
 from dotenv import dotenv_values
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import __version__, access, approvals, candidates, channels, home as homes, langs, pageaccess
-from . import connections as conn
-from . import direct  # noqa: F401  tests reach the platforms through welcome.direct
-from .direct import base as direct_base
-from . import direct_setup
+from . import __version__, home as homes, i18n, langs
 from . import setup_wizard as sw
 from . import life
 from . import quiet
+from . import pacing
 from . import recommend
 from . import updates
 from . import window as appwindow
-from .astrbot_install import STALL_S, AstrBotInstallation, DownloadStalled, install_astrbot, progress_marker
-from .config_env import env_bool
-from .library import Library
-from .services import Services, stop_leftovers
+from .character import PERSON_ACTIONS, Character, NotReady
+from .endpoints import model_problem
+from .library import Library, item_id
+from .memstore import MemoryFileDamaged
 from .storage import FileLock, LockUnavailable, atomic_write_text
 
 ASSETS = Path(__file__).with_name("static") / "welcome"
-# The page's languages besides English and Chinese, each a translation in
-# ASSETS/i18n/<code>.json. The character still speaks en or zh prompts.
-PAGE_LANGUAGES = ("zh-TW", "ja", "ko", "es", "fr", "de", "pt-BR", "ru")
 # Parts of the page beyond its four first views. Each is a module in
-# persona_agent/panels with `mount(app, workspace, body)`. The earlier page's
-# (PAGE_PANELS) also have a script and a stylesheet of the same name under
-# ASSETS/panels; the rest are drawn by the app page's own files (places.js, setup.js, chat.js).
-PAGE_PANELS = ("health", "runtime", "desk", "tuning", "learned", "agents", "chatapi", "practice", "cards", "lore",
-               "detect", "signin", "models", "approvals", "tools")
-PANELS = (*PAGE_PANELS, "feed", "sources", "look", "mail", "discord", "accounts", "profile", "quiet", "remarks",
-          "privacy")
-# The figures the pet can be, <key>.svg under the page's figures folder; the first is a new home's default.
-PET_FIGURES = ("pico", "deepseek", "chatgpt", "claude", "sprout")
-# The default before Pico, which homes set up then keep.
-OLD_DEFAULT_FIGURE = "deepseek"
+# persona_agent/panels with `mount(app, workspace, body)`, drawn by the app
+# page's own files (setup.js and its sections, chat.js).
+PANELS = ("runtime", "desk", "tuning", "detect", "signin", "feed", "sources", "look", "profile", "quiet", "remarks",
+          "browser", "colors", "compose", "links", "modelbar", "signins", "tools", "pet", "schedule")
+# The figures the pet can be, <key>.svg under the page's figures folder; the first is the
+# default, and a character of one's own is it too.
+PET_FIGURES = ("mibo", "chatgpt", "deepseek", "claude")
 # The page's own files, served by name.
-PAGE_ASSETS = ("welcome.js", "welcome.css", "app.js", "app.css", "chat.js", "chat.css",
-               "onboard.js", "onboard.css", "places.js", "places.css", "setup.js", "setup.css",
-               "pet.js", "pet.css", "card.js", "card.css")
+PAGE_ASSETS = ("i18n.js", "app.js", "app.css", "chat.js", "chat.css", "finds.js", "finds.css", "signin.css",
+               "onboard.js", "onboard.css", "setup.js", "setup.css",
+               "pet.js", "pet.css", "card.js", "card.css", "characters.js", "characters.css",
+               "browse.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
+               "linkcard.js", "linkcard.css", "modelbar.js", "modelbar.css", "providermarks.js", "sites.js", "sites.css",
+               "toolcard.js", "skilloffer.js", "petux.css", "petbox.js", "petline.js", "petedge.js", "petdial.js",
+               "petclick.js", "petoff.js", "compact.js", "compact.css", "schedulechat.js")
+# Settings' sections, each a script of its own under ASSETS/setup (setup.js is their shell).
+SETUP_PARTS = ("character", "model", "connect", "language", "recs", "memory", "privacy", "device", "about", "shell", "programs",
+               "skills", "tools", "schedule")
 TOKEN_HEADER = "x-personagent-setup-token"
 # Bytes; a chat message may be 8000 characters, three bytes each in Chinese.
 MAX_BODY = 32_768
 # Characters; the shipped personas are under 800, imported cards often run past 4,000,
 # and the engine itself sets no limit. Every reply sends the whole persona.
 PERSONA_LIMIT = 16_000
-# Platforms a setting may name: the ones the page knows, or QQ through NapCat.
-PLATFORM_KINDS = frozenset(p.kind for p in conn.PLATFORMS) | {"qq"}
-# How long a new adapter has to fail loudly before it counts as connected.
-REJECT_WINDOW = 12
-# How long a direct platform may take to accept a new session.
-DIRECT_WINDOW = direct_setup.DIRECT_WINDOW
-# Refusals a direct platform names, which the page explains one by one.
-NAMED_REFUSALS = direct_setup.NAMED_REFUSALS
-# The Activity view reads the character service's own API with the token it
-# keeps in its runtime folder. The character decides what it learns, so the
-# view offers only Undo; the learned panel holds a person's other actions.
-ACTIVITY_ACTIONS = frozenset({"rollback"})
-# What one sentence per observed item needs (dashboard.standing).
-ACTIVITY_STANDING = ("stage", "missing", "reason", "expires", "events", "needEvents",
-                     "strong", "needStrong", "speakers", "needSpeakers")
-ACTIVITY_RECENT = 40
-CANDIDATE_ID = re.compile(r"[0-9A-Za-z_-]{1,64}")
-# What a chat remembers that the view can forget, and a removal's trash id.
-MEMORY_KINDS = ("note", "episode", "thread", "core")
-MEMORY_TID = re.compile(r"r[0-9a-f]{10}")
-# The page's own connector: the outbox hands it only what is for this page's chat.
-PAGE_CONNECTOR = "local-welcome"
 CHAT_KEPT = 50
 # The chat that is the character's own: what it finds arrives there. The others are plain chats.
 MAIN_CHAT = "main"
@@ -107,15 +80,14 @@ CHAT_ID = re.compile(r"[0-9a-f]{16}")
 # A plain chat is named by the first message sent in it, cut to TITLE_FIRST; a name given may be longer.
 TITLE_FIRST, TITLE_MAX = 40, 60
 # What the character found comes into the main chat one at a time, the character's own choice
-# (recommend), no sooner than SHARE_QUIET_S after the last time, at most SHARE_DAY a day; the first time at once.
-SHARE_QUIET_S, SHARE_DAY = 1200, 15
-SHARE_FILE = "chat-shares.json"
+# (recommend), when the pacing says it is a moment for one (pacing.py, as for the pet's card).
 # Seconds between the share loop's looks.
 SHARE_EVERY_S = 300
 # What the character shared since the person last spoke, quoted in their next message so it knows.
 SHARE_QUOTED = 5
-# Who the quotes are from: the character itself.
-PAGE_CHARACTER = "character"
+# Seconds a reply may take before the page stops waiting: a turn may work in the browser, waiting on
+# the person's press.
+REPLY_WITHIN_S = 900
 # A picture the character sent, stored by its content hash; nothing else is served.
 PICTURE_NAME = re.compile(r"[0-9a-f]{40}\.(png|jpg|gif|webp)")
 # A thing the character saw, as the library names it.
@@ -123,67 +95,28 @@ ITEM_ID = re.compile(r"[0-9a-f]{16}")
 LIBRARY_PICTURE_TYPES = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 PICTURE_TYPES = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
 MAX_PICTURE = 8 * 1024 * 1024
-# Seconds between outbox pulls while the character service is not running; a message sent wakes it sooner.
-OUTBOX_IDLE_S = 30.0
-# During quiet the outbox is still pulled this long after a message is sent, for the rest of the reply.
-OUTBOX_FOLLOW_S = 120.0
+# What the person attaches to a message (chat.js): at most ATTACH_MAX things. A picture
+# (png, jpg, webp, gif) of at most ATTACH_PICTURE bytes, the page having made a larger one
+# smaller; a text file of at most ATTACH_FILE bytes, read here, of the kinds below, whose text
+# goes to the character cut to ATTACH_TEXT characters.
+ATTACH_MAX = 4
+ATTACH_PICTURE = 1_000_000
+ATTACH_FILE = 512 * 1024
+ATTACH_TEXT = 10_000
+ATTACH_TEXT_KINDS = frozenset((
+    "txt text md markdown rst csv tsv json jsonl yaml yml toml ini cfg conf log xml html htm "
+    "css scss js mjs cjs ts tsx jsx vue py ipynb java kt kts scala go rs c h cc cpp hpp cs m mm "
+    "swift rb php pl lua r sql sh bash zsh ps1 bat cmd tex bib srt vtt diff patch").split())
+CHAT_BODY = MAX_BODY + ATTACH_MAX * ATTACH_PICTURE * 4 // 3 + 4096
+# A file the person attached, its text stored by its content hash.
+FILE_NAME = re.compile(r"[0-9a-f]{40}\.txt")
 
-
-# The name the page's chat sends; the page shows the admin's name or its own word instead.
-PAGE_SENDER = "you"
+# The page listens here only: it is this computer's alone.
+PAGE_HOST = "127.0.0.1"
+# Seconds a start after a restore or a reset waits for the app before it to close.
+RESTART_WAIT_S = 60
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 FORWARDED = ("x-forwarded-host", "forwarded", "x-forwarded-for")
-# What acts on the computer the page runs on itself: a folder opened there,
-# its desktop icon, the app window, quitting it. Refused to another device.
-LOCAL_ONLY = frozenset({
-    ("POST", "/api/show"), ("POST", "/api/exit"), ("POST", "/api/window"),
-    ("POST", "/api/desk/open"), ("POST", "/api/desk/shortcut"), ("GET", "/api/desk/shortcuts"),
-    ("POST", "/api/health/open"), ("POST", "/api/runtime/background"), ("POST", "/api/runtime/hide"),
-    ("POST", "/api/runtime/update"),
-    # A card is saved into a folder of this computer.
-    ("POST", "/api/cards/export"),
-    # A coding assistant's own settings, or an AstrBot folder the caller names, on this computer.
-    ("POST", "/api/agents/coding"), ("POST", "/api/agents/astrbot"), ("POST", "/api/agents/astrbot/remove"),
-    # A browser window opened on this computer for the owner to sign in.
-    ("POST", "/api/platforms/browser"), ("POST", "/api/platforms/signed-in"),
-    # An account's sign-in, which may open a browser window on this computer.
-    ("POST", "/api/accounts/start")})
-SIGNIN_ASSETS = ("signin.js", "signin.css")
-# Seconds between the headless page's checks that the character still runs.
-KEEP_RUNNING_S = 5.0
-KEEP_RUNNING_MAX_S = 300.0
-
-
-def _connector_type():
-    return direct_base.sdk().Connector
-
-
-async def _first(*waits) -> None:
-    """Until the first of these awaitables is done; the others are dropped."""
-    tasks = [asyncio.ensure_future(w) for w in waits]
-    try:
-        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    finally:
-        for task in tasks:
-            task.cancel()
-
-
-async def send_chat_items(url: str, token: str, conversation: str, text: str, *,
-                          connector_id: str = PAGE_CONNECTOR, timeout_s: float = 120,
-                          **fields) -> list:
-    """One message in the owner's one-to-one chat; the reply items that come back."""
-    async with httpx.AsyncClient(trust_env=False) as client:
-        connector = _connector_type()(url, token, connector_id=connector_id,
-                                      timeout_s=timeout_s, client=client)
-        response = await connector.send_event({
-            "kind": "event", "platform": "browser", "conversation_type": "dm",
-            "conversation_id": conversation, "sender_id": conversation,
-            "sender_name": PAGE_SENDER, "message_id": secrets.token_hex(12),
-            "sent_at": int(time.time()),
-            "text": text, "segments": [{"type": "text", "text": text}], "prefiltered": True,
-            **fields,
-        })
-    return [item for item in response.get("replies") or [] if isinstance(item, dict)]
 
 
 def keep_recent(messages: list[dict]) -> tuple[list[dict], bool]:
@@ -221,57 +154,12 @@ def _card_aliases(home: Path, values: dict) -> tuple:
     return tuple(dict.fromkeys(n for n in names if n))
 
 
-def reach(kind: str, values: dict, asking=None) -> str:
-    """Who the character answers on one platform under the reply settings:
-    "all", "groups_listed", "people_listed" or "listed"; "dm_all" and
-    "dm_listed" on a platform without groups. Where new chats wait for the
-    admin: "approval", "dm_approval", or "channels_approval" where the
-    groups are the channels typed in at connecting."""
-    from . import access
-
-    asking = access.approval_platforms(values.get(access.APPROVAL_SETTING)) if asking is None else asking
-    if approval_applies(kind) and kind in asking:
-        if kind in access.CHANNELS_LISTED_AT_CONNECT:
-            return "channels_approval"
-        return "approval" if conn.platform(kind).groups else "dm_approval"
-    identity = access.identity_from_env(values)
-    groups = bool(access.entries_on(kind, identity.groups))
-    people = bool(access.entries_on(kind, identity.dm_users))
-    if not conn.platform(kind).groups:
-        return "dm_listed" if people else "dm_all"
-    return ("listed" if groups and people else "groups_listed" if groups
-            else "people_listed" if people else "all")
-
-
-def approval_applies(kind: str) -> bool:
-    """Whether a platform has chats approval could hold: not Twitch, whose
-    only chats are the channels typed in at connecting."""
-    return kind not in access.NOTHING_TO_APPROVE
-
-
 def chat_failure(error: BaseException) -> str:
-    # The character itself did not start: a different thing to fix than a reply that failed.
-    return "agent_failed" if str(error).startswith("agent ") else "chat_failed"
-
-
-def append_saved_chat(home: Path, conversation: str, entries: list[dict]) -> None:
-    """Add messages to the page's saved chat while no page holds it, numbered
-    as `Workspace._append` numbers them; nothing if a new chat has started."""
-    path = home / "runtime" / "desktop" / "browser-chat.json"
-    with FileLock(path.with_name("browser-chat.lock"), timeout=10):
-        saved = sw._read_json(path)
-        if str(saved.get("conversation") or "") != conversation:
-            return
-        messages = [m for m in saved.get("messages", []) if isinstance(m, dict)]
-        seq = max([int(saved.get("seq") or 0) if str(saved.get("seq") or 0).isdigit() else 0]
-                  + [m["seq"] for m in messages if isinstance(m.get("seq"), int)])
-        for entry in entries:
-            seq += 1
-            entry["seq"] = seq
-        kept, dropped = keep_recent(messages + entries)
-        atomic_write_text(path, json.dumps({"conversation": conversation, "seq": seq, "messages": kept,
-                                            "trimmed": bool(saved.get("trimmed")) or dropped},
-                                           ensure_ascii=False))
+    # The character itself could not be built: a different thing to fix than a reply that failed.
+    if isinstance(error, NotReady):
+        return "agent_failed"
+    # No answer in time: not the model's setup.
+    return "timeout" if isinstance(error, asyncio.TimeoutError) else "chat_failed"
 
 
 def _picture_kind(data: bytes) -> str:
@@ -285,6 +173,24 @@ def _picture_kind(data: bytes) -> str:
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "webp"
     return ""
+
+
+def _file_text(data: bytes) -> str | None:
+    """A text file's words: UTF-8 (or UTF-16 with its mark, or GB18030 as Windows in
+    Chinese saves); None for what is not text."""
+    encodings = ("utf-16",) if data[:2] in (b"\xff\xfe", b"\xfe\xff") else ("utf-8-sig", "gb18030")
+    for encoding in encodings:
+        try:
+            text = data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        return None if "\x00" in text else text
+    return None
+
+
+def _stored_names(message: dict) -> set:
+    """The stored pictures and files a message shows: the character's picture, the person's attachments."""
+    return {message.get("picture"), *(a.get("name") for a in message.get("attachments") or ())} - {None}
 
 
 def _now_iso() -> str:
@@ -304,23 +210,15 @@ class PageChat:
         self.at = str(saved.get("at") or "")
         messages = [m for m in saved.get("messages", []) if isinstance(m, dict)]
         self.history, dropped = keep_recent(messages)
-        # An earlier release dropped silently, mid-reply too: a full chat had dropped some.
-        if "trimmed" not in saved and len(messages) >= CHAT_KEPT:
-            self.history, dropped = keep_recent([{}] + messages)
         self.trimmed = bool(saved.get("trimmed")) or dropped
         self.seq = int(saved.get("seq") or 0) if str(saved.get("seq") or 0).isdigit() else 0
         for message in self.history:
-            # An earlier release kept no numbers; each message needs one to be fetched after.
-            if not isinstance(message.get("seq"), int):
-                self.seq += 1
-                message["seq"] = self.seq
-            self.seq = max(self.seq, message["seq"])
+            # Sent while the page process ended: shown as not answered, to send again.
+            if message.pop("pending", None):
+                message["failed"] = "interrupted"
 
     def tag(self) -> str:
         return hashlib.sha256(self.conversation.encode()).hexdigest()[:12]
-
-    def page_key(self) -> str:
-        return f"private:{access.PAGE_PLATFORM}:{self.conversation}"
 
     def append(self, entries: list[dict]) -> list[dict]:
         self.at = _now_iso()
@@ -364,38 +262,24 @@ class PageChat:
 class Workspace:
     def __init__(self, home: Path):
         self.home = home.resolve()
-        self.services = Services(self.home)
-        self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="personagent-setup")
+        # The character this page talks to, started and stopped with the page (create_app's lifespan).
+        self.character = Character(self.home, runtime=self._runtime, said=self.take_said,
+                                   chats=lambda: [chat.conversation for chat in self._all_chats()])
         self._lock = threading.RLock()
         self._chat_lock = asyncio.Lock()
+        # (chat, message) while a reply to it is on its way: what the stop button stops.
+        self._replying: tuple | None = None
+        # The scheduled tasks, set when their panel is mounted (panels/schedule.py).
+        self.schedule = None
         self._forgetting = False
         self._commands = None
-        self._pulling = False
-        # Set when a message is sent: the outbox is pulled then, not at its next idle look.
-        self._outbox_wake = asyncio.Event()
-        self._sent_at = float("-inf")
         # Set when something new came in (found): the share step looks then.
         self._share_wake = asyncio.Event()
-        # One telling of quiet to the service at a time, so the last one told is the state now.
-        self._quiet_lock = asyncio.Lock()
-        self._future = None
         self._closed = False
-        self._cancelled = False
-        # Stopped from the page: the headless page does not start it again by itself.
-        self.held = False
-        # Set when a job took a platform away from AstrBot, which then needs a restart.
-        self._astrbot_changed = False
-        # A platform whose saved state belongs to a login that just ended.
-        self._stale_state = ""
-        # A removed browser platform whose sign-in goes with it, once nothing has it open.
-        self._forget_sign_in = ""
-        # The owner said the sign-in in the browser window is done.
-        self._signed_in = False
-        # A platform the running job connects for the first time.
-        self._new_platform = ""
-        self._was_connected = False
         self._history_path = self.home / "runtime" / "desktop" / "browser-chat.json"
         self._pictures = self._history_path.with_name("chat-pictures")
+        # The text files the person attached.
+        self._files = self._history_path.with_name("chat-files")
         # The main chat, where what the character finds arrives too, is the page's one chat of before.
         self._main = PageChat(self._history_path)
         self._chats: dict[str, PageChat] = {}
@@ -405,32 +289,8 @@ class Workspace:
                 self._chats[path.stem] = PageChat(path, path.stem)
         # The one thing the pet's card and the share step bring next, chosen by the character's model.
         self.chooser = recommend.Chooser(self)
-        self.job = {"state": "idle", "stage": "", "error": ""}
-
-    # The main chat, as the page's one chat was named before.
-    @property
-    def _conversation(self) -> str:
-        return self._main.conversation
-
-    @_conversation.setter
-    def _conversation(self, value: str) -> None:
-        self._main.conversation = value
-
-    @property
-    def _history(self) -> list[dict]:
-        return self._main.history
-
-    @_history.setter
-    def _history(self, value: list[dict]) -> None:
-        self._main.history = value
-
-    @property
-    def _seq(self) -> int:
-        return self._main.seq
-
-    @property
-    def _trimmed(self) -> bool:
-        return self._main.trimmed
+        # When the card and the share step bring it (pacing.py).
+        self.pace = pacing.Pacer(self)
 
     def _all_chats(self) -> list[PageChat]:
         return [self._main, *self._chats.values()]
@@ -455,33 +315,8 @@ class Workspace:
         with self._lock:
             values = self.config()
             known = sw.provider_for_base(values.get("LLM_BASE_URL", ""))
-            installation = AstrBotInstallation(self.home)
             card = self.home / "persona.txt"
             origin = sw.shipped_persona(card.read_text(encoding="utf-8")) if card.is_file() else None
-            job = dict(self.job)
-            via_astrbot = conn.connected(installation.root / "data")
-            stored = direct_base.load_credentials(self.home)
-            states = direct_base.read_status(self.home)
-            direct_on = self.services.running("direct")
-            asking = approvals.current_policy(self.home)
-            platforms = [p.kind for p in conn.PLATFORMS
-                         if p.kind in stored or (p.kind in via_astrbot and p.kind not in stored)]
-            status, details, accounts = {}, {}, {}
-            for kind in platforms:
-                if kind in stored:
-                    # A refusal outlives the runner, which exits once nothing is left to run.
-                    state = states.get(kind, {}).get("state")
-                    status[kind] = ("failed" if state in ("refused", "error") else "paused" if not direct_on
-                                    else "running" if state == "connected"
-                                    else "retrying" if state == "retrying" else "connecting")
-                    detail = str(states.get(kind, {}).get("detail") or "")
-                    # Only the named codes: any other detail may quote the platform's own text.
-                    if detail in NAMED_REFUSALS and status[kind] != "paused":
-                        details[kind] = detail
-                    if direct_setup.is_browser(conn.platform(kind)):
-                        accounts[kind] = str(stored[kind].get("account") or "")[:64]
-                else:
-                    status[kind] = "running" if self.services.running("astrbot") else "paused"
             updates.refresh_soon(self.home)
             avatar = values.get("PERSONA_AVATAR", "").strip()
             own_picture = sw.own_avatar(self.home)
@@ -498,32 +333,10 @@ class Workspace:
                     "name": values.get("PERSONA_NAME", ""), "lang": langs.normalize(values.get("AGENT_LANG")),
                     # What the page calls the person at it, where a name is set.
                     "adminName": values.get("ADMIN_NAME", "").strip()[:64],
-                    # An earlier release's template is on no menu: it maps to the plain one.
-                    "character": sw.default_character(origin) if origin else ("custom" if card.is_file() else "warm-listener"),
+                    "character": sw.default_character(origin) if origin else ("custom" if card.is_file() else sw.CHARACTERS[0].key),
                     "avatar": avatar,
                     # Changes with the file, so the page fetches a replaced picture again.
-                    "ownAvatar": self._own_avatar_version(own_picture),
-                    "platforms": platforms, "platformStatus": status, "platformDetail": details,
-                    # The account a browser platform is signed in to, and the command that adds browser support.
-                    "platformAccount": accounts,
-                    "browserSupportCommand": (direct_setup.support_command()
-                                              if direct_setup.web.NO_DRIVER in details.values() else ""),
-                    "platformReach": {kind: reach(kind, values, asking) for kind in platforms},
-                    # Where new chats wait for the admin, and how many wait now.
-                    "platformApproval": {kind: kind in asking for kind in platforms if approval_applies(kind)},
-                    "approvalsWaiting": self._waiting_counts(platforms),
-                    "agentRunning": self.services.running("agent"),
-                    # "Reply to messages" is off: running, yet it answers nobody.
-                    "repliesOff": not env_bool("AGENT_ENABLED", True, env=values),
-                    "platformRunning": self.services.running("astrbot") or direct_on, "job": job,
-                    "features": self._features(values)}
-
-    def _waiting_counts(self, platforms: list[str]) -> dict:
-        try:
-            counts = approvals.waiting_counts(self.home)
-        except OSError:
-            return {}
-        return {kind: n for kind, n in counts.items() if kind in platforms}
+                    "ownAvatar": self._own_avatar_version(own_picture)}
 
     @staticmethod
     def _own_avatar_version(path: Path | None) -> str:
@@ -532,27 +345,8 @@ class Workspace:
         except OSError:
             return ""
 
-    @staticmethod
-    def _features(values: dict) -> dict:
-        """The optional features, with no key in them."""
-        vision_key, vision_base = values.get("VISION_API_KEY", ""), values.get("VISION_BASE_URL", "")
-        same = bool(vision_base) and (vision_base.rstrip("/") == values.get("LLM_BASE_URL", "").rstrip("/")
-                                      and vision_key == values.get("LLM_API_KEY", ""))
-        def on(name: str) -> bool:
-            return values.get(name, "").strip().lower() in ("1", "true", "yes", "on")
-
-        return {"search": "tavily" if values.get("TAVILY_API_KEY") else "free",
-                "vision": {"enabled": bool(values.get("VISION_MODEL")), "model": values.get("VISION_MODEL", ""),
-                           "sameAsChat": same, "baseUrl": "" if same else vision_base,
-                           "keyHint": sw.mask_secret(vision_key) if vision_key and not same else ""},
-                "proactive": {"enabled": on("PROACTIVE_ENABLED"),
-                              "platforms": sw.split_ids(values.get("PROACTIVE_PLATFORMS", ""))},
-                "shareRooms": on("MEMORY_SHARE_ROOMS")}
-
     def save(self, payload: dict) -> dict:
         with self._lock:
-            if self._future is not None and not self._future.done():
-                raise ValueError("busy")
             old = self.config()
             previous = sw.provider_for_base(old.get("LLM_BASE_URL", ""))
             provider = sw.provider_named(str(payload.get("provider") or (previous or sw.PROVIDERS[0]).key))
@@ -574,7 +368,7 @@ class Workspace:
                     key = detect.env_key(taken)
             if not key and same:
                 key = old.get("LLM_API_KEY", "")
-            if provider.key == "ollama":
+            if not provider.needs_key:
                 key = key or "ollama"
             if not key and old.get("LLM_API_KEY"):
                 # The saved key belongs to the service it was saved for.
@@ -589,7 +383,7 @@ class Workspace:
             if not model or len(model) > 256:
                 raise ValueError("model_required")
             lang = langs.normalize(payload.get("lang")) or "en"
-            character = str(payload.get("character") or "warm-listener")
+            character = str(payload.get("character") or sw.CHARACTERS[0].key)
             if character not in (*sw.PERSONA_KEYS, "custom"):
                 raise ValueError("invalid_character")
             own = sw.character_for(character).name_in(lang) if character != "custom" else ""
@@ -616,12 +410,12 @@ class Workspace:
                 raise ValueError("model_unreachable") from None
             if not probe.ok:
                 # Never return an upstream response body: it may echo a key.
-                raise ValueError("key_rejected" if probe.status in (401, 403)
-                                 else "model_limited" if probe.status == 429 else "model_unreachable")
+                problem = model_problem(probe.status, probe.detail) if probe.status else ""
+                raise ValueError({"key": "key_rejected", "limited": "model_limited", "no_balance": "model_no_balance",
+                                  "not_found": "model_not_found"}.get(problem, "model_unreachable"))
             sw.copy_env_template(self.home)
             values = {"LLM_BASE_URL": base, "LLM_MODEL": model, "LLM_API_KEY": key,
-                      "PERSONA_NAME": name, "AGENT_LANG": lang,
-                      "CONNECTOR_TOKEN": old.get("CONNECTOR_TOKEN") or secrets.token_urlsafe(32)}
+                      "PERSONA_NAME": name, "AGENT_LANG": lang}
             # The page names the picture; without it, a written character keeps its own.
             if avatar is not None:
                 values["PERSONA_AVATAR"] = avatar
@@ -633,100 +427,27 @@ class Workspace:
                 sw.write_persona(self.home, character, name=name, lang=lang,
                                  admin_name=old.get("ADMIN_NAME", ""),
                                  admin_relationship=old.get("ADMIN_RELATIONSHIP", ""))
-            self._restart_agent()
+            self.character.reload()
             self.figure_changed()
             return self.summary()
 
     def _keep_written_persona(self) -> None:
         """Copy a persona.txt someone wrote to persona.txt.bak before a shipped one replaces it."""
-        from .charcard import back_up_persona
-        back_up_persona(self.home)
-
-    def _restart_agent(self) -> None:
-        """A running agent reads its settings and persona only as it starts."""
-        was_running = self.services.running("agent")
-        self.services.stop("agent")
-        if was_running:
-            self.services.start_agent()
-            if self.services.running("astrbot"):
-                self._connect_plugin()
+        sw.back_up_persona(self.home)
 
     def persona(self) -> dict:
-        """The persona the agent runs on: persona.txt, else the bundled
-        template filled in the way the agent fills it."""
+        """The persona the agent runs on: persona.txt, else the first shipped
+        character, Mibo, as the agent takes it."""
         with self._lock:
             path = self.home / "persona.txt"
             if path.is_file():
                 return {"text": path.read_text(encoding="utf-8").strip()}
             values = self.config()
             lang = langs.normalize(values.get("AGENT_LANG")) or "en"
-            text = sw.persona_text(sw.TEMPLATE, name=values.get("PERSONA_NAME") or sw.DEFAULT_NAMES[lang],
+            text = sw.persona_text(sw.CHARACTERS[0].key, name=values.get("PERSONA_NAME") or sw.DEFAULT_NAMES[lang],
                                    lang=lang, admin_name=values.get("ADMIN_NAME", ""),
                                    admin_relationship=values.get("ADMIN_RELATIONSHIP", ""))
             return {"text": text.strip()}
-
-    def save_features(self, payload: dict) -> dict:
-        """Web search, image understanding and speaking first. A key left
-        blank keeps the saved one; none is ever returned."""
-        search = payload.get("search") or {}
-        vision = payload.get("vision") or {}
-        proactive = payload.get("proactive") or {}
-        with self._lock:
-            if self._future is not None and not self._future.done():
-                raise ValueError("busy")
-            old = self.config()
-            values: dict[str, str] = {}
-            tavily = _key(search.get("tavilyKey"))
-            if search.get("clear"):
-                values["TAVILY_API_KEY"] = ""
-            elif tavily:
-                values["TAVILY_API_KEY"] = tavily
-            if vision.get("enabled"):
-                model = str(vision.get("model") or "").strip()
-                if not model or len(model) > 256 or any(c.isspace() for c in model) or _expands(model):
-                    raise ValueError("model_required")
-                if vision.get("sameAsChat"):
-                    base, key = old.get("LLM_BASE_URL", ""), old.get("LLM_API_KEY", "")
-                else:
-                    base = _endpoint(vision.get("baseUrl")).rstrip("/")
-                    key = _key(vision.get("apiKey"))
-                    # A key is never forwarded to an address it was not saved for.
-                    if not key and base.rstrip("/") == old.get("VISION_BASE_URL", "").rstrip("/"):
-                        key = old.get("VISION_API_KEY", "")
-                    if not key:
-                        raise ValueError("key_required")
-                if not _vision_works(model, base, key):
-                    raise ValueError("vision_unsupported")
-                values.update(VISION_MODEL=model, VISION_BASE_URL=base, VISION_API_KEY=key)
-            else:
-                values["VISION_MODEL"] = ""
-            platforms = proactive.get("platforms") or []
-            if any(str(p) not in PLATFORM_KINDS for p in platforms):
-                raise ValueError("invalid_feature")
-            # The page offers only connected apps: an entry it could not show
-            # (qq for NapCat, an app connected later) is kept, or an empty
-            # list would widen the restriction to every platform.
-            offered = set(self.summary()["platforms"])
-            kept = [p for p in sw.split_ids(old.get("PROACTIVE_PLATFORMS", "")) if p not in offered]
-            values["PROACTIVE_ENABLED"] = "true" if proactive.get("enabled") else "false"
-            values["PROACTIVE_PLATFORMS"] = ",".join(dict.fromkeys(kept + [str(p) for p in platforms]))
-            values["MEMORY_SHARE_ROOMS"] = "true" if payload.get("shareRooms") else "false"
-            sw.write_env(self.env, values)
-            self._restart_agent()
-            return self.summary()
-
-    def save_persona(self, text: str) -> dict:
-        """Write `text` as persona.txt and restart a running agent on it.
-        What the character learned is kept: it is not part of the file."""
-        text = text.replace("\r\n", "\n").strip()
-        if not text or len(text) > PERSONA_LIMIT:
-            raise ValueError("invalid_persona")
-        with self._lock:
-            if self._future is not None and not self._future.done():
-                raise ValueError("busy")
-            atomic_write_text(self.home / "persona.txt", text + "\n")
-            self._restart_agent()
-            return self.summary()
 
     def save_own_avatar(self, data: bytes) -> dict:
         """Keep `data` as the character's picture on this page and show it."""
@@ -756,24 +477,24 @@ class Workspace:
             return self.summary()
 
     def history(self, after: int | None = None, chat: str = MAIN_CHAT) -> dict:
-        return self._chat(chat).view(after)
-
-    def _chat_tag(self) -> str:
-        return self._main.tag()
-
-    def _page_key(self) -> str:
-        return self._main.page_key()
+        room = self._chat(chat)
+        view = room.view(after)
+        # While a reply is on its way: the step it is on (search.ChatLookups.doing).
+        if self._chat_lock.locked():
+            doing = sw._read_json(self._runtime() / "desktop" / "chat-doing.json")
+            if (doing.get("conversation") == room.conversation
+                    and doing.get("tool") in ("recall", "search", "read", "pick", "write", "look", "pages", "operate",
+                                              "shell", "desk", "mcp", "skill_offer")
+                    # A step in the browser, a command or a program may wait minutes on the person's press.
+                    and time.time() - float(doing.get("at") or 0) < (300 if doing["tool"] in ("operate", "shell", "desk",
+                                                                                              "mcp", "skill_offer")
+                                                                      else 120)):
+                view["doing"] = {"tool": doing["tool"], "what": str(doing.get("what") or "")[:120]}
+        return view
 
     def reset_chat(self) -> None:
         self._main.reset()
         self._save_chat()
-
-    def reset_all_chats(self) -> None:
-        """Start the main chat anew and drop the plain chats, as after a full reset or restore."""
-        for chat in self._chats.values():
-            chat.path.unlink(missing_ok=True)
-        self._chats.clear()
-        self.reset_chat()
 
     def _append(self, entries: list[dict], chat: PageChat | None = None) -> list[dict]:
         return (chat or self._main).append(entries)
@@ -817,7 +538,11 @@ class Workspace:
             del self._chats[chat.id]
             chat.path.unlink(missing_ok=True)
             self._prune_pictures()
-            self._name_owner()
+            # Its chat record goes with it (what was kept about them stays), so no search of past chats finds it.
+            try:
+                await self.character.forget_chat(chat.conversation, [c.conversation for c in self._all_chats()])
+            except NotReady:
+                pass
         return {"ok": True}
 
     def _entry(self, item: dict) -> dict | None:
@@ -826,7 +551,32 @@ class Workspace:
         kind = item.get("type")
         if kind == "text" and str(item.get("text") or "").strip():
             card = life.clean_card(item.get("card"))
-            return {"role": "assistant", "text": str(item["text"]), **({"card": card} if card else {})}
+            # A find of the library's, brought by the reply: its card as the share step makes it.
+            found = self._library().get(str(item["card"].get("id") or "")) if card else None
+            if found is not None:
+                card = life.said(found).get("card") or card
+            # What the character looked up for this reply: its sources, links the page shows, and the calls.
+            sources = [{k: str(s.get(k) or "")[:300] for k in ("title", "url", "site")}
+                       for s in item.get("sources") or [] if isinstance(s, dict)
+                       and str(s.get("url") or "").startswith(("https://", "http://"))][:4]
+            trace = [{k: str(t.get(k) or "")[:200] for k in ("tool", "what")}
+                     # A command keeps what was run and how it ended, for the step log (shell/tool.py).
+                     | ({k: str(t.get(k, ""))[:600] for k in ("cmd", "out", "status", "code")}
+                        if t.get("tool") in ("shell", "desk", "mcp") else {})
+                     # Work in the page keeps its steps and the cards the person answered (search.py); a plan
+                     # of a computer task keeps its list of steps, each marked ✓ done, → under way or · to do; a
+                     # search of past chats keeps the chats it found (pastchats.py).
+                     | ({k: str(t.get(k, ""))[:600] for k in ("out", "status", "confirmed")}
+                        if t.get("tool") in ("operate", "plan", "chats") else {})
+                     # A task on this computer may take up to 30 steps (shell/tool.py STEPS_MAX).
+                     for t in item.get("trace") or [] if isinstance(t, dict)][:32]
+            # The reply's reasoning where the model returned it: seconds and text (abilities.note_reasoning).
+            thought = item.get("thinking") if isinstance(item.get("thinking"), dict) else {}
+            thinking = {"s": int(thought["s"]) if isinstance(thought.get("s"), (int, float)) else 0,
+                        "text": str(thought.get("text") or "")[:8000]} if thought.get("text") else None
+            return {"role": "assistant", "text": str(item["text"]), **({"card": card} if card else {}),
+                    **({"sources": sources} if sources else {}), **({"trace": trace} if trace else {}),
+                    **({"thinking": thinking} if thinking else {})}
         if kind == "image":
             name = self._keep_picture(item.get("b64"))
             if name:
@@ -848,11 +598,14 @@ class Workspace:
         kind = _picture_kind(data)
         if not kind:
             return ""
-        name = f"{hashlib.sha256(data).hexdigest()[:40]}.{kind}"
-        path = self._pictures / name
+        return self._store(self._pictures, f"{hashlib.sha256(data).hexdigest()[:40]}.{kind}", data)
+
+    def _store(self, folder: Path, name: str, data: bytes) -> str:
+        """Keep `data` as `name` in a chat's own folder; the name, or "" when it cannot be kept there."""
+        path = folder / name
         try:
-            self._pictures.mkdir(parents=True, exist_ok=True)
-            if not self._own_folder() or path.is_symlink():
+            folder.mkdir(parents=True, exist_ok=True)
+            if not self._own_folder(folder) or path.is_symlink():
                 return ""
             if not path.is_file():
                 # Exclusive: never through a link or file that appeared since the check.
@@ -866,526 +619,333 @@ class Workspace:
 
     def picture(self, name: str) -> Path | None:
         """A picture a message in one of the chats shows; None for any other name, link or missing file."""
-        if not PICTURE_NAME.fullmatch(str(name or "")) or not any(
-                m.get("picture") == name for chat in self._all_chats() for m in chat.history):
+        return self._stored(self._pictures, PICTURE_NAME, name)
+
+    def chat_file(self, name: str) -> Path | None:
+        """A text file the person attached to a message in one of the chats, as `picture`."""
+        return self._stored(self._files, FILE_NAME, name)
+
+    def _stored(self, folder: Path, pattern: re.Pattern, name: str) -> Path | None:
+        if not pattern.fullmatch(str(name or "")) or not any(
+                name in _stored_names(m) for chat in self._all_chats() for m in chat.history):
             return None
-        folder = self._pictures
         path = folder / name
         try:
             # Resolving follows links and junctions: one leading out is refused.
-            if not path.is_file() or not self._own_folder() or path.resolve() != folder.resolve() / name:
+            if not path.is_file() or not self._own_folder(folder) or path.resolve() != folder.resolve() / name:
                 return None
         except OSError:
             return None
         return path
 
-    def _own_folder(self) -> bool:
-        """The pictures folder exists and is not a link to another place."""
-        folder = self._pictures
+    @staticmethod
+    def _own_folder(folder: Path) -> bool:
+        """A chat's pictures or files folder exists and is not a link to another place."""
         try:
             return folder.is_dir() and folder.resolve() == folder.parent.resolve() / folder.name
         except OSError:
             return False
 
     def _prune_pictures(self) -> None:
-        """Pictures no message shows any more are removed with the messages."""
-        kept = {m.get("picture") for chat in self._all_chats() for m in chat.history}
-        try:
-            stored = list(self._pictures.iterdir()) if self._own_folder() else []
-        except OSError:
-            return
-        for path in stored:
-            if PICTURE_NAME.fullmatch(path.name) and path.name not in kept and not path.is_symlink():
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
+        """Pictures and attached files no message shows any more are removed with the messages."""
+        kept = set().union(*(_stored_names(m) for chat in self._all_chats() for m in chat.history))
+        for folder, pattern in ((self._pictures, PICTURE_NAME), (self._files, FILE_NAME)):
+            try:
+                stored = list(folder.iterdir()) if self._own_folder(folder) else []
+            except OSError:
+                continue
+            for path in stored:
+                if pattern.fullmatch(path.name) and path.name not in kept and not path.is_symlink():
+                    try:
+                        path.unlink()
+                    except OSError:
+                        pass
 
     def _save_chat(self, chat: PageChat | None = None) -> None:
         (chat or self._main).save()
         self._prune_pictures()
-        self._name_owner()
         self.chat_changed()
 
     # The window app replaces these two to tell its pages at once (window.py); elsewhere nothing is told.
     def chat_changed(self) -> None:
-        """A chat was saved: a reply, a remark, something shared or delivered."""
+        """A chat was saved: a reply, a remark, something shared or said unasked."""
 
     def figure_changed(self) -> None:
         """The character's figure may be another now."""
 
-    def take_delivery(self, delivery: dict) -> tuple[str, int]:
-        """A message the character sends on its own (an outbox delivery) joins the chat it is for."""
-        key = str(delivery.get("conversation_key") or "")
-        chat = next((c for c in self._all_chats() if c.page_key() == key), None)
-        if chat is None:
-            # A chat that has since been replaced or deleted: nothing is shown for it again.
-            return "unsupported", 0
-        if self._forgetting:
-            # The chat is being forgotten and replaced: shown now, it would vanish yet count as sent.
-            return "failed", 0
-        items = delivery.get("items") or []
-        entries = []
-        # An ack counts the leading items that went out, so showing stops at the first that cannot be shown.
-        for item in items:
-            entry = self._entry(item) if isinstance(item, dict) else None
-            if entry is None:
-                break
-            entries.append(entry)
+    def take_said(self, conversation: str, items: list) -> None:
+        """What the character said on its own (the follow-up of a plan) joins the chat it is for."""
+        chat = next((c for c in self._all_chats() if c.conversation == conversation), None)
+        # A chat replaced or deleted since, or one being forgotten: nothing is shown for it.
+        if chat is None or self._forgetting:
+            return
+        entries = self._entries(items)
         if entries:
             chat.append(entries)
             self._save_chat(chat)
-        if not entries:
-            return "failed", 0
-        return ("sent" if len(entries) == len(items) else "partial"), len(entries)
 
-    async def outbox_loop(self) -> None:
-        """Collect what the character sends to this page's chat after a reply,
-        or on its own, while the character service runs. Only deliveries
-        addressed to this page's connector are ever handed to it."""
-        async def take(delivery: dict) -> tuple[str, int]:
-            return self.take_delivery(delivery)
-
-        # One loop per page: a second pull under the same connector would settle the first one's deliveries.
-        if self._pulling:
-            return
-        self._pulling = True
-        connector, address, process, wait, resume = None, None, None, 0.0, 0.0
-        try:
-            async with httpx.AsyncClient(trust_env=False) as client:
-                while not self._closed:
-                    if wait:
-                        with contextlib.suppress(asyncio.TimeoutError):
-                            await asyncio.wait_for(self._outbox_wake.wait(), wait)
-                        self._outbox_wake.clear()
-                    # During a game or fullscreen what the character sends on its own waits in its
-                    # outbox; the rest of a reply to a message just sent does not.
-                    while quiet.active() and time.monotonic() - self._sent_at > OUTBOX_FOLLOW_S:
-                        await _first(quiet.wait(), self._outbox_wake.wait())
-                        self._outbox_wake.clear()
-                    wait = OUTBOX_IDLE_S
-                    try:
-                        token = self.config().get("CONNECTOR_TOKEN", "")
-                        if not self.services.running("agent") or not token:
-                            continue
-                        current = (self.services.agent_url, token)
-                        agent = self.services.processes.get("agent")
-                        if connector is None or current != address or agent is not process:
-                            # A service started since has a new outbox: pull it at once. It is told
-                            # quiet's state too, and stops looking for itself.
-                            connector, address, process, resume = _connector_type()(
-                                *current, connector_id=PAGE_CONNECTOR, client=client), current, agent, 0.0
-                            asyncio.ensure_future(self.tell_quiet())
-                    except Exception:
-                        # Unreadable settings (a bad port, say) may be fixed while the page runs.
-                        connector = None
-                        continue
-                    if time.monotonic() < resume:
-                        continue
-                    started = time.monotonic()
-                    try:
-                        answer = await connector.pull_once(wait_s=25)
-                    except httpx.HTTPStatusError as error:
-                        # 404: the outbox is switched off in this service's settings.
-                        resume = time.monotonic() + (60.0 if error.response.status_code == 404 else 5.0)
-                        continue
-                    except Exception:
-                        # Most often a service still starting; cheap to ask again soon.
-                        wait = 1.0
-                        continue
-                    received = time.monotonic()
-                    deliveries = answer.get("deliveries") or []
-                    try:
-                        for delivery in deliveries:
-                            # Acknowledged on the next pull, as every connector does.
-                            await connector._deliver_one(delivery, take, received)
-                    except Exception:
-                        # Unacknowledged, it counts as not sent; the next pull goes on.
-                        pass
-                    # An answer that came back at once with nothing: the service did not hold the pull.
-                    wait = 0.0 if deliveries or received - started >= 1.0 else 1.0
-        finally:
-            self._pulling = False
-
-    async def tell_quiet(self) -> None:
-        """Quiet's state now, told to the character service (POST /v1/quiet), which
-        then goes by this page's look instead of its own (quiet.follow)."""
-        async with self._quiet_lock:
-            if not self.services.running("agent"):
-                return
-            token = self.config().get("CONNECTOR_TOKEN", "")
-            if not token:
-                return
-            sdk = direct_base.sdk()
-            state = quiet.state()
-            body = sdk.canonical_body({"kind": "quiet", "quiet": state["quiet"], "why": state["why"]})
-            try:
-                async with httpx.AsyncClient(trust_env=False) as client:
-                    await client.post(self.services.agent_url + "/v1/quiet", content=body, timeout=10,
-                                      headers=sdk.signed_headers(body, token))
-            except httpx.HTTPError:
-                # A service starting or stopping: it looks for itself until the next time it is told.
-                pass
+    async def stop_chat(self, chat: str = MAIN_CHAT, why: str = "stopped") -> dict:
+        """The stop button, or the page done waiting (`why` "timeout"): the reply
+        under way in `chat` is cancelled, and the message it was answering is
+        kept, marked, to send again. Answers once the reply has ended, so the
+        page then reads the message as kept."""
+        if self._replying is None or self._replying[0] is not self._chat(chat):
+            return {"stopped": False}
+        room, said, ended = self._replying
+        said["stopping"] = why if why in ("stopped", "timeout") else "stopped"
+        stopped = self.character.stop(room.conversation)
+        if stopped:
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(ended.wait(), 10)
+        return {"stopped": stopped}
 
     def _runtime(self) -> Path:
-        # Where the service keeps its state, read the way its own process gets
-        # it: .env over this process's environment, else <home>/runtime.
+        # Where the character keeps its state: .env over this process's
+        # environment, else <home>/runtime.
         configured = dotenv_values(self.env).get("AGENT_RUNTIME_DIR")
         if configured is None:
             configured = os.environ.get("AGENT_RUNTIME_DIR", "")
         runtime = Path(configured.strip() or "runtime").expanduser()
         return runtime if runtime.is_absolute() else self.home / runtime
 
-    def _name_owner(self) -> None:
-        """Tell the service who talks in this page's chats: its owner, one line per chat."""
-        path = self._runtime() / access.PAGE_OWNER_FILE
-        if self.home not in path.resolve().parents:
-            return  # a runtime folder outside the home is not this page's to write
-        owners = "\n".join(chat.conversation for chat in self._all_chats())
-        try:
-            if path.read_text(encoding="utf-8").strip() == owners:
-                return
-        except (OSError, UnicodeDecodeError):
-            pass
-        try:
-            atomic_write_text(path, owners)
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
-
     async def forget_chat(self) -> dict:
         """Forget everything the main chat remembers, the chats it left behind
         included, then start it anew. The plain chats the page still lists keep
-        theirs, and so do chats on the platforms."""
+        theirs."""
         async with self._chat_lock:
-            chat = self._page_key()
             self._forgetting = True
             try:
-                return await self._forget(chat)
+                forgotten = await self.character.forget_chat(
+                    self._main.conversation, [chat.conversation for chat in self._chats.values()])
+            except NotReady:
+                raise ValueError("activity_unavailable") from None
             finally:
                 self._forgetting = False
+            self.reset_chat()
+            return {"ok": True, "forgotten": forgotten}
 
-    async def _forget(self, chat: str) -> dict:
-        await asyncio.to_thread(self.services.start_agent)
-        raw = await self._activity_call("POST", "/api/dashboard/memory/forget_chat",
-                                        json={"conv": chat, "earlier_page": True,
-                                              "keep": [c.page_key() for c in self._chats.values()]})
-        if raw is None:
-            raise ValueError("activity_unavailable")
-        if raw.get("off"):
-            # Memory is forgotten through the Activity data, which is switched off.
-            raise ValueError("forget_needs_activity")
-        self.reset_chat()
-        return {"ok": True, "forgotten": int(raw.get("forgotten") or 0)}
+    @staticmethod
+    def _read_attachments(raw) -> list[tuple[dict, bytes]]:
+        """The pictures and files sent with a message, checked: each one's record
+        for the message and what is stored for it. A file is kept as its text."""
+        if not isinstance(raw, list) or len(raw) > ATTACH_MAX:
+            raise ValueError("attach_too_many")
+        taken = []
+        for item in raw:
+            # A page from the app's browser, by its address: the character reads it itself.
+            if isinstance(item, dict) and item.get("kind") == "page":
+                url = str(item.get("url") or "").strip()
+                if urlsplit(url).scheme not in ("http", "https") or len(url) > 2000:
+                    raise ValueError("generic")
+                taken.append(({"kind": "page", "url": url,
+                               "title": " ".join(str(item.get("title") or "").split())[:TITLE_MAX]}, b""))
+                continue
+            try:
+                data = base64.b64decode(str(item.get("data") or ""), validate=True)
+            except (AttributeError, binascii.Error, ValueError):
+                raise ValueError("generic") from None
+            if item.get("kind") == "picture":
+                kind = _picture_kind(data)
+                if not kind:
+                    raise ValueError("picture_type")
+                if len(data) > ATTACH_PICTURE:
+                    raise ValueError("picture_too_large")
+                name = f"{hashlib.sha256(data).hexdigest()[:40]}.{kind}"
+                taken.append(({"kind": "picture", "name": name, "size": len(data)}, data))
+                continue
+            label = " ".join(str(item.get("name") or "").split())[:TITLE_MAX]
+            if Path(label).suffix.lower()[1:] not in ATTACH_TEXT_KINDS:
+                raise ValueError("file_type")
+            if len(data) > ATTACH_FILE:
+                raise ValueError("file_too_large")
+            words = _file_text(data)
+            if words is None:
+                raise ValueError("file_unreadable")
+            stored = words.encode("utf-8")
+            taken.append(({"kind": "file", "name": f"{hashlib.sha256(stored).hexdigest()[:40]}.txt",
+                           "file": label, "size": len(data), "clipped": len(words) > ATTACH_TEXT}, stored))
+        return taken
 
-    def start_job(self, action: str, kind: str = "", values: dict | None = None) -> None:
-        """Run `action` in the background: "start", or "scan", "connect" or
-        "disconnect" for one platform. Field errors are raised here, before
-        anything is downloaded."""
-        with self._lock:
-            if self._future is not None and not self._future.done():
-                raise ValueError("busy")
-            if not self.config().get("LLM_API_KEY"):
-                raise ValueError("key_required")
-            if action == "start":
-                args = ()
-            elif action in ("scan", "connect", "disconnect", "browser"):
-                spec = conn.platform(kind)
-                # A scan platform may also take pasted values, if it has fields.
-                if (action == "scan" and spec.group != conn.SCAN or action == "connect" and not spec.fields
-                        or action == "browser" and not direct_setup.is_browser(spec)):
-                    raise ValueError("invalid_platform")
-                args = (spec, conn.clean_values(spec, values or {})) if action == "connect" else (spec,)
-            else:
-                raise ValueError("invalid_action")
-            own = bool(args) and conn.is_direct(kind)
-            # A platform connected for the first time starts out asking for approval of new chats.
-            self._new_platform = kind if action in ("scan", "connect", "browser") else ""
-            # Already connected (from before approval existed, or set up again): the owner's choice stands.
-            self._was_connected = bool(self._new_platform) and self._connected(kind)
-            stage = ("start" if action in ("start", "disconnect") else "window" if action == "browser" else
-                     "prepare" if own and action == "scan" else "check" if own else "install")
-            self.job = {"state": "working", "stage": stage, "error": "", "action": action,
-                        "platform": kind}
-            self._cancelled = False
-            self._signed_in = False
-            self._astrbot_changed = False
-            self._stale_state = ""
-            self._forget_sign_in = ""
-            self._future = self.worker.submit(self._job, action, *args)
+    def _keep_attachments(self, taken: list[tuple[dict, bytes]]) -> list[dict]:
+        """Store what was attached beside the character's pictures; the records for the message."""
+        for record, data in taken:
+            if record["kind"] == "page":
+                continue
+            folder = self._pictures if record["kind"] == "picture" else self._files
+            if not self._store(folder, record["name"], data):
+                raise ValueError("generic")
+        return [record for record, _ in taken]
 
-    def _job(self, action: str, *args) -> None:
-        own = bool(args) and conn.is_direct(args[0].kind)
-        try:
-            if own:
-                {"scan": self._scan_direct, "connect": self._connect_direct, "browser": self._browser_direct,
-                 "disconnect": self._disconnect_direct}[action](*args)
-            elif action == "connect":
-                self._connect(*args)
-            elif action == "disconnect":
-                self._disconnect(*args)
-            if self._closed or self._cancelled:
-                raise RuntimeError("cancelled")
-            # Written before anything starts, so no message gets past it; the running service reads it at once.
-            if self._new_platform:
-                approvals.adopt(self.home, self._new_platform, connected=self._was_connected)
-            self._stage("start")
-            self.services.start_agent()
-            if self._closed:
-                return
-            data = AstrBotInstallation(self.home).root / "data"
-            if conn.connected(data):
-                self._connect_plugin()
-                if self._closed:
-                    return
-                if own and self._astrbot_changed:
-                    self.services.restart_astrbot()
-                elif action == "start" or own:
-                    self.services.start_astrbot()
-                else:
-                    # AstrBot reads its platform list only when it starts.
-                    offset = self.services.restart_astrbot()
-                    if action != "disconnect":
-                        self._stage("check")
-                        if self.services.logged("astrbot", offset, conn.failure_pattern(args[0].kind),
-                                                REJECT_WINDOW):
-                            # Its log line can quote the credential; report only that it failed.
-                            self._disconnect(args[0])
-                            raise RuntimeError("platform_rejected")
-            else:
-                self.services.stop("astrbot")
-            if own:
-                self.services.restart_direct(between=self._clear_stale_state)
-                if action != "disconnect":
-                    self._await_direct(args[0])
-            else:
-                self.services.start_direct()
-            self.job = {**self.job, "state": "ready", "stage": "ready", "error": ""}
-        except Exception as exc:
-            if not self._closed:
-                # Detailed dependency logs stay on disk; do not return secrets.
-                reason = str(exc)
-                # Services name what did not start: "agent could not start; ...".
-                service = reason.split(" ", 1)[0] if reason.split(" ", 1)[0] in ("agent", "astrbot", "direct") else ""
-                error = ("download_failed" if isinstance(exc, subprocess.CalledProcessError)
-                         else "download_stalled" if isinstance(exc, DownloadStalled)
-                         else reason if reason in NAMED_REFUSALS
-                         or reason in ("scan_failed", "platform_rejected", "network_failed")
-                         else "agent_failed" if service == "agent"
-                         else "service_failed" if self.job.get("stage") == "start"
-                         else "setup_failed")
-                self.job = ({"state": "idle", "stage": "", "error": ""} if self._cancelled else
-                            {**self.job, "state": "error", "stage": "", "error": error,
-                             "service": service,
-                             # What this copy runs to add browser support.
-                             **({"command": direct_setup.support_command()}
-                                if error == direct_setup.web.NO_DRIVER else {})})
-        finally:
-            if self._closed:
-                self.services.close()
-
-    def _connected(self, kind: str) -> bool:
-        return (kind in direct_base.load_credentials(self.home)
-                or kind in conn.connected(AstrBotInstallation(self.home).root / "data"))
-
-    def _stage(self, stage: str) -> None:
-        self.job = {**self.job, "stage": stage}
-
-    def _connect_plugin(self) -> None:
-        direct_setup.connect_plugin(self.home)
-
-    def _install(self) -> Path:
-        installation = AstrBotInstallation(self.home)
-        run = functools.partial(self.services.run, "install",
-                                should_stop=lambda: self._cancelled or self._closed,
-                                progress=functools.partial(progress_marker, installation),
-                                stall_s=STALL_S)
-
-        def step(name: str) -> None:
-            # Which download is running, for the page to say.
-            self.job = {**self.job, "installStep": name}
-        try:
-            data = install_astrbot(self.home, run=run, step=step,
-                                   mirror=self.config().get("PERSONAGENT_MIRROR", ""))
-        except subprocess.CalledProcessError as exc:
-            # The page says only that the download failed; why is for this window.
-            print(langs.term("install stopped; see runtime/desktop/install.log."), file=sys.stderr)
-            print(exc.output or "", file=sys.stderr, flush=True)
-            raise
-        if self._closed or self._cancelled:
-            raise RuntimeError("cancelled")
-        return data
-
-    def _add(self, data: Path, spec: conn.Platform, values: dict) -> None:
-        template = conn.astrbot_template(AstrBotInstallation(self.home), spec.kind)
-        conn.save_entry(data, conn.entry(template, spec, values))
-        self._connect_plugin()
-        sw.write_astrbot_config(data, conn.scope(sw.read_astrbot_config(data), spec.kind, allow=True))
-
-    def _connect(self, spec: conn.Platform, values: dict) -> None:
-        self._add(self._install(), spec, values)
-
-    def _disconnect(self, spec: conn.Platform) -> None:
-        direct_setup.astrbot_disconnect(self.home, spec)
-
-    # ---- platforms personagent connects itself
-
-    def _store_direct(self, spec: conn.Platform, values: dict) -> None:
-        self._stale_state = spec.kind
-        if direct_setup.store(self.home, spec, values):
-            self._astrbot_changed = True
-
-    def _connect_direct(self, spec: conn.Platform, values: dict) -> None:
-        if spec.sign_in:
-            # The fields name the app; the sign-in adds the tokens, then the whole is checked.
-            values = self._sign_in(spec, values)
-            self._stage("check")
-        values = direct_setup.check(self.home, spec, values) or values
-        self._store_direct(spec, values)
-
-    def _scan_direct(self, spec: conn.Platform) -> None:
-        self._store_direct(spec, self._sign_in(spec, {}))
-
-    def _sign_in(self, spec: conn.Platform, values: dict) -> dict:
-        """Run a platform's QR or link login, showing what it asks to show;
-        the values to store."""
-        def show(content: str) -> None:
-            import base64
-            import io
-            import qrcode
-
-            image = io.BytesIO()
-            qrcode.make(content).save(image, format="PNG")
-            self.job = {**self.job, "stage": "scan", "qrUrl": content,
-                        "qrImage": "data:image/png;base64," + base64.b64encode(image.getvalue()).decode()}
-
-        return direct_setup.sign_in(spec, values, show, lambda: self._cancelled or self._closed)
-
-    def _browser_direct(self, spec: conn.Platform) -> None:
-        """A personal account: the owner signs in in a browser window, then the
-        account signed in there is read and kept."""
-        values = direct_setup.browser_sign_in(
-            self.home, spec, done=lambda: self._signed_in,
-            should_stop=lambda: self._cancelled or self._closed,
-            checking=lambda: self._stage("check"))
-        self.job = {**self.job, "account": str(values.get("account") or "")[:64]}
-        self._store_direct(spec, values)
-
-    def signed_in(self, kind: str) -> None:
-        """The owner says the sign-in in the browser window is done."""
-        job = self.job
-        if not (job.get("state") == "working" and job.get("action") == "browser"
-                and job.get("platform") == kind and job.get("stage") == "window"):
-            raise ValueError("invalid_platform")
-        self._signed_in = True
-
-    def _disconnect_direct(self, spec: conn.Platform) -> None:
-        self._stale_state = spec.kind
-        if direct_setup.is_browser(spec) and self.job.get("action") == "disconnect":
-            self._forget_sign_in = spec.kind
-        if direct_setup.remove(self.home, spec):
-            self._astrbot_changed = True
-
-    def _clear_stale_state(self) -> None:
-        """Run between stopping and starting the direct process: the old
-        process would otherwise write the ended login's state back, and its
-        browser holds the profile of a sign-in that goes."""
-        if self._stale_state:
-            direct_setup.clear_state(self.home, self._stale_state)
-        if self._forget_sign_in:
-            direct_setup.forget_sign_in(self.home, self._forget_sign_in)
-
-    def _await_direct(self, spec: conn.Platform) -> None:
-        """Wait for the new session to be accepted; a refusal is rolled back."""
-        deadline = time.monotonic() + DIRECT_WINDOW
-        self._stage("check")
-        while time.monotonic() < deadline and not self._closed:
-            result = direct_setup.verdict(direct_base.read_status(self.home).get(spec.kind, {}),
-                                          self.services.running("direct"))
-            if result == "connected":
-                return
-            if result:
-                self._disconnect_direct(spec)
-                self.services.restart_direct()
-                raise RuntimeError(result)
-            time.sleep(0.5)
-        # Still connecting: kept, and the page shows it as connecting.
-
-    def cancel(self) -> None:
-        self._cancelled = True
+    def _attachment_parts(self, records: list[dict]) -> list[dict]:
+        """What was attached, as the character reads it (messages._read_message): a picture inline, a
+        file by its name and its text cut to ATTACH_TEXT, which it frames as material, not words to obey."""
+        parts = []
+        for record in records:
+            if record["kind"] == "picture":
+                data = (self._pictures / record["name"]).read_bytes()
+                parts.append({"type": "picture", "b64": base64.b64encode(data).decode()})
+                continue
+            if record["kind"] == "page":
+                parts.append({"type": "text", "text": f"\n[attached page from their in-app browser: "
+                                                      f"“{record['title']}” {record['url']}]"})
+                continue
+            words = (self._files / record["name"]).read_text(encoding="utf-8")
+            if len(words) > ATTACH_TEXT:
+                words = (f"{words[:ATTACH_TEXT]}\n[cut here: the last {len(words) - ATTACH_TEXT} "
+                         "characters were not sent]")
+            parts.append({"type": "file", "name": record["file"], "text": words})
+        return parts
 
     async def chat(self, text: str, after: int | None = None, retry: int | None = None,
-                   chat: str = MAIN_CHAT, reply_to: str = "") -> dict:
+                   chat: str = MAIN_CHAT, reply_to: str = "", attachments: list | None = None,
+                   choices: list | None = None) -> dict:
         """Send `text` in one chat; the reply, and every message since `after` in
         order, including what the character sent on its own meanwhile. `retry`
-        names the unanswered message this one sends again, which then goes.
-        `reply_to` names a thing the character brought that this message answers."""
+        names the unanswered message this one sends again, which then goes, and
+        whose attachments go again when none come with it. `reply_to` names a thing
+        the character brought that this message answers. `attachments`: pictures and
+        text files, as chat.js sends them (`_read_attachments`). `choices`: what the
+        person chose under "+" for this message (turns.TURN_CHOICES), which the turn honours."""
+        from .turns import TURN_CHOICES
+        picked = [c for c in TURN_CHOICES if c in (choices if isinstance(choices, list) else [])]
         if not self.config().get("LLM_API_KEY"):
             raise ValueError("key_required")
-        if not text.strip():
+        if not text.strip() and not attachments and retry is None:
             raise ValueError("generic")
         if len(text) > 8000:
             raise ValueError("invalid_message")
-        # What the character sends after its reply comes through the outbox: pulled from now on, quiet or not.
-        self._sent_at = time.monotonic()
-        self._outbox_wake.set()
+        taken = self._read_attachments(attachments or [])
+        began = time.monotonic()
+        asked_at = time.time()
         async with self._chat_lock:
             room = self._chat(chat)
-            self._name_owner()
+            again = []
             if retry is not None:
+                again = next((m.get("attachments") or [] for m in room.history
+                              if m.get("seq") == retry and m.get("failed")), [])
+                picked = picked or next((m.get("choices") or [] for m in room.history
+                                         if m.get("seq") == retry and m.get("failed")), [])
                 room.history = [m for m in room.history
                                 if not (m.get("seq") == retry and m.get("failed"))]
+            # Stored and recorded with no wait between, so no save in between finds them unshown.
+            records = self._keep_attachments(taken) if taken else again
+            if not text.strip() and not records:
+                raise ValueError("generic")
             if room is not self._main and not room.title:
-                room.title = " ".join(text.split())[:TITLE_FIRST]
+                room.title = (" ".join(text.split())
+                              or next((r["file"] for r in records if r["kind"] == "file"), ""))[:TITLE_FIRST]
             # The character's own record of the chat holds only what was said in turns: what it
             # shared since the person last spoke reaches it as quotes in this message.
             quotes = self._quotes(room)
-            asked = {"role": "user", "text": text}
+            asked = {"role": "user", "text": text, **({"attachments": records} if records else {}),
+                     **({"choices": picked} if picked else {})}
             # The thing answered is quoted last, nearest the words about it, and shown in the message.
             answered = next((m for m in reversed(room.history)
                              if reply_to and (m.get("card") or {}).get("id") == reply_to), None)
             if answered:
-                quotes = [q for q in quotes if q["message_id"] != f"shared-{answered['seq']}"]
+                quotes = [q for q in quotes if q["of"] != answered["seq"]]
                 quotes.append(self._quote(answered))
                 card = answered["card"]
                 asked["quote"] = {k: card.get(k) or "" for k in ("id", "title", "kind", "site", "picture")}
-            # Recorded first, so a message sent on its own during the reply comes after it.
+            # Recorded first, so what the character says on its own during the reply comes after it.
             (said,) = room.append([asked])
+            # Kept now, marked, so a page process that ends mid-reply leaves it to send again.
+            said["pending"] = True
+            with contextlib.suppress(OSError):
+                room.save()
+            self._replying = (room, said, asyncio.Event())
             try:
-                await asyncio.to_thread(self.services.start_agent)
-                items = await send_chat_items(self.services.agent_url, self.config().get("CONNECTOR_TOKEN", ""),
-                                              room.conversation, text, capabilities=["outbox"],
-                                              # The outbox reaches only a conversation with a handle.
-                                              reply_handle=room.conversation,
-                                              **({"segments": [*quotes, {"type": "text", "text": text}],
-                                                  "bot_id": PAGE_CHARACTER} if quotes else {}))
+                # Its own line, apart from what follows it.
+                words = [{"type": "text", "text": f"{text}\n" if records else text}] if text.strip() else []
+                items = await asyncio.wait_for(self.character.reply(
+                    room.conversation, [*quotes, *words, *self._attachment_parts(records)], choices=picked),
+                    REPLY_WITHIN_S)
             except BaseException as error:
                 self._unanswered(said, chat_failure(error), room)
                 raise
+            finally:
+                self._replying[2].set()
+                self._replying = None
+            said.pop("pending", None)
+            stopped = said.pop("stopping", "")
+            if stopped and not items:
+                # Stopped from the page: nothing came, and the message waits to be sent again.
+                self._unanswered(said, stopped, room)
+                return {"reply": "", "stopped": True, **room.view(said["seq"] - 1 if after is None else after)}
             if any(item.get("reason") == "excuse" for item in items):
                 # The model failed: here the admin checks the setup, so it is reported, not chatted about.
+                # An account out of balance is named, with its console (abilities.note_problem).
+                from . import abilities
+                if abilities.problem_since(self._runtime(), asked_at) == "no_balance":
+                    self._unanswered(said, "model_no_balance", room)
+                    raise ValueError("model_no_balance")
                 self._unanswered(said, "chat_failed", room)
                 raise RuntimeError("the model did not answer")
+            if not items:
+                # The character had no words for it: shown as not sent, to send again.
+                self._unanswered(said, "generic", room)
+                raise ValueError("generic")
             entries = self._entries(items)
-            command = self._memory_command(text) if entries else None
+            if self.schedule is not None:
+                # What the reply did to scheduled tasks, under it (panels/schedule.py).
+                self.schedule.attach(entries)
+            command = self._memory_command(text) if entries and text.strip() else None
             for entry in entries:
                 # An answer to a memory command is shown whole at once, not typed out.
                 if command:
                     entry["command"] = command[0]
+                # How long the turn took, shown with its steps (activity.js).
+                if entry.get("trace"):
+                    entry["took"] = round(time.monotonic() - began)
+            if command:
+                # Under its last line, the way to Settings › Memory (chat.js).
+                entries[-1]["manage"] = True
             room.append(entries)
-            dropped, query = self._drop_forgotten(command, said, entries, room)
+            dropped = 0
+            scrub = next((i["scrub"] for i in items if isinstance(i.get("scrub"), dict)), None)
+            if scrub:
+                # The command and its answer stay as they are.
+                dropped = self._scrub_chats(scrub, room, {id(said), *map(id, entries)})
             self._save_chat(room)
-            if query:
-                # Activity's recent lines lose the words too.
-                with contextlib.suppress(ValueError):
-                    await self._activity_call("POST", "/api/dashboard/memory/forget_recent",
-                                              json={"conv": room.page_key(), "query": query})
+            await self._chat_finds(items, entries, asked.get("quote"))
             reply = "\n".join(str(i.get("text", "")) for i in items if i.get("type") == "text")
             if dropped:
                 # Earlier messages went: the page draws the chat afresh.
                 return {"reply": reply, "forgotLines": dropped, **room.view()}
             since = said["seq"] - 1 if after is None else after
             return {"reply": reply, **room.view(since)}
+
+    async def _chat_finds(self, items: list, entries: list, answered: dict | None = None) -> None:
+        """What a reply did with finds: one it brought is seen in the feed and told, as the share step's
+        are, and what the person said of one is kept as their reaction from the chat (feed.remember).
+        `answered`: the find this message of theirs answers, which is a reaction to it by itself."""
+        from .panels import feed
+        runtime = self._runtime()
+        item = self._library().get(answered["id"]) if answered else None
+        if item is not None:
+            await asyncio.to_thread(feed.remember, runtime, item, "talk", surface="chat")
+        for entry in entries:
+            ident = (entry.get("card") or {}).get("id")
+            item = self._library().get(ident) if ident else None
+            if item is not None:
+                await asyncio.to_thread(self.pace.shown, "chat", item.id)
+                await asyncio.to_thread(feed.remember, runtime, item, "seen", surface="chat", rank=0)
+                await self.mark_item(item.id, "told")
+        for said in (f for i in items for f in i.get("feedback") or [] if isinstance(f, dict)):
+            item = self._library().get(str(said.get("id") or ""))
+            if item is None:
+                continue
+            liked = said.get("liked") is True
+            # "Not this source" is the feed's "less like this source".
+            action = ("like" if liked else "hide_source" if said.get("about") == "source" and item.source
+                      else "skip")
+            words = {"about": str(said.get("about") or "")[:20], "words": str(said.get("words") or "")[:120]}
+            await asyncio.to_thread(feed.remember, runtime, item, action, surface="chat", said=words)
+            await asyncio.to_thread(self.pace.ended, item.id, "like" if liked else "close", "chat")
+            if liked:
+                await self.mark_item(item.id, "keep", True)
+            else:
+                self.fold_card(item.id, action)
 
     @staticmethod
     def _quotes(room: PageChat) -> list[dict]:
@@ -1397,6 +957,10 @@ class Workspace:
                 break
             if (message.get("card") or {}).get("id"):
                 shared.append(Workspace._quote(message))
+            elif (message.get("task") or {}).get("quote"):
+                # A reminder or a failure line the page said for a scheduled task (panels/schedule.py).
+                shared.append({"type": "quote", "of": message["seq"],
+                               "text": f"[{message['task']['title']}] {message.get('text', '')}"})
         return shared[:SHARE_QUOTED][::-1]
 
     @staticmethod
@@ -1406,7 +970,7 @@ class Workspace:
         # A thing it had no sentence for is said by its title: not twice.
         title = card.get("title") if card.get("title") != message.get("text") else ""
         facts = " · ".join(v for v in (card.get("kind"), title, card.get("site")) if v)
-        return {"type": "reply", "message_id": f"shared-{message['seq']}", "sender_id": PAGE_CHARACTER,
+        return {"type": "quote", "of": message["seq"],
                 "text": " ".join(v for v in (message.get("text"), f"[{facts}]", card.get("excerpt")) if v)}
 
     def _memory_command(self, text: str):
@@ -1422,261 +986,69 @@ class Workspace:
         except Exception:
             return None
 
-    def _drop_forgotten(self, command, said: dict, answer: list[dict], room: PageChat) -> tuple[int, str]:
-        """After a forget the character carried out, the page's own record of
-        the forgotten words goes too: each earlier message holding them and the
-        replies that answered it. The command and its answer stay. How many
-        went, and the words; (0, "") when nothing was forgotten."""
-        if not command or command[0] != "forget":
-            return 0, ""
-        from . import chatlangs
-        from .dashboard import forget_hit
-        from .memory import _forget_query, _loosely_names
-        spec = chatlangs.SPECS.get(command[2])
-        if spec is None:
-            return 0, ""
-        done = {str(s).strip().lower() for s in spec.replies.get("forgotten", ())}
-        if not any(str(e.get("text") or "").strip().lower() in done for e in answer):
-            return 0, ""
-        query = _forget_query(command[1], spec)
-        exact = forget_hit(query)
+    def _scrub_chats(self, scrub: dict, room: PageChat, keep: frozenset | set = frozenset()) -> int:
+        """What the character forgot, or was asked not to keep, leaves the chats'
+        own copies. A forget (`mark`: its language) puts the forgotten mark in place
+        of each sentence holding the words, in every chat, and of the lines it names
+        in this one; a turn not to keep goes from this chat whole. The messages
+        `keep` names stay. How many changed."""
+        from . import person
+        lines = {" ".join(part.split()) for x in scrub.get("lines") or [] for part in [str(x), *str(x).split("\n")]}
+        lines.discard("")
+        said = person.forget_hit(scrub.get("words") or [], scrub.get("texts") or [])
+        mark = scrub.get("mark")
+        changed = 0
+        for chat in self._all_chats():
 
-        def hit(text: str) -> bool:
-            # As the character found its note: word for word, or in another form of the words.
-            return exact(text) or _loosely_names(query, text, spec.stopwords)
-
-        rows = room.history
-        fixed = {id(said), *(id(e) for e in answer)}
-        gone: set[int] = set()
-        dropping = False
-        for i, message in enumerate(rows):
-            if id(message) in fixed:
-                dropping = False
-                continue
-            text = str(message.get("text") or "")
-            if message.get("role") == "user":
-                dropping = hit(text)
-            if dropping or hit(text):
-                gone.add(i)
-        for i in sorted(gone):
-            # One line of a memory answer went: its other lines ("Here is what
-            # I remember:") and the question that asked for them go with it.
-            if not rows[i].get("command"):
-                continue
-            first = last = i
-            while first > 0 and rows[first - 1].get("command") and id(rows[first - 1]) not in fixed:
-                first -= 1
-            while (last + 1 < len(rows) and rows[last + 1].get("command")
-                   and id(rows[last + 1]) not in fixed):
-                last += 1
-            if first > 0 and rows[first - 1].get("role") == "user" \
-                    and id(rows[first - 1]) not in fixed:
-                first -= 1
-            gone.update(range(first, last + 1))
-        room.history = [m for i, m in enumerate(rows) if i not in gone]
-        return len(gone), query
+            def hit(text: str, chat=chat) -> bool:
+                return said(text) or chat is room and " ".join(text.split()) in lines
+            rows = []
+            for m in chat.history:
+                text = str(m.get("text") or "")
+                if id(m) in keep or not hit(text):
+                    rows.append(m)
+                    continue
+                changed += 1
+                if mark:
+                    rows.append({**m, "text": person.scrub(text, hit, mark)})
+            if len(rows) != len(chat.history) or any(a is not b for a, b in zip(rows, chat.history)):
+                chat.history = rows
+                if chat is not room:
+                    with contextlib.suppress(OSError):
+                        chat.save()
+        return changed
 
     def _unanswered(self, said: dict, code: str, room: PageChat) -> None:
         """Kept, marked, so the person can see which message went unanswered and send it again."""
+        said.pop("pending", None)
         said["failed"] = code
         with contextlib.suppress(OSError):
             self._save_chat(room)
 
-    def _activity_token(self) -> str:
-        try:
-            return (self._runtime() / "dashboard.token").read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeDecodeError):
-            return ""
+    # -- what the character knows of the one person (person.json)
 
-    async def _activity_call(self, method: str, path: str, **kwargs) -> dict | None:
-        """The service's answer; None while it is not running, {"off": True}
-        when DASHBOARD_ENABLED is off."""
-        if not self.services.running("agent"):
-            return None
-        headers = {"X-Personagent-Dashboard-Token": self._activity_token()}
-        if method == "POST":
-            headers["X-Personagent-Dashboard"] = "1"
+    async def person_write(self, action: str, payload: dict) -> dict:
+        """forget, edit or restore one item, or forget all; the view after it."""
+        item, text = str(payload.get("id") or ""), str(payload.get("text") or "")
+        if (action not in PERSON_ACTIONS or len(item) > 64 or len(text) > 400
+                or (action != "forget_all" and not item) or (action == "edit" and not text)):
+            raise ValueError("invalid_chat")
         try:
-            async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
-                response = await client.request(method, self.services.agent_url + path,
-                                                headers=headers, **kwargs)
-            value = response.json()
-        except (httpx.HTTPError, ValueError):
+            raw = await self.character.person_write(action, self._main.conversation, item, text)
+        except NotReady:
             raise ValueError("activity_unavailable") from None
-        if response.status_code == 404 and value.get("detail") == "Not Found":
-            return {"off": True}
-        if response.status_code == 409:
-            raise ValueError("activity_changed")
-        if response.status_code == 404 and value.get("code") == "restore_gone":
-            raise ValueError("activity_restore_gone")
-        if response.status_code != 200:
-            raise ValueError("activity_unavailable")
-        return value
-
-    async def model_unreachable(self) -> bool:
-        """Whether the running character found its model unreachable; False when it cannot say."""
-        try:
-            raw = await self._activity_call("GET", "/api/dashboard/model")
-        except ValueError:
-            return False
-        return bool(raw and raw.get("model_unreachable"))
-
-    async def start_character(self) -> dict:
-        """Start the character as a sent message does, without sending one."""
-        if not self.config().get("LLM_API_KEY"):
-            raise ValueError("key_required")
-        async with self._chat_lock:
-            await asyncio.to_thread(self.services.start_agent)
-        return {"ok": True}
-
-    async def activity(self) -> dict:
-        raw = await self._activity_call("GET", "/api/dashboard/conversations")
-        if raw is None or raw.get("off"):
-            return {"running": raw is not None, "off": bool(raw), "chats": []}
-        chats = [{"id": str(c.get("id", "")), "platform": str(c.get("platform", "")),
-                  "kind": str(c.get("kind", "")), "last": c.get("last_activity", 0),
-                  "observing": int(c.get("observing", 0)), "learned": int(c.get("learned", 0)),
-                  "latest": float(c.get("latest") or 0), "notes": int(c.get("memories", 0)),
-                  # One of this page's chats now, as against one replaced or deleted.
-                  "current": str(c.get("id", "")) in {chat.page_key() for chat in self._all_chats()}}
-                 for c in raw.get("conversations", [])]
-        return {"running": True, "off": False, "chats": chats}
-
-    async def activity_chat(self, chat: str) -> dict:
-        chat = str(chat or "")
-        if not chat or len(chat) > 512:
-            raise ValueError("invalid_chat")
-        raw = await self._activity_call("GET", "/api/dashboard/conversation", params={"id": chat})
-        if raw is None or raw.get("off"):
-            raise ValueError("activity_unavailable")
-        shown = _activity_chat(raw)
-        # An earlier page chat: what was learned there is no longer used.
-        if shown["platform"] == access.PAGE_PLATFORM and chat not in {c.page_key() for c in self._all_chats()}:
-            shown["retired"] = True
-        return shown
-
-    async def activity_evidence(self, chat: str, conv: str, kind: str, item: str) -> dict:
-        """The logged lines one remembered fact or event of a chat rests on."""
-        chat, conv, kind, item = (str(v or "") for v in (chat, conv, kind, item))
-        if (not chat or len(chat) > 512 or len(conv) > 512 or kind not in ("note", "episode")
-                or not item or len(item) > 128):
-            raise ValueError("invalid_chat")
-        raw = await self._activity_call("GET", "/api/dashboard/memory/evidence",
-                                        params={"conv": conv or chat, "kind": kind, "id": item})
-        if raw is None or raw.get("off"):
-            raise ValueError("activity_unavailable")
-        page = channels.platform_of(conv or chat) == access.PAGE_PLATFORM
-        lines = []
-        for row in raw.get("lines") or []:
-            name = str(row.get("name") or "")
-            mine = page and not row.get("self") and name == PAGE_SENDER
-            lines.append({"when": row.get("t", 0), "text": str(row.get("text") or ""),
-                          "name": "" if mine else name,
-                          **({"you": True} if mine else {}),
-                          **({"character": True} if row.get("self") else {})})
-        return {"refs": int(raw.get("refs") or 0), "on": bool(raw.get("on")), "lines": lines}
-
-    async def activity_decide(self, payload: dict) -> dict:
-        cid, action = str(payload.get("id") or ""), str(payload.get("action") or "")
-        chat = str(payload.get("chat") or "")
-        if (action not in ACTIVITY_ACTIONS or not CANDIDATE_ID.fullmatch(cid)
-                or not chat or len(chat) > 512):
-            raise ValueError("invalid_chat")
-        result = await self._activity_call("POST", f"/api/dashboard/candidates/{cid}/{action}",
-                                           json={"reason": "local page"})
-        if result is None or result.get("off"):
-            raise ValueError("activity_unavailable")
-        return await self.activity_chat(chat)
-
-    async def activity_forget(self, payload: dict) -> dict:
-        """Forget one remembered item; the trash id comes back for Undo."""
-        chat, conv = str(payload.get("chat") or ""), str(payload.get("conv") or "")
-        item, kind = str(payload.get("id") or ""), str(payload.get("kind") or "")
-        if (not chat or len(chat) > 512 or len(conv) > 512 or kind not in MEMORY_KINDS
-                or len(item) > 128):
-            raise ValueError("invalid_chat")
-        result = await self._activity_call(
-            "POST", "/api/dashboard/memory/forget",
-            json={"conv": conv or chat, "kind": kind, "id": item})
-        if result is None or result.get("off"):
-            raise ValueError("activity_unavailable")
-        return {"tid": str(result.get("tid") or ""), "chat": await self.activity_chat(chat)}
-
-    async def activity_restore(self, payload: dict) -> dict:
-        """Bring back an item the character or a person removed."""
-        chat, tid = str(payload.get("chat") or ""), str(payload.get("tid") or "")
-        if not chat or len(chat) > 512 or not MEMORY_TID.fullmatch(tid):
-            raise ValueError("invalid_chat")
-        try:
-            result = await self._activity_call("POST", "/api/dashboard/memory/restore",
-                                               json={"tid": tid})
-        except ValueError as error:
-            if str(error) == "activity_changed":
-                raise ValueError("activity_restore_exists") from None
-            raise
-        if result is None or result.get("off"):
-            raise ValueError("activity_unavailable")
-        return await self.activity_chat(chat)
-
-    async def activity_forget_chat(self, payload: dict) -> dict:
-        """Forget all one chat remembers; one of this page's own chats also starts anew."""
-        chat = str(payload.get("chat") or "")
-        if not chat or len(chat) > 512:
-            raise ValueError("invalid_chat")
-        if chat == self._page_key():
-            return await self.forget_chat()
-        result = await self._activity_call("POST", "/api/dashboard/memory/forget_chat",
-                                           json={"conv": chat})
-        if result is None or result.get("off"):
-            raise ValueError("activity_unavailable")
-        room = next((c for c in self._chats.values() if c.page_key() == chat), None)
-        if room is not None:
+        scrub = raw.pop("scrub", None)
+        if scrub:
+            # The page's own copies of the chats lose the words too.
             async with self._chat_lock:
-                room.reset()
-                self._save_chat(room)
-        return {"ok": True, "forgotten": int(result.get("forgotten") or 0)}
+                self._scrub_chats(scrub, self._main)
+                self._save_chat()
+        return raw
 
-    # -- the character's home and days
+    # -- the character's finds
 
     def _library(self) -> Library:
         return Library(self._runtime())
-
-    async def _life_call(self, method: str, path: str, **kwargs) -> dict | None:
-        """The service's answer; None when it is stopped or cannot answer, so the files answer instead."""
-        try:
-            raw = await self._activity_call(method, path, **kwargs)
-        except ValueError:
-            return None
-        return None if raw is None or raw.get("off") else raw
-
-    async def home_view(self) -> dict:
-        raw = await self._life_call("GET", "/api/dashboard/home")
-        if raw is not None and isinstance(raw.get("now"), dict):
-            return raw
-        shown = life.home(life.Sources.from_files(self._runtime(), self.config()))
-        if self.services.running("agent"):
-            # Running but not answering: nothing is known of what it does now, only that it is not off.
-            shown["now"] = life.now_state(self._library(), life.clock(), running=True)
-        return shown
-
-    async def go_out(self) -> dict:
-        raw = await self._life_call("POST", "/api/dashboard/home/out", json={})
-        if raw is None:
-            return {"error": "off"}
-        code = str(raw.get("error") or "")
-        return {"error": code[:40]} if code or not raw.get("ok") else {"ok": True}
-
-    async def days(self, before: str = "", limit: int = life.DAYS_LIMIT, kept: bool = False) -> dict:
-        before = str(before or "")
-        if len(before) > 128:
-            raise ValueError("item_gone")
-        limit = max(1, min(life.DAYS_MAX, int(limit)))
-        raw = await self._life_call("GET", "/api/dashboard/days",
-                                    params={"before": before, "limit": limit, "kept": int(bool(kept))})
-        if raw is not None and isinstance(raw.get("items"), list):
-            return raw
-        return life.days(life.Sources.from_files(self._runtime(), self.config()), before, limit,
-                         kept_only=bool(kept))
 
     def _item(self, payload) -> life.Item:
         ident = str((payload or {}).get("id") or "")
@@ -1686,16 +1058,10 @@ class Workspace:
         return item
 
     async def mark_item(self, ident: str, action: str, kept: bool = True) -> dict:
-        """Keep, dismiss or mark told, through the service while it runs, else in the files."""
-        sent = {"id": ident, **({"kept": kept} if action == "keep" else {})}
-        raw = await self._life_call("POST", f"/api/dashboard/days/{action}", json=sent)
-        if raw is not None and raw.get("ok"):
-            done = bool(raw.get("kept"))
-        else:
-            item = life.mark(self._library(), ident, action, kept)
-            if item is None:
-                raise ValueError("item_gone")
-            done = item.state == life.KEPT
+        """Keep, dismiss or mark told one thing the character saw."""
+        done = await asyncio.to_thread(self.character.mark, ident, action, kept)
+        if done is None:
+            raise ValueError("item_gone")
         if action == "keep":
             # A card in the main chat shows the same choice the next time it is drawn.
             cards = [m["card"] for m in self._main.shared() if m["card"]["id"] == ident]
@@ -1706,7 +1072,8 @@ class Workspace:
         return {"ok": True, "kept": done}
 
     def fold_card(self, ident: str, action: str) -> None:
-        """A card turned down in the main chat (skip or hide_source) stays folded the next time it is drawn."""
+        """A card turned down in the main chat stays folded the next time it is drawn, to the line `action`
+        names (skip, topic, hide_source, or known for seen already); "" unfolds it (the no was taken back)."""
         cards = [m["card"] for m in self._main.shared() if m["card"]["id"] == ident]
         for card in cards:
             card["skipped"] = action
@@ -1722,7 +1089,7 @@ class Workspace:
         from .panels import feed
 
         served = feed.on_card if served is None else served
-        since = self._seq
+        since = self._main.seq
         if items:
             messages = [life.said(item) for item in items]
             for rank, (item, message) in enumerate(zip(items, messages)):
@@ -1730,7 +1097,9 @@ class Workspace:
                 if shaped.get("line"):
                     message["text"] = shaped["line"]
                 if message.get("card"):
-                    message["card"].update(rank=rank, slot=shaped.get("slot", ""))
+                    # The chip under its site and the topic a no may name, as the chooser dressed it (recommend.Why).
+                    message["card"].update(rank=rank, slot=shaped.get("slot", ""), why=shaped.get("why"),
+                                           topic=shaped.get("topic"))
             self._append(messages)
             self._save_chat()
             for rank, item in enumerate(items):
@@ -1739,22 +1108,11 @@ class Workspace:
                 await self.mark_item(item.id, "told")
         return {"count": len(items), **self.history(since)}
 
-    def _share_due(self) -> bool:
-        """Whether the share step brings something now, at the pace SHARE_* sets;
-        never before the first run is done."""
-        now = life.clock()
+    async def _share_due(self) -> bool:
+        """Whether the share step brings something now, as the pacing says; never before the first run is done."""
         if not app_settings(self._history_path.parent).get("toured"):
             return False
-        pace = self._share_pace(now)
-        first = pace["chat"] != self._main.tag()
-        return pace["count"] < SHARE_DAY and (first or now - pace["at"] >= SHARE_QUIET_S)
-
-    def _share_pace(self, now: float) -> dict:
-        """When the main chat last had things shared, which chat that was, and how many today."""
-        saved = sw._read_json(self._history_path.with_name(SHARE_FILE))
-        today = date.fromtimestamp(now).isoformat()
-        return {"at": float(saved.get("at") or 0), "chat": str(saved.get("chat") or ""),
-                "count": int(saved.get("count") or 0) if saved.get("day") == today else 0, "day": today}
+        return await self.pace.due("chat")
 
     async def share(self) -> int:
         """The share step: the character's choice comes into the main chat as its
@@ -1763,17 +1121,13 @@ class Workspace:
         if self._chat_lock.locked():
             return 0
         async with self._chat_lock:
-            if not await asyncio.to_thread(self._share_due):
+            if not await self._share_due():
                 return 0
             chosen = await self.chooser.take("chat")
             if chosen is None:
                 return 0
             shaped, item = chosen
-            now = life.clock()
-            pace = self._share_pace(now)
-            atomic_write_text(self._history_path.with_name(SHARE_FILE),
-                              json.dumps({"at": now, "chat": self._main.tag(), "day": pace["day"],
-                                          "count": pace["count"] + 1}))
+            await asyncio.to_thread(self.pace.shown, "chat", item.id)
             await self._say([item], {item.id: shaped})
             return 1
 
@@ -1798,6 +1152,9 @@ class Workspace:
     def news(self) -> None:
         """The window app replaces this to have the pet look at once (window.py)."""
 
+    def busy(self, doing: str) -> None:
+        """The window app replaces this: a reply is on its way ("thinking"), or "" when it is in (window.py pet_busy)."""
+
     async def bring(self, payload: dict) -> dict:
         """One thing into the main chat (the pet's card opens it there): the message
         that already carries it, else the character shares it now."""
@@ -1819,165 +1176,18 @@ class Workspace:
             self._save_chat()
         return True
 
-    async def tell(self) -> dict:
-        async with self._chat_lock:
-            return await self._say(life.tell_queue(self._library()))
-
-    async def talk(self, payload: dict) -> dict:
-        item = self._item(payload)
-        async with self._chat_lock:
-            return await self._say([item])
-
-    def library_text(self, ident: str) -> dict:
-        item = self._item({"id": ident})
-        if not item.text.strip():
-            raise ValueError("item_gone")
-        return {"title": item.title, "text": item.text}
-
     def library_picture(self, ident: str) -> Path | None:
         return self._library().picture_path(ident) if ITEM_ID.fullmatch(str(ident or "")) else None
 
     def close(self) -> None:
         with self._lock:
             self._closed = True
-        self.services.shutdown()
-        self.worker.shutdown(wait=False, cancel_futures=True)
-
-
-def _activity_chat(raw: dict) -> dict:
-    """One chat as the Activity view shows it: what the character still
-    observes and where each item stands, what it learned and how, what it
-    remembers and what it recently did. Evidence and history stay with the
-    learned panel and `personagent learned`."""
-    # In this page's own chat every message is the page's person's, sent under a placeholder name.
-    page = raw.get("platform") == access.PAGE_PLATFORM
-
-    def mine(name) -> bool:
-        return page and name == PAGE_SENDER
-
-    def own(name) -> str:
-        return "" if mine(name) else name
-
-    def flag(key: str, on: bool) -> dict:
-        return {key: True} if on else {}
-
-    def item(cand: dict) -> dict:
-        speakers = [e.get("speaker") for e in cand.get("evidence") or [] if e.get("speaker")]
-        out = {"id": cand.get("id", ""), **flag("self", page and bool(speakers)),
-               "kind": "wording" if cand.get("type") == candidates.TYPE_PAIR else "repeat",
-               "said": cand.get("reply", ""), "better": cand.get("better", ""),
-               "lesson": cand.get("lesson", ""),
-               "when": cand.get("created", 0),
-               "from": [] if page else list(dict.fromkeys(speakers))[:3],
-               "actions": [a for a in cand.get("actions") or [] if a in ACTIVITY_ACTIONS]}
-        where = cand.get("standing")
-        if isinstance(where, dict):
-            out["standing"] = {key: where.get(key) for key in ACTIVITY_STANDING if key in where}
-        by = cand.get("by")
-        if isinstance(by, dict):
-            out["by"] = {"by": str(by.get("by") or ""), "why": str(by.get("why") or "")}
-        return out
-
-    thread, status, log = raw.get("thread"), raw.get("memory_status"), raw.get("log")
-    return {"id": raw.get("id", ""), "platform": raw.get("platform", ""), "kind": raw.get("kind", ""),
-            "observing": [item(c) for c in raw.get("observing") or []],
-            "learned": [item(c) for c in raw.get("learned") or []],
-            "notes": [{"text": m.get("text", ""), "by": m.get("by", ""), "about": own(m.get("about", "")),
-                       "when": m.get("time", 0), "id": m.get("id", ""), "conv": m.get("conv", ""),
-                       "born": m.get("born", 0), "used": m.get("used", 0),
-                       "saidBy": own(m.get("said_by_name", "")),
-                       "checked": m.get("checked") or 0, "refs": len(m.get("refs") or []),
-                       **flag("aboutSelf", mine(m.get("about"))),
-                       **flag("saidBySelf", mine(m.get("said_by_name")))}
-                      for m in raw.get("memories") or []],
-            "core": raw.get("core_note", ""),
-            "coreAt": raw.get("core_at") or 0,
-            "thread": {"id": thread.get("id", ""), "text": thread.get("text", ""),
-                       "from": thread.get("from_t", 0), "to": thread.get("to_t", 0)}
-            if isinstance(thread, dict) else None,
-            "events": [{"id": e.get("id", ""), "text": e.get("text", ""), "from": e.get("t0", 0),
-                        "to": e.get("t1", 0), "names": [n for n in e.get("names") or [] if own(n)],
-                        "refs": len(e.get("refs") or []),
-                        **flag("self", any(mine(n) for n in e.get("names") or []))}
-                       for e in raw.get("episodes") or []],
-            "removed": [{"tid": r.get("tid", ""), "kind": r.get("kind", ""), "why": r.get("why", ""),
-                         "by": r.get("by", ""), "at": r.get("at", 0), "text": r.get("text", ""),
-                         "until": r.get("until", 0)}
-                        for r in raw.get("removed") or []],
-            # Only while consolidation is on: today's calls, or when it tries again.
-            "status": {"used": status.get("calls_today", 0), "cap": status.get("cap", 0),
-                       "paused": status.get("paused_until", 0), "next": status.get("next_at", 0)}
-            if isinstance(status, dict) else None,
-            # The chat's record: whether it is kept, for how many days, from when.
-            "log": {"on": bool(log.get("on")), "days": int(log.get("days") or 0),
-                    "lines": int(log.get("lines") or 0), "first": log.get("first_at") or 0}
-            if isinstance(log, dict) else None,
-            "recent": [{"when": d.get("ts", 0), "spoke": bool(d.get("spoke")), "mode": d.get("mode", ""),
-                        "reason": d.get("reason", ""), "text": d.get("excerpt", ""),
-                        "answered": d.get("answered", ""),
-                        "sender": "" if page else d.get("sender", ""),
-                        # Whatever message a row quotes here was written by the page's person.
-                        **flag("self", page and bool(d.get("sender") or d.get("answered")
-                                                     or not d.get("spoke"))),
-                        "count": int(d.get("count") or 1),
-                        **_lookup(d.get("lookup"))}
-                       for d in (raw.get("decisions") or [])[:ACTIVITY_RECENT]][::-1]}
-
-
-def _lookup(raw) -> dict:
-    """What a reply drew on: a web search, or a tool by name."""
-    if not isinstance(raw, dict) or not raw or raw.get("kind") not in ("search", "tool"):
-        return {}
-    return {"lookup": {"kind": raw["kind"], "name": str(raw.get("name") or "")[:120]}}
 
 
 def _expands(text: str) -> bool:
     """Would dotenv read `text` back as another setting? It expands ${VAR}
     even inside quotes, so ${LLM_API_KEY} saved as a vision key is the chat key."""
     return "${" in str(text)
-
-
-def _key(value) -> str:
-    """A pasted key: one token, no spaces, line breaks or ${...}."""
-    text = str(value or "").strip()
-    if len(text) > 4096 or any(c.isspace() for c in text) or _expands(text):
-        raise ValueError("invalid_feature")
-    return text
-
-
-_VISION_VARS = ("VISION_MODEL", "VISION_BASE_URL", "VISION_API_KEY")
-_vision_probe_lock = threading.Lock()
-
-
-def _vision_works(model: str, base: str, key: str) -> bool:
-    """One `doctor` vision probe against values not saved yet. The check
-    reads the environment, so they stand in there for its length."""
-    from . import health
-
-    with _vision_probe_lock:
-        before = {name: os.environ.get(name) for name in _VISION_VARS}
-        os.environ.update(VISION_MODEL=model, VISION_BASE_URL=base, VISION_API_KEY=key)
-        try:
-            ok, said = health.check_vision()
-        except Exception:
-            ok, said = False, ""
-        finally:
-            for name, value in before.items():
-                if value is None:
-                    os.environ.pop(name, None)
-                else:
-                    os.environ[name] = value
-    # The probe shows a red square: only an answer naming its colour proves the model saw it.
-    return ok is True and _names_red(str(said).rsplit("->", 1)[-1])
-
-
-# "Red" as a vision model may answer the probe's "What color?" in the languages it speaks.
-_RED = re.compile(r"\bred\b|\brot\b|rouge|roj[oa]|rosso|vermelh|красн|红|紅|赤|빨|적색|scarlet|crimson",
-                  re.IGNORECASE)
-
-
-def _names_red(answer: str) -> bool:
-    return bool(_RED.search(answer))
 
 
 def _endpoint(value) -> str:
@@ -1992,89 +1202,29 @@ def _endpoint(value) -> str:
     return base
 
 
-def _local_caller(request: Request, host: str | None) -> bool:
-    """A caller on this computer, addressing it by a loopback name, through no proxy."""
-    client = request.client.host if request.client else ""
-    return (pageaccess.is_loopback(client) and host in LOOPBACK
-            and not any(request.headers.get(key) for key in FORWARDED))
-
-
-async def _fail_wait() -> None:
-    # Slowed, so guessing costs time even before the address is shut out.
-    await asyncio.sleep(pageaccess.FAIL_DELAY_S)
-
-
-def _secure_request(request: Request) -> bool:
-    # Behind a proxy that ends TLS only the browser's side says https.
-    return (request.url.scheme == "https"
-            or request.headers.get("x-forwarded-proto", "").strip().lower() == "https"
-            or request.headers.get("origin", "").startswith("https://"))
-
-
-async def keep_running(workspace: Workspace) -> None:
-    """The headless page keeps the character running, as `up` does: started
-    once it is set up, started again after it stopped, waiting longer after
-    each start that failed. A stop from the page holds until Start."""
-    failures, retry_at, started, wait = 0, 0.0, False, 0.0
-    while not workspace._closed:
-        await asyncio.sleep(wait)
-        wait = KEEP_RUNNING_S
-        try:
-            ready = await asyncio.to_thread(lambda: bool(workspace.config().get("LLM_API_KEY")))
-            future = workspace._future
-            if (future is not None and not future.done()) or workspace.held or not ready:
-                continue
-            if workspace.services.running("agent"):
-                failures, started = 0, False
-                continue
-            if started:
-                # What this loop started is not running: the next try waits longer.
-                failures += 1
-                retry_at = time.monotonic() + min(KEEP_RUNNING_S * 2 ** failures, KEEP_RUNNING_MAX_S)
-                started = False
-            if time.monotonic() < retry_at:
-                continue
-            await asyncio.to_thread(workspace.start_job, "start")
-            started = True
-        except ValueError:
-            continue
-        except Exception:
-            traceback.print_exc()
-            wait = KEEP_RUNNING_MAX_S
-
-
-def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
-               gate: pageaccess.Gate | None = None, headless: bool = False) -> FastAPI:
-    """The page. With `gate` it also admits callers from other devices that
-    signed in with the page password; `headless` is the page `up` serves."""
+def create_app(home: Path, token: str, *, workspace: Workspace | None = None) -> FastAPI:
+    """The page, for this computer alone: a loopback address, and the token for the API."""
     workspace = workspace or Workspace(home)
 
     @asynccontextmanager
     async def lifespan(app):
-        later = [asyncio.create_task(workspace.outbox_loop())]
+        # The character, with its own loops: its memory, its walks, the follow-up of a plan.
+        await workspace.character.start()
+        # Another program in front, or another tab: maybe a good moment to bring something (pacing.py).
+        quiet.on_front(lambda: asyncio.ensure_future(workspace.pace.look()))
         # Games and fullscreen in front: the background loops wait and the pet hides (quiet.py).
-        # The character service hears each change from here and does not look itself.
-        quiet.listen(lambda _state: asyncio.ensure_future(workspace.tell_quiet()))
-        # Mail and messages the character may not read: how many came is said from here (privacy.py).
-        app.state.privacy.attach()
-        later.append(asyncio.create_task(quiet.watch(workspace._runtime)))
-        # The public sources need no model and no service: they are read whenever the page runs.
+        later = [asyncio.create_task(quiet.watch(workspace._runtime))]
+        # The public sources need no model: they are read whenever the page runs.
         later.append(asyncio.create_task(app.state.sources.loop()))
-        # The person's own mail and Discord are read on their own too, once connected.
-        later.append(asyncio.create_task(app.state.mail.loop()))
-        later.append(asyncio.create_task(app.state.discord.loop()))
-        # The other accounts connected in Settings › Connect (Discord is read by its own loop above).
-        later.append(asyncio.create_task(app.state.accounts.loop()))
         # What the character found comes into the main chat at its own pace, whether or not it is open.
         later.append(asyncio.create_task(workspace.share_loop()))
-        if headless:
-            later.append(asyncio.create_task(keep_running(workspace)))
-        else:
-            # Now and then a line about what the person is doing (remarks.py).
-            later.append(asyncio.create_task(app.state.remarks.loop()))
+        # The person's MCP servers run with the page and stop with it (mcp_hub.py).
+        later.append(asyncio.create_task(app.state.mcp.run()))
+        # Scheduled tasks run when due, whether or not the window is open (panels/schedule.py).
+        later.append(asyncio.create_task(app.state.schedule.loop()))
+        # Now and then a line about what the person is doing (remarks.py).
+        later.append(asyncio.create_task(app.state.remarks.loop()))
         try:
-            if not headless and workspace.summary()["platforms"] and workspace.config().get("LLM_API_KEY"):
-                workspace.start_job("start")
             yield
         finally:
             for task in later:
@@ -2083,57 +1233,34 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
                     await task
             for stop in app.state.closers:
                 await asyncio.to_thread(stop)
-            await asyncio.to_thread(workspace.close)
+            await workspace.character.close()
+            workspace.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.workspace = workspace
-    app.state.gate = gate
-    app.state.headless = headless
-    # What a panel started outside the workspace's services; called before those stop.
+    # What a panel started and must stop; called before the character stops.
     app.state.closers = []
 
     def refuse(code: str = "forbidden", status: int = 403) -> JSONResponse:
         return JSONResponse({"error": code}, status_code=status)
 
     def judge(request: Request) -> JSONResponse | None:
-        """None when the request may go on; sets whether it came from another device."""
-        request.state.remote = request.state.signed_in = False
-        path = request.url.path
+        """None when the request may go on: addressed to a loopback name, and to the
+        API only with the token, from the page's own origin, through no proxy."""
         try:
             host = urlsplit("//" + request.headers.get("host", "")).hostname
         except ValueError:
             return refuse()
-        if gate is None or _local_caller(request, host):
-            if host not in LOOPBACK:
-                return refuse()
-            if path.startswith("/auth/"):
-                return refuse("not_found", 404)
-            if path.startswith("/api/"):
-                if not secrets.compare_digest(request.headers.get(TOKEN_HEADER, "").encode(), token.encode()):
-                    return refuse()
-                origin = request.headers.get("origin")
-                if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
-                    return refuse()
-                if any(request.headers.get(key) for key in FORWARDED):
-                    return refuse()
-            return None
-        # Another device: only at an address the owner configured, and only signed in.
-        request.state.remote = True
-        if not pageaccess.host_allowed(request.headers.get("host", ""), gate.settings().allowed):
+        if host not in LOOPBACK:
             return refuse()
-        if path.startswith(("/api/", "/auth/")):
-            fetched = request.headers.get("sec-fetch-site", "")
-            if fetched and fetched not in ("same-origin", "none"):
+        if request.url.path.startswith("/api/"):
+            if not secrets.compare_digest(request.headers.get(TOKEN_HEADER, "").encode(), token.encode()):
                 return refuse()
-            if not pageaccess.same_origin(request.headers.get("origin", ""), request.headers.get("host", "")):
-                # The sign-in page names the likely cause (a proxy's Host); both headers are the caller's own.
-                return refuse("signin_origin" if path.startswith("/auth/") else "forbidden")
-        request.state.signed_in = gate.session(request.cookies.get(pageaccess.COOKIE))
-        if path.startswith("/api/"):
-            if not request.state.signed_in or request.headers.get(pageaccess.SESSION_HEADER) != "1":
-                return refuse("signin_required", 401)
-            if (request.method, path) in LOCAL_ONLY:
-                return refuse("local_only")
+            origin = request.headers.get("origin")
+            if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
+                return refuse()
+            if any(request.headers.get(key) for key in FORWARDED):
+                return refuse()
         return None
 
     @app.middleware("http")
@@ -2167,117 +1294,80 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
     async def bad_value(request, exc):
         allowed = {"busy", "invalid_provider", "key_required", "invalid_url", "https_required",
                    "model_required", "invalid_character", "key_rejected", "model_limited", "model_unreachable",
+                   "model_no_balance", "model_not_found",
                    "key_malformed", "key_again", "name_required",
-                   "vision_unsupported",
-                   "permission_required", "invalid_message", "invalid_platform",
-                   "field_required", "invalid_field", "invalid_persona", "invalid_feature",
-                   "invalid_chat", "activity_unavailable", "activity_changed", "forget_needs_activity",
-                   "activity_restore_gone", "activity_restore_exists",
-                   "avatar_type", "avatar_too_large", "local_only", "item_gone", "invalid_title"}
+                   "invalid_message", "invalid_chat", "activity_unavailable", "activity_changed",
+                   "avatar_type", "avatar_too_large", "item_gone", "invalid_title",
+                   "attach_too_many", "picture_type", "picture_too_large", "file_type", "file_too_large",
+                   "file_unreadable"}
         error = str(exc)
         known = error in allowed or any(
             error in importlib.import_module(f"{__package__}.panels.{name}").ERRORS for name in PANELS)
         return JSONResponse({"error": error if known else "generic"}, status_code=400)
 
     @app.get("/")
-    async def index(request: Request):
-        # Another device sees the sign-in page until it has signed in.
-        if request.state.remote and not request.state.signed_in:
-            return FileResponse(ASSETS / "signin.html")
+    async def index():
         # The app: what the character found, and the chat.
         return FileResponse(ASSETS / "app.html")
-
-    @app.get("/classic")
-    async def classic(request: Request):
-        # The earlier page: setup, the character, connecting apps.
-        if request.state.remote and not request.state.signed_in:
-            return FileResponse(ASSETS / "signin.html")
-        return FileResponse(ASSETS / "index.html")
 
     @app.get("/pet")
     async def pet():
         # The character alone, for the small window personagent starts as.
         return FileResponse(ASSETS / "pet.html")
 
+    @app.get("/compact")
+    async def compact():
+        # The app page again, laid out as the small chat beside the pet (compact.js).
+        return FileResponse(ASSETS / "app.html")
+
+    @app.get("/locale.js")
+    async def locale_script():
+        # The interface's language and its catalog, English beside it, for the page's other scripts (i18n.js).
+        code = i18n.lang(await asyncio.to_thread(workspace.config))
+        data = json.dumps([code, i18n.catalog(code), i18n.catalog("en")], ensure_ascii=False)
+        return Response(f"paI18n.load(...{data});\n", media_type="text/javascript; charset=utf-8",
+                        headers={"Cache-Control": "no-store"})
+
+    @app.get("/assets/locales/{name}")
+    async def locale_file(name: str):
+        # A language's catalog, for a page that changes to it.
+        if name.removesuffix(".json") not in langs.CODES or not name.endswith(".json"):
+            raise HTTPException(404)
+        return FileResponse(i18n.LOCALES / name, media_type="application/json")
+
     @app.get("/health")
     async def health():
-        # For a container's health check: that the page answers, nothing more.
+        # That the page answers, nothing more.
         return {"ok": True}
-
-    @app.post("/auth/signin")
-    async def sign_in(request: Request):
-        address = request.client.host if request.client else ""
-        payload = await body(request, 4096)
-        # Full: refused at once, and not held against this caller.
-        if not gate.checks.take():
-            return JSONResponse({"error": "signin_busy", "seconds": 1}, status_code=429)
-        try:
-            state, wait = gate.limiter.begin(address)
-            if state != "ok":
-                return JSONResponse({"error": "signin_locked" if state == "locked" else "signin_busy",
-                                     "seconds": wait}, status_code=429)
-            attempt = payload.get("password")
-            stored = gate.settings().password
-            ok = False
-            try:
-                if isinstance(attempt, str) and stored:
-                    ok = await asyncio.get_running_loop().run_in_executor(
-                        gate.checks.pool(), pageaccess.verify, stored, attempt)
-            finally:
-                left = gate.limiter.finish(address, ok)
-        finally:
-            gate.checks.give_back()
-        if not ok:
-            await _fail_wait()
-            if not left:
-                return JSONResponse({"error": "signin_locked", "seconds": pageaccess.LOCK_S}, status_code=429)
-            return JSONResponse({"error": "signin_wrong", "left": left}, status_code=401)
-        response = JSONResponse({"ok": True})
-        response.set_cookie(pageaccess.COOKIE, gate.sessions.create(pageaccess.fingerprint(stored)),
-                            max_age=pageaccess.SESSION_S, path="/", httponly=True, samesite="strict",
-                            secure=_secure_request(request))
-        return response
-
-    @app.post("/auth/signout")
-    async def sign_out(request: Request):
-        await body(request, 1024)
-        if not request.state.signed_in or request.headers.get(pageaccess.SESSION_HEADER) != "1":
-            return JSONResponse({"error": "signin_required"}, status_code=401)
-        gate.sessions.end(request.cookies.get(pageaccess.COOKIE, ""))
-        response = JSONResponse({"ok": True})
-        response.delete_cookie(pageaccess.COOKIE, path="/", httponly=True, samesite="strict",
-                               secure=_secure_request(request))
-        return response
 
     @app.get("/assets/{name}")
     async def asset(name: str):
-        if name not in (*PAGE_ASSETS, *SIGNIN_ASSETS):
+        if name not in PAGE_ASSETS:
             raise HTTPException(404)
         return FileResponse(ASSETS / name)
 
     @app.get("/assets/figures/{name}")
     async def pet_figure(name: str):
-        # A figure is a drawing (<key>.svg) or a sheet of frames cut from a painting (<key>.webp).
-        key, _, kind = name.rpartition(".")
+        # A figure is a drawing (<key>.svg) or a sheet of frames cut from a painting (<key>.webp),
+        # and a painted one has the pet's poses too (<key>.pet.webp, laid out in <key>.pet.json).
+        key, _, kind = name.partition(".")
         path = ASSETS / "figures" / name
-        if key not in PET_FIGURES or kind not in ("svg", "webp") or not path.is_file():
+        if key not in PET_FIGURES or kind not in ("svg", "webp", "pet.webp", "pet.json") or not path.is_file():
             raise HTTPException(404)
-        return FileResponse(path, media_type="image/svg+xml" if kind == "svg" else "image/webp")
+        if name == "mibo.svg":
+            # Mibo in the colours chosen for it.
+            from .panels import colors
+            chosen = colors.chosen(await asyncio.to_thread(app_settings, workspace.home / "runtime" / "desktop"))
+            return Response(colors.paint(path.read_text(encoding="utf-8"), chosen), media_type="image/svg+xml")
+        return FileResponse(path, media_type={"svg": "image/svg+xml", "pet.json": "application/json"}.get(kind, "image/webp"))
 
-    @app.get("/assets/panels/{name}")
-    async def panel_asset(name: str):
+    @app.get("/assets/setup/{name}")
+    async def setup_part(name: str):
         stem, _, kind = name.rpartition(".")
-        if stem not in PAGE_PANELS or kind not in ("js", "css"):
+        # A section's script, and the styles of the one that has its own (skills.css).
+        if stem not in SETUP_PARTS or kind not in ("js", "css") or not (ASSETS / "setup" / name).is_file():
             raise HTTPException(404)
-        return FileResponse(ASSETS / "panels" / name)
-
-    @app.get("/assets/i18n/{name}")
-    async def page_language(name: str):
-        path = ASSETS / "i18n" / name
-        if name.removesuffix(".json") not in PAGE_LANGUAGES or not name.endswith(".json") \
-                or not path.is_file():
-            raise HTTPException(404)
-        return FileResponse(path, media_type="application/json")
+        return FileResponse(ASSETS / "setup" / name)
 
     @app.get("/assets/characters/{name}")
     async def character_portrait(name: str):
@@ -2287,44 +1377,32 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
         return FileResponse(path, media_type="image/webp", headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/api/state")
-    async def state(request: Request):
+    async def state():
         summary = await asyncio.to_thread(workspace.summary)
-        summary["modelUnreachable"] = summary["agentRunning"] and await workspace.model_unreachable()
-        # What the page hides or words differently: another device, no window, a container.
-        summary["remote"] = bool(request.state.remote)
-        summary["headless"] = headless
-        summary["container"] = pageaccess.in_container()
+        summary["modelUnreachable"] = workspace.character.model_unreachable()
         return summary
 
     @app.get("/api/catalog")
-    async def catalog():
-        return {"providers": [{"id": p.key, "name": list(p.name), "baseUrl": p.base_url,
-                               "model": p.model, "keyUrl": p.key_url} for p in sw.PROVIDERS],
-                "characters": [{"id": c.key, "name": list(c.title),
+    async def catalog(request: Request):
+        values = await asyncio.to_thread(workspace.config)
+        # The saved language, else the one this computer's browser asks for: DeepSeek leads for Chinese.
+        lang = langs.normalize(values.get("AGENT_LANG")) or request.headers.get("accept-language", "")
+        # Names and notes in the interface's language.
+        words = i18n.words("catalog", i18n.lang(values))["providers"]
+        return {"providers": [{"id": p.key, "name": words[p.key]["name"], "baseUrl": p.base_url,
+                               "model": p.model, "keyUrl": p.key_url, "note": words[p.key].get("note", ""),
+                               "local": not p.needs_key} for p in sw.providers_for(lang)],
+                "characters": [{"id": c.key,
                                 # By the character's language; ownNames adds the names it had before.
                                 "defaultNames": {lang: c.name_in(lang) for lang in sw.LANGS} if c.stem else None,
                                 "ownNames": sorted(c.own_names),
                                 "avatar": f"/assets/characters/{c.key}.webp" if sw.portrait(c.key) else None}
                                for c in sw.CHARACTERS],
-                "ownAvatarLimit": sw.MAX_OWN_AVATAR, "personaLimit": PERSONA_LIMIT,
-                "platforms": conn.catalog()}
+                "ownAvatarLimit": sw.MAX_OWN_AVATAR, "personaLimit": PERSONA_LIMIT}
 
     @app.post("/api/config")
     async def config(request: Request):
         return await asyncio.to_thread(workspace.save, await body(request))
-
-    @app.post("/api/features")
-    async def save_features(request: Request):
-        return await asyncio.to_thread(workspace.save_features, await body(request))
-
-    @app.get("/api/persona")
-    async def persona():
-        return await asyncio.to_thread(workspace.persona)
-
-    @app.post("/api/persona")
-    async def save_persona(request: Request):
-        payload = await body(request, PERSONA_LIMIT * 4 + 1024)
-        return await asyncio.to_thread(workspace.save_persona, str(payload.get("text") or ""))
 
     @app.get("/api/avatar")
     async def own_avatar():
@@ -2350,80 +1428,41 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
         await body(request)
         return await asyncio.to_thread(workspace.remove_own_avatar)
 
-    @app.post("/api/key")
-    async def reveal(request: Request):
-        await body(request)
-        return {"apiKey": workspace.config().get("LLM_API_KEY", "")}
-
-    @app.post("/api/platforms/connect")
-    async def connect_platform(request: Request):
-        payload = await body(request)
-        if payload.get("allowConversations") is not True:
-            raise ValueError("permission_required")
-        kind = str(payload.get("platform") or "")
-        # A scan platform takes pasted values only when the page says so.
-        scan = conn.platform(kind).group == conn.SCAN and payload.get("mode") != "paste"
-        workspace.start_job("scan" if scan else "connect", kind, payload.get("values") or {})
-        return {"ok": True}
-
-    @app.post("/api/platforms/browser")
-    async def browser_platform(request: Request):
-        payload = await body(request)
-        # A personal account: the owner has read the risks and taken them on.
-        if payload.get("allowConversations") is not True or payload.get("acceptRisk") is not True:
-            raise ValueError("permission_required")
-        workspace.start_job("browser", str(payload.get("platform") or ""))
-        return {"ok": True}
-
-    @app.post("/api/platforms/signed-in")
-    async def browser_signed_in(request: Request):
-        payload = await body(request)
-        workspace.signed_in(str(payload.get("platform") or ""))
-        return {"ok": True}
-
-    @app.post("/api/platforms/disconnect")
-    async def disconnect_platform(request: Request):
-        payload = await body(request)
-        workspace.start_job("disconnect", str(payload.get("platform") or ""))
-        return {"ok": True}
-
-    @app.post("/api/platforms/cancel")
-    async def cancel_platform(request: Request):
-        await body(request)
-        workspace.cancel()
-        return {"ok": True}
-
-    @app.post("/api/start")
-    async def start(request: Request):
-        await body(request)
-        workspace.start_job("start")
-        workspace.held = False
-        return {"ok": True}
-
-    @app.post("/api/stop")
-    async def stop(request: Request):
-        await body(request)
-        if workspace._future is not None and not workspace._future.done():
-            raise ValueError("busy")
-        workspace.held = True
-        await asyncio.to_thread(workspace.services.close)
-        return {"ok": True}
-
     @app.post("/api/chat")
     async def chat(request: Request):
-        payload = await body(request)
+        # Room for what is attached: pictures go as base64.
+        payload = await body(request, CHAT_BODY)
 
         def number(value):
             return value if isinstance(value, int) and not isinstance(value, bool) else None
 
+        workspace.busy("thinking")
         try:
             return await workspace.chat(str(payload.get("text") or ""), number(payload.get("after")),
                                         number(payload.get("retry")), str(payload.get("chat") or MAIN_CHAT),
-                                        str(payload.get("reply_to") or ""))
+                                        str(payload.get("reply_to") or ""), payload.get("attachments"),
+                                        **({"choices": payload["choices"]} if payload.get("choices") else {}))
         except ValueError:
             raise
         except Exception as error:
             return JSONResponse({"error": chat_failure(error)}, status_code=502)
+        finally:
+            workspace.busy("")
+
+    @app.get("/api/chat/doing")
+    async def chat_doing(after: int | None = None):
+        # The line above the pet's head: whether a reply is on its way, the main chat's step, and its last
+        # message's number; with `after`, the last words the character said since (the bubble of a reply
+        # that came in after its compact chat was put away). Nothing shared.
+        view = workspace.history(1 << 30 if after is None else after)
+        said = [m.get("text") for m in view.get("messages") or [] if m.get("role") != "user" and m.get("text")]
+        return {"busy": workspace._chat_lock.locked(), "doing": view.get("doing"), "last": view["last"],
+                "said": said[-1] if after is not None and said else ""}
+
+    @app.post("/api/chat/stop")
+    async def stop(request: Request):
+        payload = await body(request)
+        return await workspace.stop_chat(str(payload.get("chat") or MAIN_CHAT), str(payload.get("why") or "stopped"))
 
     @app.post("/api/chat/reset")
     async def reset(request: Request):
@@ -2439,7 +1478,8 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
 
     @app.get("/api/chat/history")
     async def history(after: int | None = None, chat: str = MAIN_CHAT):
-        if workspace._chat(chat) is workspace._main:
+        # Not in the middle of a reply, when the page looks only for what it is looking up.
+        if workspace._chat(chat) is workspace._main and not workspace._chat_lock.locked():
             # Looked at: what the character found may come in now, when it is time.
             try:
                 await workspace.share()
@@ -2477,81 +1517,28 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
         # Not cached: a picture removed since must show as removed.
         return FileResponse(path, media_type=PICTURE_TYPES[path.suffix[1:]])
 
-    @app.get("/api/activity")
-    async def activity():
-        return await workspace.activity()
+    @app.get("/api/chat/file/{name}")
+    async def chat_file(name: str):
+        path = workspace.chat_file(name)
+        if path is None:
+            raise HTTPException(404)
+        # Stored as UTF-8 text whatever it was written in; never run or shown as a page.
+        return FileResponse(path, media_type="text/plain; charset=utf-8")
 
-    @app.post("/api/activity/start")
-    async def activity_start(request: Request):
-        await body(request)
+    @app.get("/api/person")
+    async def person_view():
         try:
-            return await workspace.start_character()
-        except ValueError:
-            raise
-        except Exception:
-            return JSONResponse({"error": "agent_failed"}, status_code=502)
+            return await asyncio.to_thread(workspace.character.person_view)
+        except MemoryFileDamaged:
+            raise ValueError("activity_unavailable") from None
 
-    @app.get("/api/activity/chat")
-    async def activity_chat(id: str = ""):
-        return await workspace.activity_chat(id)
-
-    @app.get("/api/activity/evidence")
-    async def activity_evidence(chat: str = "", conv: str = "", kind: str = "", id: str = ""):
-        return await workspace.activity_evidence(chat, conv, kind, id)
-
-    @app.post("/api/activity/decide")
-    async def activity_decide(request: Request):
-        return await workspace.activity_decide(await body(request))
-
-    @app.post("/api/activity/forget")
-    async def activity_forget(request: Request):
-        return await workspace.activity_forget(await body(request))
-
-    @app.post("/api/activity/restore")
-    async def activity_restore(request: Request):
-        return await workspace.activity_restore(await body(request))
-
-    @app.post("/api/activity/forget_chat")
-    async def activity_forget_chat(request: Request):
-        return await workspace.activity_forget_chat(await body(request))
+    @app.post("/api/person/{action}")
+    async def person_write(request: Request, action: str):
+        return await workspace.person_write(action, await body(request))
 
     @app.get("/api/home")
     async def home_now():
-        return await workspace.home_view()
-
-    @app.post("/api/home/out")
-    async def home_out(request: Request):
-        await body(request)
-        answer = await workspace.go_out()
-        return answer if answer.get("ok") else JSONResponse(answer, status_code=409)
-
-    @app.post("/api/home/tell")
-    async def home_tell(request: Request):
-        await body(request)
-        return await workspace.tell()
-
-    @app.get("/api/days")
-    async def days(before: str = "", limit: int = life.DAYS_LIMIT, kept: int = 0):
-        return await workspace.days(before, limit, bool(kept))
-
-    @app.post("/api/days/keep")
-    async def days_keep(request: Request):
-        payload = await body(request)
-        item = workspace._item(payload)
-        return await workspace.mark_item(item.id, "keep", payload.get("kept") is not False)
-
-    @app.post("/api/days/dismiss")
-    async def days_dismiss(request: Request):
-        item = workspace._item(await body(request))
-        return await workspace.mark_item(item.id, "dismiss")
-
-    @app.post("/api/days/talk")
-    async def days_talk(request: Request):
-        return await workspace.talk(await body(request))
-
-    @app.get("/api/library/text")
-    async def library_text(id: str = ""):
-        return workspace.library_text(id)
+        return await asyncio.to_thread(workspace.character.now)
 
     @app.get("/api/library/picture/{ident}")
     async def library_picture(ident: str):
@@ -2569,7 +1556,6 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
     @app.post("/api/exit")
     async def exit_app(request: Request):
         await body(request)
-        await asyncio.to_thread(workspace.close)
         callback = getattr(app.state, "shutdown", None)
         if callback:
             callback()
@@ -2577,6 +1563,22 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None,
 
     for name in PANELS:
         importlib.import_module(f"{__package__}.panels.{name}").mount(app, workspace, body)
+    # A turn's MCP tools come from the hub the tools panel made (mcp_offer.py).
+    from . import mcp_offer
+    mcp_offer.offer_source = app.state.mcp.offer
+    # Commands on this computer: their cards, Settings' section and the log (shell/panel.py).
+    from .shell import panel as shell_panel
+    shell_panel.mount(app, workspace, body)
+    # The card that turns a switched-off ability on from the chat (turnon.py).
+    from . import turnon
+    turnon.mount(app, workspace, body)
+    # Skills: Settings' section, adding and removing them (skills/panel.py).
+    from .skills import panel as skills_panel
+    skills_panel.mount(app, workspace, body)
+    # Other programs' windows, on Windows: their cards, Settings' section and the log (desk/panel.py).
+    if os.name == "nt":
+        from .desk import panel as desk_panel
+        desk_panel.mount(app, workspace, body)
     return app
 
 
@@ -2609,62 +1611,51 @@ def save_app_settings(desktop: Path, **changes) -> dict:
 
 
 def pet_figure(desktop: Path, config: dict) -> str:
-    """Which figure the pet is: the one chosen from its menu, else the character's own, else the home's default."""
+    """Which figure the pet is: the one chosen from its menu, else the character's own, else the first."""
     settings = app_settings(desktop)
     if settings.get("pet") in PET_FIGURES:
         return settings["pet"]
     avatar = config.get("PERSONA_AVATAR", "")
-    if avatar in PET_FIGURES:
-        return avatar
-    return settings.get("default_figure") if settings.get("default_figure") in PET_FIGURES else PET_FIGURES[0]
-
-
-def keep_default_figure(home: Path) -> None:
-    """Note once which figure the home has when none is chosen: a home set up
-    before Pico became the first keeps the one it had."""
-    desktop = home / "runtime" / "desktop"
-    settings = app_settings(desktop)
-    if "default_figure" in settings:
-        return
-    older = settings.get("toured") or (home / "persona.txt").is_file()
-    desktop.mkdir(parents=True, exist_ok=True)
-    save_app_settings(desktop, default_figure=OLD_DEFAULT_FIGURE if older else PET_FIGURES[0])
+    return avatar if avatar in PET_FIGURES else PET_FIGURES[0]
 
 
 def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Path,
                      hidden: bool = False) -> None:
     """The page in its own window on this thread, the server behind it on another."""
-    services = app.state.workspace.services
-
-    def confirm() -> str:
-        if not (services.running("direct") or services.running("astrbot")):
-            return ""
-        return langs.term("Closing personagent takes the character out of your chats "
-                          "until you open it again. Close it?")
-
     def words() -> dict:
-        return {"open": langs.term("Open personagent"), "quit": langs.term("Quit"), "pet": langs.term("Show the pet"),
-                "still": langs.term("personagent is still running here, and the character keeps answering.")}
+        # The notification-area icon's menu and the pet's own.
+        return i18n.words("tray", i18n.lang(app.state.workspace.config()))
 
     def figure() -> str:
         return pet_figure(desktop, app.state.workspace.config())
 
     def figures() -> list[tuple[str, str]]:
         from .panels import look
-        return [(row["key"], row["name"]) for row in look.names(langs.terminal_lang())]
+        return [(row["key"], row["name"]) for row in look.names(app.state.workspace, "")]
+
+    def choose(key: str) -> None:
+        # The pet's menu chooses a whole character, as the app's pickers do.
+        from .panels import look
+        look.choose_figure(app.state.workspace, key)
 
     window = appwindow.AppWindow(
-        url, storage=desktop / "webview", confirm=confirm, words=words,
+        url, storage=desktop / "webview", words=words,
         background=lambda: bool(app_settings(desktop).get("background")),
         # Hidden only makes sense where closing can hide too.
         start_hidden=hidden and bool(app_settings(desktop).get("background")),
         pet=True, figure=figure, figures=figures,
-        choose=lambda key: save_app_settings(desktop, pet=key))
+        choose=choose,
+        # Links open in the browser inside the app window unless the person chose the system's
+        # (panels/browser.py), where a find's reading is timed: the library knows a find by its address.
+        links=lambda: app_settings(desktop).get("links", "app"),
+        find=lambda address: getattr(app.state.workspace._library().get(item_id(address)), "id", ""),
+        address=lambda ident: getattr(app.state.workspace._library().get(ident), "url", ""))
     app.state.window = window
     # The window's pages are told of a chat or a figure that changed, or of something found, and need not keep asking.
     app.state.workspace.chat_changed = lambda: window.chats_changed()
     app.state.workspace.figure_changed = lambda: window.refigure()
     app.state.workspace.news = lambda: window.pet_look()
+    app.state.workspace.busy = lambda doing: window.pet_busy(doing)
 
     def stop() -> None:
         server.should_exit = True
@@ -2684,7 +1675,7 @@ def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Pat
         # No error and no window: it was closed before it finished opening.
         if not window.run() and window.error:
             app.state.show = None
-            print(langs.term("No window opened, so the page is in your browser.")
+            print(i18n.t("start.noWindow", i18n.lang(app.state.workspace.config()))
                   + f" ({window.error})", flush=True)
             webbrowser.open(url)
             while serving.is_alive():
@@ -2698,15 +1689,15 @@ def _serve_in_window(app: FastAPI, server, sockets: list, url: str, desktop: Pat
 
 
 def main(argv: list[str] | None = None, prog: str = "personagent start") -> int:
-    parser = argparse.ArgumentParser(prog=prog, description=langs.term("Open local setup and chat in a window of their own"))
-    parser.add_argument("--browser", action="store_true", help=langs.term("open the page in your browser instead of a window"))
-    parser.add_argument("--no-browser", action="store_true", help=langs.term("print the local link and open nothing"))
-    parser.add_argument("--background", action="store_true", help=langs.term("start behind the notification-area icon, when closing the window is set to keep it running"))
-    parser.add_argument("--terminal", action="store_true", help=langs.term("use the terminal menu instead"))
-    parser.add_argument("--port", type=int, default=0, help=langs.term("local page port (default: choose automatically)"))
+    lang = i18n.lang()
+    parser = argparse.ArgumentParser(prog=prog, description=i18n.t("start.about", lang))
+    parser.add_argument("--browser", action="store_true", help=i18n.t("start.browser", lang))
+    parser.add_argument("--no-browser", action="store_true", help=i18n.t("start.noBrowser", lang))
+    parser.add_argument("--background", action="store_true", help=i18n.t("start.background", lang))
+    parser.add_argument("--port", type=int, default=0, help=i18n.t("start.port", lang))
+    # Started by the app itself after a restore or a reset: it waits for the one before to close.
+    parser.add_argument("--restart", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-    if args.terminal:
-        return sw.start_main([])
     home = homes.find_home()
     # Before anything is written in it: app.log and welcome.json hold the page's token link.
     sw.secure_home(home)
@@ -2732,15 +1723,19 @@ def main(argv: list[str] | None = None, prog: str = "personagent start") -> int:
         if not quiet:
             raise
         traceback.print_exc()
-        appwindow.alert(langs.term(f"personagent could not start. The details are in {desktop / 'app.log'}."))
+        appwindow.alert(i18n.t("cli.broken", lang, log=desktop / "app.log"))
         return 1
 
 
 def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], log=None) -> int:
     import uvicorn
+    from .textproc import DESKTOP_ENV
+    # The desktop app keeps this computer's clock (textproc.default_tz_offset).
+    os.environ[DESKTOP_ENV] = "1"
     desktop = home / "runtime" / "desktop"
     info = desktop / "welcome.json"
-    lock = FileLock(info.with_suffix(".lock"), timeout=0)
+    lang = i18n.lang()
+    lock = FileLock(info.with_suffix(".lock"), timeout=RESTART_WAIT_S if args.restart else 0)
     try:
         lock.acquire()
         if log:
@@ -2749,7 +1744,7 @@ def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], l
     except LockUnavailable:
         url = sw._read_json(info).get("url", "")
         if not url:
-            return refuse(langs.term("personagent is starting. Try again in a moment."))
+            return refuse(i18n.t("start.starting", lang))
         print(url, flush=True)
         if not args.no_browser and (args.browser or not _raise_window(url)):
             webbrowser.open(url)
@@ -2757,36 +1752,31 @@ def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], l
     token = secrets.token_urlsafe(32)
     sockets: list[socket.socket] = []
     try:
-        settings = pageaccess.read(home)
-        problem = page_problem(settings)
-        if problem:
-            return refuse(problem)
-        stopped = stop_leftovers(home)
-        if stopped:
-            print(langs.term(f"Stopped what an earlier personagent left running: {', '.join(stopped)}."))
-        port = settings.port_or(args.port)
+        port = args.port or _page_port(home)
+        if port is None:
+            return refuse(i18n.t("start.pagePortBad", lang))
+        from .panels import desk
+        desk.apply_pending(home)
         try:
-            sockets = pageaccess.listen(settings, port)
+            sockets = [_listen(port)]
         except OSError:
             if args.port:
-                return refuse(langs.term(f"Port {args.port} is in use. Leave --port out to pick a free one."))
-            return refuse(_port_taken(port))
+                return refuse(i18n.t("start.portFlagBusy", lang, port=args.port))
+            return refuse(i18n.t("start.portBusy", lang, port=port))
         port = sockets[0].getsockname()[1]
-        url = f"http://{pageaccess.local_link_host(settings)}:{port}/#token={token}"
+        url = f"http://{PAGE_HOST}:{port}/#token={token}"
         atomic_write_text(info, json.dumps({"url": url}))
         windowed = not (args.browser or args.no_browser) and appwindow.available()
         if windowed:
-            print(langs.term(f"personagent {__version__}\n\n  {url}\n\nClose the personagent window to stop."), flush=True)
+            print(i18n.t("start.inWindow", lang, version=__version__, url=url), flush=True)
         else:
-            print(langs.term(f"personagent {__version__}\n\n  {url}\n\nKeep this window open. Press Ctrl+C to stop."), flush=True)
-        for line in remote_lines(settings, port):
-            print(line, flush=True)
-        notice = updates.line(updates.notice(home))
-        if notice:
-            print(langs.term(notice), flush=True)
-        keep_default_figure(home)
-        app = create_app(home, token, gate=pageaccess.gate_for(home, settings))
-        server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=port, log_level="warning"))
+            print(i18n.t("start.inTerminal", lang, version=__version__, url=url), flush=True)
+        found = updates.notice(home)
+        if found:
+            print(i18n.t("start.update", lang, **found), flush=True)
+        app = create_app(home, token)
+        app.state.relaunch = functools.partial(relaunch, home, args)
+        server = uvicorn.Server(uvicorn.Config(app, host=PAGE_HOST, port=port, log_level="warning"))
         if windowed:
             _serve_in_window(app, server, sockets, url, desktop, hidden=args.background)
             return 0
@@ -2805,123 +1795,38 @@ def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], l
         lock.release()
 
 
-def page_problem(settings: pageaccess.Settings) -> str:
-    """Why the page may not listen as configured, one line per setting; '' when it may."""
-    return "\n".join(f"{key}: {langs.term(sentence)}" for level, key, sentence in pageaccess.problems(settings)
-                     if level == "ERROR")
+def relaunch(home: Path, args: argparse.Namespace) -> None:
+    """Start the app again as it was started, to take the home over once this one has closed."""
+    from . import autostart
+    command = [sys.executable, "start"] if autostart.frozen() else [sys.executable, "-m", "persona_agent", "start"]
+    command += ["--home", str(home), "--restart"]
+    if args.port:
+        command += ["--port", str(args.port)]
+    if args.no_browser or args.browser:
+        command.append("--no-browser" if args.no_browser else "--browser")
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    subprocess.Popen(command, stdin=subprocess.DEVNULL, close_fds=True, creationflags=flags,
+                     start_new_session=os.name != "nt")
 
 
-def _port_taken(port: int) -> str:
-    return langs.term(f"Port {port} is in use, or PAGE_HOST is not an address of this computer. "
-                      f"Set PAGE_PORT to another port, or correct PAGE_HOST.")
-
-
-def remote_lines(settings: pageaccess.Settings, port: int) -> list[str]:
-    """Where another device finds the page, and what plain HTTP exposes; none on loopback."""
-    if not settings.remote:
-        return []
-    if pageaccess.in_container():
-        where = langs.term(f"From another device, open the port this container publishes (it listens on "
-                           f"{port} inside) on the computer running it, and sign in with the page password.")
-    else:
-        address = settings.host if not pageaccess.is_wildcard(settings.host) else pageaccess.guess_address()
-        if address:
-            shown = f"[{address}]" if ":" in address else address
-            where = langs.term(f"From another device, open http://{shown}:{port}/ and sign in with the page password.")
-        else:
-            where = langs.term(f"From another device, open this computer's address at port {port} "
-                               f"and sign in with the page password.")
-    return [where, langs.term(
-        "The page is served over plain HTTP, so on a network the password and the session can be read "
-        "in transit. Reach it through an SSH tunnel, a VPN such as Tailscale, or a reverse proxy with "
-        "HTTPS; docs/deploy.md shows how.")]
-
-
-def _first_password(home: Path) -> str:
-    """In a container with no page password: a random one, saved as a hash; '' otherwise."""
-    settings = pageaccess.read(home)
-    if not (settings.remote and not settings.password and not settings.invalid and pageaccess.in_container()):
-        return ""
-    password = secrets.token_urlsafe(18)
-    sw.copy_env_template(home)
-    sw.write_env(home / ".env", {"PAGE_PASSWORD": pageaccess.hash_password(password)})
-    return password
-
-
-def serve_headless(home: Path) -> int:
-    """`personagent up` with the page: the character, its platforms and the
-    page together, with no window and no browser. Setup may happen on the
-    page, so no model key is needed to start."""
-    import uvicorn
-    from .storage import ALREADY_RUNNING, RuntimeInstanceLock
-    from .services import _memory_problem
-
-    generated = _first_password(home)
-    settings = pageaccess.read(home)
-    problem = page_problem(settings)
-    if problem:
-        print(problem, file=sys.stderr)
-        return 2
-    if sw.env_get(home / ".env", "LLM_API_KEY"):
-        damaged = _memory_problem(home)
-        if damaged:
-            print(damaged, file=sys.stderr)
-            return 2
-        if not sw.env_get(home / ".env", "CONNECTOR_TOKEN"):
-            # As `up` without the page: the connectors sign with it.
-            sw.write_env(home / ".env", {"CONNECTOR_TOKEN": secrets.token_urlsafe(32)})
-    desktop = home / "runtime" / "desktop"
-    info = desktop / "welcome.json"
-    lock = FileLock(info.with_suffix(".lock"), timeout=0)
-    try:
-        lock.acquire()
-    except LockUnavailable:
-        print(langs.term(ALREADY_RUNNING.format(home=home)), file=sys.stderr)
-        return 2
-    sockets: list[socket.socket] = []
-    try:
-        probe = RuntimeInstanceLock(home)
-        try:
-            probe.acquire()
-        except LockUnavailable:
-            print(langs.term(ALREADY_RUNNING.format(home=home)), file=sys.stderr)
-            return 2
-        probe.release()
-        updates.refresh_soon(home)
-        stopped = stop_leftovers(home)
-        if stopped:
-            print(langs.term(f"Stopped what an earlier personagent left running: {', '.join(stopped)}."))
-        port = settings.port_or()
-        try:
-            sockets = pageaccess.listen(settings, port)
-        except OSError:
-            print(_port_taken(port), file=sys.stderr)
-            return 1
-        port = sockets[0].getsockname()[1]
-        token = secrets.token_urlsafe(32)
-        url = f"http://{pageaccess.local_link_host(settings)}:{port}/#token={token}"
-        atomic_write_text(info, json.dumps({"url": url}))
-        print(langs.term(f"personagent {__version__}\n\n  {url}\n\nKeep this window open. Press Ctrl+C to stop."))
-        for line in remote_lines(settings, port):
-            print(line)
-        if generated:
-            # Printed once: only its hash is kept.
-            print(langs.term(f"The page password, made for this first start and shown only this once: {generated}",
-                             keep=(generated,)))
-            print(langs.term("Change it with `personagent page password`."))
-        if not sw.env_get(home / ".env", "LLM_API_KEY"):
-            print(langs.term("No model key yet: open the page to finish the setup. The character starts once it is saved."))
-        print(langs.term(f"Logs are in {desktop}."))
-        notice = updates.line(updates.notice(home), sub="up")
-        if notice:
-            print(langs.term(notice))
-        app = create_app(home, token, gate=pageaccess.gate_for(home, settings), headless=True)
-        server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=port, log_level="warning"))
-        app.state.shutdown = lambda: setattr(server, "should_exit", True)
-        server.run(sockets=sockets)
+def _page_port(home: Path) -> int | None:
+    """PAGE_PORT, the environment over the home's .env: 0 when blank, None when it is no port."""
+    raw = (os.environ.get("PAGE_PORT") or sw.env_get(home / ".env", "PAGE_PORT") or "").strip()
+    if not raw:
         return 0
-    finally:
-        for sock in sockets:
-            sock.close()
-        info.unlink(missing_ok=True)
-        lock.release()
+    return int(raw) if raw.isdigit() and 0 < int(raw) < 65536 else None
+
+
+def _listen(port: int) -> socket.socket:
+    """The page's socket, on this computer only. OSError when it cannot bind."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        if os.name != "nt":
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((PAGE_HOST, port))
+        sock.listen(128)
+    except (OSError, OverflowError):
+        sock.close()
+        raise OSError("bind") from None
+    return sock
+

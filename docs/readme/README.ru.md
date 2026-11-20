@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 Установщик поставляется с собственным Python, устанавливает personagent и открывает его; в Windows он также создаёт значок на рабочем столе. Если PyPI или GitHub отвечают медленно, он сам переключается на зеркала в материковом Китае. Повторный запуск обновляет personagent.
 
-Если Python 3.10 или новее уже установлен, то же самое делают `python -m pip install personagent` и затем `personagent`, а с [uv](https://docs.astral.sh/uv/) команда `uvx personagent` запускает его без отдельной установки. В Windows можно также скачать ZIP с исходным кодом и дважды щёлкнуть `start.bat`; если на компьютере нет Python, он скачает и его.
+Если Python 3.10 или новее уже установлен, то же самое делают `python -m pip install personagent` и затем `personagent`, а с [uv](https://docs.astral.sh/uv/) команда `uvx personagent` запускает его без отдельной установки.
 
 В Windows он открывается в отдельном окне, а в macOS и Linux — в браузере. Нажмите **Войти через OpenRouter** и подтвердите доступ в браузере либо вставьте API-ключ модели и нажмите **Проверить и начать общение**. По умолчанию выбраны бесплатные модели OpenRouter, но и им нужна учётная запись или ключ, которые предоставляются бесплатно. `personagent demo` воспроизводит три заранее заданные сцены без всякого ключа. [Руководство по началу работы](https://github.com/wangkant/personagent/blob/main/docs/start.ru.md) описывает страницу экран за экраном.
 
@@ -139,7 +139,7 @@ personagent бесплатен. Вы платите выбранному сер�
 
 Для всего остального на той же странице есть **Другие программы**: включите эту функцию, скопируйте адрес, ключ и название модели в любое приложение, принимающее адрес, совместимый с OpenAI, и это приложение будет общаться с вашим персонажем, с той же памятью, что и везде. Подробности — в [руководстве пользователя](https://github.com/wangkant/personagent/blob/main/docs/guide.ru.md#другие-программы), а `personagent connect api` делает то же самое из терминала.
 
-У вас уже работает AstrBot, Koishi или Matrix? personagent может работать за ним в роли агента: см. [мосты, которые вы запускаете сами](https://github.com/wangkant/personagent/blob/main/docs/guide.ru.md#мосты-которые-вы-запускаете-сами), [коннектор Satori](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.ru.md) и [коннектор Matrix](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.ru.md).
+У вас уже работает AstrBot? personagent может работать за ним в роли агента: см. [мосты, которые вы запускаете сами](https://github.com/wangkant/personagent/blob/main/docs/guide.ru.md#мосты-которые-вы-запускаете-сами).
 
 ## На сервере
 
@@ -182,7 +182,6 @@ personagent connect dsh
 - [Руководство пользователя](https://github.com/wangkant/personagent/blob/main/docs/guide.ru.md): настройка, коннекторы, обучение, раздел «Активность», устранение неполадок.
 - [Руководство по развёртыванию](https://github.com/wangkant/personagent/blob/main/docs/deploy.ru.md): эксплуатация в рабочей среде, расходы и что проверить, если бот перестал отвечать.
 - [Протокол коннекторов](https://github.com/wangkant/personagent/blob/main/docs/connectors.ru.md): для написания собственного коннектора.
-- [Инструменты](https://github.com/wangkant/personagent/blob/main/docs/tools.ru.md): скрипты в `tools/` для запуска из клона репозитория.
 - [Список изменений](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [Участие в разработке](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [Политика безопасности](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [Отказ от ответственности](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.ru.md)
 
 ## Лицензия

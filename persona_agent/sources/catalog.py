@@ -21,16 +21,18 @@ import logging
 import random
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import httpx
 
 from .. import langs, quiet, roam, situation
 from ..library import Library, item_id
 from ..panels import feed as feed_panel
-from ..roam import public_address, small_picture
+from ..panels import links
+from ..roam import PICTURE_FETCH_MAX, public_address, small_picture
 from ..storage import atomic_write_text
 from . import base, weights
 from .base import Find, Source
@@ -45,9 +47,13 @@ AT_ONCE = 6
 # A round soon after the app starts, then this often.
 FIRST_ROUND_S = 20
 ROUND_EVERY_S = 30 * 60
-# Covers are read only this far; a larger one is left out rather than half read.
-COVER_READ_MAX = 500_000
 COVER_HOPS = 4
+# A page is read this far for the picture it declares: the head holds it.
+HEAD_READ_MAX = 300_000
+# A thing about to be shown waits this long for its page's picture.
+SHOWN_COVER_S = 6
+# One the person asked for and is waiting on gets this long: most pages answer within it.
+ASKED_COVER_S = 1.5
 ERROR_MAX = 160
 
 # sources.json is written from the page's worker threads and from the rounds.
@@ -144,7 +150,46 @@ def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: Optional[
     return weights.weigh(public, weights.load(runtime), situation.readable(runtime) | situation.expand({lang}), matcher,
                          unreadable=situation.unreadable(runtime), defaults=situation.default_langs(runtime, lang),
                          supply=situation.supplier(runtime), origin=origin,
-                         retry_s=situation.retry_s(runtime), retry_at=situation.retry_at(runtime))
+                         retry_s=situation.retry_s(runtime), retry_at=situation.retry_at(runtime),
+                         topical=pulls(runtime, public, time.time()))
+
+
+# How far back what a source brought tells what it is about, and the fresh unseen things on an interest
+# that count as enough of it for now.
+YIELD_DAYS = 14
+ENOUGH = 10
+
+
+def pulls(runtime: Path, sources: list[Source], now: float) -> Optional[dict[str, float]]:
+    """Per source key, its pull toward the person's interests (roam.interests): over the interests, the
+    largest of how short the library is of it (1 with nothing fresh, unseen and readable on it, 1/2 with ENOUGH) times
+    the share of what the source brought in YIELD_DAYS that is on it. The share starts from the source's own
+    words (one thing on the interest when they name it, a tenth when not) and moves with what it brings.
+    None when the person named no interest."""
+    topics = roam.interests(runtime)
+    if not topics:
+        return None
+    reads = situation.readable(runtime)
+    held = roam.supply(runtime, topics, now, frozenset(s.key for s in sources if s.lang and s.lang not in reads))
+    need = {t: 1 / (1 + held[t] / ENOUGH) for t in topics}
+    matchers = [(t, m) for t in topics if (m := feed_panel.topic_matcher([t]))]
+    brought: dict[str, list] = {}
+    for item in Library(runtime).items():
+        if item.seen_at < now - YIELD_DAYS * 86400:
+            break
+        if item.source:
+            text = " ".join((item.title, item.description[:300], item.site)).casefold()
+            row = brought.setdefault(item.source, [0, dict.fromkeys(topics, 0)])
+            row[0] += 1
+            for topic, matcher in matchers:
+                row[1][topic] += bool(matcher.search(text))
+    out = {}
+    for source in sources:
+        count, hits = brought.get(source.key, (0, {}))
+        words = weights._text(source)
+        out[source.key] = max(need[t] * (hits.get(t, 0) + (1.0 if m.search(words) else 0.1)) / (count + 2)
+                              for t, m in matchers) if matchers else 0.0
+    return out
 
 
 # --------------------------------------------------------------------- one round --
@@ -176,22 +221,109 @@ async def _fetch(http: httpx.AsyncClient, source: Source, gate: asyncio.Semaphor
 
 async def _cover(http: httpx.AsyncClient, address: str, referer: str) -> bytes:
     """The cover made small, or b"": only https to public addresses, every redirect checked again."""
+    # An http picture is asked for over https, as a browser upgrades one on a secure page.
+    if address.startswith("http://"):
+        address = "https://" + address.removeprefix("http://")
     for _ in range(COVER_HOPS):
         if not address.startswith("https://") or not await public_address(address):
             return b""
-        async with http.stream("GET", address, headers={"Referer": referer}, follow_redirects=False) as answer:
+        # A header takes ASCII only: an address with Chinese in its path goes percent-encoded.
+        coming_from = {"Referer": quote(referer, safe=":/?#[]@!$&'()*+,;=%~")}
+        async with http.stream("GET", address, headers=coming_from, follow_redirects=False) as answer:
             if answer.is_redirect:
                 address = urljoin(address, answer.headers.get("location", ""))
                 continue
-            if answer.status_code != 200 or int(answer.headers.get("content-length") or 0) > COVER_READ_MAX:
+            if answer.status_code != 200 or int(answer.headers.get("content-length") or 0) > PICTURE_FETCH_MAX:
                 return b""
             data = bytearray()
             async for chunk in answer.aiter_bytes():
                 data.extend(chunk)
-                if len(data) > COVER_READ_MAX:
+                if len(data) > PICTURE_FETCH_MAX:
                     return b""
         return await asyncio.to_thread(small_picture, bytes(data))
     return b""
+
+
+async def _page_picture(http: httpx.AsyncClient, address: str) -> str:
+    """The picture a page declares for itself (og:image and its kin), or "": what a link preview shows, for a
+    find whose source gave none. Only https to public addresses, every redirect checked again."""
+    for _ in range(COVER_HOPS):
+        if not address.startswith("https://") or not await public_address(address):
+            return ""
+        async with http.stream("GET", address, follow_redirects=False) as answer:
+            if answer.is_redirect:
+                address = urljoin(address, answer.headers.get("location", ""))
+                continue
+            if answer.status_code != 200 or "html" not in answer.headers.get("content-type", ""):
+                return ""
+            data = bytearray()
+            async for chunk in answer.aiter_bytes():
+                data.extend(chunk)
+                if len(data) >= HEAD_READ_MAX:
+                    break
+            headers = dict(answer.headers)
+        head = links._Head()
+        head.feed(links._page_text(bytes(data), headers))
+        return roam.facts_from({"meta": head.meta, "ld": head.ld, "canonical": head.canonical, "title": ""},
+                               address)["picture"]
+    return ""
+
+
+async def _own_picture(http: httpx.AsyncClient, found: Find, gate: asyncio.Semaphore) -> str:
+    async with gate:
+        try:
+            return await asyncio.wait_for(_page_picture(http, found.item.url), base.TIMEOUT_S)
+        except Exception:
+            return ""
+
+
+async def _fill(http: httpx.AsyncClient, library: Library, lacking: list[Find], gate: asyncio.Semaphore) -> int:
+    """The pages' own pictures for kept finds that have none; how many got one."""
+    declared = await asyncio.gather(*(_own_picture(http, f, gate) for f in lacking))
+    # One address declared by two pages is the site's emblem, not a cover of either.
+    emblems = {address for address, count in Counter(declared).items() if count > 1}
+    for found, address in zip(lacking, declared):
+        found.picture = "" if address in emblems else address
+    covers = await asyncio.gather(*(_covered(http, f, gate) for f in lacking))
+
+    def keep() -> int:
+        for found, cover in zip(lacking, covers):
+            if cover:
+                library.change(found.item.id, picture=library.save_picture(found.item.id, cover))
+        return sum(1 for cover in covers if cover)
+
+    return await asyncio.to_thread(keep)
+
+
+async def cover_shown(runtime: Path, item, within: float = SHOWN_COVER_S) -> str:
+    """Its page's own picture kept for a library thing that has none, as it is about to be shown, waited for
+    `within` seconds; the picture's file name, or ""."""
+    library = Library(runtime)
+    others = await asyncio.to_thread(library.items) if item.source else []
+    other = next((i for i in others if i.source == item.source and i.id != item.id), None)
+
+    async def fetch(http: httpx.AsyncClient) -> bytes:
+        # Another page of the same source is read beside this one: what it declares too is the site's emblem,
+        # not this thing's cover.
+        theirs = asyncio.ensure_future(_page_picture(http, other.url)) if other else None
+        try:
+            address = await _page_picture(http, item.url)
+            if address and theirs and address == await theirs:
+                return b""
+            return await _cover(http, address, item.url)
+        finally:
+            if theirs:
+                theirs.cancel()
+
+    async with base.client(**situation.client_options(runtime)) as http:
+        try:
+            cover = await asyncio.wait_for(fetch(http), within)
+        except Exception:
+            return ""
+    if not cover:
+        return ""
+    kept = await asyncio.to_thread(lambda: library.change(item.id, picture=library.save_picture(item.id, cover)))
+    return kept.picture if kept else ""
 
 
 async def _covered(http: httpx.AsyncClient, found: Find, gate: asyncio.Semaphore) -> bytes:
@@ -245,8 +377,13 @@ async def run_round(runtime: Path, lang: str) -> tuple[int, list[str]]:
                     found.item.source = source.key
                     new.append(found)
         covers = await asyncio.gather(*(_covered(http, f, gate) for f in new))
-    if new:
-        await asyncio.to_thread(_keep, library, list(zip(new, covers)))
+        if new:
+            # Kept first, so the feed has them while the picture-less ones' pages are asked for theirs.
+            await asyncio.to_thread(_keep, library, list(zip(new, covers)))
+            lacking = [found for found, cover in zip(new, covers) if not cover]
+            filled = await _fill(http, library, lacking, gate) if lacking else 0
+            logger.info("sources: %d of %d new things had no picture; %d took their page's", len(lacking), len(new),
+                        filled)
     now = int(time.time())
 
     def record(saved: dict) -> None:
@@ -295,13 +432,6 @@ class Rounds:
         with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(self._wake.wait(), seconds)
         self._wake.clear()
-
-    async def check_again(self) -> dict:
-        """The person's "check again now": the down hosts tried at once, then a round that retries
-        every blocked source. What the situation then is (`situation.view`)."""
-        shown = await situation.check_again(self.runtime(), self.lang())
-        self.ask(even_if_running=True)
-        return shown
 
     async def _judge(self) -> None:
         try:

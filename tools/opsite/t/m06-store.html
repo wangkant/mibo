@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>布衣小铺</title>
+<style>
+body { margin: 0; font: 14px/1.5 system-ui, "Microsoft YaHei", sans-serif; background: #fbfaf7; }
+header { display: flex; justify-content: space-between; padding: 12px 20px; background: #fff; border-bottom: 1px solid #eee; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; padding: 18px; }
+.it { background: #fff; border-radius: 8px; padding: 10px; } .it .pic { height: 120px; background: #e6e1d8; border-radius: 6px; }
+.it a { color: #333; text-decoration: none; display: block; margin-top: 6px; } .price { color: #c40; }
+</style></head>
+<body><header><b>布衣小铺</b><a href="/t/m06-bag.html" id="bag">购物袋</a></header>
+<div class="grid" id="grid"></div>
+<script src="/t/kit.js"></script>
+<script>
+const ITEMS = [["tee", "纯棉圆领T恤", 59], ["hood", "加绒连帽卫衣", 169], ["crew", "圆领卫衣", 139], ["pants", "束脚运动裤", 99],
+  ["coat", "轻薄羽绒服", 299], ["sock", "中筒袜三双装", 29]];
+for (const [id, name, price] of ITEMS) {
+  document.getElementById("grid").insertAdjacentHTML("beforeend",
+    `<div class="it"><div class="pic"></div><a href="/t/m06-item.html?id=${id}">${name}</a><div class="price">¥${price}</div></div>`);
+}
+</script></body></html>

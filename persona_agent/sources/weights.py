@@ -37,8 +37,10 @@ OTHER_LANG = 0.05
 # defaults, 3 others drawn by weight and 3 explored.
 DEFAULT = 30.0
 DEFAULT_HALF = 40
-# Added when a source's group, name or line about it names a topic the person chose.
+# Added when a source's group, name or line about it names a topic the person chose; with `topical`, this
+# many times its pull instead (the share of what it brought that is on an interest the library holds little of).
 TOPIC = 3.0
+PULL = 40.0
 # Points a source earns for each thing of it seen, opened, liked or skipped (a like taken back undoes one).
 POINTS = {"seen": -0.25, "open": 1.25, "like": 2.0, "unlike": -2.0, "skip": -2.0}
 # The learned factor is 2 ** (GAIN * points / (things reacted to + SMOOTH)), within 2 ** LOW and 2 ** HIGH:
@@ -149,11 +151,12 @@ def _text(source) -> str:
 def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher: Optional[re.Pattern], *,
           unreadable: set[str] = frozenset(), defaults: Optional[set[str]] = None, supply: Optional[Callable] = None,
           origin: Optional[Callable[[str], float]] = None, retry_s: float = RETRY_S, retry_at: float = 0,
-          now: Optional[float] = None) -> list[dict]:
+          now: Optional[float] = None, topical: Optional[dict[str, float]] = None) -> list[dict]:
     """Each source's gate, prior, learned exponent and weight, highest weight first.
 
     w = G * prior * exp(supply(s) + theta) * HIDE^hides * FAILED^min(fails, FAILS_MAX), with
-    prior = L * (1 + default * is_default + TOPIC * on_topic). G is 0 for a blocked source not yet due a
+    prior = L * (1 + default * is_default + TOPIC * on_topic), or with `topical` (source key -> pull, 0-1)
+    L * (1 + default * is_default + PULL * pull). G is 0 for a blocked source not yet due a
     retry; L is 1 for a language the person reads, 0 for one they said they cannot, OTHER_LANG otherwise;
     theta is `origin(key)` (the taste model's coefficient), or ln 2 times the reactions' exponent without it.
     A source with G or L at 0 gets weight 0 and is never drawn. is_default tests `defaults` (the reader's
@@ -169,8 +172,9 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
         gate = 1.0 if open_to(row, now, retry_s, retry_at) else 0.0
         lang = (1.0 if source.lang in readable or not source.lang
                 else 0.0 if source.lang in unreadable else OTHER_LANG)
-        on_topic = bool(matcher and matcher.search(_text(source)))
-        prior = lang * (1 + default * (source.default in defaults or source.default == "all") + TOPIC * on_topic)
+        topic = (PULL * topical.get(source.key, 0.0) if topical is not None
+                 else TOPIC * bool(matcher and matcher.search(_text(source))))
+        prior = lang * (1 + default * (source.default in defaults or source.default == "all") + topic)
         exponent = origin(source.key) if origin else math.log(2) * learned(row)
         situated = supply(source) if supply else 0.0
         weight = (gate * prior * math.exp(situated + exponent) * HIDE ** row["hides"]

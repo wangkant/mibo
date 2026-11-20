@@ -22,7 +22,7 @@
     {"text": "Nova vergiss Koriander", "kind": "forget", "deletes": "ich hasse Koriander"},
     {"text": "Nova vergiss alles über Lenas Geburtstag", "kind": "forget", "deletes": "Lenas Geburtstag ist am 3. Mai"},
     {"text": "Nova, was hast du dir so gemerkt?", "kind": "recall"},
-    {"text": "Nova was hast du gelernt", "kind": "learned"},
+    {"text": "Nova was hast du gelernt", "kind": null},
     {"text": "Nova, lösch die Nachricht", "kind": null}
   ],
   "first_person": [

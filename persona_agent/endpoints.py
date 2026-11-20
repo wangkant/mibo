@@ -109,6 +109,26 @@ def _refuses_field(text: str, field: str) -> bool:
     return False
 
 
+# Said in place of pictures an endpoint would not take.
+PICTURES_REFUSED_NOTE = (
+    "(Correction: the picture in this message was not shown to you after all, as this "
+    "model takes no pictures. Say plainly that you can't see it; never guess what it shows.)")
+
+
+def without_pictures(payload: dict) -> bool:
+    """Each message's image parts dropped, its words sent as plain text with
+    PICTURES_REFUSED_NOTE; whether there were any."""
+    messages = payload.get("messages") or []
+    shown = [m for m in messages if isinstance(m.get("content"), list)]
+    if not shown:
+        return False
+    payload["messages"] = [
+        {**m, "content": "\n".join(p["text"] for p in m["content"] if p["type"] == "text")
+         + f"\n\n{PICTURES_REFUSED_NOTE}"} if isinstance(m.get("content"), list) else m
+        for m in messages]
+    return True
+
+
 def adapt_rejected_payload(payload: dict, error_text: str) -> str:
     """Rewrite `payload` for the field a 400 refused; return its name, or "".
 
@@ -121,7 +141,9 @@ def adapt_rejected_payload(payload: dict, error_text: str) -> str:
     model = str(payload.get("model") or "").lower()
     if model:
         text = re.sub(rf"(?<!\w){re.escape(model)}(?!\w)", " ", text)
-    if payload.get("reasoning") == {"enabled": False} and "reasoning is mandatory" in text:
+    # Or an upstream whose lowest effort is above none ("reasoning_effort none is not supported").
+    if payload.get("reasoning") == {"enabled": False} and (
+            "reasoning is mandatory" in text or re.search(r"effort[\"' ]{0,3}none[^.\n]{0,40}not supported", text)):
         payload["reasoning"] = {"effort": "minimal"}
         return "reasoning"
     if "thinking" in payload and _refuses_field(text, "thinking"):
@@ -130,7 +152,96 @@ def adapt_rejected_payload(payload: dict, error_text: str) -> str:
     if "max_tokens" in payload and _refuses_field(text, "max_tokens"):
         payload["max_completion_tokens"] = payload.pop("max_tokens")
         return "max_tokens"
-    if "temperature" in payload and _refuses_field(text, "temperature"):
+    # Or a model that runs at one fixed temperature (Kimi K3, Claude 4.7 and later).
+    if "temperature" in payload and (_refuses_field(text, "temperature") or re.search(
+            r"temperature.{0,60}(?:\bonly\b|is fixed|fixed (?:at|to)|deprecated)|\bonly\b.{0,30}temperature", text)):
         payload.pop("temperature")
         return "temperature"
+    # Qwen's switch, refused by a model that always thinks or by a host that has no such field.
+    if "enable_thinking" in payload and "enable_thinking" in text:
+        payload.pop("enable_thinking")
+        return "enable_thinking"
+    # A model whose lowest effort is above "none" steps up to "low"; one that takes no effort at all drops it.
+    if "reasoning_effort" in payload and "reasoning_effort" in text:
+        if payload["reasoning_effort"] == "none":
+            payload["reasoning_effort"] = "low"
+            return "reasoning_effort_none"
+        payload.pop("reasoning_effort")
+        return "reasoning_effort"
+    # Pictures refused: a model that takes none ("unknown variant `image_url`", "not a multimodal model").
+    if re.search(r"image|vision|visual|multi-?modal", text) and without_pictures(payload):
+        return "images"
+    # JSON mode refused, or no host behind a router takes it (OpenRouter's 404 "no endpoints
+    # found ... filter by parameters"): the prompts ask for the JSON in words too.
+    # Claude's compatible endpoint takes only json_schema and 400s json_object ("response_format.type:
+    # Input should be 'json_schema'"); LM Studio likewise. Any 400 naming the field is about it.
+    if "response_format" in payload and (_refuses_field(text, "response_format") or re.search(
+            r"json_object|response_format", text) or (
+            re.search(r"no endpoints? found", text) and "parameter" in text)):
+        payload.pop("response_format")
+        return "response_format"
+    return ""
+
+
+# What went wrong with a call, told apart by its status and the provider's own
+# words. The spellings are the ones each vendor's documentation shows.
+_PROBLEM_WORDS = (
+    ("no_balance", r"insufficient[ _](?:balance|quota|credits?|funds)|exceeded (?:your )?current[ _]quota"
+                   r"|exceeded_current_quota|credit balance is too low|arrear|good standing|account ?overdue"
+                   r"|payment required|prepay|欠费|余额不足|额度不足|资源包"),
+    ("key", r"invalid[ _-]?(?:api[ _-]?key|authentication|token)|incorrect api key|api[ _]key[ _]invalid"
+            r"|valid api key|api key not valid|authentication[ _](?:error|fails?)|invalid_iam_token|login fail|令牌已过期或验证不正确"),
+    ("not_found", r"model[^.\n]{0,40}(?:not (?:found|exist)|does not exist|is not a valid|not available|unknown)"
+                  r"|unknown model|model_not_found|no such model|invalid model|endpointormodel\.notfound|模型不存在"),
+    ("context", r"context[ _](?:length|window)|maximum context|input token length too long|prompt is too long"
+                r"|range of input length|tokens? exceeds?|exceeds? the (?:maximum|context)"),
+    ("refused", r"content[ _]?filter|content[ _]policy|data_inspection_failed|inappropriate content"
+                r"|considered high risk|sensitive ?content|不安全|敏感内容"),
+)
+
+# One sentence for each, telling the person what to do: (en, zh).
+PROBLEMS = {
+    "no_balance": ("The account at this service has no balance or free quota left. Top it up in the "
+                   "service's console, or choose another service.",
+                   "该服务的账户余额或免费额度已用完。请前往服务商控制台充值，或改用其他服务。"),
+    "key": ("The service did not accept the key. Check that it was copied in full, that it belongs to this "
+            "service and region (a China key does not work at an international address, nor the reverse), "
+            "and that it is still valid.",
+            "服务商未接受该密钥。请确认密钥已完整复制、属于该服务及其所在区域（中国区密钥不能用于国际地址，反之亦然），"
+            "且仍然有效。"),
+    "not_found": ("The service does not know this model name, or the account has no access to it. Copy the "
+                  "exact name from the service's model list; some services require enabling the model in "
+                  "their console first.",
+                  "该服务不存在此模型名称，或账户无权使用该模型。请从服务商的模型列表中复制准确名称；"
+                  "部分服务须先在控制台开通该模型。"),
+    "limited": ("The service is limiting requests right now. Wait a minute and try again, or check the rate "
+                "limits of your plan.",
+                "该服务当前限制请求频率。请等待一分钟后重试，或检查套餐的速率限制。"),
+    "context": ("The conversation is longer than this model can read at once. Choose a model with a longer "
+                "context window; for a model on this computer, raise its context length.",
+                "对话内容超出该模型一次可读取的长度。请改用上下文窗口更长的模型；本机运行的模型可调高其上下文长度。"),
+    "refused": ("The service's content review withheld this request or its answer. Rephrase the message, "
+                "or choose another model.",
+                "服务商的内容审核拦截了该请求或其回答。请调整措辞，或改用其他模型。"),
+}
+
+
+def model_problem(status, text: str) -> str:
+    """A key of PROBLEMS for a failed call, or "" (an outage, or nothing known).
+    The account's words come first: Kimi and Zhipu answer an empty balance with
+    a 429, DashScope and Claude with a 400, Gemini a wrong key with a 400."""
+    text = (text or "").lower()
+    found = next((kind for kind, words in _PROBLEM_WORDS if re.search(words, text)), "")
+    if status == 402 or found == "no_balance":
+        return "no_balance"
+    if status in (401, 403):
+        return "key"
+    if status == 429:
+        return "limited"
+    if status == 404:
+        return "not_found"
+    if status == 413:
+        return "context"
+    if status in (400, 422) or status is None:
+        return found
     return ""

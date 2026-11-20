@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>投递简历 · 前端工程师 - 小站招聘</title>
+<link rel="stylesheet" href="/site.css">
+<style>.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; } .row button { padding: 6px 14px; }</style>
+</head>
+<body>
+<header><b>小站招聘</b><a href="/index.html">首页</a></header>
+<main>
+  <div class="card">
+    <h1>投递简历 · 前端工程师</h1>
+    <label for="name">姓名</label><input type="text" id="name">
+    <label for="cv">简历（PDF 或 Word）</label><input type="file" id="cv" accept=".pdf,.doc,.docx,.txt">
+    <p class="note" id="cv-said">尚未选择简历。</p>
+    <div class="row">
+      <img id="face" alt="头像" width="48" height="48" style="border-radius:50%;background:#ddd">
+      <input type="file" id="avatar" accept="image/*,.txt" style="display:none">
+      <button type="button" id="avatar-up">上传头像</button>
+      <span class="note" id="face-said"></span>
+    </div>
+    <div class="row">
+      <button type="button" id="draft">保存草稿</button>
+      <button type="button" id="clear">清空附件</button>
+      <a href="/t/t26-template.csv" download="简历模板.csv">下载简历模板</a>
+      <span class="note" id="draft-said"></span>
+    </div>
+    <button type="button" class="primary" id="apply">提交申请</button>
+    <p id="done"></p>
+  </div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+// A file as the site keeps it: its name, size and first characters.
+async function about(file) {
+  const head = (await file.slice(0, 40).text()).replace(/\s+/g, " ");
+  return { name: file.name, size: file.size, head };
+}
+$("cv").addEventListener("change", () => {
+  const file = $("cv").files[0];
+  $("cv-said").textContent = file ? `已选择：${file.name}（${file.size} 字节）` : "尚未选择简历。";
+});
+$("avatar-up").addEventListener("click", () => $("avatar").click());
+// The avatar is uploaded the moment it is chosen, as many sites do.
+$("avatar").addEventListener("change", async () => {
+  const file = $("avatar").files[0];
+  if (!file) return;
+  await post("/api/avatar", await about(file));
+  $("face-said").textContent = "头像已更新";
+});
+$("draft").addEventListener("click", async () => {
+  await post("/api/draft", { name: $("name").value });
+  alert("草稿已保存");
+  $("draft-said").textContent = "草稿保存于刚刚";
+});
+$("clear").addEventListener("click", async () => {
+  if (!confirm("确定移除已选择的简历吗？")) return;
+  $("cv").value = "";
+  $("cv-said").textContent = "尚未选择简历。";
+  await post("/api/clear", {});
+});
+$("apply").addEventListener("click", async () => {
+  const file = $("cv").files[0];
+  await post("/api/apply", { name: $("name").value, cv: file ? await about(file) : null });
+  $("done").textContent = "申请已提交，我们会在三个工作日内联系你。";
+});
+</script>
+</body></html>

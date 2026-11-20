@@ -16,7 +16,6 @@ SPEC = Spec(
     # "forget it" / "forget about it" means never mind.
     not_a_delete=r"(?!\s*(?:about\s+)?it\b)",
     recall=r"what do you remember|what'?s in your memory|memory\?",
-    learned=r"what (?:have|did) you learn(?:ed)?|what'?ve you learned|learned\?",
     note_lead=r"^that\s+",
     query_lead=r"^(?:about|that)\s+",
     deictic=frozenset({"that", "this", "it", "those", "these", "that one",
@@ -24,13 +23,6 @@ SPEC = Spec(
     everything=frozenset({"everything", "all", "all of it", "all of that",
                           "all that", "every note"}),
     first_person=FIRST_PERSON,
-    leak_labels=r"input|speaker|intent|decision|style",
-    # A refusal needs its object: "sorry I can't help it" is a person.
-    assistant_tells=(r"(?:i'?m\s+sorry|i\s+apologi[sz]e|my\s+apologies|sorry)[,.!\s]+(?:but\s+)?"
-                     r"i\s+(?:can'?t|cannot|am\s+unable\s+to|am\s+not\s+able\s+to)\s+"
-                     r"(?:help|assist|provide|comply\s+with|fulfill|answer)\s+"
-                     r"(?:with\s+(?:that|this|it)|that|this|your\s+request|you\s+with\s+(?:that|this))"
-                     r"|\bhope\s+(?:this|that)\s+(?:helps|was\s+helpful)\b"),
     replies={
         "remember_what": ("remember what? you didn't say anything", "spill it",
                           "remember what lol"),
@@ -42,12 +34,7 @@ SPEC = Spec(
         "forgotten": ("forgotten", "dropped", "gone"),
         "empty": ("head's empty", "nothing in there", "blank slate"),
         "recall_head": ("Here's what I remember:",),
-        "said": ("you said: ",),
-        "about": ("about {name}: ",),
-        "from": ("from {name}: ",),
-        # Fixed lines, no model: a chat waiting for the admin's approval.
-        "approval_dm": ("My administrator has to approve this chat before I can reply here. The code of this request is {code}. Please pass it on to my administrator.",),
-        "approval_group": ("My administrator has not approved this group yet, so I cannot reply here.",),
+        "secret": ('Not kept: ID numbers, card numbers, passwords and codes are never saved.',),
     },
     failure_excuses=("ugh, hanging here for a sec",
                      "hold on, connection's wonky",
@@ -58,4 +45,10 @@ SPEC = Spec(
         "can", "just", "so", "have", "how", "why", "not", "be", "your", "i'm",
         "it's", "lol", "yeah", "hey", "there", "about", "would", "will",
     }),
+    unsaid=(r"\b(?:don'?t|do not|no need to)\s+(?:remember|save|store|note|keep|write down)"
+            r"\s+(?:this|that|it)\b|\boff the record\b"),
+    forget_that=(r"forget (?:what i (?:just )?(?:said|told you)|i (?:said|mentioned) (?:that|it|anything)"
+                 r"|(?:that|this|it)(?: please)?[\s.!]*$)|pretend i (?:never|didn'?t) (?:said|say) (?:that|it|anything)"),
+    lead_in=r"ok(?:ay)?|actually|never ?mind|well|oh|also|hey",
+    kinds=("About you", "Likes", "Dislikes", "Lately", "Plans", "How you like to be treated"),
 )

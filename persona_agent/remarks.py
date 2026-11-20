@@ -5,9 +5,11 @@ an activity that held HOLD_S (with no more than IDLE_MAX_S of it idle) earns
 one, a stretch that held LONG_S one more, and coming back after BACK_S away a
 welcome-back line; never sooner than GAP_S after the last, at most DAY_MAX a
 day, never in or just after a meeting, in a full-screen window, or the first
-WARMUP_S. `write`
-asks the person's model for the line in the character's voice, told only the
-kind of activity and how long; `canned` is the line without a model.
+WARMUP_S. When the person asked for fewer messages (profile.py) the gap is
+FEWER times as long and the day holds half as many. `write` asks the person's
+model for the line in the character's voice, told only the kind of activity
+and how long, and how the person asked to be treated; `canned` is the line
+without a model.
 
 The switch and the programs never looked at are kept in <runtime>/remarks.json
 with the day's count; no program name or title is.
@@ -24,7 +26,7 @@ from pathlib import Path
 
 from . import drafting, langs
 from . import setup_wizard as sw
-from .llm import purpose
+from .llm import _call_purpose, purpose
 from .storage import atomic_write_text
 from .usage import UsageBook
 
@@ -38,6 +40,8 @@ BACK_S = 30 * 60
 GAP_S = 40 * 60
 WARMUP_S = 120
 DAY_MAX = 8
+# Asked for fewer messages: the gap this many times as long, the day's lines divided by it.
+FEWER = 2
 # No input for this long: the sample counts as idle; this long, the stretch is over.
 IDLE_S = 60
 AWAY_S = 10 * 60
@@ -126,10 +130,12 @@ class Pace:
         elif now - self.other_since >= SWITCH_S:
             self._begin(activity, self.other_since)
 
-    def due(self, now: float, last_at: float, today: int) -> dict | None:
-        """{"kind": start|long|back, "activity", "minutes"} when a line is due now, else None."""
+    def due(self, now: float, last_at: float, today: int, fewer: bool = False) -> dict | None:
+        """{"kind": start|long|back, "activity", "minutes"} when a line is due now, else None; `fewer` when
+        the person asked for fewer messages."""
+        slow = FEWER if fewer else 1
         if (now - self.started < WARMUP_S or self.fullscreen or self.activity in (None, "meeting")
-                or now - self.met_at < MEETING_CALM_S or now - last_at < GAP_S or today >= DAY_MAX):
+                or now - self.met_at < MEETING_CALM_S or now - last_at < GAP_S * slow or today >= DAY_MAX // slow):
             return None
         if self.back_at is not None:
             return {"kind": "back", "activity": self.activity, "minutes": int(self.back_away // 60)}
@@ -193,7 +199,8 @@ def _part_of_day(hour: int) -> str:
             else "afternoon" if hour < 18 else "evening" if hour < 22 else "night")
 
 
-def prompt(name: str, persona: str, lang: str, due: dict, now: float) -> tuple[str, str]:
+def prompt(name: str, persona: str, lang: str, due: dict, now: float, manner: str = "") -> tuple[str, str]:
+    """`manner`: how the person asked to be treated (profile.manner_rule), "" when they said nothing."""
     local = datetime.fromtimestamp(now)
     if due["kind"] == "back":
         what = (f"They were away from the computer for about {due['minutes']} minutes and just came back. "
@@ -212,6 +219,8 @@ You live on your person's computer desktop as a small figure beside them. Now an
 - One short sentence, at most {LINE_MAX // 3 if lang in ("zh", "zh-TW", "ja", "ko") else LINE_MAX // 2} characters. Warm and light, never preachy. {advice}
 - Never say or hint how you know what they are doing: nothing about windows, screens, apps, titles or watching them.
 - No quotation marks, emoji, actions in asterisks or name tags. Write only the line."""
+    if manner:
+        system += "\n\n" + manner
     user = f"{what} It is {_part_of_day(local.hour)} ({local:%H:%M}) on a {local:%A}."
     return system, user
 
@@ -229,36 +238,37 @@ def character(home: Path, values: dict) -> tuple[str, str, str]:
     name = values.get("PERSONA_NAME") or sw.DEFAULT_NAMES.get(lang, "Nova")
     card = Path(home) / "persona.txt"
     text = card.read_text(encoding="utf-8") if card.is_file() else sw.persona_text(
-        sw.TEMPLATE, name=name, lang=lang, admin_name=values.get("ADMIN_NAME", ""),
+        sw.CHARACTERS[0].key, name=name, lang=lang, admin_name=values.get("ADMIN_NAME", ""),
         admin_relationship=values.get("ADMIN_RELATIONSHIP", ""))
     return name, text.strip(), lang
 
 
 class _Model(drafting._Client):
-    """The person's model outside the service, its tokens tallied as "other"."""
+    """The person's model outside the service, its tokens tallied under the call's purpose."""
 
     def _count_usage(self, model: str, resp) -> None:
         try:
             body = resp.json()
             book = UsageBook(self._usage_path)
-            book.add(model, body.get("usage") if isinstance(body, dict) else None, time.time(), "other")
+            book.add(model, body.get("usage") if isinstance(body, dict) else None, time.time(), _call_purpose.get())
             book.flush(time.time())
         except Exception:
             pass
 
 
-async def write(home: Path, values: dict, due: dict, now: float) -> str:
-    """The line from the person's model; the canned one without a model or on any error."""
+async def write(home: Path, values: dict, due: dict, now: float, manner: str = "") -> str:
+    """The line from the person's model; the canned one without a model or on any error. `manner` as
+    `prompt` takes it."""
     name, persona, lang = character(home, values)
     if not all(values.get(k) for k in ("LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL")):
         return canned(due, lang)
     client = _Model(values, drafting.usage_path(Path(home), values))
     client.llm_timeout_s = 30.0
-    system, user = prompt(name, persona, lang, due, now)
+    system, user = prompt(name, persona, lang, due, now, manner)
     try:
-        with purpose("other"):
+        with purpose("proactive"):
             text = await client._call_llm(system, [{"role": "user", "content": user}], client.model,
-                                          max_tokens=200, enable_search=False, disable_thinking=True,
+                                          max_tokens=200, disable_thinking=True,
                                           temperature=0.9)
     except Exception:
         text = ""

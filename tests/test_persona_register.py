@@ -1,11 +1,10 @@
-"""The 1:1 register: a DM persona is company, not a service.
+"""The 1:1 register: a character who does what is asked, in its own voice.
 
-`[COMPANY, NOT SERVICE]` and `[CONTINUITY]` in `dm_style_guide` are
-unconditional text, which is why they are checked over the WHOLE knob space
-rather than over the default style: the failure is not a persona choosing
-badly (no knob offers "be a service"), it is a later edit moving a section
-inside a variant table, or a new variant in a table between them
-dropping what follows. Both ship green against one style and fail here."""
+The sections of `dm_style_guide` checked here are unconditional text, which
+is why they are checked over the WHOLE knob space rather than over the
+default style: the failure is not a persona choosing badly, it is a later
+edit moving a section inside a variant table, or a new variant in a table
+between them dropping what follows."""
 from __future__ import annotations
 
 import itertools
@@ -14,14 +13,10 @@ from pathlib import Path
 
 from persona_agent.agent import Agent
 from persona_agent.prompts import (
-    HONEST_DISCLOSURE,
-    INTENT_RULES,
-    DM_TOOL_GUIDE,
-    REASONING_PROTOCOL,
-    STYLE_GUIDE,
+    OWNER_TOOL_GUIDE,
     STYLE_KNOBS,
     PersonaStyle,
-    dm_intent_rules,
+    dm_honest_disclosure,
     dm_output_protocol,
     dm_style_guide,
 )
@@ -30,9 +25,9 @@ from helpers import check, isolated_agent
 
 
 def make_agent(tmp: Path) -> Agent:
-    """The persona is a stub: the bundled example is the operator's text, and
-    what these suites own is the text the engine writes around it."""
-    return isolated_agent(tmp, seeds=True, qq_bot_id="1", persona_name="B")
+    """The persona is a stub: what these suites own is the text the engine
+    writes around it."""
+    return isolated_agent(tmp, persona_name="B")
 
 
 def _every_style() -> list[PersonaStyle]:
@@ -46,16 +41,12 @@ def _every_style() -> list[PersonaStyle]:
 def _assembled_dm_prompt(style: PersonaStyle) -> str:
     """Every block of the 1:1 system prompt a `PersonaStyle` can change, in
     served order."""
-    return "\n\n".join((dm_style_guide(style),
-                        dm_intent_rules(style),
-                        DM_TOOL_GUIDE,
-                        dm_output_protocol(style)))
+    return "\n\n".join((dm_style_guide(style), OWNER_TOOL_GUIDE, dm_output_protocol()))
 
 
 async def _served_dm_prompts(tmp: Path) -> dict[str, str]:
-    """The whole system prompt `_chat_dm` sends, for the admin and for
-    anyone else: the engine-authored rest of it (overrides, `<rules>`, the
-    sticker guide) is where a banned phrase would slip back in unnoticed."""
+    """The whole system prompt `_chat_dm` sends: the engine-authored rest of
+    it (who they are) is where a banned phrase would slip back in unnoticed."""
     agent = make_agent(tmp)
     captured: list = []
 
@@ -63,17 +54,12 @@ async def _served_dm_prompts(tmp: Path) -> dict[str, str]:
         captured.append(system)
         return json.dumps({"reply": "mhm"})
 
-    async def no_search(_messages, hint=""):
-        return ""
 
     agent._call_llm = fake_call
-    agent._decide_and_search = no_search
     served = {}
     try:
-        for who, is_admin in (("friend", False), ("admin", True)):
-            await agent._chat_dm([{"role": "user", "content": "hey"}],
-                                      is_admin=is_admin, pkey="private:7")
-            served[who] = captured[-1]
+        await agent._chat_dm([{"role": "user", "content": "hey"}], pkey="private:browser:c1")
+        served["person"] = captured[-1]
     finally:
         await agent.aclose()
     return served
@@ -92,7 +78,7 @@ BANNED_ASSISTANT_PHRASES = (
 )
 
 #: The header of the one section allowed to contain those strings.
-COMPANY_HEADER = "[COMPANY, NOT SERVICE]"
+DOES_HEADER = "[WHAT THEY ASK FOR, YOU DO]"
 
 
 def _section(guide: str, header: str) -> str:
@@ -111,36 +97,39 @@ def _section(guide: str, header: str) -> str:
 def test_the_companionship_register_survives_every_knob_combination() -> None:
     """Each anchor is a distinct rule, pinned by a phrase short enough to
     survive rewording and specific enough that deleting the rule deletes it.
-    The crisis safety exception is re-checked too: these sections sit on
-    both sides of the emotional-scenes block, and "the exception survived
-    when its neighbours moved" is the property at risk."""
+    The crisis safety exception is re-checked too."""
     styles = _every_style()
     check("the knob space really is the full cross product",
           len(styles) == 216 and len(set(map(repr, styles))) == len(styles),
           f"{len(styles)} styles")
 
     anchors = (
-        # [COMPANY, NOT SERVICE]
-        (COMPANY_HEADER, "the section header"),
-        ("Never open with an offer of help", "no opening offer of help"),
+        # [WHAT THEY ASK FOR, YOU DO]
+        (DOES_HEADER, "the section header"),
+        ("Capable, in your own voice", "what is asked is done, in its own voice"),
+        ("never a reason to do less", "personality is the tone, never less help"),
+        ("Length and form follow what was asked", "length by need"),
+        ("Read what they actually said", "what was said is answered"),
+        ("is their answer: act on it", "a short line after its own question is an answer"),
+        ("Never read a mood into them", "no mood read into them"),
         ("Don't summarize their message back at them", "no read-back"),
+        ("make it with schedule_create in that same reply", "a reminder is made, never only promised"),
+        # [SMALL TALK]: the two floors under every character
         ("Don't end every turn with a question", "not every turn a question"),
-        ("You have a life offscreen", "a day of your own is fair game"),
-        ("A silence-adjacent reply is a full reply", "'mhm' is a whole reply"),
-        ("You are somebody, not a general-purpose engine", "a person, not a tool"),
-        ("turning into the tool", "the character never becomes the deliverable"),
-        ("You know what this person would know", "knowledge is bounded by the character"),
-        # [VOICE]: the two floors under every character
+        ("is a whole reply", "'mhm' is a whole reply"),
         ("Never win at their expense", "a tease is never a verdict on them"),
         ("Say the thing", "understood on one read"),
         # [WHEN IT IS ABOUT THE TWO OF YOU]
         ("receive it, do not deflect", "affection is received"),
         ("Do not overcorrect into devotion", "and not performed back"),
+        # [PICTURES AND FILES]
+        ("read it out, describe it and answer from it", "a picture asked about is read and described"),
+        # [DON'T FAKE KNOWING]
+        ("is only what <your_day> in the turn context holds", "its day is only what its record holds"),
         # [CONTINUITY]
         ("[CONTINUITY", "the continuity header"),
         ("briefly, once", "raise an open thread briefly and once"),
         ("Never announce that you remembered", "don't narrate the recall"),
-        ("never promise to remind them", "no reminder service"),
     )
     missing: dict[str, list[str]] = {}
     unsafe: list[str] = []
@@ -149,8 +138,7 @@ def test_the_companionship_register_survives_every_knob_combination() -> None:
         for anchor, label in anchors:
             if anchor not in assembled:
                 missing.setdefault(label, []).append(repr(style))
-        if not ("SAFETY EXCEPTION" in assembled and "crisis line" in assembled
-                and "crisis helpline" in assembled):
+        if not ("SAFETY EXCEPTION" in assembled and "crisis line" in assembled):
             unsafe.append(repr(style))
 
     for _anchor, label in anchors:
@@ -161,13 +149,12 @@ def test_the_companionship_register_survives_every_knob_combination() -> None:
           not unsafe, f"{len(unsafe)} styles, e.g. {unsafe[:1]}")
 
     guide = dm_style_guide(PersonaStyle())
-    voice = _section(guide, "[VOICE")
+    talk = _section(guide, "[SMALL TALK")
     check("the floors sit under the teasing licence they bound",
-          voice.index("Light teasing only") < voice.index("Never win at")
-          and "Say the thing" in voice, voice)
-    check("continuity follows DON'T FAKE KNOWING, which it defers to",
-          guide.index("[CONTINUITY") > guide.index("[DON'T FAKE KNOWING")
-          and "DON'T FAKE KNOWING wins" in _section(guide, "[CONTINUITY"))
+          talk.index("Light teasing only") < talk.index("Never win at")
+          and "Say the thing" in talk, talk)
+    check("continuity follows DON'T FAKE KNOWING",
+          guide.index("[CONTINUITY") > guide.index("[DON'T FAKE KNOWING"))
 
 
 async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
@@ -175,9 +162,9 @@ async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
     """The banned phrases appear nowhere in the 1:1 prompt except in the one
     section that forbids them. A flat "nowhere" is unsatisfiable, because the
     ban is written by quoting them; so: each occurs exactly once, inside
-    `[COMPANY, NOT SERVICE]`, on a line that forbids it, and the prompt with
-    that section removed contains none of them in any casing — which is what
-    catches an example reply or a protocol line teaching one."""
+    `[WHAT THEY ASK FOR, YOU DO]`, on a line that forbids it, and the prompt
+    with that section removed contains none of them in any casing — which is
+    what catches an example reply or a protocol line teaching one."""
     styles = _every_style()
     headerless: list[str] = []
     not_once: dict[str, list[str]] = {}
@@ -185,7 +172,7 @@ async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
     leaked: dict[str, list[str]] = {}
 
     def audit(label: str, assembled: str) -> None:
-        section = _section(assembled, COMPANY_HEADER)
+        section = _section(assembled, DOES_HEADER)
         if not section:
             headerless.append(label)
             return
@@ -195,7 +182,7 @@ async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
                 not_once.setdefault(phrase, []).append(
                     f"{label}: {assembled.count(phrase)} occurrences")
             carrier = [line for line in section.splitlines() if phrase in line]
-            if not any("Never" in line or "Don't" in line for line in carrier):
+            if not any("never" in line or "Don't" in line for line in carrier):
                 not_a_ban.setdefault(phrase, []).append(repr(carrier))
             hits = [line for line in outside.splitlines()
                     if phrase.lower() in line.lower()]
@@ -207,7 +194,7 @@ async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
     for who, served in (await _served_dm_prompts(tmp)).items():
         audit(f"served to the {who}", served)
 
-    check(f"every prompt renders a {COMPANY_HEADER} section",
+    check(f"every prompt renders a {DOES_HEADER} section",
           not headerless, f"{len(headerless)} without one, e.g. {headerless[:1]}")
     for phrase in BANNED_ASSISTANT_PHRASES:
         check(f"{phrase!r} is written exactly once, inside the section that "
@@ -223,61 +210,21 @@ async def test_no_assistant_ism_survives_the_assembled_dm_prompt(
 
 async def test_a_tool_shaped_request_is_answered_by_the_character(
         tmp: Path) -> None:
-    """A DM persona asked for the first hundred digits of pi typed out a
-    hundred digits: the prompt banned every assistant PHRASE and said nothing
-    about assistant SUBSTANCE. Beside the two style bullets, three more
-    places say it, each where the model reads it at a different moment: the
-    `question` intent, the reasoning protocol's tool check, and the <rules>
-    block after the persona. The group prompt, where the persona is one
-    member of a room, is untouched."""
-    style = PersonaStyle()
-    question = next(line for line in dm_intent_rules(style).splitlines()
-                    if line.startswith("- `question`"))
-    check("the question intent answers as this person, from what they'd know",
-          "as this person and from what they'd know" in question, question)
-    check("...and not having it, said in their own words, is the answer",
-          "saying so in their own words IS the direct answer" in question,
-          question)
-    protocol = dm_output_protocol(style)
-    check("the reasoning protocol runs a tool check",
-          "- Tool check:" in protocol and "decide as the character" in protocol)
-    bullets = protocol.split("Cover these ", 1)[1].split("\n\nintent", 1)[0]
-    stated = int(bullets.split(" ", 1)[0])
-    check("...and counts it among the points it asks for",
-          stated == bullets.count("\n- "), bullets)
-
-    tool_check = next(line for line in protocol.splitlines()
-                      if line.startswith("- Tool check:"))
-    # "look up" is in the tool check's list, and DM_TOOL_GUIDE says to
-    # answer from fetched results as if already known. Without this the two
-    # disagreed about a search the engine had already paid for.
-    check("...which counts fetched search results as something they have",
-          "[external_web_search_data]" in tool_check, tool_check)
+    """Asked for code, a lookup or a fact, the character does it properly, in
+    its own voice: personality is never a reason to do less."""
+    protocol = dm_output_protocol()
+    check("the protocol has no intent to classify and no PASS",
+          '"intent"' not in protocol and "never the literal" in protocol, protocol)
+    check("...and its reasoning asks whether the turn needs a lookup",
+          "whether it needs a tool or a lookup this turn" in protocol)
 
     served_by_who = await _served_dm_prompts(tmp)
     for who, served in served_by_who.items():
-        rules = served.split("<rules>", 1)[1].split("</rules>", 1)[0]
-        check(f"the {who}'s <rules> say the character decides what gets done",
-              "The person never turns into the tool" in rules, rules)
-        check(f"...and the {who}'s count fetched search results as known",
-              "[external_web_search_data]" in rules, rules)
-
-    # The admin's overrides come after <rules> and say "engage directly" to
-    # a lookup. They name the option they retract, and keep the character
-    # rather than handing over a deliverable, so the two lines agree.
-    overrides = served_by_who["admin"].split(
-        "<private_overrides>", 1)[1].split("</private_overrides>", 1)[0]
-    ask = next(line for line in overrides.splitlines()
-               if "look something up" in line)
-    check("the admin's lookup override names the <rules> option it retracts",
-          "<rules>" in ask and "no interest" in ask, ask)
-    check("...and still answers in the character's voice",
-          "own voice" in ask, ask)
-
-    group = "\n".join((STYLE_GUIDE, INTENT_RULES, REASONING_PROTOCOL))
-    check("the group prompt keeps its own question intent and protocol",
-          "general-purpose engine" not in group and "Tool check" not in group
-          and "encyclopedia entry" not in group)
+        check(f"the {who} gets the thing asked for done properly",
+              "answer it or do it, fully and correctly" in served, who)
+        check(f"...with no refusal of work and no second rule block for the {who}",
+              "work to order" not in served and "<private_overrides>" not in served
+              and "<rules>" not in served and "<intent_rules>" not in served, who)
 
 
 async def test_the_dm_guide_tells_the_character_to_receive_affection(
@@ -301,65 +248,55 @@ async def test_the_dm_guide_tells_the_character_to_receive_affection(
           "**answer it**" in guide)
     check("1:1 guide: and it does not swing into devotion",
           "Do not overcorrect into devotion" in guide)
+    honesty = dm_honest_disclosure("some-model")
     check("the honest answer is still owed to anyone who sincerely asks",
-          "sincerely asks whether you are an AI, answer honestly"
-          in HONEST_DISCLOSURE)
+          "sincerely asks whether you are an AI, answer honestly" in honesty)
+    check("...and the model the person set is named when they ask",
+          "it is some-model" in honesty and "Leave out" not in honesty, honesty)
     check("the style rule defers to the honesty block instead of replacing it",
           "sincere question about whether you are an AI, which the honesty "
           "block below covers" in guide)
 
     for who, served in (await _served_dm_prompts(tmp)).items():
         check(f"the {who}'s honesty block really is below the guide",
-              served.index(HONEST_DISCLOSURE)
+              served.index("<honesty>")
               > served.index("receive it, do not deflect"), who)
         check(f"...and is the one place the {who}'s prompt says it",
               served.lower().count("answer honestly") == 1, who)
 
 
-def test_both_guides_let_the_chat_choose_the_reply_language() -> None:
-    """The guides are English and the bundled data English or Chinese, so a
+def test_the_guide_lets_the_chat_choose_the_reply_language() -> None:
+    """The guide is English and the bundled data English or Chinese, so a
     chat in any other language is answered in it only because [LANGUAGE] says
     so. Unconditional text, so it is checked over every knob combination."""
-    group = _section(STYLE_GUIDE, "[LANGUAGE]")
-    check("the group guide follows the group's language",
-          "language the group is chatting in" in group, group)
-    check("...ahead of the format rules",
-          STYLE_GUIDE.index("[LANGUAGE]") < STYLE_GUIDE.index("[FORMAT"))
     for style in _every_style():
         guide = dm_style_guide(style)
-        check("the 1:1 guide follows the other person's language",
+        check("the guide follows the other person's language",
               "language they write to you in" in _section(guide, "[LANGUAGE]"), repr(style))
-        check("...after the register, which stays first",
-              guide.index(COMPANY_HEADER) < guide.index("[LANGUAGE]") < guide.index("[FORMAT"),
+        check("...after what it does, which stays first",
+              guide.index(DOES_HEADER) < guide.index("[LANGUAGE]") < guide.index("[FORMAT"),
               repr(style))
 
 
 def test_a_cards_emoji_opt_in_and_length_reach_the_prompt(tmp: Path) -> None:
-    """The tuning panel edits `reply_style`; the prompt said emoji were banned
-    whatever the card said. The default card must give today's exact text, or
+    """A card sets `reply_style`; the prompt said emoji were banned
+    whatever the card said. The default card must give the default text, or
     the provider's prompt cache starts over."""
     import dataclasses
 
     agent = make_agent(tmp)
-    default_group = agent._build_group_prompt("g1", "called", "hi").system
     default_dm = agent._build_dm_prompt([{"role": "user", "content": "hi"}]).system
-    check("the default card keeps the group guide byte for byte",
-          STYLE_GUIDE in default_group)
-    check("...and the 1:1 guide", dm_style_guide(agent.persona_style) in default_dm)
+    check("the default card keeps the guide byte for byte", dm_style_guide(agent.persona_style) in default_dm)
+    check("no emoji at the default card", "- No emoji, no kaomoji" in default_dm)
 
     agent.reply_style = dataclasses.replace(agent.reply_style, allow_emoji=True)
-    group = agent._build_group_prompt("g1", "called", "hi").system
     dm = agent._build_dm_prompt([{"role": "user", "content": "hi"}]).system
-    for who, text in (("group", group), ("1:1", dm)):
-        banned = next(line for line in text.splitlines() if line.startswith("- Banned:"))
-        check(f"{who}: emoji are no longer banned", "emoji," not in banned, banned)
-        check(f"{who}: ...but used only as the character does",
-              "emoji only as this character uses them" in text, banned)
-        check(f"{who}: no length line at the default length",
-              "Stay under" not in text)
+    check("emoji as the character uses them",
+          "- Emoji only as this character uses them" in dm and "- No emoji" not in dm)
+    check("no length line at the default length", "stay under" not in dm)
 
     agent.reply_style = dataclasses.replace(agent.reply_style, max_chars=120)
-    group = agent._build_group_prompt("g1", "called", "hi").system
     dm = agent._build_dm_prompt([{"role": "user", "content": "hi"}]).system
-    check("a shorter limit is stated in both guides",
-          "Stay under 120 characters" in group and "Stay under 120 characters" in dm)
+    check("a shorter limit is stated for small talk only, never for code or a real answer",
+          "In small talk stay under 120 characters; code, lists and the answer "
+          "to a real question are not counted" in dm)

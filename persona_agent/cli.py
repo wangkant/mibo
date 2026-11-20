@@ -1,4 +1,4 @@
-"""The `personagent` command.
+"""The `personagent` command: it opens the app.
 
 Each subcommand imports its module only when it runs, so `--home` is in the
 environment before anything resolves a path or reads a setting.
@@ -11,77 +11,13 @@ import os
 import sys
 import textwrap
 
-from persona_agent import langs
+from persona_agent import i18n, langs
 from persona_agent import __version__
 
-# name -> (module, function, one-line help). The function takes (argv, prog).
+# name -> (module, function, its one-line help in the catalog). The function takes (argv, prog).
 COMMANDS = {
-    "start": ("persona_agent.welcome", "main",
-              "Open setup and chat in a window of their own"),
-    "shortcut": ("persona_agent.shortcut", "main",
-                 "Put personagent on the desktop and in the Start menu (Windows)"),
-    "up": ("persona_agent.services", "main",
-           "Start personagent and its connected chat platforms together"),
-    "service": ("persona_agent.service", "main",
-                "Keep `personagent up` running after a reboot: install, restart, remove or check it"),
-    "page": ("persona_agent.pageaccess", "main",
-             "Set the password that lets other devices sign in to the page"),
-    "init": ("persona_agent.setup_wizard", "main",
-             "Set up a home: model, key, character, language"),
-    "character": ("persona_agent.character", "main",
-                  "Import a character card, save the character as one, or draft a persona"),
-    "chat": ("persona_agent.chat", "run",
-             "Talk to the character in this terminal"),
-    "demo": ("persona_agent.demo", "main",
-             "Watch it stay quiet and learn from a correction"),
-    "run": ("persona_agent.cli", "_run_server",
-            "Start the service the connectors talk to"),
-    "connect": ("persona_agent.setup_wizard", "connect_main",
-                "Connect a chat platform, AstrBot, a coding assistant or other software (api)"),
-    "tools": ("persona_agent.mcp_tools", "main",
-              "Give the character tools from MCP servers: list, add, remove, check, call"),
-    "mcp": ("persona_agent.coding", "mcp_main",
-            "Serve the character over MCP (run by coding assistants, not by hand)"),
-    "hook": ("persona_agent.coding", "hook_main",
-             "React when a coding agent finishes a turn (run by coding assistants, not by hand)"),
-    "doctor": ("persona_agent.doctor", "main",
-               "Check the setup and every upstream service"),
-    "learned": ("persona_agent.ledger_admin", "main",
-                "Review, promote or roll back what it learned"),
-    "memory": ("persona_agent.memory_admin", "main",
-               "Look at what it remembers, forget an item or bring one back"),
-    "access": ("persona_agent.approvals", "main",
-               "Approve or decline new chats on the platforms that ask for approval"),
-    "eval": ("persona_agent.evals", "main",
-             "Measure speaking, persona, learning and memory on labelled cases"),
+    "start": ("persona_agent.welcome", "main", "start.command"),
 }
-
-
-#: Commands that only read an existing home: a mistyped --home must not pass for an empty one.
-READ_A_HOME = ("memory", "learned", "doctor", "access")
-
-
-def _missing_home() -> str:
-    """Why there is no home to read, or '' when the folder exists."""
-    from persona_agent import home
-    from persona_agent.setup_wizard import command
-
-    found = home.find_home()
-    if found.is_dir():
-        return ""
-    return langs.term(f"There is no personagent home at {found}. "
-                      f"Run `{command('init', found)}` to set one up there.")
-
-
-def _run_server(argv: list[str], prog: str) -> int:
-    p = argparse.ArgumentParser(prog=prog, description=langs.term(COMMANDS["run"][2]))
-    p.add_argument("--host", default=None, help=langs.term("default SERVER_HOST or 127.0.0.1"))
-    p.add_argument("--port", type=int, default=None, help=langs.term("default SERVER_PORT or 8080"))
-    args = p.parse_args(argv)
-    from persona_agent import server
-
-    server.main(host=args.host, port=args.port)
-    return 0
 
 
 def _broken_without_a_terminal() -> int:
@@ -95,36 +31,35 @@ def _broken_without_a_terminal() -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
     with open(log, "a", encoding="utf-8") as out:
         traceback.print_exc(file=out)
-    window.alert(langs.term(f"personagent could not start. The details are in {log}."))
+    window.alert(i18n.t("cli.broken", i18n.lang(), log=log))
     return 1
 
 
-def _parser() -> argparse.ArgumentParser:
+def _parser(lang: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="personagent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        description=textwrap.fill(langs.term("An agent that behaves like a person, on every platform you use: "
-                    "it has a character of its own, remembers, learns from the people it talks to, "
-                    "and judges for itself when to speak."), 78),
+        description=textwrap.fill(i18n.t("cli.about", lang), 78),
         # Raw, so the command list keeps one line per command.
-        epilog=_usage() + "\n\n" + textwrap.fill(langs.term(
-            "Run `personagent` to open local setup and chat. On a machine without a display, "
-            "use `personagent up` (the service and its platforms) or `personagent run` (the service alone). "
-            "Messages follow AGENT_LANG, else the system language."), 78))
+        epilog=_usage(lang) + "\n\n" + textwrap.fill(i18n.t("cli.noCommand", lang), 78))
     p.add_argument("--version", action="version", version=f"personagent {__version__}")
-    p.add_argument("--home", metavar="DIR",
-                   help=langs.term("the folder holding .env, persona.txt and runtime/ "
-                        "(default: AGENT_HOME, this checkout, or ~/personagent)"))
+    p.add_argument("--home", metavar="DIR", help=i18n.t("cli.home", lang))
     p.add_argument("command", nargs="?", choices=list(COMMANDS), metavar="command",
-                   help=langs.term("one of the commands below"))
+                   help=i18n.t("cli.command", lang))
     p.add_argument("args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     return p
 
 
-def _usage() -> str:
+def _usage(lang: str) -> str:
     width = max(map(len, COMMANDS))
-    lines = [f"  {name:<{width}}  {langs.term(spec[2])}" for name, spec in COMMANDS.items()]
-    return langs.term("commands:") + "\n" + "\n".join(lines)
+    lines = [f"  {name:<{width}}  {i18n.t(spec[2], lang)}" for name, spec in COMMANDS.items()]
+    return i18n.t("cli.commands", lang) + "\n" + "\n".join(lines)
+
+
+def _argparse_words(lang: str):
+    """argparse's gettext: its own words (the English catalog's cli.argparse) in `lang`, anything else as given."""
+    keys = {text: key for key, text in i18n.words("cli", "en")["argparse"].items()}
+    return lambda text: i18n.t(f"cli.argparse.{keys[text]}", lang) if text in keys else text
 
 
 def _take_home(args: list[str]) -> tuple[str | None, list[str]]:
@@ -137,7 +72,7 @@ def _take_home(args: list[str]) -> tuple[str | None, list[str]]:
             break
         if word == "--home":
             if i + 1 >= len(args):
-                raise SystemExit(langs.term("personagent: --home needs a folder"))
+                raise SystemExit(i18n.t("cli.homeMissing", i18n.lang()))
             home, i = args[i + 1], i + 2
         elif word.startswith("--home="):
             home, i = word[len("--home="):], i + 1
@@ -149,7 +84,7 @@ def _take_home(args: list[str]) -> tuple[str | None, list[str]]:
 
 def _unknown_leading_option(words: list[str]) -> str | None:
     """An option before the command that personagent does not know; argparse
-    would take the word after it for the command (`--hme H doctor`)."""
+    would take the word after it for the command (`--hme H run`)."""
     i = 0
     while i < len(words):
         word = words[i]
@@ -166,9 +101,10 @@ def _unknown_leading_option(words: list[str]) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     langs.utf8_console()
+    lang = i18n.lang()
     # argparse asks gettext for its own words: usage, options, its errors.
-    argparse._ = langs.term
-    p = _parser()
+    argparse._ = _argparse_words(lang)
+    p = _parser(lang)
     words = sys.argv[1:] if argv is None else argv
     unknown = _unknown_leading_option(words)
     if unknown:
@@ -183,11 +119,6 @@ def main(argv: list[str] | None = None) -> int:
     chosen = later_home or args.home
     if chosen:
         os.environ["AGENT_HOME"] = os.path.abspath(os.path.expanduser(chosen))
-    if args.command in READ_A_HOME and not {"-h", "--help"} & set(rest):
-        missing = _missing_home()
-        if missing:
-            print(missing, file=sys.stderr)
-            return 2
     module_name, func_name, _help = COMMANDS[args.command]
     try:
         func = getattr(importlib.import_module(module_name), func_name)
@@ -195,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
         if sys.stderr is not None:
             raise
         return _broken_without_a_terminal()
-    if args.command == "start" and not {"-h", "--help", "--no-browser", "--terminal"} & set(rest):
+    if args.command == "start" and not {"-h", "--help", "--no-browser"} & set(rest):
         # The app opening: start at sign-in is on by default, the first time.
         from persona_agent import autostart, home
         autostart.first_run_soon(home.find_home())
@@ -203,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         result = func(rest, f"personagent {args.command}")
     except SystemExit as stop:
         if {"-h", "--help"} & set(rest) and not stop.code:
-            print(langs.term("\nAlso accepted: --home DIR, the folder holding .env, persona.txt and runtime/."))
+            print(i18n.t("cli.alsoHome", i18n.lang()))
         raise
     return int(result or 0)
 

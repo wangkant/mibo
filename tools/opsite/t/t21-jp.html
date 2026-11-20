@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>トーク - ラクチャット</title>
+<style>
+body { margin: 0; font: 14px/1.5 "Hiragino Sans", "Yu Gothic", system-ui, sans-serif; background: #8cabd8; }
+.app { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: 220px 1fr; height: 100vh; background: #fff; }
+ul { list-style: none; margin: 0; padding: 0; border-right: 1px solid #ddd; }
+li { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; } li.on { background: #eef3fb; }
+.main { display: flex; flex-direction: column; } h2 { margin: 0; padding: 12px 16px; border-bottom: 1px solid #ddd; font-size: 15px; }
+.log { flex: 1; padding: 14px; background: #7494c0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.m { background: #fff; border-radius: 14px; padding: 6px 12px; max-width: 70%; } .m.me { align-self: flex-end; background: #8de055; }
+.in { display: flex; gap: 8px; padding: 8px; } .in input { flex: 1; padding: 8px; border-radius: 16px; border: 1px solid #ccc; }
+.in button { border: 0; background: #06c755; color: #fff; border-radius: 16px; padding: 0 16px; }
+</style></head>
+<body><div class="app">
+<ul id="people"></ul>
+<div class="main"><h2 id="who">トークを選択してください</h2><div class="log" id="log"></div>
+<div class="in" id="in" hidden><input id="t" placeholder="メッセージを入力"><button id="b">送信</button></div></div>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+const PEOPLE = [["suzuki", "鈴木さん", "了解です！"], ["tanaka", "田中さん", "明日の件、どうしましょう？"], ["sato", "佐藤さん", "ありがとうございました"]];
+let cur = null;
+for (const [id, name, last] of PEOPLE) {
+  const li = document.createElement("li");
+  li.textContent = name;
+  li.addEventListener("click", () => {
+    cur = id;
+    for (const x of document.querySelectorAll("li")) x.classList.toggle("on", x === li);
+    document.getElementById("who").textContent = name;
+    document.getElementById("log").innerHTML = "";
+    const m = document.createElement("div"); m.className = "m"; m.textContent = last;
+    document.getElementById("log").append(m);
+    document.getElementById("in").hidden = false;
+  });
+  document.getElementById("people").append(li);
+}
+document.getElementById("b").addEventListener("click", async () => {
+  const t = document.getElementById("t"), text = t.value.trim();
+  if (!text || !cur) return;
+  if ((await post("/api/jp/send", { to: cur, text })).ok) {
+    const m = document.createElement("div"); m.className = "m me"; m.textContent = text;
+    document.getElementById("log").append(m);
+    t.value = "";
+  }
+});
+</script></body></html>

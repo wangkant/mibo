@@ -1,5 +1,5 @@
-"""The models panel: the models the saved service lists, for the model field to
-offer. Read on the server with the saved key, which never reaches the page."""
+"""The models the saved service lists, for the model bar to offer. Read on the
+server with the saved key, which never reaches the page."""
 from __future__ import annotations
 
 import asyncio
@@ -12,7 +12,6 @@ import httpx
 
 from .. import setup_wizard as sw
 
-ERRORS: frozenset[str] = frozenset()
 CACHE_S = 300
 # A service that did not answer is asked again sooner.
 MISS_CACHE_S = 30
@@ -101,9 +100,3 @@ async def listing(workspace) -> dict:
             _cache.pop(old, None)
         _cache[slot] = (now + (CACHE_S if models else MISS_CACHE_S), models)
     return {"baseUrl": base, "models": models}
-
-
-def mount(app, workspace, body) -> None:
-    @app.get("/api/models")
-    async def models():
-        return await listing(workspace)

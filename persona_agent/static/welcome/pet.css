@@ -2,12 +2,13 @@
    The page is drawn over the desktop as it is, and the window takes the
    pointer only round the figure and its card (window.py).
 
-   A figure is one of the files under figures/, put in by pet.js. A sheet
-   (.sheet) is four frames cut from a painting, rest, blink, talk and look:
-   this sheet swaps them and moves the whole figure, which has no limbs of
-   its own. A drawing shares one skeleton (.figure > .leg.left, .leg.right,
-   .torso > .arm.left, .arm.right, .face > .eyes.open/.glad/.shut,
-   .mouth.smile/.oh) and carries its own colours: this sheet only moves it. */
+   A figure is one of the files under figures/, put in by pet.js, which moves
+   it (its motion engine): nothing here runs by itself, so a pet at rest draws
+   nothing. Mibo is a drawing in parts (figures/mibo.svg, [data-rig="mibo"]):
+   each part turns about its own joint, given below in the drawing's units,
+   and its eyes change by data-face. A painted figure (.sheet) is two
+   canvases the size of the window that pet.js draws its poses on, and moves
+   as a whole. */
 html,
 body {
   margin: 0;
@@ -23,8 +24,8 @@ body {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 160px;
-  height: 190px;
+  width: 200px;
+  height: 214px;
   cursor: grab;
   touch-action: none;
 }
@@ -45,10 +46,35 @@ body.card-right .pet {
   left: 0;
   cursor: pointer;
 }
-.actor,
-.figure-box {
+/* The figure's box, 160 by 190, at the bottom of a window with room round
+   it (PAD in pet.js): what a move takes beyond the box is drawn there, not cut. */
+.actor {
   position: absolute;
   inset: 0;
+  transform-origin: 50% 100%;
+}
+.figure-box {
+  position: absolute;
+  left: 20px;
+  top: 24px;
+  width: 160px;
+  height: 190px;
+}
+.figure-box svg {
+  overflow: visible;
+}
+.pet svg.overlay {
+  top: 24px;
+  left: 20px;
+  overflow: visible;
+}
+/* Facing left: the whole figure mirrored. A painted figure faces the person
+   at rest, and pet.js mirrors only the poses that go sideways. */
+.pet.left .figure-box {
+  transform: scaleX(-1);
+}
+.pet.left .figure-box.painted {
+  transform: none;
 }
 .pet svg {
   display: block;
@@ -56,15 +82,17 @@ body.card-right .pet {
   top: 0;
   left: 0;
 }
-svg * {
-  transform-box: fill-box;
+.overlay {
+  pointer-events: none;
 }
 .dots,
 .zz {
   display: none;
+  fill: #5b7f9e;
 }
 .zz text {
   font: 700 15px system-ui, sans-serif;
+  visibility: hidden;
 }
 
 /* ---- out of sight below the window's bottom, and back up with a little overshoot */
@@ -89,443 +117,295 @@ svg * {
     transform: translateY(0);
   }
 }
-/* Peeking: now and then it sinks a little, and patted it ducks and pops up. */
-.pet.sink .actor {
-  animation: sink 1.6s ease-in-out;
+
+/* ---- Mibo's joints, in the drawing's own units (400 by 475) */
+[data-rig="mibo"],
+[data-rig="mibo"] *,
+.figure-box .shadow {
+  transform-box: view-box;
 }
-@keyframes sink {
-  30%,
-  65% {
-    transform: translateY(16px);
-  }
+[data-rig="mibo"] {
+  transform-origin: 200px 450px;
 }
-.pet.pat .actor {
-  animation: duck 0.48s ease-in-out;
+[data-rig="mibo"] .body {
+  transform-origin: 200px 424px;
 }
-@keyframes duck {
-  40% {
-    transform: translateY(48%);
-  }
-  75% {
-    transform: translateY(-5px);
-  }
+[data-rig="mibo"] .arm.left {
+  transform-origin: 77px 300px;
+}
+[data-rig="mibo"] .arm.right {
+  transform-origin: 323px 300px;
+}
+/* A foot turns about its heel's corner, so a tap lifts the toe. */
+[data-rig="mibo"] .foot.left {
+  transform-origin: 158px 450px;
+}
+[data-rig="mibo"] .foot.right {
+  transform-origin: 222px 450px;
+}
+[data-rig="mibo"] .antenna {
+  transform-origin: 200px 124px;
+}
+[data-rig="mibo"] .tip {
+  transform-origin: 200px 88px;
+}
+[data-rig="mibo"] .ear.left {
+  transform-origin: 84px 236px;
+}
+[data-rig="mibo"] .ear.right {
+  transform-origin: 316px 236px;
+}
+[data-rig="mibo"] .visor,
+[data-rig="mibo"] .eyes {
+  transform-origin: 200px 226px;
+}
+[data-rig="mibo"] .chest {
+  transform-origin: 200px 362px;
+}
+.figure-box .shadow {
+  transform-origin: 200px 452px;
+}
+/* Where it looks: pet.js moves the eyes, and the visor a little with them. */
+[data-rig="mibo"] .eyes,
+[data-rig="mibo"] .visor {
+  transition: transform 0.16s ease-out;
+}
+/* Its eyes: open, else the one each face shows: shut, happy arcs, asleep,
+   round (surprised) or half-lidded (sleepy); winking and thinking change one. */
+[data-face="shut"] .e-open,
+[data-face="happy"] .e-open,
+[data-face="sleep"] .e-open,
+[data-face="round"] .e-open,
+[data-face="sleepy"] .e-open,
+[data-face="wink"] .eye.right .e-open,
+[data-face="think"] .eye.right .e-open {
+  display: none;
+}
+[data-face="shut"] .e-shut,
+[data-face="happy"] .e-happy,
+[data-face="sleep"] .e-sleep,
+[data-face="round"] .e-round,
+[data-face="sleepy"] .e-half,
+[data-face="wink"] .eye.right .e-happy,
+[data-face="think"] .eye.right .e-half {
+  display: inline;
+}
+/* Asleep, between two breaths (pet.js steps it a few times a minute). */
+.pet.breath [data-rig="mibo"] .body,
+.pet.breath .sheet-body {
+  transform: scale(1.014, 0.988);
 }
 
-/* ---- at rest: it breathes and blinks */
-.figure {
-  transform-origin: 50% 100%;
-  animation: bob 2.6s ease-in-out infinite;
-}
-.torso {
-  transform-origin: 50% 100%;
-  animation: breathe 2.6s ease-in-out infinite;
-}
-/* The sprout's own leaves sway. */
-.sprout {
-  transform-origin: 50% 100%;
-  animation: sway 3.4s ease-in-out infinite;
-}
-.eye {
-  transform-origin: center;
-  animation: blink var(--blink, 4.6s) infinite;
-}
-/* Where each drawing's arms join it and how far a raised one goes. The ones
-   with shoulders turn the arm about the top of it, towards the body, and lift
-   it out to the side: drawn behind the hair and the dress, an arm raised
-   higher would vanish behind them. The sprout holds its arms out from its
-   sides and lifts them right up. */
-.figure-box {
-  --shoulder-left: 82% 6%;
-  --shoulder-right: 18% 6%;
-  --arm-rest: 0deg;
-  --raise: 105deg;
-  --lift-x: 5px;
-  --lift-y: -3px;
-}
-.figure-box[data-figure="sprout"] {
-  --shoulder-left: 50% 10%;
-  --shoulder-right: 50% 10%;
-  --arm-rest: 14deg;
-  --raise: 150deg;
-  --lift-x: 4px;
-  --lift-y: -24px;
-}
-.arm.left {
-  transform-origin: var(--shoulder-left);
-  transform: rotate(var(--arm-rest));
-}
-.arm.right {
-  transform-origin: var(--shoulder-right);
-  transform: rotate(calc(-1 * var(--arm-rest)));
-}
-.leg {
-  transform-origin: 50% 0;
-}
-.face {
-  transition: transform 0.25s ease;
-}
-.sheet {
+/* ---- a painted figure: its poses drawn on the lower canvas, and one that
+   fades in on the upper (pet.js). The canvases cover the whole window, so a
+   pose that reaches past the box (arms up, held) is drawn there. */
+.sheet,
+.sheet-body {
   position: absolute;
   inset: 0;
-  overflow: hidden;
   transform-origin: 50% 100%;
-  animation: breathe-whole 2.6s ease-in-out infinite;
 }
-.sheet img {
+.sheet-body {
+  transform-origin: 50% 180px;
+}
+.sheet canvas {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 640px;
-  height: 190px;
-  -webkit-user-drag: none;
-  animation: blink-frame var(--blink, 4.6s) step-end infinite;
+  left: -20px;
+  top: -24px;
+  width: 200px;
+  height: 214px;
 }
-@keyframes bob {
-  50% {
-    transform: translateY(-2px);
-  }
-}
-@keyframes breathe {
-  50% {
-    transform: scale(1.02, 0.975);
-  }
-}
-@keyframes breathe-whole {
-  50% {
-    transform: translateY(-1px) scale(1.012, 0.988);
-  }
-}
-@keyframes sway {
-  0%,
-  100% {
-    transform: rotate(-7deg);
-  }
-  50% {
-    transform: rotate(7deg);
-  }
-}
-@keyframes blink {
-  0%,
-  94%,
-  100% {
-    transform: scaleY(1);
-  }
-  97% {
-    transform: scaleY(0.08);
-  }
-}
-/* A sheet blinks with its second frame. */
-@keyframes blink-frame {
-  0%,
-  96% {
-    left: 0;
-  }
-  97% {
-    left: -160px;
-  }
-  99.5% {
-    left: 0;
-  }
+.sheet canvas + canvas {
+  opacity: 0;
 }
 
-/* ---- walking: the legs take turns and the face leads the way; a sheet waddles */
-.pet.walk .figure,
-.pet.walk .sheet {
-  animation: waddle 0.44s ease-in-out infinite;
-}
-.pet.walk .leg.left {
-  animation: step 0.44s ease-in-out infinite;
-}
-.pet.walk .leg.right {
-  animation: step 0.44s ease-in-out -0.22s infinite;
-}
-.pet.walk .arm.left {
-  animation: swing-left 0.44s ease-in-out infinite;
-}
-.pet.walk .arm.right {
-  animation: swing-right 0.44s ease-in-out -0.22s infinite;
-}
-.pet.walk .face {
-  transform: translateX(7px);
-}
-.pet.walk.left .face {
-  transform: translateX(-7px);
-}
-@keyframes waddle {
-  0%,
-  100% {
-    transform: rotate(-3deg);
-  }
-  50% {
-    transform: rotate(3deg) translateY(-3px);
-  }
-}
-@keyframes step {
-  50% {
-    transform: translateY(-7px);
-  }
-}
-@keyframes swing-left {
-  0%,
-  100% {
-    transform: rotate(calc(var(--arm-rest) + 16deg));
-  }
-  50% {
-    transform: rotate(calc(var(--arm-rest) - 18deg));
-  }
-}
-@keyframes swing-right {
-  0%,
-  100% {
-    transform: rotate(calc(-1 * var(--arm-rest) - 16deg));
-  }
-  50% {
-    transform: rotate(calc(18deg - var(--arm-rest)));
-  }
-}
-
-/* ---- looking about; a sheet looks down for it */
-.pet.look .face {
-  animation: look 1.8s ease-in-out;
-}
-@keyframes look {
-  20%,
-  45% {
-    transform: translateX(-8px);
-  }
-  60%,
-  85% {
-    transform: translateX(8px);
-  }
-}
-
-/* ---- glad eyes for a wave, a pat, a card and its "here you go" */
-.pet.wave .eyes.open,
-.pet.glad .eyes.open,
-.pet.give .eyes.open {
-  display: none;
-}
-.pet.wave .eyes.glad,
-.pet.glad .eyes.glad,
-.pet.give .eyes.glad {
-  display: inline;
-}
-.pet.wave .arm.right {
-  animation: wave 0.4s ease-in-out 4;
-}
-.pet.wave .sheet {
-  animation: wiggle 0.4s ease-in-out 4;
-}
-@keyframes wave {
-  0%,
-  100% {
-    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(15deg - var(--raise)));
-  }
-  50% {
-    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-15deg - var(--raise)));
-  }
-}
-@keyframes wiggle {
-  0%,
-  100% {
-    transform: rotate(-3deg);
-  }
-  50% {
-    transform: rotate(3deg);
-  }
-}
-
-/* ---- a hop, on its own, when patted, or when it has found something */
-.pet.hop .figure,
-.pet.hop .sheet {
-  animation: hop 0.6s cubic-bezier(0.3, 0, 0.4, 1);
-}
-@keyframes hop {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  15% {
-    transform: translateY(0) scale(1.08, 0.9);
-  }
-  50% {
-    transform: translateY(-24px) scale(0.96, 1.05);
-  }
-  85% {
-    transform: translateY(0) scale(1.06, 0.93);
-  }
-}
-
-/* ---- picked up: it dangles */
-.pet.held .figure,
-.pet.held .sheet {
-  animation: dangle 0.5s ease-in-out infinite;
-  transform-origin: 50% 0;
-}
-.pet.held .leg {
-  animation: kick 0.5s ease-in-out infinite;
-}
-.pet.held .leg.right {
-  animation-delay: -0.25s;
-}
-.pet.held .arm.left {
-  transform: translate(calc(-1 * var(--lift-x)), var(--lift-y)) rotate(var(--raise));
-}
-.pet.held .arm.right {
-  transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-1 * var(--raise)));
-}
-.pet.held .mouth.smile {
-  display: none;
-}
-.pet.held .mouth.oh {
-  display: inline;
-}
-@keyframes dangle {
-  0%,
-  100% {
-    transform: rotate(-4deg);
-  }
-  50% {
-    transform: rotate(4deg);
-  }
-}
-@keyframes kick {
-  0%,
-  100% {
-    transform: rotate(-12deg);
-  }
-  50% {
-    transform: rotate(12deg);
-  }
-}
-
-/* ---- "here you go": it crouches, holds the window out with a raised arm, and lifts */
-.pet.give .figure,
-.pet.give .sheet {
-  animation: give 0.6s ease-in-out;
-}
-.pet.give .arm.right {
-  animation: offer 0.6s ease-in-out forwards;
-}
-@keyframes give {
-  35% {
-    transform: scale(1.08, 0.88) rotate(-6deg);
-  }
-  75% {
-    transform: translateY(-6px) scale(0.95, 1.07) rotate(4deg);
-  }
-}
-@keyframes offer {
-  0% {
-    transform: rotate(calc(-1 * var(--arm-rest)));
-  }
-  35% {
-    transform: rotate(45deg);
-  }
-  75%,
-  100% {
-    transform: translate(var(--lift-x), var(--lift-y)) rotate(calc(-1 * var(--raise)));
-  }
-}
-
-/* ---- peeking over the app window: eyes lowered to the screen */
-.pet.peek .face {
-  transform: translateY(3px);
-}
+/* ---- peeking over the app window */
 .pet.peek .overlay {
   visibility: hidden;
 }
 
-/* ---- a sheet's frames: talking when glad, held or giving; looking down
-   while it peeks, still blinking; eyes closed asleep */
-.pet.glad .sheet img,
-.pet.wave .sheet img,
-.pet.give .sheet img,
-.pet.held .sheet img {
-  left: -320px;
-  animation: none;
-}
-.pet.look .sheet img,
-.pet.peek .sheet img {
-  left: -480px;
-  animation-name: blink-look;
-}
-@keyframes blink-look {
-  0%,
-  96% {
-    left: -480px;
-  }
-  97% {
-    left: -160px;
-  }
-  99.5% {
-    left: -480px;
-  }
-}
-
-/* ---- what the character is doing */
-.pet[data-state="asleep"] .figure,
-.pet[data-state="asleep"] .torso,
-.pet[data-state="asleep"] .sheet {
-  animation-duration: 4.4s;
-}
-.pet[data-state="asleep"] .eyes.open,
-.pet[data-state="asleep"] .eyes.glad {
-  display: none;
-}
-.pet[data-state="asleep"] .eyes.shut {
+/* ---- what the character is doing: the dots while it answers, and the z's
+   while it sleeps, each shown as far as pet.js has stepped them */
+.pet[data-state="answering"] .dots {
   display: inline;
-}
-.pet[data-state="asleep"] .sheet img {
-  left: -160px;
-  animation: none;
 }
 .pet[data-state="asleep"] .zz {
   display: inline;
 }
-.pet[data-state="asleep"] .zz text {
-  animation: doze 3s step-end infinite;
-  visibility: hidden;
-}
-.pet[data-state="asleep"] .zz text:nth-child(2) {
-  animation-delay: 0.6s;
-}
-.pet[data-state="asleep"] .zz text:nth-child(3) {
-  animation-delay: 1.2s;
-}
-@keyframes doze {
-  20% {
-    visibility: visible;
-  }
-  70% {
-    visibility: hidden;
-  }
-}
-.pet[data-state="answering"] .dots {
-  display: inline;
-}
-.pet[data-state="answering"] .dots circle {
-  animation: think 1.2s ease-in-out infinite;
-}
-.pet[data-state="answering"] .dots circle:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.pet[data-state="answering"] .dots circle:nth-child(3) {
-  animation-delay: 0.3s;
-}
-@keyframes think {
-  30% {
-    transform: translateY(-5px);
-  }
-  60% {
-    transform: translateY(0);
-  }
+.pet[data-z="1"] .zz text:nth-child(1),
+.pet[data-z="2"] .zz text:nth-child(-n + 2),
+.pet[data-z="3"] .zz text {
+  visibility: visible;
 }
 .pet[data-state="out"] .figure-box {
   visibility: hidden;
 }
 
-/* While pet.js measures a drawing's eyes, they show whatever it is doing. */
-.pet.measure .eyes.open {
+/* ---- dizzy, after being shaken: its eyes are spinning spirals, only while it lasts */
+[data-face="dizzy"] .e-open {
+  display: none;
+}
+[data-face="dizzy"] .e-dizzy {
   display: inline;
+}
+[data-rig="mibo"] .e-dizzy {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dizzy 0.9s linear infinite;
+}
+@keyframes dizzy {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- what it holds or wears (figures/mibo.svg): each turns with the arm that holds it */
+.prop {
+  display: none;
+}
+.pet[data-dnd] .headphones,
+.pet[data-holding="magnifier"] .magnifier,
+.pet[data-holding="book"] .book,
+.pet[data-holding="found"] .found {
+  display: inline;
+}
+[data-rig="mibo"] .magnifier,
+[data-rig="mibo"] .found {
+  transform-origin: 323px 300px;
+}
+[data-rig="mibo"] .book {
+  transform-origin: 200px 362px;
+}
+[data-rig="mibo"] .headphones {
+  transform-origin: 200px 236px;
+}
+
+/* ---- do not disturb on a painted figure: a small badge by its head (Mibo wears headphones) */
+.dnd-badge {
+  display: none;
+}
+.pet[data-dnd] .figure-box.painted ~ .overlay .dnd-badge {
+  display: inline;
+}
+.dnd-badge circle {
+  fill: #ffffff;
+  stroke: #9fd3ef;
+}
+.dnd-badge path {
+  fill: none;
+  stroke: #2f8fc4;
+  stroke-width: 1.6;
+}
+.dnd-badge rect {
+  fill: #2f8fc4;
+}
+
+/* ---- out on a walk: the sign where it stood */
+.away-sign {
+  display: none;
+}
+.away-sign rect {
+  fill: #c6c6cb;
+}
+.away-sign .steps {
+  fill: #ffffff;
+}
+.pet[data-state="out"] .away-sign {
+  display: inline;
+}
+
+/* ---- its small actions: three round buttons in an arc by its head, in the
+   card's plain look, faded in while the pointer stays on it */
+.quick {
+  --quick-bg: #ffffff;
+  --quick-line: #d8d8dc;
+  --quick-ink: #48484b;
+  --quick-hover: #f2f2f4;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s ease-out;
+}
+@media (prefers-color-scheme: dark) {
+  .quick {
+    --quick-bg: #242426;
+    --quick-line: #414145;
+    --quick-ink: #e4e4e7;
+    --quick-hover: #313134;
+  }
+}
+.quick.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.quick button {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--quick-line);
+  border-radius: 50%;
+  background: var(--quick-bg);
+  color: var(--quick-ink);
+  cursor: pointer;
+}
+.quick button:hover {
+  background: var(--quick-hover);
+}
+.quick svg {
+  position: static;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.quick .quick-find svg {
+  fill: currentColor;
+  stroke: none;
+}
+.quick .quick-quiet.on {
+  color: #2f8fc4;
+  border-color: #9fd3ef;
+}
+.quick-chat {
+  left: 54px;
+  top: 32px;
+}
+.quick-find {
+  left: 32px;
+  top: 60px;
+}
+.quick-quiet {
+  left: 27px;
+  top: 92px;
+}
+.pet.peek .quick {
+  display: none;
+}
+
+/* Its faces ease into one another: the eyes' shapes cross-fade, quickly enough for a blink. */
+[data-rig="mibo"] .eye > :not(.e-dizzy) {
+  display: inline;
+  opacity: 0;
+  transition: opacity 0.07s ease-out;
+}
+[data-rig="mibo"]:not([data-face]) .e-open,
+[data-rig="mibo"][data-face="open"] .e-open,
+[data-rig="mibo"][data-face="look"] .e-open,
+[data-rig="mibo"][data-face="shut"] .e-shut,
+[data-rig="mibo"][data-face="happy"] .e-happy,
+[data-rig="mibo"][data-face="sleep"] .e-sleep,
+[data-rig="mibo"][data-face="round"] .e-round,
+[data-rig="mibo"][data-face="sleepy"] .e-half,
+[data-rig="mibo"][data-face="wink"] .eye.left .e-open,
+[data-rig="mibo"][data-face="wink"] .eye.right .e-happy,
+[data-rig="mibo"][data-face="think"] .eye.left .e-open,
+[data-rig="mibo"][data-face="think"] .eye.right .e-half {
+  opacity: 1;
+}
+[data-rig="mibo"] .gloss {
+  transform-origin: 200px 199px;
 }

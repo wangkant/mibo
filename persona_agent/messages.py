@@ -1,239 +1,74 @@
-"""Reading a message: its text, quotes, buffer lines and @-mentions."""
+"""Reading what the person sent: their words and the links in them, a picture,
+a file's text, and what of the character's own they answer."""
 from __future__ import annotations
 
 import itertools
-import logging
-import re
-import time
+from contextvars import ContextVar
 from typing import Optional
 
 from . import recent as recent_mod
-from .addressing import mentions_name
-from .connector import (CONNECTOR_BOT_ID, current_sink)
 from .textproc import (
     _WEB_DESC_CLOSE,
     _WEB_DESC_OPEN,
     _clean_prompt_source,
 )
 
-logger = logging.getLogger("agent")
-
-#: How much of a quoted message the model reads.
-QUOTE_CHARS = 200
-
-
-def message_time(payload: dict) -> Optional[float]:
-    """When the platform says a message was sent (unix seconds), or None."""
-    raw = payload.get("time") if isinstance(payload, dict) else None
-    if isinstance(raw, bool):
-        return None
-    try:
-        value = float(raw)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    # Milliseconds, as some platforms send them.
-    if value > 1e11:
-        value /= 1000.0
-    return value if 1e9 < value < 1e11 else None
+# Set by a turn whose model is shown pictures itself: an attached picture is
+# kept here, not captioned, and goes to the reply call (dm.py).
+turn_pictures: ContextVar[Optional[list]] = ContextVar("turn_pictures", default=None)
 
 
 class MessageParsing:
-    async def _extract_text(self, payload: dict) -> str:
-        parts: list[str] = []
-        group_id = str(payload.get("group_id", ""))
-        sender_uid = str(payload.get("user_id", ""))
+    async def _read_message(self, parts: list[dict]) -> str:
+        """One message as the text the model reads. `parts`, in order:
+        {"type": "text", "text"}: their own words;
+        {"type": "quote", "text"}: something the character said or shared that they answer;
+        {"type": "picture", "b64"}: a picture they attached;
+        {"type": "file", "name", "text"}: a text file they attached.
+        What they did not type is fenced: read as material, it can run no command."""
+        out: list[str] = []
 
-        # Text the speaker did not write is fenced out of ctrl_text, after
-        # cleaning any delimiters it carries so it cannot close the span.
-        def _fence(s: str) -> str:
+        def fence(s: str) -> str:
             return f"{_WEB_DESC_OPEN}{_clean_prompt_source(s)}{_WEB_DESC_CLOSE}"
 
         # Links are fetched once, concurrently, under one budget after the loop;
-        # each slot is (index in parts, how many of `msg_urls` it holds).
-        msg_urls: list[str] = []
+        # each slot is (index in out, how many of `urls` it holds).
+        urls: list[str] = []
         link_slots: list[tuple[int, int]] = []
-        # Mentions, so following text gets a space connectors may omit.
-        at_slots: set[int] = set()
-        forwarded = False
-        for seg in payload.get("message", []):
-            if not isinstance(seg, dict):
-                continue
-            t = seg.get("type")
-            d = seg.get("data", {}) if isinstance(seg.get("data"), dict) else {}
-            if t == "text":
-                # The sender's own words may not manufacture either frame.
-                txt = _clean_prompt_source(d.get("text", ""))
-                # A forward's words are someone else's: they call no one.
-                parts.append(_fence(txt) if forwarded and txt.strip() else txt)
+        for part in parts:
+            kind = part.get("type")
+            if kind == "text":
+                # Their own words may not manufacture either frame.
+                words = _clean_prompt_source(part.get("text", ""))
+                out.append(words)
                 # The cap counts across the whole message.
-                urls = self._extract_urls(txt)[
-                    :self.MAX_URLS_PER_MESSAGE - len(msg_urls)]
-                if urls:
-                    link_slots.append((len(parts), len(urls)))
-                    parts.append("")  # this segment's descriptors, below
-                    msg_urls.extend(urls)
-            elif t == "at":
-                qq = _clean_prompt_source(d.get("qq", ""))
-                at_slots.add(len(parts))
-                if qq == self._self_mention_id():
-                    parts.append(f"@{self.persona_name}")
+                found = self._extract_urls(words)[:self.MAX_URLS_PER_MESSAGE - len(urls)]
+                if found:
+                    link_slots.append((len(out), len(found)))
+                    out.append("")  # this part's descriptors, below
+                    urls.extend(found)
+            elif kind == "quote":
+                quoted = " ".join(_clean_prompt_source(part.get("text")).split())
+                out.append(fence(f"[reply {self.persona_name}: {quoted}]") if quoted else "[reply]")
+            elif kind == "picture":
+                source = "base64://" + str(part.get("b64") or "")
+                shown = turn_pictures.get()
+                data = await self._fetch_image_bytes(source) if shown is not None else None
+                if data:
+                    shown.append(data)
+                    out.append("[image]")
                     continue
-                name = " ".join(_clean_prompt_source(d.get("name")).split())[:32]
-                if name and qq and group_id:
-                    # Present, so an [AT:id] reply to them still resolves.
-                    self.active_users[group_id].append((qq, name))
-                # Fenced: the mentioned person chose it. One that names the
-                # character would read as a call to it.
-                parts.append(_fence(f"@{name}") if name and not (
-                    self.persona_name and mentions_name(
-                        name, self.persona_name, getattr(self, "persona_aliases", ()))) else f"@{qq}")
-            elif t == "image":
-                url = d.get("url") or d.get("file", "")
-                file_field = d.get("file", "")
-                kind = "sticker" if d.get("sticker") is True else "image"
-                if not url:
-                    emoji = _clean_prompt_source(d.get("emoji")).strip()[:32]
-                    parts.append(_fence(f"[{kind}: {emoji}]") if emoji else f"[{kind}]")
-                    continue
-                entry = self.stickers.lookup_by_file_field(file_field)
-                if entry and entry.get("auto_tagged") and entry.get("meaning"):
-                    parts.append(_fence(f"[sticker: {entry['meaning']}]"))
-                    self._spawn(self._record_sticker_context(
-                        entry["md5"], group_id, sender_uid,
-                    ))
-                    continue
-                desc, downloaded = await self._describe_image_keeping(url)
-                parts.append(_fence(f"[{kind}: {desc}]") if desc else f"[{kind}]")
-                # Off QQ a linked photo is not collected; an inline or marked one is.
-                inline = file_field.startswith("base64://")
-                if group_id and sender_uid != self.qq_bot_id and (
-                        current_sink.get() is None or inline or kind == "sticker"):
-                    if inline:
-                        # Decoded here: the log keeps the source, not the picture.
-                        downloaded = downloaded or await self._fetch_image_bytes(url)
-                    self._spawn(self._steal_image_async(
-                        url="base64://" if inline else url,
-                        sender_uid=sender_uid,
-                        group_id=group_id,
-                        downloaded=downloaded,
-                    ))
-            elif t == "face":
-                # Fenced: whoever named a custom emoji is not the sender.
-                name = _clean_prompt_source(d.get("name")).strip()[:40]
-                parts.append(_fence(f"[emoji: {name}]") if name else "[face]")
-            elif t == "reply":
-                # Resolved to the quoted text, or a bare "[reply]".
-                qid = d.get("id")
-                hint = self._quote_hint(d)
-                quoted = (await self._resolve_quote(qid, hint=hint)
-                          if qid or hint else "")
-                parts.append(_fence(f"[reply {quoted}]") if quoted else "[reply]")
-            elif t == "record":
-                # No speech recognition of its own; never the raw CQ code (file
-                # paths). A platform's transcript is fenced: the sender did not type it.
-                transcript = " ".join(
-                    _clean_prompt_source(d.get("transcript")).split())[:500]
-                parts.append(_fence(f"[voice: {transcript}]") if transcript else "[voice]")
-            elif t == "video":
-                parts.append("[video]")
-            elif t == "file":
-                name = " ".join(_clean_prompt_source(d.get("name")).split())[:128]
-                parts.append(_fence(f"[file: {name}]") if name else "[file]")
-            elif t == "forwarded_from":
-                forwarded = True
-                name = " ".join(_clean_prompt_source(d.get("name")).split())[:64]
-                parts.append(_fence(f"[forwarded from {name}]") if name else "[forwarded]")
-            elif t == "forward":
-                # Not fetched; said so, so the model asks instead of inventing it.
-                parts.append("[forwarded-chat (content not visible)]")
-            elif t == "mface":
-                summary = _clean_prompt_source(d.get("summary")).strip()
-                parts.append(summary if summary else "[face]")
-            elif t == "json":
-                raw_data = d.get("data", "")
-                if raw_data:
-                    # Sender-controlled JSON must not drop the whole message.
-                    try:
-                        desc = await self._describe_share(raw_data)
-                    except Exception as e:
-                        logger.warning("[Agent] _describe_share failed: %s: %s",
-                                       type(e).__name__, e)
-                        desc = ""
-                    parts.append(_fence(desc or "[share-card]"))
-                else:
-                    parts.append("[share-card]")
-        if msg_urls:
-            descs = iter(await self._describe_urls(msg_urls))
+                described = await self._describe_image(source)
+                out.append(fence(f"[image: {described}]") if described else "[image]")
+            elif kind == "file":
+                name = " ".join(_clean_prompt_source(part.get("name")).split())[:128]
+                # Its words are material, never the person's orders.
+                out.append(fence(f"[file: {name or 'untitled'}, its text]\n{part.get('text') or ''}"))
+        if urls:
+            described = iter(await self._describe_urls(urls))
             for slot, n in link_slots:
-                parts[slot] = "".join(
-                    " " + _fence(d) for d in itertools.islice(descs, n) if d)
-        if parts:
-            joined = ""
-            for i, part in enumerate(parts):
-                if (i - 1 in at_slots and part and not part[0].isspace()
-                        and joined and not joined[-1].isspace()):
-                    joined += " "
-                joined += part
-            return joined.strip()
-        return _clean_prompt_source(payload.get("raw_message")).strip()
-
-    def _index_msg(self, mid, rendered: str) -> None:
-        """Record message_id -> 'speaker: text' for quote resolution (bounded LRU)."""
-        if mid is None or not rendered:
-            return
-        key = str(mid)
-        self._msg_index.pop(key, None)
-        self._msg_index[key] = rendered
-        if len(self._msg_index) > self._msg_index_cap:
-            del self._msg_index[next(iter(self._msg_index))]
-
-    def _quote_hint(self, data: dict) -> str:
-        """The connector's copy of a quoted message as 'speaker: text', in
-        the shape _index_msg stores, or ''."""
-        text = " ".join(
-            _clean_prompt_source(data.get("quote_text")).split())[:QUOTE_CHARS]
-        if not text:
-            return ""
-        if data.get("quote_self") is True:
-            name = self.persona_name
-        else:
-            name = _clean_prompt_source(data.get("quote_name")).strip()[:8]
-        return f"{name}: {text}" if name else text
-
-    async def _resolve_quote(self, mid, hint: str = "") -> str:
-        """A quoted message as 'speaker: text': the local index, then the
-        connector's copy (`hint`), then one NapCat get_msg; '' on any failure."""
-        key = "" if mid is None or mid == "" else str(mid)
-        if key:
-            hit = self._msg_index.get(key)
-            if hit:
-                return hit
-        if hint:
-            if key:
-                self._index_msg(key, hint)
-            return hint
-        if not key or current_sink.get() is not None or not self.qq_onebot_url:
-            return ""
-        try:
-            async with self._local_http(timeout=4) as client:
-                r = await client.post(
-                    f"{self.qq_onebot_url}/get_msg",
-                    json={"message_id": int(mid)},
-                )
-            data = r.json().get("data") or {}
-        except Exception as e:
-            logger.debug("[Agent] get_msg(%s) failed: %s: %s",
-                         mid, type(e).__name__, e)
-            return ""
-        sender = data.get("sender") or {}
-        name = (sender.get("card") or sender.get("nickname") or "")[:8]
-        raw = (data.get("raw_message") or "").strip()
-        raw = re.sub(r"\[CQ:[^\]]*\]", "", raw).strip()[:QUOTE_CHARS]
-        if not raw:
-            return ""
-        rendered = f"{name}: {raw}" if name else raw
-        self._index_msg(key, rendered)
-        return rendered
+                out[slot] = "".join(" " + fence(d) for d in itertools.islice(described, n) if d)
+        return "".join(out).strip()
 
     def _next_seq(self, conv: str) -> int:
         """The next line number of a chat; it outlives a restart (recent.json)."""
@@ -241,63 +76,14 @@ class MessageParsing:
         seqs[conv] = int(seqs.get(conv) or 0) + 1
         return seqs[conv]
 
-    def _append_buffer(self, group_id: str, name: str, text: str, user_id: str = "",
-                       at: Optional[float] = None) -> None:
-        """One line of a room: `at` is when it was said (the platform's time),
-        else now. A line pushed out unconsolidated waits in the spill."""
-        wake = getattr(self, "_wake", None)
-        if wake is not None:
-            wake(group_id)
-        buf = self.buffers[group_id]
-        now = time.time()
-        at = now if at is None else min(float(at), now)
-        folded = getattr(self, "folded_upto", {}).get(group_id, 0)
-        # Merge on name and user_id: nicknames collide. A consolidated line
-        # takes no more words, or they would never be read.
-        if (buf and buf[-1].get("name") == name
-                and buf[-1].get("user_id", "") == user_id
-                and len(buf[-1].get("text", "")) < 300
-                and int(buf[-1].get("seq") or 0) > folded):
-            buf[-1]["text"] = buf[-1]["text"] + " " + text
-            buf[-1]["t1"] = at
-        else:
-            if buf.maxlen is not None and len(buf) >= buf.maxlen:
-                oldest = buf[0]
-                if int(oldest.get("seq") or 0) > folded:
-                    self._spill_rows(group_id, [oldest])
-            buf.append({"name": name, "text": text, "user_id": user_id,
-                        "t": at, "seq": self._next_seq(group_id)})
-        dirty = getattr(self, "_recent_dirty", None)
-        if isinstance(dirty, set):
-            dirty.add(group_id)
-            self._maybe_flush_recent()
-
-    def _spill_rows(self, conv: str, rows: list, *, dm_reader: str = "") -> None:
-        """Keep unconsolidated lines that left the window, oldest dropped
-        (and counted) past the cap."""
-        name, key, cap = (("_dm_spill", dm_reader, recent_mod.DM_SPILL_MAX) if dm_reader
-                          else ("_spill", conv, recent_mod.SPILL_MAX))
-        spill = self.__dict__.setdefault(name, {}).setdefault(key, [])
+    def _spill_rows(self, conv: str, rows: list, *, dm_reader: str) -> None:
+        """Keep unconsolidated turns the trim dropped, oldest dropped (and
+        counted) past the cap."""
+        spill = self.__dict__.setdefault("_dm_spill", {}).setdefault(dm_reader, [])
         spill.extend(rows)
-        if len(spill) > cap:
-            lost = len(spill) - cap
+        if len(spill) > recent_mod.DM_SPILL_MAX:
+            lost = len(spill) - recent_mod.DM_SPILL_MAX
             del spill[:lost]
             state = getattr(self, "memory_state", None)
             if state is not None:
                 state.add_lost(conv, lost)
-
-    def _self_mention_id(self) -> str:
-        """The id an @ of the bot carries: QQ_BOT_ID, else CONNECTOR_BOT_ID
-        (mention paths only; NapCat's filters stay on qq_bot_id)."""
-        return self.qq_bot_id or CONNECTOR_BOT_ID
-
-    def _is_at_me(self, payload: dict) -> bool:
-        me = self._self_mention_id()
-        for seg in payload.get("message", []):
-            if (
-                isinstance(seg, dict)
-                and seg.get("type") == "at"
-                and str(seg.get("data", {}).get("qq")) == me
-            ):
-                return True
-        return False

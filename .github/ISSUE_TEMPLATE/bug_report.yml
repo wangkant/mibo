@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. Check [When the bot goes quiet](https://github.com/wangkant/personagent/blob/main/docs/deploy.md#when-the-bot-goes-quiet) first; most silent bots are one of its ten items.
+        Thanks for reporting.
 
         If the bot **said the wrong thing**, use the "Persona report" form instead.
 
@@ -23,12 +23,10 @@ body:
     attributes:
       label: How you installed it
       options:
-        - uvx personagent
-        - uv tool install personagent
-        - pipx install personagent
+        - The Windows installer
+        - The macOS app
         - pip install personagent
         - git clone
-        - Downloaded ZIP
         - Other
     validations:
       required: true
@@ -40,22 +38,7 @@ body:
         - Windows
         - macOS
         - Linux
-        - Docker
         - Other
-    validations:
-      required: true
-  - type: dropdown
-    id: connector
-    attributes:
-      label: Chat platform and connector
-      options:
-        - Terminal only (personagent chat)
-        - QQ through AstrBot and NapCat
-        - Another platform through AstrBot
-        - Satori
-        - Matrix
-        - My own connector
-        - The deprecated /v1/onebot route
     validations:
       required: true
   - type: textarea
@@ -66,16 +49,8 @@ body:
     validations:
       required: true
   - type: textarea
-    id: doctor
-    attributes:
-      label: Output of `personagent doctor`
-      description: It checks the settings and each upstream service, and sends one tiny request to each model. It hides keys. Check the output before pasting.
-      render: shell
-    validations:
-      required: true
-  - type: textarea
     id: logs
     attributes:
       label: Logs
-      description: The lines from `personagent run` around the problem, and from AstrBot's log (lines starting `personagent:`) if you use it.
+      description: The lines from `personagent run` around the problem.
       render: shell

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>快递查询</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f4f7fb; }
+main { max-width: 560px; margin: 30px auto; background: #fff; padding: 20px 24px; border-radius: 10px; min-height: 200px; }
+.sk { height: 14px; background: linear-gradient(90deg, #eee, #f6f6f6, #eee); border-radius: 4px; margin: 10px 0; }
+input { width: 70%; padding: 8px; } .q { padding: 8px 18px; background: #1a73e8; color: #fff; border-radius: 4px; cursor: pointer; display: inline-block; }
+.spin { color: #888; } .res { margin-top: 14px; padding: 12px; background: #f1f8f1; border-radius: 6px; }
+</style></head>
+<body><main id="m" aria-busy="true"><div class="sk"></div><div class="sk"></div><div class="sk" style="width:60%"></div></main>
+<script src="/t/kit.js"></script>
+<script>
+// The page's own script takes a while to draw it, and a lookup takes a while to answer.
+setTimeout(() => {
+  const m = document.getElementById("m");
+  m.removeAttribute("aria-busy");
+  m.innerHTML = `<h2>快递查询</h2><input id="no" placeholder="请输入快递单号"> <span class="q" id="q" role="button" tabindex="0">查询</span><div id="out"></div>`;
+  document.getElementById("q").addEventListener("click", async () => {
+    const no = document.getElementById("no").value.trim(), out = document.getElementById("out");
+    if (!no) return;
+    out.innerHTML = `<p class="spin">正在查询，请稍候…</p>`;
+    out.setAttribute("aria-busy", "true");
+    const r = await (await fetch("/api/track?no=" + encodeURIComponent(no))).json();
+    out.removeAttribute("aria-busy");
+    out.innerHTML = `<div class="res"><b>${no}</b><p>状态：${r.status}</p>${r.where ? `<p>位置：${r.where}</p><p>时间：${r.at}</p>` : ""}</div>`;
+  });
+}, 2500);
+</script></body></html>

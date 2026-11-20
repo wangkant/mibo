@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>畅聊 - 消息</title>
+<style>
+body { margin: 0; font: 14px/1.4 system-ui, "Microsoft YaHei", sans-serif; background: #ededed; }
+.app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+.side { background: #f7f7f7; border-right: 1px solid #ddd; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.side h1 { font-size: 16px; margin: 0; padding: 14px 16px; border-bottom: 1px solid #e3e3e3; }
+.list { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
+.row { position: absolute; left: 0; right: 0; height: 60px; display: flex; gap: 10px; align-items: center;
+  padding: 0 12px; box-sizing: border-box; cursor: pointer; }
+.row:hover { background: #e9e9e9; } .row.on { background: #dcdcdc; }
+.av { width: 38px; height: 38px; border-radius: 6px; background: #8aa4c8; color: #fff; display: grid; place-items: center; }
+.meta { flex: 1; min-width: 0; } .name { font-weight: 600; } .last { color: #888; font-size: 12px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; } .time { color: #aaa; font-size: 11px; }
+.main { display: flex; flex-direction: column; background: #f5f5f5; min-height: 0; }
+.top { padding: 14px 18px; border-bottom: 1px solid #ddd; font-weight: 600; min-height: 20px; }
+.thread { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.b { max-width: 60%; padding: 8px 12px; border-radius: 6px; background: #fff; }
+.b.me { align-self: flex-end; background: #95ec69; }
+.edit { border-top: 1px solid #ddd; padding: 10px 16px; background: #fff; display: flex; gap: 10px; align-items: flex-end; }
+.box { flex: 1; min-height: 60px; outline: none; }
+.box:empty::before { content: attr(data-ph); color: #aaa; }
+.go { width: 36px; height: 36px; border-radius: 50%; border: 0; background: #07c160; cursor: pointer; }
+.empty { margin: auto; color: #aaa; }
+</style></head>
+<body>
+<div class="app">
+  <aside class="side"><h1>消息</h1><div class="list" id="list"><div id="spacer"></div></div></aside>
+  <section class="main">
+    <div class="top" id="top"></div>
+    <div class="thread" id="thread"><p class="empty">选择一个会话开始聊天</p></div>
+    <div class="edit" id="edit" hidden>
+      <div class="box" id="box" contenteditable="true" data-ph="输入消息，Enter 发送"></div>
+      <button class="go" id="go" aria-label="发送"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="#fff" d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+    </div>
+  </section>
+</div>
+<script src="/t/kit.js"></script>
+<script>
+// 120 conversations, newest first; the list draws only the rows in view, as large messengers do.
+const SURNAMES = "王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤".split("");
+const GIVEN = ["子涵", "一诺", "浩然", "欣怡", "梓萱", "宇轩", "雨桐", "思远", "可馨", "俊杰", "晨曦", "佳琪"];
+const LAST = ["好的", "收到", "明天再说吧", "哈哈哈", "[图片]", "晚安", "文件发你了", "在吗", "辛苦了", "下周见"];
+const people = [];
+for (let i = 0; i < 120; i++) {
+  const name = SURNAMES[i % SURNAMES.length] + GIVEN[(i * 7) % GIVEN.length];
+  people.push({ id: "c" + String(i).padStart(3, "0"), name, last: LAST[i % LAST.length], time: i < 5 ? "刚刚" : (i < 30 ? "昨天" : "11-" + String(18 - Math.floor(i / 10)).padStart(2, "0")) });
+}
+// The one the task names sits far down the list.
+people[71] = { id: "c071", name: "周子涵", last: "那就周末再约", time: "11-11" };
+people[12] = { id: "c012", name: "周子豪", last: "好嘞", time: "昨天" };
+const msgs = {};
+const ROW = 60, list = document.getElementById("list"), spacer = document.getElementById("spacer");
+spacer.style.height = people.length * ROW + "px";
+let current = null;
+function draw() {
+  const first = Math.max(0, Math.floor(list.scrollTop / ROW) - 2);
+  const last = Math.min(people.length, Math.ceil((list.scrollTop + list.clientHeight) / ROW) + 2);
+  for (const r of [...list.querySelectorAll(".row")]) r.remove();
+  for (let i = first; i < last; i++) {
+    const p = people[i];
+    const row = document.createElement("div");
+    row.className = "row" + (current === p ? " on" : "");
+    row.style.top = i * ROW + "px";
+    row.innerHTML = `<div class="av">${p.name[0]}</div><div class="meta"><div class="name"></div><div class="last"></div></div><div class="time">${p.time}</div>`;
+    row.querySelector(".name").textContent = p.name;
+    row.querySelector(".last").textContent = p.last;
+    row.addEventListener("click", () => open(p));
+    list.append(row);
+  }
+}
+list.addEventListener("scroll", draw);
+function open(p) {
+  current = p;
+  document.getElementById("top").textContent = p.name;
+  document.getElementById("edit").hidden = false;
+  thread();
+  draw();
+}
+function thread() {
+  const t = document.getElementById("thread");
+  t.textContent = "";
+  for (const [me, text] of [[false, current.last], ...(msgs[current.id] || [])]) {
+    const b = document.createElement("div");
+    b.className = "b" + (me ? " me" : "");
+    b.textContent = text;
+    t.append(b);
+  }
+}
+async function send() {
+  const box = document.getElementById("box"), text = box.innerText.trim();
+  if (!text || !current) return;
+  if ((await post("/api/send", { to: current.id, name: current.name, text })).ok) {
+    (msgs[current.id] = msgs[current.id] || []).push([true, text]);
+    box.textContent = "";
+    thread();
+  }
+}
+document.getElementById("go").addEventListener("click", send);
+document.getElementById("box").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+});
+window.addEventListener("resize", draw);
+draw();
+</script></body></html>

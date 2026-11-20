@@ -1,0 +1,190 @@
+/* Scheduled tasks: Settings › 定时任务 (setup/schedule.js) and their marks in the chat (schedulechat.js), in
+   setup.css's kit and app.css's tokens, light and dark alike. Grey throughout; the accent only on the clock of a
+   task's message and on what waits for a press. */
+
+/* ---- Settings */
+.setup-schedule-top {
+  display: flex;
+  justify-content: flex-end;
+}
+.setup-schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+}
+.setup-schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+}
+.setup-schedule-form .setup-option {
+  padding: 0;
+}
+.setup-schedule-form .setup-textarea {
+  min-height: 88px;
+}
+.setup-schedule-buttons {
+  display: flex;
+  gap: var(--pa-s2);
+}
+.setup-schedule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pa-s3);
+}
+.setup-schedule-head .setup-option-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.setup-schedule-kind {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 400;
+}
+.setup-schedule-acts {
+  border: 1px solid var(--pa-line-strong);
+  background: transparent;
+}
+.setup-schedule-request {
+  margin: var(--pa-s2) 0 0;
+  color: var(--pa-text);
+  overflow-wrap: anywhere;
+}
+.setup-schedule-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+  margin-top: var(--pa-s2);
+}
+.setup-schedule-remove {
+  color: var(--pa-error);
+}
+.setup-schedule-run + .setup-schedule-run {
+  border-top: 1px solid var(--pa-line);
+}
+.setup-schedule-said {
+  margin: 4px 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  overflow-wrap: anywhere;
+}
+.setup-schedule-empty {
+  padding: var(--pa-s4) 0;
+  text-align: center;
+}
+
+/* ---- The chat */
+.task-mark-wrap {
+  margin: 0 0 6px;
+}
+.task-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0 0 6px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.task-mark-wrap .task-mark {
+  margin: 0;
+}
+.task-mark-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--pa-accent);
+}
+.task-mark-off .task-mark-icon {
+  color: var(--pa-faint);
+}
+.task-mark-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-mark-kind {
+  flex: none;
+  white-space: nowrap;
+}
+.task-mark-kind::before {
+  content: "· ";
+}
+.task-mark-late {
+  margin: 2px 0 0;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.task-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  max-width: 440px;
+  border: 1px solid var(--pa-line);
+  border-radius: 10px;
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+}
+.task-note-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--pa-accent);
+}
+.task-note-text {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-note-done {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.task-offer .op-card-facts dd {
+  overflow-wrap: anywhere;
+}
+.task-proposals {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-width: 440px;
+  border: 1px solid var(--pa-line);
+  border-radius: 10px;
+  background: var(--pa-sunken);
+  font-size: var(--pa-fs-sm);
+}
+.task-proposals-head {
+  margin: 0 0 6px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.task-proposal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.task-proposal + .task-proposal {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--pa-line);
+}
+.task-proposal-text {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--pa-text);
+  overflow-wrap: anywhere;
+}

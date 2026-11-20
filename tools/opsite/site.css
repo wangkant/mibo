@@ -1,0 +1,25 @@
+body { margin: 0; font: 15px/1.5 system-ui, "Microsoft YaHei", sans-serif; color: #222; background: #f6f6f4; }
+header { display: flex; gap: 18px; align-items: center; padding: 10px 20px; background: #2d3a4a; color: #fff; }
+header a { color: #dfe8f2; text-decoration: none; }
+header b { margin-right: 12px; }
+main { max-width: 900px; margin: 20px auto; padding: 0 16px; }
+.card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+.chat { display: grid; grid-template-columns: 200px 1fr; gap: 14px; }
+.contacts { list-style: none; margin: 0; padding: 0; }
+.contacts a { display: block; padding: 8px 10px; border-radius: 6px; color: #222; text-decoration: none; }
+.contacts a.on { background: #e4ecf6; }
+.thread { min-height: 220px; display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.msg { max-width: 70%; margin: 0; padding: 6px 10px; border-radius: 8px; background: #eee; }
+.msg.mine { align-self: flex-end; background: #cfe3c7; }
+.composer-row { display: flex; gap: 8px; align-items: flex-end; }
+.composer { flex: 1; min-height: 40px; padding: 8px; border: 1px solid #bbb; border-radius: 6px; background: #fff; }
+.composer:empty::before { content: attr(data-placeholder); color: #999; }
+.send { width: 40px; height: 40px; border: 0; border-radius: 50%; background: #3a7bd5; cursor: pointer; }
+.danger { background: #c0392b; color: #fff; border: 0; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+label { display: block; margin: 10px 0 4px; }
+input[type=text], input[type=password], input[type=search], textarea {
+  width: 100%; max-width: 360px; padding: 6px; box-sizing: border-box;
+}
+button.primary { margin-top: 12px; padding: 6px 16px; background: #3a7bd5; color: #fff; border: 0; border-radius: 6px; }
+.results li { margin: 6px 0; }
+.note { color: #666; }

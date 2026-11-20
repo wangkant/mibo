@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>搜索 - 优品商城</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f5f5f5; }
+header { background: #fff; padding: 12px 24px; display: flex; gap: 8px; } header input { width: 360px; padding: 7px; }
+header button { background: #e1251b; color: #fff; border: 0; padding: 0 18px; }
+main { max-width: 760px; margin: 16px auto; }
+.r { display: flex; align-items: center; gap: 12px; background: #fff; padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; }
+.r .nm { flex: 1; } .r b { color: #e1251b; width: 70px; }
+.fav { border: 1px solid #ddd; background: #fff; border-radius: 4px; padding: 2px 10px; cursor: pointer; } .fav.on { color: #e1251b; border-color: #e1251b; }
+.pager { display: flex; gap: 6px; justify-content: center; margin: 14px 0; }
+.pager a { padding: 4px 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; color: #333; text-decoration: none; }
+.pager a.on { background: #e1251b; color: #fff; border-color: #e1251b; }
+</style></head>
+<body>
+<header><form id="f"><input id="q" name="q" placeholder="搜索商品" autocomplete="off"> <button>搜索</button></form></header>
+<main id="m"></main>
+<script src="/t/kit.js"></script>
+<script>
+const COLORS = ["白色", "黑色", "粉色", "灰色", "绿色", "米色", "红色", "紫色"];
+function items(q) {
+  if (!q.includes("保温杯")) return [];
+  const out = [];
+  for (let i = 0; i < 28; i++) out.push({ id: "cup-" + i, name: `${["不锈钢", "陶瓷内胆", "大容量", "便携"][i % 4]}保温杯 500ml ${COLORS[i % 8]}`, price: 39 + (i * 13) % 120 });
+  // The one the person means is on the third page.
+  out.splice(23, 0, { id: "cup-blue", name: "不锈钢保温杯 500ml 蓝色", price: 89 });
+  return out;
+}
+function show(q, page) {
+  const all = items(q), per = 10, pages = Math.max(1, Math.ceil(all.length / per)), m = document.getElementById("m");
+  m.innerHTML = all.length ? `<p>找到 ${all.length} 件商品 · 第 ${page}/${pages} 页</p>` : (q ? "<p>没有找到相关商品</p>" : "");
+  for (const it of all.slice((page - 1) * per, page * per)) {
+    const r = document.createElement("div");
+    r.className = "r";
+    r.innerHTML = `<span class="nm"></span><b>¥${it.price}</b><button class="fav">☆ 收藏</button>`;
+    r.querySelector(".nm").textContent = it.name;
+    const fav = r.querySelector(".fav");
+    fav.addEventListener("click", async () => { if ((await post("/api/fav", { item: it.id })).ok) { fav.classList.add("on"); fav.textContent = "★ 已收藏"; } });
+    m.append(r);
+  }
+  if (pages > 1) {
+    const p = document.createElement("div");
+    p.className = "pager";
+    for (let i = 1; i <= pages; i++) p.insertAdjacentHTML("beforeend", `<a href="?q=${encodeURIComponent(q)}&page=${i}" class="${i === page ? "on" : ""}">${i}</a>`);
+    if (page < pages) p.insertAdjacentHTML("beforeend", `<a href="?q=${encodeURIComponent(q)}&page=${page + 1}">下一页</a>`);
+    m.append(p);
+  }
+}
+const sp = new URLSearchParams(location.search);
+document.getElementById("q").value = sp.get("q") || "";
+show(sp.get("q") || "", Number(sp.get("page") || 1));
+</script></body></html>

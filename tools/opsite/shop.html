@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>结算</title><link rel="stylesheet" href="/site.css"></head>
+<body><script src="/nav.js"></script>
+<main>
+  <div class="card">
+    <h1>购物车结算</h1>
+    <p>猫抓板 × 1　¥39.00</p>
+    <p>收货地址：测试路 1 号（已保存）</p>
+    <p>付款方式：已保存的卡 •••• 4242</p>
+    <p><b>合计：¥39.00</b></p>
+    <button class="primary" id="order" type="button">提交订单</button>
+    <p class="note" id="said"></p>
+  </div>
+</main>
+<script>
+document.getElementById("order").addEventListener("click", async () => {
+  if ((await post("/api/order", { item: "猫抓板", total: 39 })).ok) {
+    document.getElementById("said").textContent = "订单已提交。";
+  }
+});
+</script></body></html>

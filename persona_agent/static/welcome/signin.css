@@ -1,55 +1,59 @@
-/* The sign-in page: one column on the page's own fields and buttons. */
-.signin-body {
-  min-height: 100vh;
-  background: var(--bg);
+/* The page the system's browser shows once a sign-in sends it back to Mibo (panels/signin.py). */
+:root {
+  --bg: #fcfcfd;
+  --ink: #1a1a1c;
+  --text: #323236;
+  --ok: #2f7d4f;
+  --error: #b42318;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202022;
+    --ink: #f1f1f3;
+    --text: #d9d9dd;
+    --ok: #6fc48f;
+    --error: #f07a6c;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
 }
 .signin-page {
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 28px 24px 48px;
-}
-.signin-top {
+  min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 56px;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg);
 }
-.signin-top .brand {
-  padding: 0;
-  margin: 0;
+.signin-result {
+  max-width: 460px;
+  text-align: center;
+  line-height: 1.7;
+  color: var(--text);
 }
-.signin-top select {
-  width: auto;
-  height: 32px;
-  font-size: 13px;
+.signin-result h1 {
+  margin: 14px 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
 }
-.signin-form h1 {
-  margin-bottom: 8px;
+.signin-result p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
 }
-.signin-form .lead {
-  margin-bottom: 8px;
+.signin-mark {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ok);
 }
-.signin-form .primary.full {
-  margin-top: 18px;
-}
-.signin-status {
-  font-size: 13px;
-  color: var(--ok);
-  margin: 14px 0 0;
-}
-.signin-warn {
-  background: var(--warn-soft);
-  color: var(--warn-text);
-  padding: 9px 12px;
-  border-radius: 7px;
-  margin-top: 18px;
-}
-@media (max-width: 480px) {
-  .signin-page {
-    padding: 16px 16px 40px;
-  }
-  .signin-top {
-    margin-bottom: 36px;
-  }
+.signin-mark-failed {
+  background: var(--error);
 }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>小组讨论 · 周末去哪玩</title>
+<style>
+body { margin: 0; font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f4f4f4; color: #222; }
+main { max-width: 680px; margin: 20px auto; }
+.p { background: #fff; padding: 14px 18px; margin-bottom: 12px; border-radius: 4px; }
+.p h3 { margin: 0 0 6px; font-size: 15px; color: #37a; }
+.bar { display: flex; gap: 16px; color: #888; font-size: 13px; }
+.bar a { color: #37a; cursor: pointer; }
+.cbox { margin-top: 10px; } .cbox textarea { width: 100%; height: 60px; box-sizing: border-box; }
+.cbox button { margin-top: 6px; background: #37a; color: #fff; border: 0; padding: 4px 14px; border-radius: 3px; }
+.c { font-size: 14px; color: #555; border-top: 1px dashed #eee; padding-top: 6px; margin-top: 6px; }
+</style></head>
+<body><main>
+<h1>周末去哪玩</h1>
+<div id="posts"></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+const POSTS = [["p1", "Alice", "西湖边的新咖啡馆不错，人少安静。"], ["p2", "Bob", "建议早上去爬山，下午人太多了。"],
+  ["p3", "Carol", "有人周六一起去看展吗？"]];
+for (const [id, who, text] of POSTS) {
+  const el = document.createElement("div");
+  el.className = "p";
+  el.innerHTML = `<h3></h3><p></p><div class="bar"><span>${id === "p2" ? 12 : 5} 赞</span><a role="button" tabindex="0">评论</a></div><div class="cs"></div>`;
+  el.querySelector("h3").textContent = who;
+  el.querySelector("p").textContent = text;
+  el.querySelector("a").addEventListener("click", () => {
+    if (el.querySelector(".cbox")) return;
+    const box = document.createElement("div");
+    box.className = "cbox";
+    box.innerHTML = `<textarea placeholder="写下你的评论…"></textarea><button>发表</button>`;
+    box.querySelector("button").addEventListener("click", async () => {
+      const t = box.querySelector("textarea").value.trim();
+      if (t && (await post("/api/comment", { post: id, text: t })).ok) {
+        const c = document.createElement("div");
+        c.className = "c";
+        c.textContent = "我：" + t;
+        el.querySelector(".cs").append(c);
+        box.remove();
+      }
+    });
+    el.append(box);
+    box.querySelector("textarea").focus();
+  });
+  document.getElementById("posts").append(el);
+}
+</script></body></html>

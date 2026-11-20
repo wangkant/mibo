@@ -8,8 +8,8 @@ Windows only: it needs the WebView2 window `personagent start` opens there.
 
     def steps(d):
         d.configure()                      # a stand-in model, through the page itself
-        d.click(".nav[data-view=app]")
-        d.check("the App view opens", "app-view" in d.views())
+        d.click("#side-settings")
+        d.check("Settings opens", "setup-view" in d.views())
 
     raise SystemExit(run(pathlib.Path(r"D:/scratch/home"), steps, out=pathlib.Path(r"D:/scratch/out")))
 
@@ -39,6 +39,11 @@ from package_smoke import FakeModel  # noqa: E402
 BUSY = "<<page is busy>>"
 VIEWS = ("[...document.querySelectorAll('section')].filter(s => !s.hidden && s.getClientRects().length)"
          ".map(s => s.id)")
+# The bridge cannot wait for a promise: the answer is left on the page.
+CONNECT = ("(body => { window.smokeConnected = null; fetch('/api/config', {method: 'POST', headers: {"
+           " 'Content-Type': 'application/json', 'X-Personagent-Setup-Token':"
+           " sessionStorage.getItem('personagent-setup-token') || ''}, body: JSON.stringify(body)})"
+           ".then(r => r.json()).then(v => { window.smokeConnected = v; }); return true; })(%s)")
 
 
 class Model(FakeModel):
@@ -129,9 +134,6 @@ class Driver:
         return self.js("(s => { const e = document.querySelector(s); return e ? e.textContent.trim().replace(/\\s+/g, ' ') : ''; })(%s)"
                        % json.dumps(selector)) or ""
 
-    def toast(self) -> str:
-        return self.js("document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent") or ""
-
     def until(self, expression: str, seconds: float = 30):
         """Wait until a JavaScript expression is truthy; its last value."""
         deadline, value = time.time() + seconds, None
@@ -220,13 +222,14 @@ class Driver:
         time.sleep(0.4)
 
     def configure(self) -> bool:
-        """First run: point the page at the stand-in model and wait for the chat."""
-        self.click(".nav[data-view=settings]")
-        self.choose("#provider", "other")
-        self.type_into("#base-url", self.model_url)
-        self.type_into("#model", "fake-model")
-        self.type_into("#api-key", "fake-local-key")
-        self.click("#save")
+        """Connect the stand-in model through the page's own API, walk the first run, and wait for the chat."""
+        self.js(CONNECT % json.dumps({"provider": "other", "apiKey": "fake-local-key", "baseUrl": self.model_url,
+                                      "model": "fake-model", "lang": "en"}))
+        self.until("!!window.smokeConnected && window.smokeConnected.configured === true", 90)
+        deadline = time.time() + 120
+        while time.time() < deadline and "onboard-view" in self.views():
+            self.click("#onboard-view .onboard-skip")
+            time.sleep(0.6)
         ready = self.until("(%s).includes('chat-view')" % VIEWS, 60)
         time.sleep(2.5)
         return bool(ready)

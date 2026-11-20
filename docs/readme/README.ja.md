@@ -119,7 +119,7 @@ curl -LsSf https://raw.githubusercontent.com/wangkant/personagent/main/install.s
 
 インストーラーは自前の Python を用意し、personagent をインストールして開きます。Windows ではデスクトップにアイコンも作成します。PyPI や GitHub への接続が遅い場合は、自動的に中国本土のミラーに切り替えます。もう一度実行すると personagent を更新します。
 
-Python 3.10 以降がすでにインストールされている場合は、`python -m pip install personagent` のあとに `personagent` を実行しても同じです。[uv](https://docs.astral.sh/uv/) があれば、`uvx personagent` で個別のインストールなしに実行できます。Windows では、ソースの ZIP をダウンロードして `start.bat` をダブルクリックする方法もあります。コンピューターに Python がない場合は、`start.bat` が Python も取得します。
+Python 3.10 以降がすでにインストールされている場合は、`python -m pip install personagent` のあとに `personagent` を実行しても同じです。[uv](https://docs.astral.sh/uv/) があれば、`uvx personagent` で個別のインストールなしに実行できます。
 
 Windows では専用のウィンドウで開き、macOS と Linux ではブラウザーで開きます。**OpenRouter でサインイン** を押してブラウザーで承認するか、モデルの API キーを貼り付けて **確認してチャットを開始** をクリックします。最初から選ばれている OpenRouter の無料モデルにもアカウントかキーが必要ですが、どちらも無料です。`personagent demo` はキーなしで、台本どおりの 3 つの場面を再生します。[はじめに](https://github.com/wangkant/personagent/blob/main/docs/start.ja.md)では、ページを画面ごとに説明しています。
 
@@ -139,7 +139,7 @@ personagent 自体は無料です。料金は、選んだモデルサービス�
 
 それ以外のものには、同じページの **その他のソフトウェア** があります。有効にして、アドレス、キー、モデル名を OpenAI 互換のアドレスを入力できるアプリにコピーすれば、そのアプリからキャラクターと会話でき、記憶もほかの場所と共通です。詳しくは[ガイド](https://github.com/wangkant/personagent/blob/main/docs/guide.ja.md#その他のソフトウェア)を参照してください。ターミナルからは `personagent connect api` で同じ操作ができます。
 
-すでに AstrBot、Koishi、Matrix を運用している場合は、personagent をその背後でエージェントとして動かすことができます。[自分で動かすブリッジ](https://github.com/wangkant/personagent/blob/main/docs/guide.ja.md#自分で動かすブリッジ)、[Satori コネクター](https://github.com/wangkant/personagent/blob/main/integrations/satori/README.ja.md)、[Matrix コネクター](https://github.com/wangkant/personagent/blob/main/integrations/matrix/README.ja.md)を参照してください。
+すでに AstrBot を運用している場合は、personagent をその背後でエージェントとして動かすことができます。[自分で動かすブリッジ](https://github.com/wangkant/personagent/blob/main/docs/guide.ja.md#自分で動かすブリッジ)を参照してください。
 
 ## サーバーで動かす
 
@@ -182,7 +182,6 @@ personagent が保存するものはすべて、あなたのマシン上の 1 �
 - [ユーザーガイド](https://github.com/wangkant/personagent/blob/main/docs/guide.ja.md)：設定、コネクター、教え方、アクティビティビュー、トラブルシューティング。
 - [デプロイガイド](https://github.com/wangkant/personagent/blob/main/docs/deploy.ja.md)：本番運用、コスト、ボットが黙ってしまったときの確認事項。
 - [コネクタープロトコル](https://github.com/wangkant/personagent/blob/main/docs/connectors.ja.md)：独自のコネクターを書くためのものです。
-- [ツール](https://github.com/wangkant/personagent/blob/main/docs/tools.ja.md)：`tools/` 内のスクリプト。クローンから実行するためのものです。
 - [変更履歴](https://github.com/wangkant/personagent/blob/main/CHANGELOG.md) · [コントリビューション](https://github.com/wangkant/personagent/blob/main/.github/CONTRIBUTING.md) · [セキュリティポリシー](https://github.com/wangkant/personagent/blob/main/.github/SECURITY.md) · [免責事項](https://github.com/wangkant/personagent/blob/main/docs/DISCLAIMER.ja.md)
 
 ## ライセンス

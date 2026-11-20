@@ -1,0 +1,731 @@
+/* The browser inside the app window (browse.js): a bar over the stage, and the space under it where the
+   site's own WebView lies, with the conversation in a column at its right. */
+body {
+  /* How wide the chat is beside the page. */
+  --pa-beside: 380px;
+}
+.browse {
+  position: absolute;
+  inset: var(--pa-bar) 0 0 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--pa-canvas);
+  /* The bar lays itself out by the pane's own width (narrow rules at the end). */
+  container: browse / inline-size;
+}
+.browse[hidden] {
+  display: none;
+}
+.browse-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 8px;
+  border-top: 1px solid var(--pa-line);
+  border-bottom: 1px solid var(--pa-line);
+  background: var(--pa-chrome);
+}
+.browse-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+.browse-btn:hover:not(:disabled) {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.browse-btn:active:not(:disabled) {
+  background: var(--pa-press);
+}
+.browse-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.browse-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The address field: the mark of a site without encryption, the address (shown while it is focused), the site and
+   the page's title over it otherwise, and the zoom a moment at its end. */
+.browse-field {
+  flex: 1;
+  min-width: 56px;
+  height: 30px;
+  margin: 0 6px;
+  padding: 0 4px 0 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--pa-surface);
+  color: var(--pa-text);
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+  cursor: text;
+}
+.browse-field:focus-within {
+  border-color: var(--pa-line-strong);
+}
+.browse-address {
+  grid-area: 1 / 2;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px 0 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-overflow: ellipsis;
+  outline: none;
+}
+.browse-field:not(:focus-within) .browse-address {
+  color: transparent;
+}
+.browse-where {
+  grid-area: 1 / 2;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-right: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.browse-field:focus-within .browse-where {
+  visibility: hidden;
+}
+.browse-where-host {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--pa-ink);
+  text-overflow: ellipsis;
+}
+.browse-where-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-muted);
+  text-overflow: ellipsis;
+}
+.browse-mark {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 8px;
+  padding-right: 9px;
+  border-right: 1px solid var(--pa-line);
+  color: var(--pa-error);
+  white-space: nowrap;
+}
+.browse-mark[hidden] {
+  display: none;
+}
+.browse-mark svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* What typing offers, under the field and over the page (the WebView is cut away under it). */
+.browse-suggest {
+  position: absolute;
+  z-index: 8;
+  padding: 6px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-2);
+}
+.browse-suggest[hidden] {
+  display: none;
+}
+.browse-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--pa-r-sm);
+  color: var(--pa-ink);
+  font: var(--pa-fs-sm) / 1.3 var(--pa-font);
+  cursor: pointer;
+}
+.browse-option.active {
+  background: var(--pa-hover);
+}
+.browse-option svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--pa-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.browse-option-words {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.browse-option-main {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browse-option-tail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  text-overflow: ellipsis;
+}
+.browse-btn.browse-text {
+  width: auto;
+  padding: 0 10px;
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+}
+.browse-btn.on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--pa-accent-tint);
+  color: var(--pa-accent-ink);
+}
+.browse-btn.on:hover:not(:disabled) {
+  background: var(--pa-accent-tint);
+  color: var(--pa-accent-ink);
+}
+.browse.private .browse-field {
+  border-color: var(--pa-accent-tint);
+  background: var(--pa-accent-soft);
+}
+/* The fit switch: its word in a wide bar, its icon in a narrow one. */
+.browse-fit svg {
+  display: none;
+}
+.browse-zoom {
+  grid-area: 1 / 3;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pa-ink);
+  color: var(--pa-canvas);
+  font: var(--pa-fs-sm) / 1.4 var(--pa-font);
+}
+.browse-zoom[hidden] {
+  display: none;
+}
+/* A page minimized, or left for Settings, waits behind this chip, on the right, clear of the day line in the
+   middle: the speaker while it plays, its title to go back, the cross to close it. */
+.browse-return {
+  position: absolute;
+  top: calc(var(--pa-bar) + 10px);
+  right: var(--pa-s4);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: min(340px, calc(100% - 2 * var(--pa-s4)));
+  height: 34px;
+  padding: 0 3px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: 999px;
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-1);
+}
+.browse-return[hidden],
+.browse-btn[hidden] {
+  display: none;
+}
+.browse-return .browse-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+.browse-return .browse-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.browse-return-go {
+  min-width: 0;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pa-ink);
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+  cursor: pointer;
+}
+.browse-return-go:hover {
+  background: var(--pa-hover);
+}
+.browse-return-go svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--pa-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.browse-return-go span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The page. Its frame is its border: the WebView lies inside it, so the border shows only while the character
+   works in the page, in the accent while it acts and in amber once the page is the person's. */
+.browse-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.browse-frame {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.browse.op-live .browse-frame {
+  padding: 2px;
+  background: var(--pa-accent);
+}
+.browse.op-theirs .browse-frame {
+  background: var(--pa-amber700);
+}
+.browse-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---- The chat beside the page: the conversation on screen, as it is, in a column at the page's right. */
+body.beside:not(.beside-over) .browse {
+  right: var(--pa-beside);
+}
+body.beside #chat-view {
+  position: absolute;
+  z-index: 6;
+  top: var(--pa-bar);
+  right: 0;
+  bottom: 0;
+  width: min(var(--pa-beside), 100%);
+  border-left: 1px solid var(--pa-line);
+}
+body.beside:not(.beside-over) .titlebar-page {
+  left: calc(100% - var(--pa-beside));
+}
+/* A window too narrow for both: the chat lies over the page's right side, under the bar (the WebView is cut
+   there, browser.py), and the bar's button puts it away. */
+body.beside-over #chat-view {
+  top: calc(var(--pa-bar) + 44px);
+  border-left-color: var(--pa-line-strong);
+}
+/* The page in the chat's context: a chip in the chat's box, over the words. */
+.browse-context {
+  display: flex;
+  padding: 10px 12px 0;
+  cursor: default;
+}
+.browse-context-chip,
+.browse-context-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 28px;
+  border-radius: 999px;
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+}
+.browse-context-chip {
+  padding: 0 4px 0 9px;
+  border: 1px solid var(--pa-line);
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+}
+.browse-context-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-context svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--pa-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.browse-context-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.browse-context-x:hover {
+  background: var(--pa-press);
+}
+.browse-context-x svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+.browse-context-add {
+  padding: 0 11px 0 7px;
+  border: 1px dashed var(--pa-line-strong);
+  background: none;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+.browse-context-add:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+
+/* ---- The character's run in the page, over the chat's box: a card waiting on the person's yes, then its state,
+   its steps and what the person may press. */
+.browse-run {
+  /* In a short window it scrolls within itself, so the chat's box under it stays in the window. */
+  max-height: 52vh;
+  margin-bottom: 10px;
+  overflow-y: auto;
+  color: var(--pa-text);
+  font: var(--pa-fs-sm) / var(--pa-lh) var(--pa-font);
+}
+.browse-run-box {
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+}
+.browse-run-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px 0;
+}
+.browse-run-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pa-faint);
+}
+.op-acting .browse-run-dot,
+.op-waiting .browse-run-dot,
+.op-stopping .browse-run-dot {
+  background: var(--pa-accent);
+  box-shadow: 0 0 0 4px var(--pa-accent-tint);
+}
+.op-acting .browse-run-dot {
+  animation: browse-pulse 1.6s ease-in-out infinite;
+}
+.op-theirs .browse-run-dot {
+  background: var(--pa-amber700);
+  box-shadow: 0 0 0 4px var(--pa-amber50);
+}
+@keyframes browse-pulse {
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+.browse-run-mode {
+  flex: 1;
+  min-width: 0;
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.browse-run-scroll {
+  max-height: min(34vh, 280px);
+  overflow-y: auto;
+  padding: 8px 14px 2px;
+}
+/* A card waiting takes the room: the steps keep a few lines. */
+.browse-run.op-waiting .browse-run-scroll {
+  max-height: 96px;
+}
+.browse-run .browse-steps {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+.browse-step-mark svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* With the chat out of sight, the run in one line under the page: its state, the step it is on, 停止. */
+.browse-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 8px 0 16px;
+  border-top: 1px solid var(--pa-line);
+  background: var(--pa-chrome);
+  color: var(--pa-text);
+  font: var(--pa-fs-sm) / 1.3 var(--pa-font);
+  cursor: pointer;
+}
+.browse-strip[hidden],
+.browse-strip [hidden] {
+  display: none;
+}
+.browse-strip .browse-run-mode {
+  flex: none;
+}
+.browse-strip-step {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The steps: a timeline that grows as it works. */
+.browse-steps {
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--pa-line);
+  list-style: none;
+}
+.browse-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+.browse-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 26px;
+  bottom: -2px;
+  left: 8.5px;
+  width: 1px;
+  background: var(--pa-line-strong);
+}
+.browse-step-mark {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--pa-muted);
+}
+.browse-step-mark svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+.browse-step.is-done .browse-step-mark {
+  background: var(--pa-sunken);
+}
+.browse-step.is-doing .browse-step-mark {
+  border: 2px solid var(--pa-accent-tint);
+  border-top-color: var(--pa-accent);
+  animation: browse-spin 0.9s linear infinite;
+}
+.browse-step.is-waiting .browse-step-mark {
+  border: 2px solid var(--pa-accent);
+  background: var(--pa-accent-tint);
+}
+.browse-step.is-failed .browse-step-mark {
+  background: var(--pa-error-soft);
+  color: var(--pa-error);
+}
+.browse-step.is-stopped .browse-step-mark,
+.browse-step.is-cancelled .browse-step-mark {
+  color: var(--pa-faint);
+}
+@keyframes browse-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.browse-step-words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.browse-step.is-doing .browse-step-words,
+.browse-step.is-waiting .browse-step-words {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.browse-step.is-stopped .browse-step-words,
+.browse-step.is-cancelled .browse-step-words {
+  color: var(--pa-muted);
+}
+.browse-step-why {
+  display: block;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 400;
+}
+.browse-step.is-failed .browse-step-why,
+.browse-step-why.is-failed {
+  color: var(--pa-error);
+}
+/* Under a step's purpose, each thing done for it. */
+.browse-step-act {
+  display: block;
+  margin-top: 1px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 400;
+}
+/* The card waiting on the person's yes, over the run. */
+.browse-card {
+  max-width: none;
+  margin: 0 0 8px;
+  padding: 14px;
+  border-color: var(--pa-accent);
+  box-shadow: var(--pa-shadow-2);
+}
+.browse-card .op-card-title {
+  margin-bottom: 4px;
+  font-size: var(--pa-fs-md);
+}
+.browse-card-where {
+  margin: 0 0 10px;
+  color: var(--pa-muted);
+  overflow-wrap: anywhere;
+}
+.browse-card-quote {
+  max-height: 168px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  overflow-y: auto;
+  border-left: 3px solid var(--pa-line-strong);
+  border-radius: 0 var(--pa-r-xs) var(--pa-r-xs) 0;
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.browse-card-ring {
+  margin: 0 0 12px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.browse-card-never {
+  margin: 10px 0 0;
+  font-size: var(--pa-fs-xs);
+}
+.browse-card .op-card-buttons .pa-btn-primary {
+  flex: 1;
+}
+/* At the bottom: 停止 and 接管 while it runs; waiting on the person, what they should do and 继续. */
+.browse-run-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 14px 12px;
+}
+.browse-run-foot.ended {
+  flex-direction: column;
+  align-items: stretch;
+}
+.browse-run-end {
+  margin: 0 0 2px;
+  color: var(--pa-ink);
+  overflow-wrap: anywhere;
+}
+.browse-run-end[hidden] {
+  display: none;
+}
+.browse-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.browse-key {
+  margin-left: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: 4px;
+  color: var(--pa-faint);
+  font: 500 11px / 16px var(--pa-font);
+}
+
+/* ---- A narrow pane: the buttons are icons alone and the field shows the site only, so the address keeps room. */
+@container browse (max-width: 560px) {
+  .browse-bar {
+    gap: 0;
+    padding: 0 4px;
+  }
+  .browse-btn {
+    width: 30px;
+  }
+  .browse-btn.browse-text {
+    width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .browse-fit svg {
+    display: block;
+  }
+  .browse-btn.browse-text span,
+  .browse-mark span,
+  .browse-where-title {
+    display: none;
+  }
+  .browse-field {
+    margin: 0 4px;
+    padding-left: 10px;
+  }
+  .browse-mark {
+    margin-right: 6px;
+    padding-right: 6px;
+  }
+}
+/* Narrower still: forward while there is nowhere to go, and 在系统浏览器中打开, leave the bar. */
+@container browse (max-width: 440px) {
+  .browse-forward:disabled,
+  .browse-system {
+    display: none;
+  }
+}

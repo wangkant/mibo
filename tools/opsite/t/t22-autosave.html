@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>个人资料 - 自动保存</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f6f6f6; }
+main { max-width: 520px; margin: 30px auto; background: #fff; padding: 20px 26px; border-radius: 10px; }
+label { display: block; margin: 12px 0 4px; color: #555; } input, textarea { width: 100%; padding: 7px; box-sizing: border-box; }
+textarea { height: 70px; } .st { color: #2a8; font-size: 12px; height: 16px; }
+</style></head>
+<body><main>
+<h2>个人资料</h2><p style="color:#999">修改后离开输入框即自动保存。</p>
+<label for="nick">昵称</label><input id="nick" value="小乐"><div class="st" id="s-nick"></div>
+<label for="bio">个人简介</label><textarea id="bio">还没想好写什么</textarea><div class="st" id="s-bio"></div>
+<label for="city">城市</label><input id="city" value="杭州"><div class="st" id="s-city"></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// Each field saves itself when it loses the focus, with no button, as many profile pages do.
+for (const id of ["nick", "bio", "city"]) {
+  const el = document.getElementById(id);
+  let saved = el.value;
+  el.addEventListener("blur", async () => {
+    if (el.value === saved) return;
+    const field = id === "nick" ? "nickname" : id;
+    if ((await post("/api/autosave", { field, value: el.value })).ok) {
+      saved = el.value;
+      document.getElementById("s-" + id).textContent = "已自动保存";
+    }
+  });
+}
+</script></body></html>

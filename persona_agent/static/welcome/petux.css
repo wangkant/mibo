@@ -1,0 +1,305 @@
+/* What shows round the pet besides the figure and its finds (petbox.js, petline.js, petedge.js,
+   petdial.js): in the card's plain look, its whites and greys, with one accent from the
+   character (--pet-accent, set by petdial.js from the figure). Everything eases in and out;
+   with reduced motion it only appears and goes. */
+.pet {
+  --pet-accent: #2f8fc4;
+  --ux-bg: #ffffff;
+  --ux-line: #d8d8dc;
+  --ux-ink: #1a1a1c;
+  --ux-text: #68686f;
+  --ux-faint: #a1a1a8;
+  --ux-wash: rgba(20, 20, 24, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  .pet {
+    --ux-bg: #242426;
+    --ux-line: #414145;
+    --ux-ink: #f2f2f4;
+    --ux-text: #b9b9bf;
+    --ux-faint: #86868d;
+    --ux-wash: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ---- the dial: eight round buttons on an arc over the head (placed by petdial.js), its name in a pill above */
+.quick button {
+  transition: transform 0.18s cubic-bezier(0.2, 0.7, 0.3, 1), background 0.12s;
+  transform: scale(0.6);
+}
+.quick.on button {
+  transform: none;
+}
+.quick button:focus-visible {
+  outline: 2px solid var(--pet-accent);
+  outline-offset: 1px;
+}
+.quick .quick-quiet.on {
+  color: var(--pet-accent);
+  border-color: var(--pet-accent);
+}
+.dial-name {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 9px;
+  border: 1px solid var(--quick-line);
+  border-radius: 10px;
+  background: var(--quick-bg);
+  color: var(--quick-ink);
+  font: 12px/16px system-ui, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.dial-name.on {
+  opacity: 1;
+}
+
+/* ---- the line over its head while the character works in a chat */
+.pet-line {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 194px;
+  height: 24px;
+  padding: 0 2px 0 0;
+  border: 1px solid var(--ux-line);
+  border-radius: 12px;
+  background: var(--ux-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  color: var(--ux-text);
+  font: 12px/16px system-ui, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.18s ease-out, transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+  pointer-events: none;
+}
+.pet-line.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.line-open {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px 0 9px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.line-open .doing {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.act-live-head {
+  color: var(--ux-ink);
+  flex: none;
+}
+.act-live-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pet-line svg.i {
+  position: static;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: var(--pet-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pet-line.asked .act-live-head {
+  color: var(--pet-accent);
+}
+.line-stop {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ux-faint);
+  cursor: pointer;
+}
+.line-stop:hover,
+.line-open:hover {
+  background: var(--ux-wash);
+  color: var(--ux-ink);
+}
+.line-stop svg {
+  position: static;
+  width: 9px;
+  height: 9px;
+  fill: currentColor;
+}
+.pet-line :focus-visible {
+  outline: 2px solid var(--pet-accent);
+  outline-offset: -2px;
+}
+
+/* ---- in the card's frame: what to do with something dropped, a line said for a moment */
+.card.panel {
+  width: 260px;
+  padding: 8px;
+  cursor: default;
+}
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.box-shut {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--card-faint);
+  cursor: pointer;
+}
+.box-shut:hover {
+  background: var(--card-wash);
+  color: var(--card-ink);
+}
+.box-shut svg {
+  width: 15px;
+  height: 15px;
+}
+.box-what {
+  margin: 0 2px;
+  overflow: hidden;
+  color: var(--card-text);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.box-text {
+  margin: 0 2px;
+  color: var(--card-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.box-row {
+  display: block;
+  width: 100%;
+  padding: 5px 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--card-ink);
+  font: 13px/1.4 system-ui, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.box-row:hover {
+  background: var(--card-wash);
+}
+.box-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.box-act {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--card-ink);
+  font: 13px system-ui, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+.box-act:hover {
+  border-color: var(--pet-accent);
+  color: var(--pet-accent);
+}
+.box-actions .box-shut {
+  margin-left: auto;
+}
+.card.panel :focus-visible {
+  outline: 2px solid var(--pet-accent);
+  outline-offset: 1px;
+}
+/* "Another": the card passed over fades while the next is chosen, its site line saying so. */
+.card .card-body > * {
+  transition: opacity 0.24s ease-out;
+}
+.card.picking .card-body > :not(.card-head) {
+  opacity: 0.3;
+}
+.card.picking .card-site {
+  color: var(--card-text);
+}
+
+/* ---- tucked at a side of the screen: the figure on its side in the edge (petedge.js turns it),
+   Mibo's hands over the edge */
+.pet .actor {
+  transition: translate 0.42s cubic-bezier(0.3, 0.7, 0.3, 1), rotate 0.42s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.pet.held .actor {
+  transition-duration: 0.2s;
+}
+.pet[data-edge] .grip {
+  display: inline;
+}
+.pet[data-edge] .overlay,
+.pet[data-edge] .quick,
+.pet[data-edge] .pet-line {
+  visibility: hidden;
+}
+.pet[data-edge] {
+  cursor: pointer;
+}
+
+/* ---- 显示桌宠 off (petoff.js): no figure, its finds as a card alone */
+.pet[data-off] .actor,
+.pet[data-off] .overlay,
+.pet[data-off] .quick,
+.pet[data-off] .pet-line {
+  visibility: hidden;
+}
+
+/* ---- While 保存为图片 takes its picture (petshot.py): the card's close button stays out of it */
+body[data-shot] .card-close {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet .actor,
+  .pet-line,
+  .quick button,
+  .dial-name {
+    transition: none;
+  }
+}

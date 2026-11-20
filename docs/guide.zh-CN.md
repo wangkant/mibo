@@ -39,10 +39,9 @@ personagent
 |---|---|
 | 不安装，直接运行 | `uvx personagent`（`uvx` 随 [uv](https://docs.astral.sh/uv/) 提供，uv 会自动下载合适的 Python） |
 | 安装为常驻的 `personagent` 命令 | `uv tool install personagent` 或 `pipx install personagent` |
-| Windows，使用源码 ZIP | 解压后双击 `start.bat` |
 | 从源码 | `git clone https://github.com/wangkant/personagent.git`、`cd personagent`，然后 `python -m venv .venv`，再运行 `.venv/bin/python -m pip install -e .` 和 `.venv/bin/python -m persona_agent`（Windows 上是 `.venv\Scripts\python.exe`） |
 
-支持 Python 3.10–3.14。`pip` 下载较慢时可添加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。`start.bat` 会创建 `.venv`、安装依赖并打开同一个页面，首次运行时还会在桌面和开始菜单中添加 personagent 图标；`pyproject.toml` 中的依赖列表有变化时，它会重新安装依赖。
+支持 Python 3.10–3.14。`pip` 下载较慢时可添加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。
 
 **主目录**存放设置（`.env`）、人设（`persona.txt`）、学到的内容（`runtime/`）和聊天平台（`platforms/`）。`platforms/` 中是托管的 AstrBot 和 `direct.json`，后者保存 personagent 直接连接的平台的凭据。personagent 按以下顺序选用第一个符合条件的文件夹：
 
@@ -181,11 +180,9 @@ PyPI 上发布新版本时，「开始聊天」视图会显示提示，并给出
 | `personagent tools` | [MCP 服务器提供的工具](#工具)：`list`、`add`、`remove`、`check`、`call`、`set` |
 | `personagent mcp` | 编程助手启动的 MCP 服务，无需手动运行 |
 | `personagent doctor` | 检查配置及其依赖的每个服务 |
-| `personagent learned` | 查看角色学到的内容和仍在观察的内容，并可在需要时介入 |
 | `personagent memory` | 列出角色记住的内容，删除某一项或将其恢复 |
 | `personagent access` | 列出[等待批准的新对话](#回复对象新对话需经批准)，并按代码批准或拒绝（`approve`、`admin`、`decline`、`undo`、`policy <平台> approve\|open`） |
 | `personagent eval` | 评测开口时机、人设、学习效果和记忆 |
-| `personagent character` | [导入角色卡](#角色卡与草稿)（`import 文件`）、将角色保存为角色卡（`export 文件.png` 或 `.json`），或根据描述起草人设并输出（`draft "……"`） |
 
 每条命令都支持 `--help`。
 
@@ -421,8 +418,6 @@ QQ 机器人连接后，可在手机 QQ 的「联系人 → 机器人」中找�
 |---|---|
 | 你已在运行的 [AstrBot](https://docs.astrbot.app) | 其已接入的平台 |
 | 经 AstrBot 接入 [NapCat](https://github.com/NapNeko/NapCatQQ)（OneBot v11） | 用个人 QQ 号接入 QQ |
-| [Koishi](https://koishi.chat) 或其他 Satori 服务端，经 [Satori 连接器](../integrations/satori/README.zh-CN.md) | 该服务端已登录的平台 |
-| [Matrix](../integrations/matrix/README.zh-CN.md)，经 mautrix 桥接 | Matrix 房间，以及 WhatsApp、Signal、Messenger、Instagram 和 Google Messages |
 
 其他平台可以按[连接器协议](connectors.zh-CN.md)接入，每条消息对应一个签名的 HTTP 请求。一个 personagent 可以同时连接多个连接器。长期运行的注意事项见[部署指南](deploy.zh-CN.md#部署参考)。
 
@@ -865,12 +860,6 @@ personagent eval --suite all --lang zh --repeat 5
 
 **更换裁判重新判定。** `--rejudge 报告路径` 使用当前设置的 `BENCH_JUDGE_MODEL` 对一份已有报告中的回复重新判定，不再调用被测模型，结果写在原报告旁边。回复、对照回复和晋升规则当时的决定都保持原样。
 
-**解读结果。** 最近一次的结果、测试方法和全部报告均位于 [evals/2026-10-18](evals/2026-10-18/README.zh-CN.md)。阅读报告时请注意：
-
-- `speak` 的错误大多是名字指代其他事物（影城、宠物），或者有人在向他人转述角色说过的话。出现名字即视为点名，模型很少推翻这一判断。
-- `persona` 中的平局，说明裁判两次都选择了同一位置的回复。公开的判定来自 Claude Opus 5.5，在 `personagent eval` 之外分批完成，做法写在每份报告的 `rejudged` 字段里；每一对的 `earlier` 字段保留了第一个裁判 Claude Haiku 5.5 的判定。
-- `learning` 中规则一行与探针各行回答的是两个不同的问题：前者考察规则是否让正确的纠正生效，后者考察生效的纠正是否改变了此后的回复。探针中 `not_promoted` 一行是噪声基线，因为其提示词没有任何变化。
-
 `learning` 本身从不让任何改动生效，预期结果也随你的晋升设置而定：设置比默认更严格时，每个场景都应当被搁置。除 `memory` 外，每次运行都会真实调用你的模型；所有测试集都使用一份用完即删的状态副本（加 `--keep` 可以保留副本并打印其位置）。
 
 ## 工作原理
@@ -981,8 +970,8 @@ personagent 保存的所有内容都在你自己的机器上，位于主目录�
 
 personagent 1.5.0 已发布到 PyPI。CI 在 Linux 上用 Python 3.10–3.14、在 Windows 上用 Python 3.12 运行测试，另有几项任务会安装软件包，实际运行命令和本地页面，并在 Linux、macOS 和 Windows 上打开应用窗口。
 
-OneBot 直连入口（`/v1/onebot`）已废弃，在 1.x 期间保留。`tools/` 中的脚本供从源码运行时使用，说明见[工具脚本](tools.zh-CN.md)。
+OneBot 直连入口（`/v1/onebot`）已废弃，在 1.x 期间保留。
 
 - [简明入门](start.zh-CN.md) · [部署教程和参考](deploy.zh-CN.md)
-- 连接器：[AstrBot 插件](../integrations/astrbot/astrbot_plugin_personagent/README.zh-CN.md) · [Satori](../integrations/satori/README.zh-CN.md) · [Matrix](../integrations/matrix/README.zh-CN.md) · [协议](connectors.zh-CN.md)
+- 连接器：[AstrBot 插件](../integrations/astrbot/astrbot_plugin_personagent/README.zh-CN.md) · [协议](connectors.zh-CN.md)
 - [全部设置](../.env.example) · [更新日志](../CHANGELOG.md) · [贡献指南](../.github/CONTRIBUTING.md) · [安全策略](../.github/SECURITY.md)（英文）

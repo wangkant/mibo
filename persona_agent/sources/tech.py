@@ -1,7 +1,6 @@
 """Technology, programming, AI and science: the places people who build things read."""
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -139,50 +138,6 @@ async def _juejin(http: httpx.AsyncClient) -> list[Find]:
     return picks
 
 
-# GitHub Trending
-
-_ROW = re.compile(r'<article class="Box-row">(.*?)</article>', re.S)
-_REPO = re.compile(r'<h2[^>]*>\s*<a[^>]*href="/([^"/]+/[^"/]+)"', re.S)
-_ABOUT = re.compile(r'<p class="col-9[^"]*">(.*?)</p>', re.S)
-_LANGUAGE = re.compile(r'itemprop="programmingLanguage">([^<]+)<')
-_TODAY = re.compile(r"([\d,]+) stars today")
-
-
-async def _trending_page(http: httpx.AsyncClient, language: str) -> list[tuple[int, Find]]:
-    page = await get_text(http, f"https://github.com/trending/{language}".rstrip("/"), since="daily")
-    rows = []
-    for row in _ROW.findall(page):
-        repo = _REPO.search(row)
-        if not repo:
-            continue
-        name = repo.group(1)
-        about = _ABOUT.search(row)
-        written = _LANGUAGE.search(row)
-        today = _TODAY.search(row)
-        stars = int(today.group(1).replace(",", "")) if today else 0
-        line = " · ".join(bit for bit in (written.group(1).strip() if written else "",
-                                          f"{stars:,} stars today" if today else "") if bit)
-        text = f"{plain(about.group(1))} ({line})" if about else line
-        rows.append((stars, find(f"https://github.com/{name}", name.replace("/", " / "), site="GitHub",
-                                 kind="page", text=text, author=name.split("/")[0],
-                                 picture=f"https://opengraph.githubassets.com/1/{name}")))
-    if not rows:
-        raise ValueError("GitHub's trending page had no repositories; its markup may have changed")
-    return rows
-
-
-def _trending(key: str, languages: tuple[str, ...], name: tuple[str, str], about: tuple[str, str],
-              default: str = "") -> Source:
-    async def fetch(http: httpx.AsyncClient) -> list[Find]:
-        pages = await asyncio.gather(*(_trending_page(http, language) for language in languages))
-        rows = [row for page in pages for row in page]
-        if len(languages) > 1:
-            rows.sort(key=lambda row: -row[0])
-        return [each for _, each in rows[:PER_SOURCE]]
-
-    return Source(key, name, about, "tech", fetch, default)
-
-
 # Hugging Face
 
 async def _hf_papers(http: httpx.AsyncClient) -> list[Find]:
@@ -300,19 +255,6 @@ SOURCES: list[Source] = [
     _feed("ruanyf-weekly", ("Ruan Yifeng's weekly", "阮一峰科技爱好者周刊"),
           ("Ruan Yifeng's blog and his weekly tech digest", "阮一峰的博客与每周科技周刊"),
           "https://www.ruanyifeng.com/blog/atom.xml"),
-
-    # What code is rising
-    _trending("gh-trending", ("",), ("GitHub Trending", "GitHub 趋势榜"),
-              ("Repositories gaining the most stars today", "今天涨星最多的开源仓库")),
-    _trending("gh-trending-python", ("python",), ("GitHub Trending: Python", "GitHub 趋势榜：Python"),
-              ("Python repositories gaining stars today", "今天涨星的 Python 仓库")),
-    _trending("gh-trending-js", ("javascript", "typescript"), ("GitHub Trending: JavaScript and TypeScript",
-                                                               "GitHub 趋势榜：JavaScript 与 TypeScript"),
-              ("JavaScript and TypeScript repositories gaining stars today", "今天涨星的 JavaScript 与 TypeScript 仓库")),
-    _trending("gh-trending-rust", ("rust",), ("GitHub Trending: Rust", "GitHub 趋势榜：Rust"),
-              ("Rust repositories gaining stars today", "今天涨星的 Rust 仓库")),
-    _trending("gh-trending-go", ("go",), ("GitHub Trending: Go", "GitHub 趋势榜：Go"),
-              ("Go repositories gaining stars today", "今天涨星的 Go 仓库")),
 
     # AI
     Source("hf-papers", ("Hugging Face Daily Papers", "Hugging Face 每日论文"),

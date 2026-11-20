@@ -11,8 +11,6 @@ import logging
 import multiprocessing
 import os
 import stat
-import subprocess
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -169,38 +167,6 @@ def test_runtime_dir_stays_under_agent_home(tmp: Path) -> None:
             os.environ.pop("AGENT_RUNTIME_DIR", None)
         else:
             os.environ["AGENT_RUNTIME_DIR"] = old_value
-
-
-def test_cli_tools_follow_runtime_dir() -> None:
-    runtime_rel = "runtime/tool-contract-test"
-    code = (
-        "from pathlib import Path\n"
-        "from tools import bootstrap_from_history as b\n"
-        "from tools import import_stickers_folder as i\n"
-        f"expected=(Path({str(ROOT)!r})/{runtime_rel!r}).resolve()\n"
-        "assert b.STICKERS_JSON == expected/'stickers.json', b.STICKERS_JSON\n"
-        "assert b.ADMIN_PROFILE == expected/'owner_profile.json', b.ADMIN_PROFILE\n"
-        "assert i.STICKERS_JSON == expected/'stickers.json', i.STICKERS_JSON\n"
-        "assert b.STICKERS_DIR == Path(" + repr(str(ROOT / "stickers" / "auto")) + ")\n"
-    )
-    env = os.environ.copy()
-    env["AGENT_RUNTIME_DIR"] = runtime_rel
-    completed = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=30,
-        check=False,
-    )
-    check(
-        "CLI tools honor a non-default runtime directory",
-        completed.returncode == 0,
-        completed.stdout + completed.stderr,
-    )
 
 
 def test_appended_rows_are_byte_exact(tmp: Path) -> None:

@@ -13,23 +13,10 @@ python -m venv .venv
 . .venv/bin/activate              # Windows: .venv\Scripts\activate
 python -m pip install -e ".[dev]"
 python -m persona_agent           # opens the local page
-python -m persona_agent chat
 ```
 
-`python -m persona_agent init --terminal` asks the setup questions in the
-terminal instead of opening the page. In a clone, the home folder is the
-clone itself. `.env`, `persona.txt`, `runtime/` and `platforms/` sit next to
-`persona_agent/` and are gitignored. On Windows you can double-click
-`start.bat` instead. It creates `.venv`, installs the package and starts it.
-
-`personagent chat` is a simulated group chat. It runs the persona, the reply
-triggers, the speak-or-stay-quiet gate, example retrieval, generation, the
-character check, the output filters, memory commands and learning from
-reactions, in the same order as a live turn. It skips the allowlists, the
-debounce and real delivery, and turns off self-evaluation and vision. It is
-the fastest way to reproduce a persona bug. Type `/why` to see why it spoke
-or stayed quiet. `personagent demo` runs the same machinery against a
-scripted model and needs no key.
+In a clone, the home folder is the clone itself. `.env`, `persona.txt` and
+`runtime/` sit next to `persona_agent/` and are gitignored.
 
 ## Running the tests
 
@@ -39,7 +26,7 @@ With the venv active, run the checks CI runs:
 python -m pip install -e ".[dev]"
 python -m pytest -q
 ruff check . --select F401,F811,F821,F841
-python -m compileall -q persona_agent tools tests integrations
+python -m compileall -q persona_agent tools tests
 ```
 
 The suite takes about a minute and needs no network or API key, because the
@@ -57,17 +44,16 @@ directories instead so compileall skips `.venv`.
 One file, or one test, for a fast loop:
 
 ```bash
-python -m pytest tests/test_outbox.py
-python -m pytest tests/test_outbox.py -k long_poll
+python -m pytest tests/test_library.py
+python -m pytest tests/test_library.py -k compacting
 ```
 
 ### The package smoke tests
 
 `tools/package_smoke.py` checks, offline, that an installed `personagent`
-command works with no checkout around it. In a throwaway home it runs
-`--version`, `init --no-input`, `chat` against a stand-in model, `run` with
-`GET /health`, and `doctor --json`. `tools/welcome_smoke.py` opens the
-installed local page, saves a key, chats and exits, using only localhost.
+command works with no checkout around it: it runs `--version`.
+`tools/welcome_smoke.py` opens the installed local page, saves a key, chats
+and exits, using only localhost.
 Run both after you change packaging, the CLI, the local page or the files a
 wheel ships. Pass the version in `pyproject.toml` to `--version`:
 
@@ -79,10 +65,6 @@ python -m venv /tmp/smoke-env
 python tools/package_smoke.py --personagent /tmp/smoke-env/bin/personagent --version X.Y.Z
 python tools/welcome_smoke.py --personagent /tmp/smoke-env/bin/personagent
 ```
-
-`--skip init` leaves that step out of the package smoke test. The other
-steps (`version`, `chat`, `run`, `doctor`) can be skipped the same way, and
-the flag can be repeated.
 
 ### Writing a test
 
@@ -153,21 +135,15 @@ The entry points:
 
 | Entry | What it is |
 |---|---|
-| `personagent` (`persona_agent/cli.py`) | The command: `start` (the default), `up`, `init`, `chat`, `demo`, `run`, `connect`, `mcp`, `hook`, `doctor`, `learned`, `eval`. Each subcommand imports its module only when it runs, so `--home` is in the environment first. Also `python -m persona_agent` |
-| `persona_agent/welcome.py`, `static/welcome/` | The local page `personagent start` opens on 127.0.0.1: Chat, Activity, Connect apps, Character & settings, with its JSON API. Activity reads the agent service's `/api/dashboard/` with the token in `<runtime>/dashboard.token`. A second `start` reuses an open page. `static/characters/` holds the character portraits, under their own `LICENSE.md`. The images at the top of `static/` are illustrations the READMEs of earlier releases still link to; the wheel leaves them out |
-| `persona_agent/connections.py` | The catalog of platforms the page can connect, and which go direct or through the managed AstrBot |
-| `persona_agent/direct/` | QQ official bots, personal WeChat, Telegram and Discord, connected by personagent itself in one process (`python -m persona_agent.direct`), with credentials in `platforms/direct.json` |
-| `persona_agent/astrbot_install.py` | The managed AstrBot for every other platform: downloaded into the home on its own Python 3.12, run headless with no dashboard |
-| `persona_agent/services.py` | The processes the page or `up` starts (agent, direct, managed AstrBot): they end with it, and what a crashed run left is stopped at the next start |
+| `personagent` (`persona_agent/cli.py`) | The command: `start` (the default), `run`, `mcp`, `hook`. Each subcommand imports its module only when it runs, so `--home` is in the environment first. Also `python -m persona_agent` |
+| `persona_agent/welcome.py`, `static/welcome/` | The local page `personagent start` opens on 127.0.0.1: Chat, Activity, Character & settings, with its JSON API. Activity reads the agent service's `/api/dashboard/` with the token in `<runtime>/dashboard.token`. A second `start` reuses an open page. `static/characters/` holds the character portraits, under their own `LICENSE.md`. The images at the top of `static/` are illustrations the READMEs of earlier releases still link to; the wheel leaves them out |
+| `persona_agent/services.py` | The process the page starts (the agent): it ends with the page, and what a crashed run left is stopped at the next start |
 | `persona_agent/home.py` | Where a deployment lives (`AGENT_HOME`, the checkout, the working folder, `~/personagent`) and where shipped files are found. Stdlib only |
 | `persona_agent/server.py` | The FastAPI service: `/v1/events`, `/v1/outbox`, `/health`, the deprecated `/v1/onebot`, startup checks. `personagent run` starts it |
-| `persona_agent/setup_wizard.py` | `init --terminal` and `connect`: the terminal questions in the language of the install, the key test, the handshake with an AstrBot you already run |
-| `persona_agent/coding.py` | The character inside coding agents: `mcp`, the stdio MCP server Claude Code, Codex or DeepSeek Harness starts, `hook`, the optional Stop hook, and what `connect claude-code`, `connect codex` and `connect dsh` write into the coding agent's configuration |
-| `persona_agent/chat.py`, `demo.py` | The simulated group chat and the scripted demo |
+| `persona_agent/setup_wizard.py` | A home's setup: the model providers, the `.env` file, the persona and its picture, the key test |
+| `persona_agent/coding.py` | The character inside coding agents: `mcp`, the stdio MCP server Claude Code, Codex or DeepSeek Harness starts, `hook`, the optional Stop hook, and what the page's agents panel writes into the coding agent's configuration |
 | `persona_agent/dashboard.py` | The agent service's Activity API under `/api/dashboard/`, its token, and the plain-text note at `/`. `decision_log.py` keeps the recent speak decisions it returns |
-| `persona_agent/doctor.py`, `ledger_admin.py`, `evals.py` | `doctor`, `learned` and `eval` |
-| `persona_agent/updates.py` | The update notice: asks PyPI for a newer release at most once a day, sending only the version number. `UPDATE_CHECK_ENABLED=false` turns it off |
-| `start.bat`, `start.ps1` | Windows from a source ZIP or a clone: make `.venv`, install, then start |
+| `persona_agent/updates.py` | The update notice: asks PyPI for a newer release at most once a day, sending only the version number, and points to its installer on the release page. `UPDATE_CHECK_ENABLED=false` turns it off |
 
 The rest of the package:
 
@@ -177,7 +153,7 @@ The rest of the package:
 | `persona_agent/turns.py` | Intake: dedup, admission, debounce and the group turn from message to send |
 | `persona_agent/decision.py` | Whether to speak: a group turn's mode (`choose_group_mode`), pacing skips (`pacing_skip`), the cheap gate model (`_gate`), the turn's model work (`_think`), and the shared reply finalizer (`_final_reply`) |
 | `persona_agent/prompt.py` | What the model reads: `_build_group_prompt`, `_build_dm_prompt` and their context blocks |
-| `persona_agent/retrieval.py` | What past material a turn sees: examples, memories, lorebook entries, and the embeddings fetched for them ahead of the prompt |
+| `persona_agent/retrieval.py` | What past material a turn sees: examples, memories, and the embeddings fetched for them ahead of the prompt |
 | `persona_agent/ranking.py` | The retrieval score: BM25, embedding similarity, scope and recency, with their weights (pure logic) |
 | `persona_agent/embeddings.py` | The optional `/embeddings` call and its cache, in memory and in `runtime/embeddings.jsonl` |
 | `persona_agent/dm.py` | The one-on-one turn |
@@ -187,10 +163,10 @@ The rest of the package:
 | `persona_agent/search.py` | Web search when a turn needs it |
 | `persona_agent/proactive.py` | Speaking first: the proactive loops |
 | `persona_agent/memory.py` | Memory commands, automatic memories, core memory |
-| `persona_agent/views.py` | Seed and learned data kept fresh from disk: pools, promoted views, filters, lorebook |
+| `persona_agent/views.py` | Seed and learned data kept fresh from disk: pools, promoted views, filters |
 | `persona_agent/settings.py` | `AgentSettings`: everything the agent is configured with, built once and passed in |
 | `persona_agent/config_env.py` | The one way to read a setting from the environment (`env_int`, `env_bool`, `env_str`, ...) |
-| `persona_agent/langs.py`, `locales/` | The ten languages personagent speaks to the person running it. English and Chinese sit next to the code that prints them. `locales/<code>.json` holds the other eight for the setup wizard, the terminal chat and the demo, and `locales/terminal/<code>.json` holds every language but English for `--help`, `doctor` and the refusals of a start. Both are keyed by the English sentence. `tools/locale_gaps.py` lists what a language still lacks, and `tests/test_locales.py` fails on a gap |
+| `persona_agent/langs.py`, `locales/` | The ten languages personagent speaks to the person running it. English and Chinese sit next to the code that prints them. `locales/<code>.json` holds the other eight, and `locales/terminal/<code>.json` holds every language but English for `--help` and the refusals of a start. Both are keyed by the English sentence. `tools/locale_gaps.py` lists what a language still lacks, and `tests/test_locales.py` fails on a gap |
 | `persona_agent/chatlangs/` | The languages people chat in, one module each: how a memory command in that language is read, and the fixed lines the agent says without the model |
 | `persona_agent/prompts.py` | The persona contract (style guide, output protocol, intent rules) and the `[style]` block parser |
 | `persona_agent/textproc.py` | Pure text: tokenising, sanitising, the whitelist validator, splitting, the prompt's data frames |
@@ -212,7 +188,7 @@ The rest of the package:
 | `persona_agent/storage.py` | File locks, atomic replace, locked JSONL appends and rotation |
 | `persona_agent/paths.py` | Deployment root (`AGENT_HOME`), runtime-dir isolation, seed lookup, JSONL reading |
 | `persona_agent/health.py`, `preflight.py` | Dependency probes; startup config check (missing or misspelled keys) |
-| `tools/` | Offline scripts that are not part of the package; [docs/tools.md](../docs/tools.md) lists them |
+| `tools/` | Offline scripts that are not part of the package |
 
 New behaviour goes in the module that owns the concern. If a change needs
 state from two mixins, it probably belongs in `agent.py`.
@@ -261,21 +237,14 @@ model, because both change what a reply looks like.
 The English page is the source of truth. These pages exist in ten
 languages (English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français,
 Deutsch, Português (Brasil) and Русский): `README`, `docs/start`,
-`docs/guide`, `docs/connectors`, `docs/tools`, `docs/DISCLAIMER`, and the
-READMEs of the AstrBot plugin and of the Satori and Matrix connectors. A
+`docs/guide`, `docs/connectors` and `docs/DISCLAIMER`. A
 translation sits next to its page as `<page>.<code>.md`. The README's are
 `README.zh-CN.md` at the root and the other eight in `docs/readme/`. A
 translation is written in natural language for its readers rather than
 translated line by line. When you change a fact in the English page, change
 it in every translation.
 
-`docs/deploy.md` has seven translations and no Chinese one.
-`docs/deploy.zh-CN.md` is a separate step-by-step guide in Chinese that
-covers installing, connecting QQ by scan, other platforms, troubleshooting
-and the third-party AstrBot and NapCat route, and closes with the reference
-part of `docs/deploy.md`. `docs/deploy.zh-TW.md` is that guide in
-Traditional Chinese. `docs/setup-for-agents.md` is in English only. Images
-in a README use absolute `raw.githubusercontent.com` URLs so they render on
+Images in a README use absolute `raw.githubusercontent.com` URLs so they render on
 PyPI.
 
 ## Releasing
@@ -321,9 +290,6 @@ jobs in order:
    GitHub environment named `pypi`. No token is stored.
 3. **github-release** creates the GitHub Release for the tag, attaches the
    sdist and the wheel, and uses the changelog section as the release notes.
-   It also attaches `astrbot_plugin_personagent.zip`, the plugin folder
-   packed by `git archive`, for AstrBot's Install from File. The plugin has
-   no repository of its own.
 
 A manual run of the workflow from a branch only builds the files and
 uploads them as workflow artifacts. Run it from a tag to release. PyPI needs
