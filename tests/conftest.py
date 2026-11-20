@@ -11,6 +11,7 @@ import pytest
 from persona_agent import agent as _agent
 from persona_agent import home as _home
 from persona_agent import paths as _paths
+from persona_agent.shell import run as _shell_run
 
 
 @pytest.fixture(autouse=True)
@@ -51,10 +52,12 @@ def _no_credential_store(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _same_on_every_machine(monkeypatch: pytest.MonkeyPatch) -> None:
-    """English output whatever the system language, and no waiting on the
-    disk: no test checks that a write was flushed."""
+    """English output whatever the system language, no waiting on the disk (no test checks that a write
+    was flushed), and not as an administrator, whoever runs the suite: the app starts no local program
+    of a connector while it is elevated, and CI's Windows runner is."""
     monkeypatch.setenv("AGENT_LANG", "en")
     monkeypatch.setattr(os, "fsync", lambda fd: None)
+    monkeypatch.setattr(_shell_run, "elevated", lambda: False)
 
 
 @pytest.fixture
