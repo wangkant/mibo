@@ -6,16 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Mibo has not been released yet. What is on `main`:
+Mibo has not been released yet. On `main`:
 
 ### Added
 
-- **One character on the desktop.** A chat window, a small figure that stays on the desktop, a first run that asks for a language, a character, a model key and what you care for. The model is the person's own: any service that speaks the OpenAI chat API.
-- **Memory of the person.** Dated facts and plans in one store, shown and editable under Settings › Memory; "remember" and "forget" in the chat; ID numbers, card numbers, passwords and codes are refused.
-- **One recommendation at a time.** Public sources read in the background, a taste model that learns from how long the person stayed rather than from an open, a card that says why and takes a no with a reason and an undo, a list of everything shown, and settings for pace, quiet hours and the taste it learned.
-- **Going out on the web as a visitor**, with robots.txt honoured and a report when asked to look something up.
-- **A browser of its own** with the conversation beside the page, and the character working the page behind cards for sending, posting, uploading, downloading and leaving for another site.
-- **Working in other programs** on Windows: found by the name Start gives them, granted one by one, with real input waiting for the person's hands to be still.
-- **Commands and files** in granted folders, with deletes going to the Recycle Bin and each turn's file changes undoable.
-- **Skills** (folders with a `SKILL.md`, and a market of reviewed sources) and **MCP connectors** (a market, one-press sign-in, tokens in the system's credential store).
-- **Scheduled tasks**, search over past chats, and ten interface languages.
+- **Conversation**: one character in a window and on the desktop, with any OpenAI-compatible model service.
+- **Memory**: dated facts and plans, editable in Settings; sensitive identifiers are refused.
+- **Recommendations**: one item at a time from public sources, ranked by dwell time; reasons, feedback with undo, history, pace and quiet hours.
+- **Web**: visitor-mode reading that honours robots.txt; a built-in browser with the chat beside the page; page operation behind confirmation cards.
+- **Programs** (Windows): per-program consent, UI Automation, input that waits for the person.
+- **Files and commands**: granted folders only, Recycle Bin deletes, per-turn undo.
+- **Extensions**: skills and MCP connectors with markets; tokens in the system credential store.
+- **Also**: scheduled tasks, search over past chats, ten interface languages.
