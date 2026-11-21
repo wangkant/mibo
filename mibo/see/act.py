@@ -141,7 +141,10 @@ class PaneSurface:
     async def gate(self, mode: str, hit: dict) -> tuple[str, str]:
         from ..web.gate import classify
         kind, why = classify(mode, hit["name"], hit["role"], hit["facts"], self.tab.url)
-        # A point on a picture is pressed without watching its requests: a bare submission asks first here.
+        # A point on a picture is pressed without watching its requests: a bare submission, and a button code could
+        # not sort, ask first here.
+        if not kind and mode == "click" and not hit["facts"].get("link") and hit["role"] in ("button", "menuitem"):
+            return "submit", "a button pressed here with its requests unwatched"
         return ("submit" if kind == "watch" else kind), why
 
     async def focused(self) -> dict:

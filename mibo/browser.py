@@ -4,10 +4,9 @@ pet's card opens inside the app window, in a pane with the conversation beside i
 The app page draws the pane's bar (browse.js) and keeps the space under it;
 here a WebView2 of its own lies over that space, a child of the app window's
 form that goes straight to the site. It is a place apart from the app page: no
-bridge to Python, nothing of the page's token, only http and https, no
-permissions, and cookies and storage in a WebView2 folder of its own that stays
-between runs, so the person stays signed in. Minimizing it or going to Settings only
-hides the pane: the page goes on, with its sound and its history, one press away.
+bridge to Python, nothing of the page's token, only http and https, and
+cookies and storage in a WebView2 folder of its own that stays between runs,
+so the person stays signed in. Minimizing it or going to Settings only hides the pane: the page goes on, with its sound and its history, one press away.
 Closing it ends its WebView2 processes: nothing of it runs while no page is open.
 While the pane is in front the window is as wide as a site and the chat beside it
 want, where the screen allows (`_room`). The page open last, until the pane is
@@ -19,6 +18,18 @@ folder and so the same browser processes. A site's new tab or popup opens as a
 tab of its own that the site keeps hold of (window.opener), so a sign-in popup
 hands its answer back and closes; the bar's private button opens an InPrivate
 tab beside the others. Only the tab in front is shown, timed and operated.
+
+The bar's ··· menu (browsemenu.js) finds in the page and prints it with the browser's own find bar and print
+preview, zooms, and lists the downloads (open, show in folder), which go to the download folder. The page's
+right-click menu adds 问 Mibo over a selection (the text goes into the chat's box as a quote, for the person to
+send or not) and, on a link, a new tab or the system browser.
+
+What a site asks of the person is said on a strip under the bar (browsestrip.js), for the tab in front: the camera,
+the microphone, the location and the rest (本次允许, 始终允许, 不允许, as browsers ask), a link to a program of this
+computer (mailto:, weixin:), which is never started by the site, and a popup the page opened by itself, which was
+stopped. A tab behind keeps what it asks until it comes to the front. While the character operates nothing is asked
+and everything is refused. Only a refusal is saved in the profile (the browser then refuses by itself); an
+allowance is kept here, so neither a run nor the Reader is ever given one.
 
 Every page is timed while the window is in front, shown and in use. When it is
 left it goes to `visit` (browsed.py keeps the row; a find's time also goes to
@@ -34,7 +45,9 @@ import contextlib
 import ctypes
 import json
 import math
+import os
 import re
+import subprocess
 import threading
 import time
 import webbrowser
@@ -66,11 +79,31 @@ def language() -> str:
         _LANGUAGE.append({"zh": "zh-CN"}.get(code, code))
     return _LANGUAGE[0]
 ACTIONS = ("back", "forward", "reload", "stop", "system", "close", "private", "hide", "return", "mute", "loaded",
-           "op_stop", "op_take", "fit", "tab_new", "tab_close", "tab_select", "tab_reopen", "tab_next", "tab_prev")
+           "op_stop", "op_take", "fit", "tab_new", "tab_close", "tab_select", "tab_reopen", "tab_next", "tab_prev",
+           "find", "print", "zoom_in", "zoom_out", "zoom_reset", "menu", "dl_open", "dl_folder",
+           "allow_once", "allow_always", "refuse")
+# The permissions the strip asks for, by WebView2's name. The rest (notifications, sensors, autoplay, kinds not
+# known) are refused without a word.
+ASKED = {"Camera": "camera", "Microphone": "microphone", "Geolocation": "geolocation", "ClipboardRead": "clipboard",
+         "MultipleAutomaticDownloads": "downloads", "FileReadWrite": "files", "LocalFonts": "fonts",
+         "MidiSystemExclusiveMessages": "midi", "WindowManagement": "windows"}
+# Schemes that are the browser's own, or that Chromium never hands to a program: refused without a word. Any other
+# scheme that is not the web is a program's (mailto:, weixin:), named on the strip.
+INSIDE = ("about", "blob", "chrome", "data", "devtools", "edge", "file", "filesystem", "javascript", "view-source",
+          "afp", "disk", "disks", "hcp", "ie.http", "ms-help", "nntp", "res", "shell", "vbscript", "vnd.ms.radio")
 # Tabs closed that Ctrl+Shift+T can bring back, newest last (never a private one).
 CLOSED_KEPT = 10
-# Beside the pane's WebView2 folder: the page open last ({"url", "title"}), each site's own zoom, and the window's
-# size while a site is in front, once the person set one ([wide, high] in px at 100 %).
+# The browser's own zoom steps (Chromium's), for the menu's − and +.
+ZOOM_STEPS = (0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0)
+# The downloads the bar's menu lists, newest first (those of private tabs only while the app runs); how often a
+# download under way tells its progress.
+DOWNLOADS_KEPT = 5
+DOWNLOAD_TELL_S = 0.5
+# A selection 问 Mibo puts in the chat's box, at most this long.
+ASK_MAX = 2000
+# Beside the pane's WebView2 folder: the page open last ({"url", "title"}), each site's own zoom, the window's
+# size while a site is in front, once the person set one ([wide, high] in px at 100 %), the downloads, and the site
+# permissions allowed always ({origin: kinds}).
 KEPT = "kept.json"
 # Fit to width (the bar's switch, off until pressed): a pane narrower than this many CSS px zooms the site out
 # until its layout gets this width, down to FIT_MIN, below which text stops being easy to read and the site lays
@@ -140,6 +173,12 @@ def _dark() -> bool:
 
 def web_address(address: str) -> bool:
     return urlsplit(str(address)).scheme in ("http", "https")
+
+
+def origin_of(address: str) -> str:
+    """The site a permission is for, as the browser's profile writes it: "https://host[:port]/"."""
+    parts = urlsplit(str(address))
+    return f"{parts.scheme}://{parts.netloc}/" if parts.netloc else ""
 
 
 def handed(status: str, note: str) -> str:
@@ -257,7 +296,9 @@ def _call(ui: Callable, core_of: Callable, method: str, params: dict, timeout: f
 class _Tab:
     """One tab of the pane: its WebView (made once it has a page to show), its core once that is ready, whether it
     is private (an InPrivate profile: no sign-in of the person's, nothing kept), the address on its way, the
-    site's request a popup waits on (with its deferral), the tab that opened it, and what the strip shows."""
+    site's request a popup waits on (with its deferral), the tab that opened it, what the strip shows, what its page
+    asks of the person (the strip under the bar shows the first, while the tab is in front) and the permissions
+    allowed this time, for its page as it is now ({origin: kinds})."""
 
     def __init__(self, ident: int, private: bool, opener: "_Tab | None" = None):
         self.id, self.private, self.opener = ident, private, opener
@@ -266,6 +307,8 @@ class _Tab:
         self.popup: tuple | None = None
         self.url = self.title = ""
         self.loading = self.sound = False
+        self.notices: list[dict] = []
+        self.once: dict[str, set] = {}
 
 
 class Pane:
@@ -331,6 +374,15 @@ class Pane:
         self._zoom_told: tuple = ()
         # Between a navigation's start and its end, WebView2 may bring back a zoom it remembers for the site.
         self._navigating = False
+        # The downloads the menu lists, newest first ({"id", "path", "url", "bytes", "got", "state", "private"}); the
+        # kept ones come back from KEPT.
+        self._downloads: list[dict] = [{**row, "id": n + 1, "private": False}
+                                       for n, row in enumerate(self._kept["downloads"])]
+        self._download_n = len(self._downloads)
+        # The site permissions the person allowed always ({origin: kinds}): kept in KEPT, in private mode for this
+        # run only; and the last number given to something the strip shows.
+        self._permits_private: dict[str, list] = {}
+        self._noticed = 0
         self.ui(self._watch_form)
 
     # ---- the tab in front: its WebView, its core, whether it is private
@@ -376,7 +428,8 @@ class Pane:
             self._place(self._css, self._scale * factor, self._cuts)
 
     def do(self, action: str, tab: int = 0) -> None:
-        """A press in the bar or the strip; `tab` names the tab a strip press is for."""
+        """A press in the bar, the strip or the menu; `tab` names the tab a strip press is for, or the download a
+        press in the menu's list is for."""
         self.ui(lambda: self._do(action, tab))
 
     def quiet(self, on: bool) -> None:
@@ -392,12 +445,20 @@ class Pane:
             with contextlib.suppress(Exception):
                 self.visit(sent[0])
 
-    def forget(self) -> None:
-        """Browsing data cleared: the pane closes, and the page open last and every site's zoom are forgotten."""
+    def forget(self, zoom: bool) -> None:
+        """History cleared: the page open last, the tabs closed lately and the list of downloads are forgotten (the
+        files stay), with `zoom` every site's zoom too; the pane stays open, its page read as from now."""
         def drop() -> None:
-            self._send(self._shut())
-            self._kept["zoom"].clear()
-            self._keep()
+            reading = self._reading
+            if reading is not None:
+                reading.update(s=0.0, at=time.time(), since=time.monotonic() if reading["since"] is not None else None)
+            self._closed.clear()
+            self._kept["last"] = {}
+            if zoom:
+                self._kept["zoom"].clear()
+            self._downloads.clear()
+            self._tell_downloads(keep=True)
+            self.tell({"kept": None})
         self.ui(drop)
 
     # ---- on the form's thread
@@ -480,6 +541,7 @@ class Pane:
             self._reading["begun"] = True
             self._count()
         self._state()
+        self._tell_prompt()
         if tab.core is not None:
             self._sound(tab.core, None)
 
@@ -506,7 +568,9 @@ class Pane:
             self.tell(self._strip())
 
     def _drop(self, tab: _Tab) -> None:
-        """A tab's WebView and its page go; a popup still waiting is let go as the site's own."""
+        """A tab's WebView and its page go; a popup still waiting is let go as the site's own, and what its page
+        asked is refused."""
+        self._clear(tab)
         if tab.popup is not None:
             args, deferral = tab.popup
             tab.popup = None
@@ -661,6 +725,7 @@ class Pane:
         core.HistoryChanged += self._changed
         core.ContainsFullScreenElementChanged += self._full_screen
         core.DownloadStarting += self._download
+        core.ContextMenuRequested += self._menu
         core.IsDocumentPlayingAudioChanged += self._sound
         core.IsMutedChanged += self._sound
         tab.core = core
@@ -678,13 +743,19 @@ class Pane:
             self._count()
 
     def _starting(self, sender, args) -> None:
-        """Only web addresses load: file:, about:, data: and every other scheme are refused."""
+        """Only web addresses load: file:, about:, data: and the browser's other schemes are refused; a program's
+        scheme goes on to `_external`, which never lets it start. A new page drops what the last one asked."""
         from Microsoft.Web.WebView2.Core import CoreWebView2NavigationKind
         if not web_address(args.Uri):
-            args.Cancel = True
+            scheme = urlsplit(str(args.Uri)).scheme
+            args.Cancel = not scheme or scheme in INSIDE
             return
         tab = self._tab_of(sender)
         tab.loading = True
+        if tab.notices or tab.once:
+            self._clear(tab)
+            if tab is self._tab:
+                self._tell_prompt()
         if tab is not self._tab:
             self.tell(self._strip())
             return
@@ -761,10 +832,16 @@ class Pane:
     def _new_window(self, sender, args) -> None:
         """A site's new tab or popup, only from the person's click: a tab of its own in front, whose page the site
         keeps hold of (the WebView is made, then handed to the site in `_ready`). While the character acts, it
-        opens in the page it acts on instead, so the run stays on the one page its guards watch."""
+        opens in the page it acts on instead, so the run stays on the one page its guards watch. A popup the page
+        opens by itself is stopped and named on the strip, which can open it in a tab."""
         args.Handled = True
         uri = str(args.Uri)
-        if not args.IsUserInitiated or not (web_address(uri) or uri == "about:blank"):
+        if not args.IsUserInitiated:
+            opener = self._tab_of(sender)
+            if web_address(uri) and self.op is None and opener is not None:
+                self._notice(opener, "popup", url=uri)
+            return
+        if not (web_address(uri) or uri == "about:blank"):
             return
         op = self.op
         if op is not None and not op.get("held") and not op.get("wait"):
@@ -779,29 +856,291 @@ class Pane:
         self._make(tab)
 
     def _permission(self, sender, args) -> None:
-        """Camera, microphone, location, notifications and the rest: refused without asking."""
-        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
-        args.State = CoreWebView2PermissionState.Deny
+        """A site asks for the camera, the microphone, the location or the rest. Refused without a word while the
+        character operates, and for the kinds never asked about; allowed at once where the person allowed it always,
+        or this time on this page; else the strip asks, for the tab that asked (a deferral holds the site's request
+        until the press). Nothing is saved in the profile here: the press decides that."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State
+        tab, kind, origin = self._tab_of(sender), ASKED.get(str(args.PermissionKind), ""), origin_of(str(args.Uri))
+        args.SavesInProfile = False
+        if self.op is not None or not kind or tab is None:
+            args.State = State.Deny
+            return
+        if kind in self._permits(tab).get(origin, ()) or kind in tab.once.get(origin, ()):
+            args.State = State.Allow
+            return
+        # A page asking for the camera and the microphone at once is asked about both on one strip.
+        notice = next((n for n in tab.notices if n["kind"] == "permission" and n["origin"] == origin), None)
+        if notice is None:
+            notice = self._notice(tab, "permission", origin=origin, what=[], asks=[])
+        if kind not in notice["what"]:
+            notice["what"] = sorted({*notice["what"], kind}, key=list(ASKED.values()).index)
+        notice["asks"].append((args, args.GetDeferral()))
+        if tab is self._tab:
+            self._tell_prompt()
+
+    def _permits(self, tab: _Tab) -> dict:
+        return self._permits_private if tab.private else self._kept["permits"]
+
+    def _notice(self, tab: _Tab, kind: str, origin: str = "", **more) -> dict:
+        """Something for the strip, on `tab`: a permission asked, a program's link, a popup stopped. A program's link
+        or a popup takes the place of the one of its kind before it."""
+        tab.notices[:] = [n for n in tab.notices if n["kind"] == "permission" or n["kind"] != kind]
+        self._noticed += 1
+        host = urlsplit(origin or (str(tab.core.Source) if tab.core is not None else tab.url)).hostname or ""
+        notice = {"id": self._noticed, "kind": kind, "origin": origin, "host": host, **more}
+        tab.notices.append(notice)
+        if tab is self._tab and kind != "permission":
+            self._tell_prompt()
+        return notice
+
+    def _tell_prompt(self) -> None:
+        """The strip shows the first thing the tab in front asks, or nothing."""
+        tab = self._tab
+        notice = tab.notices[0] if tab is not None and tab.notices else None
+        self.tell({"prompt": None if notice is None else {k: v for k, v in notice.items() if k != "asks"}})
+
+    def _clear(self, tab: _Tab) -> None:
+        """What `tab` asked goes unanswered, refused and not saved (its page left, it closed, a run began), and what
+        was allowed this time ends with its page."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State
+        for notice in tab.notices:
+            for args, deferral in notice.get("asks", ()):
+                args.State = State.Deny
+                deferral.Complete()
+        tab.notices.clear()
+        tab.once.clear()
+
+    def _answer(self, ident: int, how: str) -> None:
+        """The person's press on the strip: "once" (本次允许, 打开), "always" (始终允许) or "no" (不允许, 取消, ×). A
+        refusal is saved in the profile, so the browser refuses by itself from then on; an allowance is kept here
+        (always) or for this page (once). Nothing is allowed while the character operates."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State
+        tab = next((t for t in self._tabs if any(n["id"] == ident for n in t.notices)), None)
+        if tab is None or self.op is not None and how != "no":
+            return
+        notice = next(n for n in tab.notices if n["id"] == ident)
+        tab.notices.remove(notice)
+        yes = how != "no"
+        if notice["kind"] == "permission":
+            origin, what = notice["origin"], notice["what"]
+            if how == "always":
+                permits = self._permits(tab)
+                permits[origin] = sorted({*permits.get(origin, ()), *what})
+                if not tab.private:
+                    self._keep()
+            elif yes:
+                tab.once.setdefault(origin, set()).update(what)
+            for args, deferral in notice["asks"]:
+                args.State = State.Allow if yes else State.Deny
+                args.SavesInProfile = not yes and not tab.private
+                deferral.Complete()
+        elif notice["kind"] == "app" and yes:
+            threading.Thread(target=os.startfile, args=(notice["url"],), name="mibo-browser", daemon=True).start()
+        elif notice["kind"] == "popup" and yes:
+            # In a tab of its own in front, as a link would open (the page that tried keeps no hold of it).
+            self._switch(self._new_tab(tab.private))
+            self._open(notice["url"], here=True)
+        self._tell_prompt()
+
+    def _hush(self) -> None:
+        """A run begins: whatever the tabs were asking is refused, and nothing is asked until it ends."""
+        for tab in self._tabs:
+            self._clear(tab)
+        self._tell_prompt()
+
+    def permits(self) -> list[dict]:
+        """The site permissions the person decided, for Settings, by site: [{"origin", "host", "kinds": [{"kind",
+        "state": "allow" | "deny"}]}]. Allowed always is kept here; refused is in the profile (WebView2's
+        GetNonDefaultPermissionSettingsAsync). From a thread other than the form's."""
+        from .signwatch import Profile
+        rows = {(origin, kind): "allow" for origin, kinds in self._kept["permits"].items() for kind in kinds}
+        with Profile(self)._page() as (_, core_of):
+            asked: list = []
+            self.ui(lambda: asked.append(core_of().Profile.GetNonDefaultPermissionSettingsAsync()))
+            asked[0].Wait(int(CDP_S * 1000))
+            self.ui(lambda: rows.update({(str(s.PermissionOrigin), ASKED[str(s.PermissionKind)]): "deny"
+                                         for s in asked[0].Result if str(s.PermissionKind) in ASKED
+                                         and str(s.PermissionState) == "Deny"}))
+        sites: dict[str, dict] = {}
+        for (origin, kind), state in rows.items():
+            site = sites.setdefault(origin, {"origin": origin, "host": urlsplit(origin).hostname or origin, "kinds": []})
+            site["kinds"].append({"kind": kind, "state": state})
+        return sorted(sites.values(), key=lambda site: site["host"])
+
+    def unpermit(self, origin: str, kind: str) -> None:
+        """A site permission taken back in Settings: the site is asked about it again next time. From a thread other
+        than the form's."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionKind as Kind
+        from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State
+
+        from .signwatch import Profile
+
+        def drop() -> None:
+            kinds = self._kept["permits"].get(origin, [])
+            if kind in kinds:
+                kinds.remove(kind)
+                if not kinds:
+                    del self._kept["permits"][origin]
+                self._keep()
+        self.ui(drop)
+        name = next(name for name, word in ASKED.items() if word == kind)
+        with Profile(self)._page() as (_, core_of):
+            asked: list = []
+            self.ui(lambda: asked.append(core_of().Profile.SetPermissionStateAsync(getattr(Kind, name), origin,
+                                                                                    State.Default)))
+            asked[0].Wait(int(CDP_S * 1000))
 
     def _download(self, sender, args) -> None:
-        """A download while the character operates waits (a deferral) in op["downloads"] for the person's answer
-        on a card (operate.Hands): saved to the download folder on yes, cancelled on no. Theirs go as ever."""
-        if self.op is None:
-            return
-        deferral, operation = args.GetDeferral(), args.DownloadOperation
+        """Every download goes to the download folder and into the menu's list (the browser's own flyout is not
+        shown), where its progress and end follow it. One while the character operates waits (a deferral) in
+        op["downloads"], the same record, for the person's answer on a card (operate.Hands): saved on yes,
+        cancelled on no."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2DownloadInterruptReason, CoreWebView2DownloadState
+        args.Handled = True
+        operation, tab = args.DownloadOperation, self._tab_of(sender)
+        self._download_n += 1
+        record = {"id": self._download_n, "path": str(args.ResultFilePath), "url": str(operation.Uri),
+                  "bytes": int(operation.TotalBytesToReceive or 0), "got": 0, "state": "progress",
+                  "private": tab is not None and tab.private, "told": 0.0}
+        self._downloads.insert(0, record)
+        del self._downloads[DOWNLOADS_KEPT:]
 
-        def answer(yes: bool) -> None:
-            def finish() -> None:
-                args.Cancel = not yes
-                deferral.Complete()
-            self.ui(finish)
-        self.op.setdefault("downloads", []).append({
-            "url": str(operation.Uri), "path": str(args.ResultFilePath),
-            "bytes": int(operation.TotalBytesToReceive or 0), "answer": answer})
+        def changed(sender, _) -> None:
+            state = sender.State
+            record["path"], record["got"] = str(sender.ResultFilePath), int(sender.BytesReceived)
+            record["bytes"] = int(sender.TotalBytesToReceive or 0) or record["bytes"]
+            if state == CoreWebView2DownloadState.Completed:
+                record["state"] = "done"
+            elif state == CoreWebView2DownloadState.Interrupted:
+                record["state"] = ("cancelled" if sender.InterruptReason == CoreWebView2DownloadInterruptReason.UserCanceled
+                                   else "failed")
+            self._tell_downloads(keep=record["state"] != "progress")
+
+        def received(sender, _) -> None:
+            record["got"] = int(sender.BytesReceived)
+            if time.monotonic() - record["told"] >= DOWNLOAD_TELL_S:
+                record["told"] = time.monotonic()
+                self._tell_downloads()
+        record["handlers"] = (changed, received)
+        operation.StateChanged += changed
+        operation.BytesReceivedChanged += received
+        if self.op is not None:
+            record["state"], deferral = "waiting", args.GetDeferral()
+
+            def answer(yes: bool) -> None:
+                def finish() -> None:
+                    args.Cancel = not yes
+                    record["state"] = "progress" if yes else "cancelled"
+                    deferral.Complete()
+                    self._tell_downloads()
+                self.ui(finish)
+            record["answer"] = answer
+            self.op.setdefault("downloads", []).append(record)
+        self._tell_downloads()
+
+    def _tell_downloads(self, keep: bool = False) -> None:
+        """The menu's list as it stands (a file deleted since is marked); with `keep` it is kept too, without
+        those of private tabs and those still under way."""
+        self.tell({"downloads": [{"id": r["id"], "name": Path(r["path"]).name, "state": r["state"], "bytes": r["bytes"],
+                                  "got": r["got"], "gone": r["state"] == "done" and not Path(r["path"]).exists()}
+                                 for r in self._downloads]})
+        if keep:
+            self._kept["downloads"] = [{k: r[k] for k in ("path", "url", "bytes", "got", "state")}
+                                       for r in self._downloads if not r["private"] and r["state"] in ("done", "failed")]
+            self._keep()
+
+    def _opened(self, ident: int, folder: bool) -> None:
+        """A download in the menu's list opened (once it is done), or shown in its folder (the folder alone when
+        the file is gone): the person's own press."""
+        record = next((r for r in self._downloads if r["id"] == ident), None)
+        if record is None:
+            return
+        path = Path(record["path"])
+        if folder:
+            subprocess.Popen(f'explorer /select,"{path}"' if path.exists() else f'explorer "{path.parent}"')
+        elif record["state"] == "done" and path.exists():
+            os.startfile(str(path))
+
+    def _menu(self, sender, args) -> None:
+        """The page's right-click menu: 问 Mibo first over a selection; on a link, 在新标签页中打开链接 in place of the
+        browser's new window, and 在系统浏览器中打开链接. The rest is the browser's own."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2ContextMenuItemKind as Kind
+
+        from . import i18n
+        target, items, lang = args.ContextMenuTarget, args.MenuItems, i18n.lang()
+
+        def item(key: str, act: str = "", value: str = ""):
+            made = sender.Environment.CreateContextMenuItem(i18n.t(f"browse.{key}", lang) if key else "", None,
+                                                            Kind.Command if key else Kind.Separator)
+            if key:
+                made.CustomItemSelected += lambda s, a: self._picked(act, value)
+            return made
+        link = str(target.LinkUri or "") if target.HasLinkUri else ""
+        if web_address(link):
+            at = next((n for n in range(items.Count) if str(items[n].Name) == "openLinkInNewWindow"), 0)
+            if at < items.Count and str(items[at].Name) == "openLinkInNewWindow":
+                items.RemoveAt(at)
+            items.Insert(at, item("linkSystem", "system", link))
+            items.Insert(at, item("linkTab", "tab", link))
+        selection = str(target.SelectionText or "").strip() if target.HasSelection else ""
+        if selection:
+            items.Insert(0, item(""))
+            items.Insert(0, item("askSelection", "ask", selection))
+
+    def _picked(self, act: str, value: str) -> None:
+        """One of the page's own right-click items: the selection to the chat's box as a quote (the page's text,
+        for the person to send or not), a link in a tab behind the one in front, or in the system browser."""
+        if act == "ask":
+            self.tell({"ask": value[:ASK_MAX]})
+        elif act == "tab":
+            tab = self._new_tab(self.private)
+            tab.url = tab.pending = value
+            self._make(tab)
+            self.tell(self._strip())
+        elif act == "system":
+            threading.Thread(target=webbrowser.open, args=(value,), name="mibo-browser", daemon=True).start()
+
+    def _find(self) -> None:
+        """The menu's 查找: the browser's own find bar, as Ctrl F opens it, with the page's selection in it."""
+        from System import Action, String
+        from System.Threading.Tasks import Task, TaskScheduler
+        core, view = self._core, self._view
+
+        def start(task) -> None:
+            term = ""
+            with contextlib.suppress(Exception):
+                term = str(json.loads(str(task.Result)) or "").strip()
+            options = core.Environment.CreateFindOptions()
+            options.FindTerm = term[:200]
+            options.ShouldHighlightAllMatches = True
+            options.SuppressDefaultFindDialog = False
+            view.Focus()
+            core.Find.StartAsync(options)
+        core.ExecuteScriptAsync("getSelection().toString()").ContinueWith(
+            Action[Task[String]](start), TaskScheduler.FromCurrentSynchronizationContext())
+
+    def _zoom_step(self, step: int) -> None:
+        """The menu's −, + and its percentage: the site's own zoom one browser step down or up, or none (0)."""
+        host, zooms = self._host(), self._zooms()
+        own = zooms.get(host, 1.0)
+        steps = ZOOM_STEPS if step > 0 else ZOOM_STEPS[::-1]
+        own = next((z for z in steps if (z - own) * step > 0.001), own) if step else 1.0
+        if abs(own - 1.0) < 0.005:
+            zooms.pop(host, None)
+        else:
+            zooms[host] = own
+        self._zoom(show=True)
+        if not self.private:
+            self._keep()
 
     def _external(self, sender, args) -> None:
-        """mailto:, a program's own scheme: nothing on this computer is started from a site."""
+        """mailto:, a program's own scheme: never started by the site (nor the browser's own dialog shown); the strip
+        names it, and its 打开 starts it, the person's own press. Nothing is named while the character operates."""
         args.Cancel = True
+        tab = self._tab_of(sender)
+        if self.op is None and tab is not None:
+            self._notice(tab, "app", origin_of(str(args.InitiatingOrigin)), url=str(args.Uri))
 
     def _close_requested(self, sender, args) -> None:
         """The page closed its own window (a sign-in popup that is done): its tab goes, once the event is over."""
@@ -834,7 +1173,8 @@ class Pane:
         self._zoom()
 
     def _do(self, action: str, ident: int = 0) -> None:
-        """The bar's and the strip's buttons, from the page; `ident` names the tab a strip press is for."""
+        """The bar's, the strip's and the menu's buttons, from the page; `ident` names the tab a strip press is for,
+        or the download of a press in the menu's list."""
         core = self._core
         if action == "close":
             self._send(self._shut())
@@ -884,18 +1224,37 @@ class Pane:
         elif action == "loaded":
             # The app page loaded again: a page still open waits behind its chip; with none, the page open last
             # is offered.
+            self._tell_downloads()
             if self._tab is None:
                 if self._kept["last"]:
                     self.tell({"kept": self._kept["last"]})
                 return
             self._state()
+            self._tell_prompt()
             if core is not None:
                 self._sound(core, None)
             self._zoom_told = ()
             self._zoom()
             self._do("hide")
+        elif action == "menu":
+            # The bar's menu opened: its list again, with any file deleted since.
+            self._tell_downloads()
+        elif action in ("dl_open", "dl_folder"):
+            self._opened(ident, action == "dl_folder")
+        elif action in ("allow_once", "allow_always", "refuse"):
+            # The strip's buttons; `ident` names what they answer.
+            self._answer(ident, {"allow_once": "once", "allow_always": "always"}.get(action, "no"))
         elif core is None:
             return
+        elif action == "find":
+            self._find()
+        elif action == "print":
+            # The browser's own print preview, as Ctrl P opens it.
+            from Microsoft.Web.WebView2.Core import CoreWebView2PrintDialogKind
+            self._view.Focus()
+            core.ShowPrintUI(CoreWebView2PrintDialogKind.Browser)
+        elif action in ("zoom_in", "zoom_out", "zoom_reset"):
+            self._zoom_step({"zoom_in": 1, "zoom_out": -1}.get(action, 0))
         elif action == "mute":
             core.IsMuted = not core.IsMuted
         elif action == "back" and core.CanGoBack:
@@ -991,7 +1350,8 @@ class Pane:
             kept = json.loads((self.folder / KEPT).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             kept = {}
-        return {"zoom": kept.get("zoom") or {}, "last": kept.get("last") or {}, "size": kept.get("size") or []}
+        return {"zoom": kept.get("zoom") or {}, "last": kept.get("last") or {}, "size": kept.get("size") or [],
+                "downloads": kept.get("downloads") or [], "permits": kept.get("permits") or {}}
 
     def _keep(self) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -1072,6 +1432,7 @@ class Pane:
         with contextlib.suppress(RuntimeError):
             self.cdp("Page.enable")
         self.ui(self._watch_input)
+        self.ui(self._hush)
         self._tell_op()
 
     def op_step(self, n: int, note: str) -> None:
@@ -1489,8 +1850,10 @@ class _Hidden:
         args.Handled = True
 
     def _deny(self, sender, args) -> None:
+        # Refused for this read only: the person is asked when they visit the site themselves.
         from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState
         args.State = CoreWebView2PermissionState.Deny
+        args.SavesInProfile = False
 
     def _cancel(self, sender, args) -> None:
         args.Cancel = True

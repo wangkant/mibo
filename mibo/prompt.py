@@ -5,7 +5,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from . import person, ranking, recommend, today
+from . import channels, person, ranking, recommend, today
 from .prompts import (
     OWNER_TOOL_GUIDE,
     dm_honest_disclosure,
@@ -180,8 +180,11 @@ class PromptBuilder:
                 "persona. If asking would not be natural now, output exactly: PASS.\n"
                 "</follow_up>\n\n"
             )
-        # What it knows of the one person, kept in one store that every chat reads (person.py).
-        memory_blocks, placed = self._person_block(pkey, last_user)
+        # What it knows of the one person, kept in one store that every chat reads (person.py); none while paused
+        # or in a 无痕对话.
+        private = channels.private_chat(pkey)
+        memory_blocks, placed = (self._person_block(pkey, last_user) if self.person_store.on and not private
+                                 else ("", []))
         self._remember_recalled(pkey, placed)
         if not follow_up and person.unsaid(last_user):
             memory_blocks += _NOT_KEPT_NOTE
@@ -196,7 +199,8 @@ class PromptBuilder:
                               "them to type it. **Never fabricate** details.\n\n")
             elif "[image]" in _strip_web_desc(last_user):
                 blind_note = _UNSEEN_PICTURE_NOTE
-        finds = recommend.chat_finds(today.runtime_of(self), time.time())
+        # A 无痕对话 tells the recommender nothing: no find is offered to react to there.
+        finds = "" if private else recommend.chat_finds(today.runtime_of(self), time.time())
         finds = f"{finds}\n\n" if finds else ""
         # The day says what they did with each find.
         day = f"{today.block(self, last_user, time.time())}\n\n"

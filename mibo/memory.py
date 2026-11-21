@@ -235,7 +235,8 @@ class Memory:
     def _log_chat(self, conv: str) -> int:
         """Append what the chat's log lacks; never raises, never waits long."""
         log = self.chat_log
-        if not log.on:
+        # A 无痕对话 is never logged: no fold and no search of past chats reads it.
+        if not log.on or channels.private_chat(conv):
             return 0
         return log.take(conv, self._log_rows(conv))
 
@@ -262,9 +263,21 @@ class Memory:
 
     # ---- hooks the turn and recall code fills in ---------------------------
 
-    def _mark_used(self, conv: str, reply_text: str) -> None:
-        """Count the remembered items a sent reply drew on (retrieval.py)."""
-        return None
+    def _mark_used(self, conv: str, reply_text: str) -> list[dict]:
+        """Count the remembered items a sent reply drew on, and return them (retrieval.py)."""
+        return []
+
+    def _tell_saved(self, rows: list[dict]) -> None:
+        """What a fold newly kept, told to the page under the chat each came from (character.py sets
+        `saved_told(conversation, items)`)."""
+        told = getattr(self, "saved_told", None)
+        by_conv: dict[str, list[dict]] = {}
+        for row in rows:
+            if row.get("conv"):
+                by_conv.setdefault(row["conv"], []).append({"id": row["id"], "text": person.shown(row)})
+        for conv, items in by_conv.items():
+            if told is not None:
+                told(channels.dm_user(conv).split(":", 1)[-1], items)
 
     def _parse_memory_command(self, text: str) -> Optional[tuple[str, str, str]]:
         """(kind, what follows the keyword, chat language) when `text` is a
@@ -485,7 +498,7 @@ class Memory:
             self._save_person()
             logger.info("[Agent] person: a turn not kept (%s)", conv)
             return
-        if person.apply_turn(store, person.read_ops(mem), reply, now, self._prompt_tz()):
+        if store.on and person.apply_turn(store, person.read_ops(mem), reply, now, self._prompt_tz()):
             self._save_person()
 
     def _drop_unsaid(self, conv: str, said: str, reply: str) -> dict:
@@ -507,31 +520,18 @@ class Memory:
         def say(key: str) -> str:
             return self._memory_reply(key, code)
 
+        # A 无痕对话 neither reads nor keeps memory; a forget still works there.
+        if kind in ("remember", "recall") and channels.private_chat(conv):
+            return say("private")
         if kind == "remember":
             content = re.sub(spec.note_lead, "", arg.strip(), flags=re.IGNORECASE) if spec.note_lead else arg.strip()
             if not content.strip(_QUERY_TRIM):
                 return say("remember_what")
-            if person.secret(content):
-                logger.info("[Agent] person: a secret not kept")
-                return say("secret")
-            content = self._validate_memory_candidate(content)
-            if not content:
-                return say("not_instructions")
-            # Each thing it says, typed and slotted in code as a turn's operation would be: a name names
-            # them, a new home replaces the old, a like or a dislike reaches the finds.
-            facts, kept = [], []
-            for fact_kind, slot, text in person.command_facts(content):
-                due = fact_kind == "other" and timewords.resolve_future(text, now, self._prompt_tz(), (code,))
-                if due:
-                    kept.append(store.put_plan(text, due, now, conv=conv))
-                    continue
-                row, _old = store.put_fact(fact_kind, slot, text, now, src="command", conv=conv, imp=4)
-                facts.append(row)
-                kept.append(row)
-            self._save_person()
-            self._tell_profile(facts, now)
+            refused, kept = self._person_keep(conv, content, code, "command")
+            if refused:
+                return say(refused)
             colon, sep = person.marks(code)
-            return say("noted") + colon + sep.join(person.second_person(r["text"], code) for r in kept)
+            return say("noted") + colon + sep.join(person.second_person(words, code) for words in kept)
         if kind == "recall":
             lines = person.listing(store, code)
             if not lines:
@@ -665,6 +665,107 @@ class Memory:
                                                                  "lines": replies, "mark": code}
         logger.info("[Agent] forgotten: %d rows, %d chat lines", len(gone), lines)
         return gone, lines
+
+    def _person_keep(self, conv: str, content: str, code: str, src: str) -> tuple[str, list[str]]:
+        """A 记住 or an item added on the page: each thing it says, typed and slotted in code (a name names them, a
+        new home replaces the old, a like or a dislike reaches the finds), a dated one as a plan. (the reply key
+        when nothing is kept, the words of what was kept as said)."""
+        store = self.person_store
+        if not store.on:
+            return "paused", []
+        if person.secret(content):
+            logger.info("[Agent] person: a secret not kept")
+            return "secret", []
+        content = self._validate_memory_candidate(content)
+        if not content:
+            return "not_instructions", []
+        now = time.time()
+        facts, kept = [], []
+        for fact_kind, slot, text in person.command_facts(content):
+            if not store.keeps(fact_kind, text):
+                continue
+            due = fact_kind == "other" and timewords.resolve_future(text, now, self._prompt_tz(), (code,))
+            if due:
+                row = store.put_plan(text, due, now, conv=conv)
+            else:
+                row, _old = store.put_fact(fact_kind, slot, text, now, src=src, conv=conv, imp=4)
+                facts.append(row)
+            # A 记住 is no line of the chat's record: its words are kept with what it kept, for 查看原话.
+            if src == "command":
+                row["words"] = text
+            kept.append(text)
+        if not kept:
+            return "health_off", []
+        self._save_person()
+        self._tell_profile(facts, now)
+        return "", kept
+
+    def _person_settings(self, on: Optional[bool], health: Optional[bool]) -> None:
+        """Settings › 记忆's two switches. Memory turned on again does not fold what was said while it was off."""
+        store = self.person_store
+        use = store.data["use"]
+        if on is True and not use["on"]:
+            _rows, newest = self._person_lines(store)
+            upto = store.data["fold"].setdefault("upto", {})
+            for key, seq in newest.items():
+                upto[key] = max(int(upto.get(key) or 0), seq)
+        if on is not None:
+            use["on"] = on
+        if health is not None:
+            use["health"] = health
+        self._save_person()
+        logger.info("[Agent] person: memory %s, health details %s", "on" if use["on"] else "off",
+                    "kept" if use["health"] else "not kept")
+
+    def _person_said(self, item_id: str) -> Optional[list[dict]]:
+        """The chat lines a fact or a plan was kept from, as the log still has them; None when the item is gone."""
+        row = self.person_store.get(item_id)
+        if row is None:
+            return None
+        if row.get("words"):
+            return [{"text": row["words"], "at": _num(row.get("born"))}]
+        if not (row.get("conv") and row.get("refs")):
+            return []
+        return [{"text": str(r.get("text") or ""), "at": _num(r.get("t"))}
+                for r in self.chat_log.lines(row["conv"], chatlog.refs_of(row))]
+
+    def _person_import_preview(self, text: str) -> list[dict]:
+        """Another assistant's memory list, pasted: each item as it would be kept, or why it would not be (a
+        secret, words that read as instructions, kept already, a health detail they do not keep). Data only."""
+        store = self.person_store
+        texts = {f["text"] for f in store.facts()}
+        out = []
+        for line in person.pasted_lines(text):
+            words = person.neutral(line)
+            why = ("secret" if person.secret(line) else "not_instructions" if not self._validate_memory_candidate(line)
+                   else "kept" if words in texts
+                   else "health_off" if not store.data["use"]["health"] and person.health("", words) else "")
+            out.append({"text": words, "ok": not why, "why": why})
+            texts.add(words)
+        return out
+
+    def _person_import(self, lines: list[str], conv: str) -> int:
+        """The items they ticked, each kept as one fact through the same checks as the preview; how many were."""
+        store = self.person_store
+        if not store.on:
+            return 0
+        now = time.time()
+        rows = []
+        for line in lines:
+            words = person.neutral(line)
+            if not words or person.secret(words) or not self._validate_memory_candidate(words):
+                continue
+            # Typed by what the person's own 记住 would say: Chinese "喜欢爬山" reads as "我喜欢爬山".
+            chinese = re.match(r"[一-鿿]", words) and not re.search(r"[぀-ヿ가-힯]", words)
+            kind, slot = person._command_kind(("我" + words) if chinese else words)
+            if store.keeps(kind, words):
+                row, _old = store.put_fact(kind, slot, words, now, src="import", conv=conv, imp=3)
+                rows.append(row)
+        if rows:
+            self._save_person()
+            self._tell_profile(rows, now)
+        logger.info("[Agent] person: %d imported item(s)", len(rows))
+        return len(rows)
 
     def _person_restore(self, tid: str) -> Optional[dict]:
         """Put a replaced or edited fact or plan back from the person's trash;

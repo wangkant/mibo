@@ -52,8 +52,10 @@ def shown(path: str, raw: str, lang: str) -> str:
 
 
 def _places(act: Act, lang: str) -> str:
-    raws = act.raw or [""] * len(act.paths)
-    items = [shown(p, r, lang) for p, r in zip(act.paths, raws + [""] * len(act.paths))]
+    # Items from a listing before may be named by what it listed.
+    places = act.listed or act.paths
+    raws = act.raw or [""] * len(places)
+    items = [shown(p, r, lang) for p, r in zip(places, raws + [""] * len(places))]
     items = list(dict.fromkeys(items))
     if not items:
         return "这些文件" if lang == "zh" else "the files"

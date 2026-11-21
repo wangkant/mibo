@@ -467,3 +467,141 @@ button.act-chg-name:hover {
 .shell-card .act-diff {
   margin: 0 0 var(--pa-s3);
 }
+
+/* ---- Under the reply: the memories it drew on (参考了 N 条记忆), each with edit and forget; and the quiet line
+   已记住：… · 管理 where the background memory kept something. */
+.act-mem {
+  margin-top: var(--pa-s2);
+  font-size: var(--pa-fs-sm);
+  line-height: 20px;
+}
+.act-mem-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border-radius: var(--pa-r-sm);
+  color: var(--pa-muted);
+  cursor: pointer;
+  list-style: none;
+}
+.act-mem-head::-webkit-details-marker {
+  display: none;
+}
+.act-mem-head:hover {
+  background: var(--pa-hover);
+}
+.act-mem-head:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 1px;
+}
+.act-mem-icon.i {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--pa-faint);
+}
+.act-mem[open] .act-chevron {
+  transform: rotate(90deg);
+}
+.act-mem-list {
+  max-width: 560px;
+  margin: var(--pa-s2) 0 0;
+  padding: var(--pa-s1) var(--pa-s3);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+  list-style: none;
+}
+.act-mem-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px var(--pa-s3);
+  padding: 6px 0;
+}
+.act-mem-row + .act-mem-row {
+  border-top: 1px solid var(--pa-line);
+}
+.act-mem-text {
+  flex: 1 1 200px;
+  min-width: 0;
+  color: var(--pa-text);
+  overflow-wrap: anywhere;
+}
+.act-mem-gone {
+  color: var(--pa-faint);
+  text-decoration: line-through;
+}
+.act-mem-field {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font: inherit;
+}
+.act-mem-field:focus {
+  outline: var(--pa-focus);
+  outline-offset: 0;
+}
+.act-mem-tools {
+  display: inline-flex;
+  flex: none;
+  gap: var(--pa-s2);
+}
+.act-mem-tool,
+.act-mem-manage {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pa-muted);
+  font: inherit;
+  font-size: var(--pa-fs-xs);
+  cursor: pointer;
+}
+.act-mem-tool:hover,
+.act-mem-manage:hover {
+  color: var(--pa-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.act-mem-told {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.act-mem-foot {
+  margin-top: 4px;
+}
+.act-saved {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: var(--pa-s2) 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 18px;
+}
+.act-saved .act-mem-icon.i {
+  align-self: center;
+  width: 14px;
+  height: 14px;
+}
+.act-saved-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.act-saved-dot {
+  color: var(--pa-faint);
+}
+.act-saved .act-mem-manage {
+  flex: none;
+}
+/* A line with no reply above it to sit under stands on the text's edge, as a remark does. */
+.chat-messages > .act-saved {
+  margin-left: 44px;
+}

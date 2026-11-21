@@ -223,18 +223,21 @@ class Retrieval:
         """The live row a placed id names, or None once it is gone."""
         return self.person_store.get(item_id)
 
-    def _mark_used(self, conv: str, reply_text: str) -> None:
+    def _mark_used(self, conv: str, reply_text: str) -> list[dict]:
         """After a sent reply: each item its prompt placed that shares at least
         two focus tokens with the reply gets one more use. Counted in memory,
-        written at most once a minute (`_flush_memory_counters`)."""
+        written at most once a minute (`_flush_memory_counters`). The items it
+        drew on ({id, text}), which the page lists under the reply."""
+        from . import person
         placed = getattr(self, "_last_recalled", {}).pop(conv, None)
         if not placed or not str(reply_text or "").strip():
-            return
+            return []
         said = _focus_tokens(str(reply_text), "zh")
         if len(said) < _USE_OVERLAP:
-            return
+            return []
         now = time.time()
         dirty = self.__dict__.setdefault("_memory_counts_dirty", set())
+        used = []
         for key, kind, item_id in placed:
             row = self._recalled_row(key, kind, item_id)
             if row is None:
@@ -243,7 +246,9 @@ class Retrieval:
                 row["uses"] = int(_num(row.get("uses"))) + 1
                 row["used"] = now
                 dirty.add(kind)
+                used.append({"id": item_id, "text": person.shown(row)})
         self._flush_memory_counters()
+        return used
 
     def _flush_memory_counters(self, force: bool = False) -> None:
         """Write use counts kept in memory; at most once a minute unless forced.
@@ -274,6 +279,8 @@ class Retrieval:
         that point back, or what was said), the best lines of those chats (pastchats.py) in the time it names.
         "" for any other message or model."""
         from . import abilities, pastchats, timewords, today
+        if channels.private_chat(conv):
+            return ""
         model = self.llm_dm_model
         if (abilities.record(today.runtime_of(self), self._endpoint_for(model)[0], model) or {}).get("tools") == "yes":
             return ""

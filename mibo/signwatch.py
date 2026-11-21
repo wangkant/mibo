@@ -13,8 +13,8 @@ written or sent. It also keeps the site's icon for Settings.
 
 `Profile` is the same profile seen from Settings: which sites hold which
 cookie names, signing out of one (its cookies and its storage, through
-WebView2's DevTools calls), and clearing all sessions or all saved passwords
-(WebView2's own ClearBrowsingDataAsync). It works on the pane's page when one is
+WebView2's DevTools calls), and clearing all sessions, all saved passwords or
+the history of a time (WebView2's own ClearBrowsingDataAsync). It works on the pane's page when one is
 open in the normal profile, else on a hidden blank WebView2 on the same folder.
 """
 from __future__ import annotations
@@ -300,19 +300,25 @@ class Profile:
                             "storageTypes": "local_storage,indexeddb,service_workers,cache_storage,websql,file_systems"})
         return gone
 
-    def clear(self, what: str) -> None:
-        """"sessions": every site's cookies and storage; "passwords": every saved password and autofill entry.
-        Through WebView2's own ClearBrowsingDataAsync."""
+    def clear(self, what: str, since: float = 0.0) -> None:
+        """"sessions": every site's cookies and storage; "passwords": every saved password and autofill entry;
+        "history": the browser's history, download history and cache, from `since` on (all with 0). Through
+        WebView2's own ClearBrowsingDataAsync."""
         from Microsoft.Web.WebView2.Core import CoreWebView2BrowsingDataKinds as Kinds
-        from System import Action
+        from System import Action, DateTime
         from System.Threading.Tasks import Task
-        kinds = Kinds.AllSite if what == "sessions" else Kinds.PasswordAutosave | Kinds.GeneralAutofill
+        kinds = {"sessions": Kinds.AllSite, "passwords": Kinds.PasswordAutosave | Kinds.GeneralAutofill,
+                 "history": Kinds.BrowsingHistory | Kinds.DownloadHistory | Kinds.DiskCache}[what]
         done = threading.Event()
         with self._page() as (_, core_of):
             def start() -> None:
                 handler = Action[Task](lambda task: done.set())
                 self._cleared = handler
-                core_of().Profile.ClearBrowsingDataAsync(kinds).ContinueWith(handler)
+                profile = core_of().Profile
+                cleared = (profile.ClearBrowsingDataAsync(kinds, DateTime.Now.AddSeconds(since - time.time()),
+                                                          DateTime.Now.AddMinutes(1)) if since
+                           else profile.ClearBrowsingDataAsync(kinds))
+                cleared.ContinueWith(handler)
             self.pane.ui(start)
             done.wait(30)
 

@@ -102,6 +102,11 @@ READ_PARAMS = ("Path", "LiteralPath", "FilePath")
 # Stages whose output is the files they list, and stages that only pass some of them on.
 ITEM_SOURCES = {"get-childitem", "get-item", "resolve-path", "get-itemproperty"}
 ITEM_FILTERS = {"where-object", "sort-object", "select-object", "out-null"}
+# A listing's parameters that leave its items exactly as Python finds them; those that make a listing or a
+# Select-Object hand on something else (names, streams, relative paths, picked properties).
+LISTING_EXACT = {"path", "literalpath", "recurse", "force", "erroraction", "file", "directory"}
+LISTING_RESHAPED = {"name", "stream", "relative"}
+SELECT_RESHAPED = {"property", "expandproperty", "excludeproperty"}
 # Modules that come with Windows, whose Get- and Test- commands only read.
 INBOX_MODULES = {"storage", "nettcpip", "netadapter", "dnsclient", "netsecurity", "pnpdevice", "international",
                  "scheduledtasks", "defender", "bitlocker", "appx", "psreadline", "cimcmdlets", "printmanagement",
@@ -293,8 +298,21 @@ class Act:
     raw: list[str] = field(default_factory=list)
     globs: list[str] = field(default_factory=list)
     dest_unresolved: bool = False
-    # A delete of items a recursive listing before named: anything under its folder matching its pattern.
-    deep: bool = False
+    # The places a listing before named, with `raw`, which stand for its items in the plain words.
+    listed: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Listing:
+    """What a stage that lists files hands down the pipeline."""
+    paths: list[str]
+    raw: list[str]
+    globs: list[str]
+    recurse: bool
+    # A parameter past the path (-Filter, -Include, -Depth) picks among the items.
+    narrowed: bool
+    # The items themselves, found in Python; None when they cannot be listed first.
+    items: list[str] | None
 
 
 @dataclass
@@ -504,6 +522,45 @@ def _walk(base: str, most: int = 50000):
     return out
 
 
+def _listed(globs: list[str], children: bool, recurse: bool, keep) -> list[str] | None:
+    """The items a listing hands on, as PowerShell lists them: a folder named to Get-ChildItem (`children`) gives
+    what is in it, all under it with -Recurse; a pattern its matches, and with -Recurse also every item under its
+    folder named like it and all a matching folder holds. Only those `keep` passes; None past 5000."""
+    found: list[str] = []
+    for glob in globs:
+        if not any(c in glob for c in "*?["):
+            if children and os.path.isdir(glob):
+                try:
+                    got = _walk(glob, 5000) if recurse else [e.path for e in os.scandir(glob)]
+                except OSError:
+                    got = []
+            else:
+                got = [glob] if os.path.lexists(glob) else []
+        else:
+            got = _matches(glob)
+            if children and recurse:
+                every = _walk(_base(glob)[0], 5000)
+                if every is None:
+                    return None
+                leaf = os.path.basename(glob).lower()
+                got += [p for p in every if fnmatch.fnmatchcase(os.path.basename(p).lower(), leaf)]
+                for hit in [p for p in got if os.path.isdir(p) and not _is_link(p)]:
+                    inside = _walk(hit, 5000)
+                    if inside is None:
+                        return None
+                    got += inside
+        if got is None:
+            return None
+        found += got
+    found = [p for p in dict.fromkeys(found) if keep(p)]
+    return found if len(found) <= 5000 else None
+
+
+def _some(paths: list[str]) -> str:
+    """Paths for an act's reason, the first five of a long list."""
+    return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")
+
+
 def _is_link(path: str) -> bool:
     return os.path.islink(path) or (os.path.isdir(path) and running._junction(path))
 
@@ -546,11 +603,11 @@ class Sorter:
         self.paths = Paths(cwd)
         self.acts: list[Act] = []
         self.funcs = {str(n.get("name") or "").lower() for n in _items(parsed.get("nodes")) if n.get("type") == "func"}
-        self.pipes: dict = {}
-        self.pipe_raw: dict = {}
-        self.pipe_meta: dict = {}
+        # Each pipeline's listing so far, or None when what goes down it may be any path at all.
+        self.pipes: dict[int, Listing | None] = {}
         self.last_raw: list[str] = []
         self.last_globs: list[str] = []
+        self.last_listed: list[str] = []
         self.origin = cwd
         self.unstable, self.no_consts = self._unstable(_items(parsed.get("nodes")))
 
@@ -589,8 +646,10 @@ class Sorter:
         # The paths as written, from the files() call just before, for the plain words.
         more.setdefault("raw", self.last_raw)
         more.setdefault("globs", self.last_globs)
+        more.setdefault("listed", self.last_listed)
         self.last_raw = []
         self.last_globs = []
+        self.last_listed = []
         act = Act(kind, what, why, **more)
         self.acts.append(act)
         return act
@@ -608,9 +667,18 @@ class Sorter:
                 # Items from the stage before: known only when it listed files (ITEM_SOURCES) and what
                 # came after only filtered them; anything else may hand on any path at all.
                 upstream = self.pipes.get(node.get("pipe"))
-                self.last_raw = list(self.pipe_raw.get(node.get("pipe")) or [])
-                self.last_globs = list((self.pipe_meta.get(node.get("pipe")) or ([], False))[0])
-                return list(upstream or []), False, upstream is None, True
+                if upstream is None:
+                    return [], False, True, True
+                if upstream.items is None:
+                    # More than can be listed first: the listing's own places stand for them.
+                    self.last_raw, self.last_globs = list(upstream.raw), list(upstream.globs)
+                    return list(upstream.paths), False, True, True
+                self.last_globs = list(upstream.items)
+                # Items picked among as it runs, or listed by patterns, are named by the listing in the plain words.
+                if (upstream.narrowed or int(node.get("index") or 0) > 1
+                        or (upstream.raw and all(any(c in r for c in "*?") for r in upstream.raw))):
+                    self.last_raw, self.last_listed = list(upstream.raw), list(upstream.paths)
+                return list(upstream.items), False, False, True
             if default_cwd and self.paths.where:
                 self.provider(*self.paths.where, write, node)
                 return [], False, False, False
@@ -635,6 +703,32 @@ class Sorter:
         self.last_raw = raws
         self.last_globs = globs
         return out, wild, unresolved, False
+
+    def keeps(self, node: dict):
+        """Which items a listing's -File, -Directory, -Filter and -Include let through, read loosely so that no
+        item PowerShell would hand on is left out: Windows also matches a three-letter extension against a longer
+        one and *.* against a name with no dot, and a pattern computed, with brackets, escapes, the system's own
+        wildcards (< > ") or a short name's ~ narrows nothing here."""
+        file, folder = _switch(node, "File"), _switch(node, "Directory")
+        groups = []
+        for param in ("Filter", "Include"):
+            got = self.paths.strings(_bound(node, param)) if _bound(node, param) is not None else None
+            if got and not any(c in s for s in got for c in "[`~<>\""):
+                groups.append([s.lower().replace("?", "*") for s in got])
+
+        def keep(path: str) -> bool:
+            if (file and not os.path.isfile(path)) or (folder and not os.path.isdir(path)):
+                return False
+            name = os.path.basename(path).lower()
+            stem, ext = os.path.splitext(name)
+            names = (name, stem + ext[:4], name + ".")
+            return all(any(fnmatch.fnmatchcase(n, s) for n in names for s in group) for group in groups)
+        return keep
+
+    def unlisted_recurse(self, node: dict, piped: bool) -> bool:
+        """Items from a recursive listing too large to list first: any file under its places."""
+        upstream = self.pipes.get(node.get("pipe")) if piped else None
+        return upstream is not None and upstream.items is None and upstream.recurse
 
     def provider(self, provider: str, place: str, write: bool, node: dict) -> None:
         name = _named(node)[0]
@@ -670,17 +764,21 @@ class Sorter:
                 self.command(node)
                 name = _named(node)[0]
                 pipe = node.get("pipe")
-                if name in ITEM_SOURCES:
-                    self.pipes[pipe] = [p for act in self.acts[before:] for p in act.paths]
-                    self.pipe_raw[pipe] = [r for act in self.acts[before:] for r in act.raw]
-                    # The listing's patterns, whether it went into folders, and whether anything narrowed it.
-                    self.pipe_meta[pipe] = ([g for act in self.acts[before:] for g in act.globs],
-                                            any(act.recurse for act in self.acts[before:]),
-                                            any(str(k).lower() not in ("path", "literalpath", "recurse", "force", "erroraction")
-                                                for k in (node.get("bound") or {})))
-                    if self.paths.where:
-                        self.pipes[pipe] = None
-                elif name not in ITEM_FILTERS or int(node.get("index") or 0) == 0:
+                bound = {str(k).lower() for k in (node.get("bound") or {})}
+                if name in ITEM_SOURCES and not self.paths.where:
+                    acts = self.acts[before:]
+                    globs = [g for act in acts for g in act.globs]
+                    recurse = any(act.recurse for act in acts)
+                    # A place of another provider, or computed, or a listing that hands on something else.
+                    known = bool(acts) and not bound & LISTING_RESHAPED and all(
+                        act.globs and not act.unresolved for act in acts)
+                    items = _listed(globs, name == "get-childitem", recurse or "depth" in bound,
+                                    self.keeps(node)) if known else None
+                    self.pipes[pipe] = Listing([p for act in acts for p in act.paths],
+                                               [r for act in acts for r in act.raw], globs, recurse,
+                                               bool(bound - LISTING_EXACT), items)
+                elif (name not in ITEM_FILTERS or int(node.get("index") or 0) == 0
+                      or (name == "select-object" and bound & SELECT_RESHAPED)):
                     self.pipes[pipe] = None
                 self.redirects(node)
             elif kind == "expr":
@@ -936,9 +1034,9 @@ class Sorter:
         if name in READS:
             what, default_cwd = READS[name]
             paths, wild, unresolved, piped = self.files(node, READ_PARAMS, False, default_cwd)
-            # Items from a recursive listing before are any file under it.
-            recurse = _switch(node, "Recurse") or (piped and (self.pipe_meta.get(node.get("pipe")) or ([], False))[1])
-            self.add("read", what, f"{what}s {', '.join(paths) or 'what comes down the pipeline'}", paths=paths,
+            # Items from a recursive listing too large to list first are any file under it.
+            recurse = _switch(node, "Recurse") or self.unlisted_recurse(node, piped)
+            self.add("read", what, f"{what}s {_some(paths) or 'what comes down the pipeline'}", paths=paths,
                      wild=wild or piped, unresolved=unresolved, recurse=recurse)
             return
         if name in CHANGES:
@@ -1047,23 +1145,23 @@ class Sorter:
         if what == "delete":
             # Remove-Item is run.BIN's function, which moves to the Recycle Bin; named with its module, the cmdlet.
             # Items a listing narrows (-Filter, -File) or a stage after it picks among are known only as it runs.
-            upstream = self.pipe_meta.get(node.get("pipe")) or ([], False, False)
-            narrowed = piped and (upstream[2] or int(node.get("index") or 0) > 1)
+            upstream = self.pipes.get(node.get("pipe")) if piped else None
+            narrowed = upstream is not None and (upstream.narrowed or int(node.get("index") or 0) > 1)
             self.add("delete", "skip_bin" if "\\" in str(node.get("name") or "") else "delete",
-                     f"deletes {', '.join(paths) or 'what comes down the pipeline'}", paths=paths, write=True,
-                     wild=wild or piped, recurse=recurse or (piped and upstream[1]), deep=piped and upstream[1],
+                     f"deletes {_some(paths) or 'what comes down the pipeline'}", paths=paths, write=True,
+                     wild=wild or piped, recurse=recurse or self.unlisted_recurse(node, piped),
                      unresolved=unresolved or narrowed
                      or any(_bound(node, k) is not None for k in ("Include", "Exclude", "Filter")))
             return
         if what == "empty":
-            self.add("overwrite", "empty", f"empties {', '.join(paths)}", paths=paths, write=True, wild=wild,
+            self.add("overwrite", "empty", f"empties {_some(paths)}", paths=paths, write=True, wild=wild,
                      unresolved=unresolved)
             return
         if what in ("write", "append", "attr"):
             append = what == "append" or _switch(node, "Append")
             exists = any(os.path.isfile(p) for p in paths)
             kind = "overwrite" if exists and not append and not _switch(node, "NoClobber") and what != "attr" else "change"
-            self.add(kind, "append" if append else what, f"{'appends to' if append else 'writes'} {', '.join(paths)}",
+            self.add(kind, "append" if append else what, f"{'appends to' if append else 'writes'} {_some(paths)}",
                      paths=paths, write=True, wild=wild, unresolved=unresolved or (piped and what == "attr"))
             return
         dest = ""
@@ -1101,7 +1199,7 @@ class Sorter:
                 merges = what == "copy" and os.path.isdir(src) and recurse and _copy_overwrites(src, target)
                 overwrite = overwrite or replaces or merges
         self.add("overwrite" if overwrite else "change", what,
-                 f"{VERBED.get(what, what + 's')} {', '.join(paths) or 'items'} to {dest or '?'}",
+                 f"{VERBED.get(what, what + 's')} {_some(paths) or 'items'} to {dest or '?'}",
                  paths=paths, dest=dest, write=what in ("move", "rename"), wild=wild or piped,
                  unresolved=unresolved or dest_unresolved, recurse=recurse,
                  dest_unresolved=dest_unresolved and not unresolved)
@@ -1492,20 +1590,12 @@ def _reaches_protected(act: Act, places) -> str:
     return ""
 
 
-def _targets(act: Act, deep: bool) -> list[str] | None:
-    """What a wildcard or a listing names now, found in Python as PowerShell would match it: each pattern's
-    matches, and with `deep` every item under the pattern's folder whose name matches its last part. None when
-    there are more than can be told first."""
+def _targets(act: Act) -> list[str] | None:
+    """What a wildcard names now, found in Python as PowerShell would match it (a listing's items come already
+    listed). None when there are more than can be told first."""
     found: list[str] = []
     for glob in act.globs:
-        if deep:
-            base, leaf = (_base(glob)[0], os.path.basename(glob)) if any(c in glob for c in "*?[") else (glob, "*")
-            under_base = _walk(base) if os.path.isdir(base) else []
-            if under_base is None:
-                return None
-            found += [p for p in under_base if fnmatch.fnmatch(os.path.basename(p).lower(), leaf.lower())]
-        else:
-            found += _matches(glob) if any(c in glob for c in "*?[") else [glob]
+        found += _matches(glob) if any(c in glob for c in "*?[") else [glob]
     found = [p for p in dict.fromkeys(found) if os.path.lexists(p)]
     # A folder taken whole leaves out what is inside it.
     found = [p for p in found if not any(under(norm(p), norm(q)) and norm(p) != norm(q) for q in found)]
@@ -1579,7 +1669,7 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
     for act in reading.acts:
         if act.unresolved or act.kind not in ("delete", "change", "overwrite"):
             continue
-        found = _targets(act, act.deep) if act.wild else list(act.paths)
+        found = _targets(act) if act.wild else list(act.paths)
         if found is None:
             asks.append(Act("unknown", "unresolved", f"{act.why}, over more files than can be listed first",
                             paths=act.paths))

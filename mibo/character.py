@@ -24,9 +24,10 @@ logger = logging.getLogger("agent")
 
 # Seconds between looks for a plan to ask after.
 FOLLOW_UP_EVERY_S = 600.0
-# What the memory view may do to one thing the character knows of the person; forget_chats also takes it
-# out of the chats.
-PERSON_ACTIONS = ("forget", "forget_chats", "edit", "restore", "forget_all")
+# What the memory view may do: to one thing the character knows of the person (forget_chats also takes it out of
+# the chats), to all of it, add one, set the two switches, and read another assistant's list pasted and keep from it.
+PERSON_ACTIONS = ("forget", "forget_chats", "edit", "restore", "forget_all", "add", "settings",
+                  "import_preview", "import")
 
 
 class NotReady(RuntimeError):
@@ -93,6 +94,9 @@ class Character:
         agent.roam = Roam(agent, home=self.home, runtime=paths.runtime_dir())
         agent._spawn(agent.roam.loop())     # stays home without ROAM_ENABLED, a browser or a model
         agent._spawn(agent.loop_memory())   # folds self-guard on MEMORY_CALLS_PER_DAY
+        # What a fold keeps is shown in the chat it came from, as one quiet 已记住 line (activity.js).
+        agent.saved_told = lambda conversation, items: self.said and self.said(
+            conversation, [{"type": "memory", "saved": items}])
         self.agent = agent
 
     async def _ready(self):
@@ -157,16 +161,29 @@ class Character:
             return person.page_view(self.agent.person_store)
         return person.page_view(person.Person(self._runtime() / person.FILE))
 
-    async def person_write(self, action: str, conversation: str, item: str, text: str) -> dict:
-        """forget, edit or restore one thing it knows, or forget all; the view
-        after it, and for a forget from the chats too what the page marks in its
-        own copies (`scrub`). ValueError("activity_changed") when the thing is gone or the
-        words cannot be kept."""
+    async def person_write(self, action: str, conversation: str, item: str, text: str,
+                           payload: Optional[dict] = None) -> dict:
+        """forget, edit or restore one thing it knows, forget all, add one, set the switches, or keep the ticked
+        items of a pasted list; the view after it, and for a forget from the chats too what the page marks in its
+        own copies (`scrub`). import_preview answers {lines} and changes nothing. ValueError("activity_changed")
+        when the thing is gone or the words cannot be kept; ValueError("memory_<why>") when an added item is
+        not kept."""
         agent = await self._ready()
         _, key = chat_key(conversation)
         extra = {}
+        payload = payload or {}
         async with agent.locks[key]:
-            if action in ("forget", "forget_chats"):
+            if action == "import_preview":
+                return {"lines": agent._person_import_preview(text)}
+            if action == "add":
+                refused, _kept = agent._person_keep(key, text, agent.chat_lang, "page")
+                if refused:
+                    raise ValueError(f"memory_{refused}")
+            elif action == "settings":
+                agent._person_settings(payload.get("on"), payload.get("health"))
+            elif action == "import":
+                extra["imported"] = agent._person_import(payload["lines"], key)
+            elif action in ("forget", "forget_chats"):
                 scrub = agent._person_forget(key, item, chats=action == "forget_chats")
                 if scrub is None:
                     raise ValueError("activity_changed")
@@ -181,6 +198,22 @@ class Character:
             else:
                 agent._person_forget_all()
         return {**person.page_view(agent.person_store), **extra}
+
+    async def person_said(self, item: str) -> list[dict]:
+        """The chat lines one kept item came from. ValueError("activity_changed") when it is gone."""
+        agent = await self._ready()
+        lines = agent._person_said(item)
+        if lines is None:
+            raise ValueError("activity_changed")
+        return lines
+
+    def person_export(self, fmt: str) -> str:
+        """Everything kept that is still true, as JSON or Markdown."""
+        from .textproc import _env_tz_offset
+        from datetime import timedelta, timezone
+        store = self.agent.person_store if self.agent is not None else person.Person(self._runtime() / person.FILE)
+        lang = self.agent.chat_lang if self.agent is not None else "en"
+        return person.export(store, fmt, lang, time.time(), timezone(timedelta(hours=_env_tz_offset())))
 
     # ---- its day --------------------------------------------------------------
 

@@ -378,19 +378,23 @@ class DirectMessages:
                 self._commit_dm_history(user_id, pkey, history)
                 self._dm_unanswered.pop(user_id, None)
                 committed = True
-                if not run_of():
+                private = channels.private_chat(pkey)
+                if not run_of() and not private:
                     # The one person's store, which every chat reads (person.py); a scheduled run's
-                    # request is not something they said now.
+                    # request is not something they said now, and a 无痕对话 keeps nothing.
                     self._person_turn(pkey, asked, reply, auto_mem)
                 if unsaid:
                     scrub = self._drop_unsaid(pkey, asked, reply)
                     if texts:
                         texts[-1]["scrub"] = scrub
-                self._mark_used(pkey, reply)
+                used = self._mark_used(pkey, reply)
+                if used and texts:
+                    # The memories the reply drew on, listed under it with edit and forget (activity.js).
+                    texts[-1]["memory"] = {"used": used}
                 self._maybe_consolidate(pkey, "trim")
             # Never the words: what they say may be forgotten later.
             logger.info("[Agent] reply (chat=%s, %d chars)", conversation, len(reply))
-            if lookups.wonder:
+            if lookups.wonder and not private:
                 # Something the talk made it want to look into: a walk goes for it as soon as it may.
                 if today.wonder(self.memory_file.parent, lookups.wonder, time.time()) and getattr(self, "roam", None):
                     self.roam.request()

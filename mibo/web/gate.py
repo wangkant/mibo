@@ -14,12 +14,16 @@ asking, and only when the person chose 始终允许 for one kind on one site
 sites: going to another one that the person did not name and no link led to
 asks too (leave).
 
-A control that only its name calls a submission (a bare 确认, 应用, save, a form
-sent by GET) is "watch": it is pressed, and a card comes only if a request that
-is not a GET really leaves on the press (operate.Hands holds it), as Gemini and
-Claude in Chrome confirm at the point of risk. So are a right click, a drag
-from one control onto another and a keyboard shortcut (`chord`); a chord that
-ends in Enter or Space is that key, and one that uses the clipboard is refused.
+Every other press is pressed, and a card comes only if a request that is not a
+GET really leaves on it (operate.Hands holds it), whatever the control's name:
+a 好的 that deletes asks as a 提交 does, as Gemini and Claude in Chrome confirm
+at the point of risk. A form sent by GET is "watch", the same; so are a right
+click, a drag from one control onto another and a keyboard shortcut (`chord`);
+a chord that ends in Enter or Space is that key, and one that uses the
+clipboard is refused. The words kept here are the hard rules (paying, deleting,
+granting access, an account) and the kinds that may skip a card by the
+person's choice or the reviewer's pass, whose press a request may not show (a
+message over a socket, a like sent by GET).
 
 `classify` sorts one action by what the page says of its target: its
 accessible name, role and the form facts pageops.FACTS_JS reads. The
@@ -41,10 +45,10 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-# Kinds an outside action can be, in the order the card names them; then the page's own asks, and going to
-# another site.
-KINDS = ("send", "comment", "like", "post", "order", "delete", "account", "grant", "submit", "upload", "download",
-         "dialog", "leave")
+# Kinds an outside action can be, in the order the card names them (press: a control code could not sort whose
+# press sent something); then the page's own asks, going to another site, and a run's plan.
+KINDS = ("send", "comment", "like", "post", "order", "delete", "account", "grant", "submit", "press", "upload",
+         "download", "dialog", "leave", "plan")
 # The kinds the person may let through without asking, per site.
 SKIPPABLE = ("send", "comment", "like", "post")
 ALLOW_FILE = "browser-allow.json"
@@ -72,11 +76,6 @@ DELETE_WORDS = _words(
      "cancel subscription", "cancel my subscription", "cancel account", "cancel membership", "cancel order",
      "close account"],
     ["删除", "移除", "清空", "注销", "取消订阅", "撤回"])
-SUBMIT_WORDS = _words(
-    ["submit", "send", "publish", "post", "confirm", "apply", "sign up", "register", "save", "update", "create",
-     "approve", "reject"],
-    ["提交", "发送", "发布", "确认", "保存", "更新", "创建", "批准", "拒绝", "驳回", "应用"])
-COOKIE_REJECT = re.compile(r"cookie|^reject\s+all$|^(?:拒绝所有|全部拒绝|拒绝全部)$", re.I)
 GRANT_WORDS = _words(["authorize", "authorise", "allow access", "grant access", "give access"],
                      ["授权", "允许访问", "授予访问"])
 AFFIRMATIVE = re.compile(r"^(?:allow|continue|accept|approve|agree|yes|允许|继续|接受|同意|批准)(?:\b|$)", re.I)
@@ -158,10 +157,7 @@ def classify(mode: str, name: str, role: str, facts: dict, url: str = "") -> tup
         return _composer_kind(facts), "a button with no words by a text box"
     if facts.get("submitter") and form and not form.get("search"):
         return _sent(form), f"it submits its form ({str(form.get('method') or 'get').upper()})"
-    if (SUBMIT_WORDS.search(name) and not (form or {}).get("search") and not COOKIE_REJECT.search(name)
-            and not facts.get("link")):
-        return "watch", f"the name {name!r} is submission vocabulary"
-    return "", "reading or moving about"
+    return "", "nothing its name or form says; what its press sends is watched"
 
 
 # Ours: chords that read or fill the person's clipboard, which may hold their password; keys that only edit a field.

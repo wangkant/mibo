@@ -101,7 +101,14 @@
     "otherSteps": "Concluiu {count} etapas",
     "sources_other": "{count} fontes",
     "listSep": ", ",
-    "sources_one": "{count} fonte"
+    "sources_one": "{count} fonte",
+    "memUsed_one": "Usou 1 lembrança",
+    "memUsed_other": "Usou {count} lembranças",
+    "memSaved": "Guardado na memória: {what}",
+    "memManage": "Gerenciar",
+    "memForgotten": "Esquecido",
+    "memGone": "Esta lembrança não existe mais.",
+    "memSep": "; "
   },
   "app": {
     "someone": "Seu personagem",
@@ -137,7 +144,8 @@
       "asleepUntil": "Descansando até {time}",
       "back": "De volta · trouxe {count} recomendações",
       "home": "Em casa"
-    }
+    },
+    "privateChat": "Conversa temporária"
   },
   "browse": {
     "back": "Voltar",
@@ -171,7 +179,6 @@
     "notSecure": "Não seguro",
     "notSecureTitle": "A conexão com este site não é criptografada. Não digite senhas nem dados de pagamento aqui.",
     "fit": "Ajustar à largura",
-    "fitOff": "100%",
     "fitTitle": "A página está ajustada à largura do painel; clique para ver no tamanho original",
     "fitOffTitle": "A página no tamanho original (Ctrl +/- para zoom); clique para ajustar à largura do painel",
     "col": {
@@ -222,7 +229,9 @@
           "account": "Alterar as configurações da conta?",
           "grant": "Conceder este acesso?",
           "submit": "Enviar este formulário?",
-          "leave": "Ir para outro site?"
+          "leave": "Ir para outro site?",
+          "plan": "Começar esta tarefa?",
+          "press": "Pressionar este botão?"
         },
         "verbs": {
           "send": "Enviar",
@@ -262,6 +271,59 @@
         "no": "Não permitir",
         "gone": "Este cartão não está mais aguardando."
       }
+    },
+    "more": "Mais ações",
+    "zoom": "Zoom",
+    "zoomIn": "Aumentar",
+    "zoomOut": "Diminuir",
+    "zoomReset": "Redefinir para 100%",
+    "find": "Localizar na página",
+    "print": "Imprimir",
+    "copyLink": "Copiar link",
+    "copied": "Link copiado",
+    "downloads": "Downloads",
+    "downloadOpen": "Abrir",
+    "downloadFolder": "Mostrar na pasta",
+    "askSelection": "Perguntar ao Mibo",
+    "linkTab": "Abrir link em nova guia",
+    "linkSystem": "Abrir link no navegador do sistema",
+    "downloadStates": {
+      "progress": "Baixando",
+      "progressPart": "Baixando: {n}%",
+      "waiting": "Aguardando confirmação",
+      "failed": "Falha no download",
+      "cancelled": "Cancelado",
+      "gone": "Arquivo excluído"
+    },
+    "modes": {
+      "title": "Como age nas páginas",
+      "off": "Desativado",
+      "read": "Somente leitura",
+      "ask": "Perguntar sempre",
+      "auto": "Revisão automática"
+    },
+    "prompt": {
+      "permission": "{site} solicita permissão: {what}",
+      "kinds": {
+        "camera": "câmera",
+        "microphone": "microfone",
+        "geolocation": "localização",
+        "clipboard": "área de transferência",
+        "downloads": "vários downloads",
+        "files": "edição de arquivos",
+        "fonts": "fontes locais",
+        "midi": "dispositivos MIDI",
+        "windows": "gerenciamento de janelas"
+      },
+      "once": "Permitir desta vez",
+      "always": "Sempre permitir",
+      "no": "Não permitir",
+      "app": "{site} quer abrir um aplicativo externo",
+      "popup": "Pop-up de {site} bloqueado",
+      "open": "Abrir",
+      "cancel": "Cancelar",
+      "close": "Fechar",
+      "thisPage": "Esta página"
     }
   },
   "card": {
@@ -388,7 +450,8 @@
       "account": "Alterar a conta",
       "setting": "Alterar uma configuração",
       "print": "Imprimir",
-      "submit": "Enviar formulário"
+      "submit": "Enviar formulário",
+      "press": "Executar um comando de menu"
     },
     "deskWindow": "Janela",
     "deskTarget": "Controle a acionar",
@@ -457,7 +520,12 @@
     "picture_too_large": "Esta imagem é grande demais. Escolha uma menor.",
     "file_type": "Este tipo de arquivo não é compatível. Envie uma imagem ou um arquivo de texto.",
     "file_too_large": "Este arquivo é grande demais. Arquivos de texto podem ter no máximo 512 KB.",
-    "file_unreadable": "Não foi possível ler o arquivo. Verifique se é um arquivo de texto."
+    "file_unreadable": "Não foi possível ler o arquivo. Verifique se é um arquivo de texto.",
+    "manageMemory": "Gerenciar memória",
+    "privateMark": "Conversa temporária",
+    "privateNote": "Não usa nem atualiza a memória, não fica no registro de conversas e é apagada ao fechar o aplicativo.",
+    "privateStart": "Iniciar uma conversa temporária",
+    "privateLeave": "Sair da conversa temporária"
   },
   "compact": {
     "full": "Abrir na janela principal",
@@ -752,7 +820,9 @@
     "clipName": "area-de-transferencia.txt",
     "shotName": "captura.png",
     "clipPictureName": "area-de-transferencia.png",
-    "failed": "Não foi possível concluir. Tente novamente."
+    "failed": "Não foi possível concluir. Tente novamente.",
+    "private": "Conversa temporária",
+    "privateHint": "Não usa nem atualiza a memória"
   },
   "schedulechat": {
     "kinds": {
@@ -958,7 +1028,7 @@
     "cancel": "Cancelar",
     "forget": "Esquecer",
     "forgetAsk": "Esquecer isto?",
-    "forgetText": "O item sai da memória, dos registros da conversa e das suas preferências ao mesmo tempo, e não pode voltar.",
+    "forgetText": "O item é removido da memória e das suas preferências e não pode ser recuperado. O histórico das conversas é mantido, a menos que você escolha o contrário.",
     "restore": "Recuperar",
     "until": "De {from} a {to}",
     "allTitle": "Esquecer tudo",
@@ -968,7 +1038,41 @@
     "errors": {
       "activity_unavailable": "O personagem não pode responder agora. Tente novamente em instantes.",
       "activity_changed": "Este item mudou; ele foi lido novamente.",
-      "activity_restore_gone": "Este item não pode mais ser recuperado."
+      "activity_restore_gone": "Este item não pode mais ser recuperado.",
+      "memory_secret": "Não guardado: números de documento e de cartão, senhas e códigos nunca são salvos.",
+      "memory_not_instructions": "Não guardado: parece uma instrução.",
+      "memory_paused": "A memória está pausada. Ative Usar e atualizar a memória para adicionar itens.",
+      "memory_health_off": "Não guardado: os dados de saúde estão configurados para não serem guardados.",
+      "no_window": "Os arquivos só podem ser salvos na janela do aplicativo."
+    },
+    "onTitle": "Usar e atualizar a memória",
+    "onText": "Quando ativada, a personagem considera estas memórias nas respostas e registra novidades das conversas. Quando desativada, nada é usado nem adicionado; os itens permanecem.",
+    "healthTitle": "Guardar dados de saúde",
+    "healthText": "Alergias, condições e medicamentos. Ativado por padrão para que a personagem evite o que você não pode comer ou não deve fazer. Quando desativado, esses dados não são guardados e os já guardados não são usados nas respostas.",
+    "kept": "Guardado em {day}",
+    "saidOpen": "Ver origem",
+    "saidClose": "Ocultar origem",
+    "saidNone": "As palavras originais não estão mais no histórico das conversas.",
+    "add": "Adicionar",
+    "addLabel": "Adicionar uma memória",
+    "addPlaceholder": "Por exemplo: alergia a manga, costuma fazer trilha nos fins de semana",
+    "moreTitle": "Exportar e importar",
+    "exportTitle": "Exportar",
+    "exportText": "Salvar em um arquivo tudo o que ainda vale.",
+    "exportSaved": "Salvo.",
+    "importTitle": "Importar de outro assistente",
+    "importText": "Cole a lista de memórias exportada por outro assistente de IA, um item por linha. Depois da leitura, revise cada item; só os marcados são guardados. O texto é guardado apenas como informação e nunca é seguido como instrução.",
+    "importLabel": "Lista de memórias de outro assistente",
+    "importRead": "Ler",
+    "importKeep": "Guardar seleção ({count})",
+    "importNone": "Nenhum item para importar foi encontrado.",
+    "importDone": "{count} importado(s).",
+    "forgetChats": "Remover também das conversas as frases que o mencionam",
+    "refused": {
+      "secret": "Contém número de documento ou de cartão, senha ou código; não guardado",
+      "not_instructions": "Parece uma instrução; não guardado",
+      "kept": "Já está na memória",
+      "health_off": "Os dados de saúde estão configurados para não serem guardados"
     }
   },
   "setup_model": {
@@ -1201,11 +1305,27 @@
     },
     "browsingTitle": "O personagem pode usar o que você lê no navegador do aplicativo",
     "browsingText": "Quando o personagem os usa, os títulos e o texto das páginas podem ser enviados ao serviço de modelos; senhas e dados de login nunca são. Páginas de login, de pagamento e páginas lidas no modo privado não são guardadas.",
-    "clearTitle": "Limpar dados de navegação",
-    "clearText": "Exclui o histórico do navegador do aplicativo, além dos cookies, logins e cache.",
+    "historyTitle": "Histórico",
+    "historyText": "Limpa o histórico, o histórico de downloads e o cache do navegador do aplicativo em um período. Logins e senhas salvas são mantidos; gerencie-os em Conexões.",
+    "clearRange": "Período",
+    "ranges": {
+      "hour": "Última hora",
+      "day": "Últimas 24 horas",
+      "all": "Todo o período"
+    },
+    "historyFold": "Mostrar histórico",
+    "historySearch": "Pesquisar no histórico",
+    "historyNone": "Ainda não há histórico. As páginas lidas no navegador do aplicativo aparecem aqui.",
+    "historyNoMatch": "Nenhuma página correspondente.",
+    "historyMore": "Mostrar mais",
+    "historyRemove": "Remover “{title}” do histórico",
     "clear": "Limpar",
-    "clearAsk": "Limpar dados de navegação?",
-    "clearAskText": "O histórico, os cookies e os logins do navegador do aplicativo serão excluídos, e os sites pedirão que você entre novamente. Esta ação não pode ser desfeita.",
+    "clearAsk": {
+      "hour": "Limpar o histórico da última hora?",
+      "day": "Limpar o histórico das últimas 24 horas?",
+      "all": "Limpar todo o histórico?"
+    },
+    "clearAskText": "O histórico, o histórico de downloads e o cache deste período serão excluídos, e as recomendações deixarão de considerar essas páginas. Logins e senhas salvas são mantidos. Esta ação não pode ser desfeita.",
     "cleared": "Limpo.",
     "sitesFold_zero": "Sites",
     "sitesFold_other": "Sites ({count})",
@@ -1233,7 +1353,13 @@
       "remarks_invalid": "Não foi salvo. Atualize a página e tente novamente."
     },
     "ignoreFold_one": "Programas que ele nunca olha ({count})",
-    "sitesFold_one": "Sites ({count})"
+    "sitesFold_one": "Sites ({count})",
+    "permitsFold": "Permissões de sites",
+    "permitsNone": "Quando um site solicita a câmera, o microfone, a localização ou outras permissões, suas escolhas aparecem aqui.",
+    "permitStates": {
+      "allow": "Sempre permitido",
+      "deny": "Não permitido"
+    }
   },
   "setup_programs": {
     "hint": "Deixe o personagem ver ou operar as janelas dos programas que você permitir, quando pedir na conversa: escrever no Bloco de Notas, fazer uma conta na Calculadora.",
@@ -1279,7 +1405,10 @@
       "check": "Marcou",
       "uncheck": "Desmarcou",
       "append": "Adicionou",
-      "see": "Pela imagem"
+      "see": "Pela imagem",
+      "tier": "Permissões alteradas",
+      "block": "Adicionado à lista proibida",
+      "unblock": "Removido da lista proibida"
     },
     "statuses": {
       "ok": "Concluído",
@@ -1308,7 +1437,8 @@
       "account": "Alterar a conta",
       "setting": "Alterar uma configuração",
       "print": "Imprimir",
-      "submit": "Enviar formulário"
+      "submit": "Enviar formulário",
+      "press": "Executar um comando de menu"
     },
     "switchLine": {
       "turned on": "Ativado",
@@ -1317,7 +1447,24 @@
       "pictures turned off": "Operar pela imagem desativado"
     },
     "typed": "Texto",
-    "logFold_one": "Registro (último {count})"
+    "logFold_one": "Registro (último {count})",
+    "modeName": "Forma de agir",
+    "modeText": "Somente leitura: lê a janela e não faz nada. Perguntar sempre: toda ação com efeito externo espera sua confirmação. Revisão automática: um modelo revisor olha primeiro; envios claramente pedidos seguem, e pagamentos, exclusões e mudanças de conta continuam perguntando.",
+    "modes": {
+      "read": "Somente leitura",
+      "ask": "Perguntar sempre",
+      "auto": "Revisão automática"
+    },
+    "tiers": {
+      "full": "Completo",
+      "click": "Só cliques",
+      "view": "Só ver"
+    },
+    "tierOf": "Permissões de {name}",
+    "blockText": "Programas cujo nome contém estas palavras também nunca são operados:",
+    "blockHint": "Adicionar uma palavra, como o nome de um programa",
+    "blockAdd": "Adicionar",
+    "unblock": "Remover {word}"
   },
   "setup_recs": {
     "paceName": "Frequência",

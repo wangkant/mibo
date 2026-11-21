@@ -219,6 +219,8 @@
   const ctx = {
     api,
     confirm: confirmBox,
+    // A new chat, or with `private` a 无痕对话, opened in place of the one on screen.
+    newChat: (isPrivate) => newChat(isPrivate),
     picture,
     attachedText,
     // In its own window: told when a chat changes ("pa-chats"), so the chat asks only now and then.
@@ -600,6 +602,9 @@
     const open = row.querySelector(".side-chat-open");
     row.classList.toggle("active", on);
     row.classList.toggle("untitled", !chat.title);
+    // A 无痕对话 wears its mark in the list too (app.css).
+    row.classList.toggle("private", Boolean(chat.private));
+    if (chat.private) open.title = `${title} · ${say("privateChat")}`;
     if (on) open.setAttribute("aria-current", "page");
     else open.removeAttribute("aria-current");
     row.querySelector(".side-chat-more").setAttribute("aria-label", say("more").replace("{title}", title));
@@ -780,13 +785,13 @@
   $("side-chats").addEventListener("scroll", () => closeMenu());
   window.addEventListener("resize", () => closeMenu());
 
-  // A new chat; one not written in yet is opened again rather than another made.
-  async function newChat() {
-    const blank = chats.find((chat) => !chat.title);
+  // A new chat, or a 无痕对话; one of that kind not written in yet is opened again rather than another made.
+  async function newChat(isPrivate = false) {
+    const blank = chats.find((chat) => !chat.title && Boolean(chat.private) === isPrivate);
     if (blank) return openChat(blank.id);
     let made;
     try {
-      made = await api("chats", {});
+      made = await api("chats", isPrivate ? { private: true } : {});
     } catch {
       return;
     }
@@ -796,7 +801,7 @@
   }
 
   $("side-main").addEventListener("click", () => openChat(MAIN));
-  $("side-new").addEventListener("click", newChat);
+  $("side-new").addEventListener("click", () => newChat());
   $("side-finds").addEventListener("click", openFinds);
   $("side-settings").addEventListener("click", () => openSetup());
 

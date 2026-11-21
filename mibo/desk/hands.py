@@ -31,6 +31,9 @@ TICKS = {"check": True, "uncheck": False}
 # editing; the new name asks); every other one asks on a card.
 MENU_FREE = re.compile(r"copy|copy as path|properties|view|sort by|group by|refresh|show more options|rename|"
                        r"复制|复制文件地址|复制为路径|属性|查看|排序方式|分组依据|刷新|显示更多选项|重命名", re.I)
+# What read only and a view tier still do; the keys a click tier still presses (they move, they type nothing).
+LOOKS = {"look", "wait", "switch", "scroll", "focus"}
+NAV_KEYS = re.compile(r"(?:shift\+)?(?:tab|up|down|left|right|pageup|pagedown|home|end|esc|escape)", re.I)
 # A change that ends a reply's run of actions: what comes after was planned on a window that is no longer so.
 MOVED = ("a window opened", "a window closed", "the window closed")
 EDITING = "the name is still being edited, the file is not renamed yet: the key Enter renames it"
@@ -66,8 +69,14 @@ def published_by(lang: str, exe: str, signer: str, package: str = "") -> str:
 
 class Hands:
     def __init__(self, desktop: Path, *, ask: Callable[[dict], Optional[dict]], who: str = "Mibo",
-                 lang: str = "zh"):
+                 lang: str = "zh", review: Optional[Callable[[dict], object]] = None):
+        from ..acting import Modes
         self.grants = g.Grants(desktop)
+        self.modes = Modes(desktop)
+        # Auto mode's reviewer on one action (review.decide's Verdict), for what acting.decide sends it.
+        self.review = review
+        # The windows where this task typed into a one-line field: their buttons may send it.
+        self.typed_tops: set[int] = set()
         self.ask = ask
         self.who = who
         self.lang = "zh" if lang.startswith("zh") else "en"
@@ -92,10 +101,11 @@ class Hands:
         self.end("replaced", "")
         self.task = " ".join(str(task).split())[:300]
         self.once = set()
+        self.typed_tops = set()
         return {"status": "ok"}
 
     def held(self) -> str:
-        if not self.task:
+        if not self.task or not self.grants.on():
             return "stopped"
         if self.strip and self.strip.halted:
             return self.strip.halted
@@ -164,6 +174,9 @@ class Hands:
                 why = f"Start calls it {shown!r}, and {word.group()!r} is on the never list"
             elif shown:
                 prog = {**prog, "name": shown}
+        word = "" if why else self.grants.blocked_by(prog)
+        if word:
+            why = f"its name holds {word!r}, which is on the person's own never list"
         if why:
             self.grants.log({"do": "use", "program": prog.get("name", ""), "exe": prog.get("exe", ""),
                              "status": "refused", "line": why})
@@ -226,7 +239,7 @@ class Hands:
         if not hwnd:
             return {"status": "failed", "line": f"[failed] no window of {part['name']} is open now"}
         prog = g.identify(g.program_pid(hwnd))
-        why = g.never(prog, hwnd)
+        why = g.never(prog, hwnd) or self.grants.blocked_by({**prog, "name": part["name"]})
         if why:
             return {"status": "refused", "line": f"[refused] that window of {part['name']} is never operated: {why}"}
         if g.key_of(prog) not in self.once and self.grants.find(prog) is None:
@@ -330,6 +343,10 @@ class Hands:
             return {"status": "failed", "line": "[failed] no program in use"}
         do = str(action.get("do") or "")
         self.target = None
+        limit = self._limit(do, action)
+        if limit:
+            self._log(do, "", "refused", limit, named=str(action.get("name") or "")[:80])
+            return {"status": "failed", "line": limit, "proved": False}
         if do not in ("look", "wait", "switch") and self.view.seen and self.view.moved():
             # A dialog that came up by itself, or a window that went: nothing is pressed or typed into a
             # window the model has not seen, and a key least of all (it would answer the dialog).
@@ -364,6 +381,23 @@ class Hands:
                   result["status"], result["line"][:300], result.get("kind", ""),
                   text=str(action.get("text") or "")[:200], named=str(action.get("name") or "")[:80])
         return result
+
+    def _limit(self, do: str, a: dict) -> str:
+        """Why the person's mode or the program's tier keeps this action from being done ("" when it may be):
+        read only and a view tier only look; a click tier presses but types nothing and presses no key that
+        types."""
+        if do in LOOKS:
+            return ""
+        tier = self.grants.tier(self.program)
+        if self.modes.mode("programs") == "read" or tier == "view":
+            why = "the person set other programs to read only" if tier != "view" else (
+                f"{self.program['name']} is set to be looked at only")
+            return f"[read-only] {do}: {why}, so nothing was done; read and tell them, or ask_person"
+        if tier == "click" and (do in ("set", "type", "append", "paste") or (
+                do == "key" and not NAV_KEYS.fullmatch(str(a.get("key") or "").replace(" ", "")))):
+            return (f"[click-only] {do}: {self.program['name']} takes presses but no typing (what is typed there can "
+                    f"run as a command), so nothing was done; ask_person to type it")
+        return ""
 
     def _find(self, a: dict):
         """The id of the control an action means. It is named by the name the look printed, by its id, or
@@ -490,6 +524,9 @@ class Hands:
             if kind:
                 return self._outside(kind, why, node, text, self._files(node, kind), run)
             line = run()
+            if node.role == "textbox" and not (node.hwnd and win32.multiline(node.hwnd)) and line.startswith("[ok]"):
+                # A one-line field of a form: its window's buttons may now send what was typed.
+                self.typed_tops.add(node.top)
             if node.role == "textbox" and gate.in_shell_view(node) and line.startswith("[ok]"):
                 # A file's name being edited is not the file's name yet.
                 line += "; " + EDITING
@@ -530,8 +567,11 @@ class Hands:
         file: unless it only copies, shows or unfolds, it asks on a card whatever its name."""
         v = self.view
         kind, why = gate.press(node, win32.title_of(node.top), node.top == v.hwnd, v.texts(node.top),
-                               self._is_folder(node), do, self._base())
+                               self._is_folder(node), do, self._base(), node.top in self.typed_tops)
         origin = v.menus.get(node.top)
+        if kind == "press" and origin is not None and gate.in_shell_view(origin):
+            # A file's own menu: the rule below decides by MENU_FREE.
+            kind = ""
         name = re.sub(r"\s*\(&?\w\)|&|\.\.\.|…", "", node.name).strip()
         if not kind and origin is not None and gate.in_shell_view(origin) and do not in ("expand", "collapse") and (
                 "expand" not in node.patterns and not MENU_FREE.fullmatch(name)):
@@ -594,20 +634,37 @@ class Hands:
 
     def _outside(self, kind: str, why: str, node, text: str, files: list[str], run: Callable[[], str],
                  source=None) -> dict:
-        """The person's press on a card first, each time; then the action exactly once; then a look again.
-        `source` is the field the text comes from, when it is not the target itself."""
+        """The person's press on a card first, each time (in auto mode the reviewer may pass what acting.decide
+        sends it); then the action exactly once; then a look again. `source` is the field the text comes from,
+        when it is not the target itself."""
+        from .. import acting
         v = self.view
         name = node.name if node is not None else ""
         before = (self._fingerprint(node), self._fingerprint(source))
-        try:
-            picture = base64_jpeg(v)
-        except Exception:
-            picture = ""
-        card = {"id": secrets.token_urlsafe(8), "type": "desk_action", "kind": kind, "program": self.program["name"],
-                "exe": self.program["exe"], "window": clip(win32.title_of(node.top if node else v.hwnd), 120),
-                "target": f"{node.role} {quote(clip(name, 80))}" if node is not None else "",
-                "text": text[:2000], "files": files[:50], "why": why[:200], "task": self.task, "picture": picture}
-        answer = self.ask(card)
+        window = clip(win32.title_of(node.top if node else v.hwnd), 120)
+        how = "confirmed by the person"
+        answer = None
+        if self.review is not None and acting.decide(self.modes.mode("programs"), kind, "", "programs") == "review":
+            verdict = self.review({"kind": kind, "where": f"{self.program['name']} — {window}",
+                                   "target": files[:50] or ([name] if name else []), "text": text[:2000],
+                                   "page_says": name})
+            if verdict.decision == "refuse":
+                return {"status": "declined", "kind": kind,
+                        "line": f"[declined] {kind} ({clip(name, 40)}): {verdict.line(self.lang)}; nothing was done"
+                                + ("; turned down three times in a row: stop and hand the task back" if verdict.stop
+                                   else "")}
+            if verdict.decision == "go":
+                answer, how = {"yes": True}, verdict.line(self.lang)
+        if answer is None:
+            try:
+                picture = base64_jpeg(v)
+            except Exception:
+                picture = ""
+            card = {"id": secrets.token_urlsafe(8), "type": "desk_action", "kind": kind,
+                    "program": self.program["name"], "exe": self.program["exe"], "window": window,
+                    "target": f"{node.role} {quote(clip(name, 80))}" if node is not None else "",
+                    "text": text[:2000], "files": files[:50], "why": why[:200], "task": self.task, "picture": picture}
+            answer = self.ask(card)
         if answer is None:
             return {"status": "declined", "kind": kind,
                     "line": f"[declined] nobody answered the card for {kind} ({clip(name, 40)}); nothing was done"}
@@ -623,8 +680,7 @@ class Hands:
         if not line.startswith("[ok]"):
             return {"status": "failed", "kind": kind, "line": line}
         proof = self._proof(kind, source or node, text, files)
-        return {"status": "ok", "kind": kind, "outside": True,
-                "line": f"{line} ({kind}, confirmed by the person; done once){proof}"}
+        return {"status": "ok", "kind": kind, "outside": True, "line": f"{line} ({kind}, {how}; done once){proof}"}
 
     def _fingerprint(self, node) -> tuple:
         """What the card showed of the target, read again: its name and, for a field, what it holds."""

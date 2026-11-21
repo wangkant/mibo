@@ -27,6 +27,14 @@ NATIVE_PLATFORM = "qq"
 #: The platform name in the keys of the app's chats (dm.chat_key). Stored in ids, so keep it.
 PAGE_PLATFORM = "browser"
 
+#: How the conversation of a 无痕对话 of the page starts: a chat that reads no memory and leaves none.
+PRIVATE_CHAT = "incognito-"
+
+
+def private_chat(key: str) -> bool:
+    """Is this conversation, its user id or its key a 无痕对话: never logged, kept on disk or folded."""
+    return str(key or "").rsplit(":", 1)[-1].startswith(PRIVATE_CHAT)
+
 
 def is_dm(routing_key: str) -> bool:
     """Is this key a one-to-one conversation rather than a room."""

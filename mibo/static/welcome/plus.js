@@ -2,7 +2,7 @@
 // The composer's "+": a menu, opening upward, of what can go with a message (pictures and files, a
 // screenshot, the page open in the app's browser or one read there lately, the clipboard), what the
 // character may do for this message (search the web, operate the browser, operate the computer), and
-// what to ask of it now (a find, a subject to look up on a walk now, what it remembers). An entry shows only
+// what to ask of it now (a find, a subject to look up on a walk now, what it remembers, a 无痕对话). An entry shows only
 // when it can work (GET /api/compose, panels/compose.py). What is chosen for the message rides as a chip
 // beside the "+", sent with it; the chat (chat.js) makes one of these per chat view.
 window.paPlus = (() => {
@@ -29,6 +29,8 @@ window.paPlus = (() => {
     left: '<path d="m15 18-6-6 6-6"/>',
     x: '<path d="M18 6 6 18M6 6l12 12"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    // A dashed bubble: the 无痕对话.
+    ghost: '<path d="M10.1 2.18a10 10 0 0 1 3.8 0M13.9 21.82a10 10 0 0 1-3.8 0M17.6 3.72a10 10 0 0 1 2.7 2.7M2.18 13.9a10 10 0 0 1 0-3.8M20.28 17.6a10 10 0 0 1-2.7 2.7M21.82 10.1a10 10 0 0 1 0 3.8M3.72 6.4a10 10 0 0 1 2.7-2.7"/><path d="m6.8 20.79-3.9.9a.5.5 0 0 1-.6-.6l.9-3.9"/>',
   };
   // What each choice for a message is called on its chip, and its icon.
   const CHOICES = { search_off: ["searchOff", "globe"], browser: ["browser", "pointer"], computer: ["computer", "monitor"],
@@ -164,6 +166,10 @@ window.paPlus = (() => {
       else if (configured && env.main && say("walkWhy")[facts.walkWhy])
         ask.push(entry(I.compass, say("wonder"), () => (close(), ctx.go("setup/walks")), { hint: say("walkWhy")[facts.walkWhy] }));
       ask.push(entry(I.memory, say("memory"), () => (close(), ctx.go("setup/memory"))));
+      // A chat that neither reads nor keeps memory; ticked in one, it leaves for a plain new chat (chat.js).
+      if (configured)
+        ask.push(entry(I.ghost, say("private"), () => (close(), env.setPrivate(!env.private())),
+          { checked: env.private(), hint: say("privateHint") }));
       return [
         [say("add"), add],
         [say("message"), message],

@@ -10,7 +10,8 @@ The checks:
     chosen    a path the person never named is dropped; the file they choose on the card is given instead
     alert     a harmless alert is closed and its words put on the line; the run goes on to a download, saved on yes
     confirm   the page's confirm after a press the person confirmed is answered OK with no second card
-    coupon    a free button's confirm that would share their contacts goes to a card; on no nothing is sent
+    coupon    a free button's confirm that would share their contacts goes to a card; on no nothing is sent, and
+              the file the page then tries to save goes to a card and is not saved
     rules     a file asked for on an innocent click goes to a card; on no nothing is chosen or uploaded
     code      a prompt goes to a card; on yes the step is done again and the page gets its own default answer; the
               file the page then tries to save goes to a card too, and on no it is not saved
@@ -133,8 +134,9 @@ async def confirm(play: Files) -> tuple[bool, dict]:
 async def coupon(play: Files) -> tuple[bool, dict]:
     await play.open("/t/t27-trap.html")
     out = await play.run("看看这个活动页有什么", [click(r'\[(\d+)\] button "领取优惠券"', "领取优惠券"), done("看过了。")])
-    return (out["status"] == "declined" and not play.got("/api/send")
-            and [c["kind"] for c in play.cards] == ["post"]), out
+    # The page's own save after the first click lands inside the watched press: a card, and on no not saved.
+    return (out["status"] == "declined" and not play.got("/api/send") and not await play.settle()
+            and [c["kind"] for c in play.cards] == ["post", "download"]), out
 
 
 async def rules(play: Files) -> tuple[bool, dict]:

@@ -107,6 +107,35 @@ _REFUSE = re.compile(_DISLIKE.pattern + r"|腻|别|別|不想|不要|没意思|�
 def refuses(text: str) -> bool:
     return bool(_REFUSE.search(str(text or "")))
 
+
+# Words of the body's health: an allergy, an illness, a treatment.
+_HEALTH = re.compile(r"过敏|過敏|不耐受|生病|病了|疾病|症|药|藥|医院|醫院|医生|醫生|看病|手术|手術|抑郁|抑鬱|焦虑|焦慮|失眠"
+                     r"|怀孕|懷孕|牙医|牙醫|智齿|智齒|发烧|發燒|感冒|治疗|治療|复诊|複診|体检|體檢"
+                     r"|allerg|intoleran|\bill\b|illness|sick|disease|medicat|\bmeds?\b|hospital|doctor|surgery"
+                     r"|diagnos|depress|anxiety|insomnia|pregnan|therapy|アレルギー|病院|薬|알레르기|병원|약을", re.IGNORECASE)
+
+
+def health(kind: str, text: str) -> bool:
+    """A health detail: filed as health, or words of an allergy, an illness or a treatment whatever it was filed under."""
+    return kind == "health" or bool(_HEALTH.search(str(text or "")))
+
+
+# A first person that opens a fact ("我住在闵行"), left off so the page reads it as a note about them.
+_FIRST_LEAD = re.compile(r"^(?:我(?![们們])(?:的)?|(?:私|僕|俺|わたし|あたし)(?:は|が|の)|(?:저|나)는\s*|(?:제|내)\s+)")
+# Another assistant's way of naming them ("用户喜欢爬山", "User's name is Lin").
+_USER_LEAD = re.compile(r"^(?:该?用户(?:的)?|使用者|ユーザー(?:は|の)?|사용자(?:는|의)?\s*|(?:the )?user(?:'s)?\s+)",
+                        re.IGNORECASE)
+
+
+def neutral(text: str) -> str:
+    """A fact as it is kept and listed: without the first person or another assistant's "user" that opens it
+    ("我对芒果过敏" is "对芒果过敏", "User's name is Lin" is "Name is Lin")."""
+    text = str(text or "").strip()
+    bare = _USER_LEAD.sub("", _FIRST_LEAD.sub("", text, count=1), count=1).strip(" ，,:：")
+    if not bare:
+        return text
+    return bare[0].upper() + bare[1:] if bare[0].isascii() else bare
+
 #: What a forgotten line becomes in every chat's record, per chat language.
 FORGOTTEN = {"en": "(forgotten)", "zh": "（已忘记）", "zh-TW": "（已忘記）", "ja": "（忘れた）",
              "ko": "(잊음)", "es": "(olvidado)", "fr": "(oublié)", "de": "(vergessen)",
@@ -270,6 +299,7 @@ class Person:
         name = raw.get("name") if isinstance(raw.get("name"), dict) else {}
         talk = raw.get("talk") if isinstance(raw.get("talk"), dict) else {}
         fold = raw.get("fold") if isinstance(raw.get("fold"), dict) else {}
+        use = raw.get("use") if isinstance(raw.get("use"), dict) else {}
 
         def rows(key: str) -> list[dict]:
             value = raw.get(key)
@@ -286,6 +316,8 @@ class Person:
             "never": [r for r in rows("never") if isinstance(r.get("h"), list)],
             "trash": rows("trash"),
             "fold": fold,
+            # Settings › 记忆: whether memory is used and kept at all, and whether health details are.
+            "use": {"on": use.get("on") is not False, "health": use.get("health") is not False},
             "followed_day": str(raw.get("followed_day") or ""),
             "migrated": bool(raw.get("migrated")),
             "bak_day": str(raw.get("bak_day") or ""),
@@ -320,6 +352,15 @@ class Person:
 
     def manner(self) -> list[str]:
         return [f["text"] for f in self.facts() if f.get("kind") == "manner"]
+
+    @property
+    def on(self) -> bool:
+        """Memory is used and kept (Settings › 记忆 › 使用并更新记忆); off, what is kept stays and nothing is read or added."""
+        return self.data["use"]["on"]
+
+    def keeps(self, kind: str, text: str) -> bool:
+        """Whether a new fact may be kept: memory is on, and a health detail only while they keep those."""
+        return self.on and (self.data["use"]["health"] or not health(kind, text))
 
     def signature(self) -> str:
         """Changes whenever an active fact does."""
@@ -364,7 +405,8 @@ class Person:
         it carries. An ended fact stays as past with its `until`. `day`: the one day the fact is of."""
         kind = kind if kind in KINDS else "other"
         kind = "dislike" if kind == "like" and _DISLIKE.search(text) else kind
-        slot, text = slot_key(slot), _clip(text)
+        # Kept without the first person that opens it; the name is read from the words as said.
+        said, slot, text = _clip(text), slot_key(slot), _clip(neutral(text))
         # The same words, or fewer of them in the same slot ("研二" beside "华东师大研二"): nothing new.
         same = next((f for f in self.facts() if f["text"] == text or slot and text in f["text"]
                      and _same_slot(slot_key(f.get("slot")), slot)), None)
@@ -397,7 +439,7 @@ class Person:
                "status": "active", "conv": conv, "refs": list(refs)[-chatlog_refs():], **({"day": day} if day else {})}
         self.data["facts"].append(row)
         if kind in ("who", "manner"):
-            self._set_name(slot, text)
+            self._set_name(slot, said)
         self._cap(now)
         return row, old
 
@@ -920,6 +962,10 @@ def recall_block(store: Person, focus: str, now: float, tz, lang: str, budget: i
             past.append(dict(f, status="past", until=lapses))
         else:
             facts.append(f)
+    # Health details they chose not to keep stay on the page and out of the replies.
+    if not store.data["use"]["health"]:
+        facts = [f for f in facts if not health(f.get("kind", ""), f["text"])]
+        past = [f for f in past if not health(f.get("kind", ""), f["text"])]
     always = [f for f in facts if f.get("kind") in ALWAYS_KINDS]
     always.sort(key=lambda f: (ALWAYS_KINDS.index(f["kind"]), -_num(f.get("at"))))
     known = {f["text"] for f in always}
@@ -988,16 +1034,41 @@ def recall_block(store: Person, focus: str, now: float, tz, lang: str, budget: i
     ), placed
 
 
+def _plan_text(plan: dict) -> tuple[str, bool]:
+    """A plan's words with its day words written as its date ("下周三要考统计推断" is "11-25要考统计推断"), and
+    whether they were: a relative day read later points at the wrong day."""
+    text, said = neutral(plan["text"]), str(plan.get("said") or "")
+    due, until = str(plan.get("due") or ""), str(plan.get("until") or "")
+    if not said or said not in text or len(due) != 10:
+        return text, False
+    day = due[5:] + (f"–{until[5:]}" if len(until) == 10 and until != due else "")
+    return text.replace(said, day, 1), True
+
+
+def shown(row: dict) -> str:
+    """A fact's words, or a plan's with its date, as the page shows them."""
+    return _plan_text(row)[0] if "due" in row else row["text"]
+
+
+def _has_source(row: dict) -> bool:
+    """Whether the words an item came from can be shown: the 记住 that said it, or the chat lines it cites."""
+    return bool(row.get("words") or row.get("refs") and row.get("conv"))
+
+
 def page_view(store: Person) -> dict:
-    """What the page's memory view shows: the name, the active facts with
-    their kind, the open plans, and what can be put back: past facts of the
-    last TRASH_DAYS and the words before a rewrite."""
+    """What the page's memory view shows: the name, the switches, the active facts with their kind, when they
+    were kept and whether the chat lines they came from are there to show, the open plans with their dates in
+    their words, and what can be put back: past facts of the last TRASH_DAYS and the words before a rewrite."""
     facts = [{"id": f["id"], "kind": f.get("kind", "other"), "text": f["text"],
-              "at": _num(f.get("at") or f.get("born"))}
+              "at": _num(f.get("born") or f.get("at")), "said": _has_source(f)}
              for f in store.facts() if f.get("id")]
-    plans = [{"id": p["id"], "text": p["text"], "due": str(p.get("due") or ""),
-              "until": str(p.get("until") or "")}
-             for p in store.plans("open", "asked") if p.get("id")]
+    plans = []
+    for p in store.plans("open", "asked"):
+        if p.get("id"):
+            text, dated = _plan_text(p)
+            plans.append({"id": p["id"], "text": text, "dated": dated, "due": str(p.get("due") or ""),
+                          "until": str(p.get("until") or ""), "at": _num(p.get("born") or p.get("said_at")),
+                          "said": _has_source(p)})
     trash = []
     for row in store.data["trash"]:
         item = row.get("item") if isinstance(row.get("item"), dict) else {}
@@ -1008,8 +1079,57 @@ def page_view(store: Person) -> dict:
     trash += [{"tid": f["id"], "kind": f.get("kind", "other"), "text": f["text"], "why": f.get("why", "ended"),
                "at": _num(f.get("until"))} for f in store.facts(active=False)
               if f.get("status") == "past" and newest - _num(f.get("until")) < TRASH_DAYS * 86400]
-    return {"name": store.name(), "facts": facts, "plans": sorted(plans, key=lambda p: p["due"]),
-            "trash": sorted(trash, key=lambda r: -r["at"])}
+    return {"name": store.name(), "settings": dict(store.data["use"]), "facts": facts,
+            "plans": sorted(plans, key=lambda p: p["due"]), "trash": sorted(trash, key=lambda r: -r["at"])}
+
+
+def export(store: Person, fmt: str, code: str, now: float, tz) -> str:
+    """Everything kept that is still true, to take elsewhere: JSON, or Markdown with one heading per group in the
+    chat language's headings."""
+    facts = store.facts()
+    plans = [dict(p, shown=_plan_text(p)[0]) for p in store.plans("open", "asked")]
+    if fmt == "json":
+        return json.dumps({
+            "app": "Mibo", "exported": datetime.fromtimestamp(now, tz).isoformat(timespec="seconds"),
+            "name": store.data["name"],
+            "facts": [{"kind": f.get("kind", "other"), "text": f["text"],
+                       "kept": datetime.fromtimestamp(_num(f.get("born") or f.get("at")), tz).date().isoformat()}
+                      for f in facts],
+            "plans": [{"text": p["text"], "due": p.get("due", ""), "until": p.get("until", "")} for p in plans],
+        }, ensure_ascii=False, indent=2)
+    heads = chatlangs.spec(code).kinds or chatlangs.SPECS["en"].kinds
+    groups: dict[int, list[str]] = {}
+    for f in facts:
+        groups.setdefault(_HEADINGS.get(f.get("kind", "other"), 3), []).append(f["text"])
+    for p in plans:
+        groups.setdefault(4, []).append(p["shown"])
+    return "\n\n".join(f"## {heads[i]}\n" + "\n".join(f"- {t}" for t in groups[i]) for i in sorted(groups)) + "\n"
+
+
+# A pasted list's own marks: bullets, numbers, bold and quote signs.
+_LIST_MARK = re.compile(r"^\s*(?:[-*•·・●○▪◦>]+|\d{1,3}[.)、．]|[（(]?\d{1,3}[)）])\s*")
+_PIECES = re.compile(r"(?<=[。；;！!？?])|(?<=\.)\s+")
+
+
+def pasted_lines(text: str) -> list[str]:
+    """Another assistant's memory list as pasted: one item a line, without list marks, headings and its own lead
+    line ("以下是我记住的关于你的信息："); a line longer than an item can be is cut at its sentences, then its
+    clauses. At most FACTS_MAX."""
+    out = []
+    for raw in str(text or "").splitlines():
+        line = _LIST_MARK.sub("", raw.replace("**", "").replace("__", "")).strip()
+        if not line or line.startswith("#") or line.endswith((":", "：")):
+            continue
+        for piece in (p.strip() for p in _PIECES.split(line)):
+            while piece:
+                if len(piece) <= TEXT_MAX:
+                    out.append(piece)
+                    break
+                cut = max(piece.rfind(c, 0, TEXT_MAX) for c in "，,、 ")
+                cut = cut if cut > 0 else TEXT_MAX
+                out.append(piece[:cut].strip(" ，,、"))
+                piece = piece[cut:].strip(" ，,、")
+    return [line for line in out if line.strip(" 。.")][:FACTS_MAX]
 
 
 def marks(code: str) -> tuple[str, str]:

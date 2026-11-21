@@ -1794,6 +1794,87 @@
   align-items: center;
 }
 
+/* Settings › Privacy › History (setup/privacy.js): the range and 清除 beside the words, the list folded under them,
+   one line a page under a line for each day. */
+.setup-history-tools {
+  display: flex;
+  gap: var(--pa-s2);
+  align-items: center;
+}
+.setup-history-range {
+  width: auto;
+  height: 32px;
+  font-size: var(--pa-fs-sm);
+}
+.setup-history {
+  flex: 0 0 100%;
+}
+.setup-history-list {
+  display: grid;
+}
+.setup-history-day {
+  margin: var(--pa-s3) 0 var(--pa-s1);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 600;
+}
+.setup-history-list > .setup-history-day:first-child {
+  margin-top: 0;
+}
+.setup-history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s3);
+  min-height: 34px;
+  border-top: 1px solid var(--pa-line);
+}
+.setup-history-day + .setup-history-row {
+  border-top: 0;
+}
+.setup-history-time {
+  flex: none;
+  min-width: 3em;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.setup-history-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  color: var(--pa-ink);
+  text-decoration: none;
+}
+.setup-history-link:hover .setup-history-title {
+  text-decoration: underline;
+}
+.setup-history-link:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.setup-history-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--pa-fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-history-host {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.setup-history-more {
+  align-self: flex-start;
+}
+
 /* Settings › Memory (setup/memory.js): one card a kind, one line an item. */
 .setup-memory-groups {
   display: grid;
@@ -1870,6 +1951,74 @@
   .setup-memory-item {
     flex-wrap: wrap;
   }
+}
+.setup-memory-add-row {
+  display: flex;
+  gap: var(--pa-s2);
+  align-items: center;
+}
+/* The day an item was kept, and the way to the chat lines it came from. */
+.setup-memory-said-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pa-accent);
+  font: inherit;
+  cursor: pointer;
+}
+.setup-memory-said-open:hover:not(:disabled) {
+  color: var(--pa-accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.setup-memory-quotes {
+  display: grid;
+  gap: var(--pa-s1);
+  margin-top: var(--pa-s1);
+}
+.setup-memory-quote {
+  display: flex;
+  gap: var(--pa-s2);
+  margin: 0;
+  padding: 2px 0 2px var(--pa-s2);
+  border-left: 2px solid var(--pa-line-strong);
+  color: var(--pa-text);
+  font-size: var(--pa-fs-sm);
+  overflow-wrap: anywhere;
+}
+.setup-memory-quote-day {
+  flex: none;
+  color: var(--pa-faint);
+}
+/* Another assistant's list: pasted, then each item ticked or set aside with its reason. */
+.setup-memory-import {
+  display: grid;
+  gap: var(--pa-s2);
+  justify-items: start;
+  margin-top: var(--pa-s3);
+}
+.setup-memory-paste {
+  width: 100%;
+  min-height: 112px;
+}
+.setup-memory-offered {
+  display: grid;
+  gap: var(--pa-s1);
+  width: 100%;
+}
+.setup-memory-offer {
+  display: flex;
+  gap: var(--pa-s2);
+  align-items: flex-start;
+  font-size: var(--pa-fs-md);
+  color: var(--pa-ink);
+}
+.setup-memory-offer > input {
+  margin-top: 4px;
+}
+.setup-memory-offer-words {
+  display: flex;
+  flex-direction: column;
 }
 
 /* Settings › Files and commands (setup/shell.js). */

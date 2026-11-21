@@ -109,6 +109,9 @@ async def use(agent, args: dict, lookups) -> str:
     """search_past_chats as the reply model called it; the chats found go under the reply as a step."""
     query = " ".join(str(args.get("query") or "").split())[:120]
     when = " ".join(str(args.get("when") or "").split())[:60]
+    # A 无痕对话 reads no memory, earlier chats included.
+    if channels.private_chat(lookups.conversation):
+        return "(this is a temporary chat: it reads no earlier chats. Say so plainly; never guess what was said)"
     lookups.doing("chats", query or when)
     at = scope(agent, channels.dm_routing_key(f"{channels.PAGE_PLATFORM}:{lookups.conversation}"))
     # What the last minutes said is in the logs before they are read.

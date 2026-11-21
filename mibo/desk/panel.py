@@ -255,7 +255,7 @@ class Desk:
 
     def _begin(self, task: str, program: str, sight: str = "", also: tuple[str, ...] = ()) -> dict:
         from .hands import Hands
-        hands = Hands(self.desktop, ask=self.ask, who=self.who(), lang=self.lang)
+        hands = Hands(self.desktop, ask=self.ask, who=self.who(), lang=self.lang, review=self.review)
         hands.begin(task)
         self.hands = hands
         result = self._window(program)
@@ -306,6 +306,9 @@ class Desk:
         from . import names, win32
         from .hands import grant_text, published_by
         why = never_named(app.name) or never_named(Path(app.target).name)
+        word = "" if why else self.grants.blocked_by({"name": app.name, "exe": app.target or ""})
+        if word:
+            why = (f"名称含有你添加的词“{word}”", f"its name holds {word!r}, on your own never list")
         if why:
             self.grants.log({"do": "use", "program": app.name, "exe": app.target, "status": "refused", "line": why[1]})
             return {"status": "refused", "line": f"[refused] {app.name} is never operated: {why[1]}",
@@ -356,6 +359,15 @@ class Desk:
             return out
         raise ValueError("generic")
 
+    def review(self, action: dict):
+        """Auto mode's reviewer on one action, on the worker thread: the person's own messages of the turn under
+        way, never the window."""
+        from .. import acting, review
+        window = getattr(self.app.state, "window", None)
+        return asyncio.run(review.decide("programs", acting.asked(self.workspace), action,
+                                         ask=acting.reviewer(self.workspace),
+                                         attended=window is not None and window.attended(), lang=self.lang))
+
     def _pictures(self, hands, look: bool) -> dict:
         """On the worker thread, before the first picture of a task goes to the model service: the person's yes
         on a card that shows the window (this once, always, or no), unless they said always for this service.
@@ -402,15 +414,20 @@ class Desk:
     # --- Settings
 
     def view(self) -> dict:
+        from ..acting import Modes
         from ..see import when
         who, service = self.who(), self.service()
         return {
             "on": self.grants.on(),
+            "mode": Modes(self.desktop).mode("programs"),
+            "block": self.grants.blocked(),
             # Pictures of a window only a picture can work: asked on a card each time unless always for this service.
             "pictures": {"on": when.Switch(self.desktop).on(service),
                          "sentence": {lang: when.Switch.sentence(lang, who, service) for lang in ("zh", "en")}},
             "switch": {lang: {k: v.format(who=who) for k, v in g.SWITCH[lang].items()} for lang in ("zh", "en")},
-            "grants": [{k: row.get(k, "") for k in ("key", "name", "exe", "since")} for row in self.grants.all()],
+            "grants": [{**{k: row.get(k, "") for k in ("key", "name", "exe", "since")},
+                        "tier": row["tier"] if row.get("tier") in g.TIERS else g.default_tier(row.get("exe", ""))}
+                       for row in self.grants.all()],
             "never": [{"zh": zh, "en": en} for _, zh, en in NEVER],
         }
 
@@ -445,9 +462,29 @@ def mount(app, workspace, body) -> None:
         """Settings: the switch, a grant taken back. Only on the computer the app runs on."""
         payload = await body(request)
         state = desk()
-        # Turning off and taking back need no more than this computer; turning on needs the app's own page.
-        if (payload.get("on") is True or payload.get("pictures") is True) and not own_page(request):
+        # Turning off, taking back and tightening need no more than this computer; loosening needs the app's own page.
+        if (payload.get("on") is True or payload.get("pictures") is True or payload.get("mode") in ("ask", "auto")
+                or "unblock" in payload or (payload.get("tier") or {}).get("tier") in ("full", "click")
+                ) and not own_page(request):
             return _error("local_only", 403)
+        if payload.get("mode") is not None:
+            from ..acting import MODES, Modes
+            if payload["mode"] not in MODES:
+                return _error("generic")
+            await asyncio.to_thread(Modes(state.desktop).set, "programs", payload["mode"])
+            if payload["mode"] == "off":
+                await state.end("stopped", "turned off in Settings")
+            return await asyncio.to_thread(state.view)
+        if isinstance(payload.get("tier"), dict):
+            if payload["tier"].get("tier") not in g.TIERS:
+                return _error("generic")
+            await asyncio.to_thread(state.grants.set_tier, str(payload["tier"].get("key") or ""),
+                                    str(payload["tier"].get("tier") or ""))
+            return await asyncio.to_thread(state.view)
+        if isinstance(payload.get("block"), str) or isinstance(payload.get("unblock"), str):
+            word = payload.get("block") if isinstance(payload.get("block"), str) else payload["unblock"]
+            await asyncio.to_thread(state.grants.block, word, "block" in payload)
+            return await asyncio.to_thread(state.view)
         if isinstance(payload.get("pictures"), bool):
             from ..see import when
             await asyncio.to_thread(when.Switch(state.desktop).set, state.service() if payload["pictures"] else "")

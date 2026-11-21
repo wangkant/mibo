@@ -1708,3 +1708,62 @@ button.find-why:hover,
   line-height: 1.45;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
+/* A 无痕对话 (chat.js): its mark heads the chat, and a new plain chat offers the switch under its ideas. */
+.chat-private {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px var(--pa-s2);
+  margin: var(--pa-s4) auto 0;
+  padding: 6px 12px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px dashed var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 18px;
+  text-align: center;
+}
+.chat-private .i {
+  align-self: center;
+  width: 15px;
+  height: 15px;
+}
+.chat-private strong {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
+.chat-empty .chat-private {
+  margin: 0 auto var(--pa-s6);
+}
+.chat-private-toggle {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  margin: var(--pa-s5) auto 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--pa-r-pill);
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.chat-private[hidden],
+.chat-private-toggle[hidden] {
+  display: none;
+}
+.chat-private-toggle .i {
+  width: 16px;
+  height: 16px;
+}
+.chat-private-toggle:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.chat-private-toggle:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 1px;
+}

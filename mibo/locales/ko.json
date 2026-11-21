@@ -96,7 +96,13 @@
     "readPages_other": "페이지 {count}개를 읽음",
     "otherSteps": "{count}단계를 완료함",
     "sources_other": "출처 {count}개",
-    "listSep": ", "
+    "listSep": ", ",
+    "memUsed_other": "기억 {count}개를 참고함",
+    "memSaved": "기억함: {what}",
+    "memManage": "관리",
+    "memForgotten": "잊었습니다",
+    "memGone": "이 기억은 더 이상 없습니다.",
+    "memSep": "; "
   },
   "app": {
     "someone": "내 캐릭터",
@@ -132,7 +138,8 @@
       "asleepUntil": "{time}까지 쉬는 중",
       "back": "돌아옴 · 추천 {count}개를 가져왔습니다",
       "home": "집에 있음"
-    }
+    },
+    "privateChat": "임시 채팅"
   },
   "browse": {
     "back": "뒤로",
@@ -166,7 +173,6 @@
     "notSecure": "주의 요함",
     "notSecureTitle": "이 사이트와의 연결은 암호화되지 않았습니다. 비밀번호나 결제 정보를 입력하지 마세요.",
     "fit": "너비에 맞춤",
-    "fitOff": "100%",
     "fitTitle": "페이지를 창 너비에 맞췄습니다. 클릭하면 원래 크기로 표시합니다",
     "fitOffTitle": "페이지를 원래 크기로 표시합니다(Ctrl +/-로 확대/축소). 클릭하면 창 너비에 맞춥니다",
     "col": {
@@ -217,7 +223,9 @@
           "account": "계정 설정을 변경할까요?",
           "grant": "이 권한을 부여할까요?",
           "submit": "이 양식을 제출할까요?",
-          "leave": "다른 사이트로 이동할까요?"
+          "leave": "다른 사이트로 이동할까요?",
+          "plan": "이 작업을 시작할까요?",
+          "press": "이 버튼을 누를까요?"
         },
         "verbs": {
           "send": "보내기",
@@ -257,6 +265,59 @@
         "no": "허용 안 함",
         "gone": "이 카드는 더 이상 대기 중이 아닙니다."
       }
+    },
+    "more": "기타 작업",
+    "zoom": "확대/축소",
+    "zoomIn": "확대",
+    "zoomOut": "축소",
+    "zoomReset": "100%로 재설정",
+    "find": "페이지에서 찾기",
+    "print": "인쇄",
+    "copyLink": "링크 복사",
+    "copied": "링크를 복사했습니다",
+    "downloads": "다운로드",
+    "downloadOpen": "열기",
+    "downloadFolder": "폴더에서 보기",
+    "askSelection": "Mibo에게 질문",
+    "linkTab": "새 탭에서 링크 열기",
+    "linkSystem": "시스템 브라우저에서 링크 열기",
+    "downloadStates": {
+      "progress": "다운로드 중",
+      "progressPart": "다운로드 중 {n}%",
+      "waiting": "확인 대기 중",
+      "failed": "다운로드 실패",
+      "cancelled": "취소됨",
+      "gone": "파일이 삭제됨"
+    },
+    "modes": {
+      "title": "페이지 작업 방식",
+      "off": "작업 안 함",
+      "read": "보기만",
+      "ask": "매번 확인",
+      "auto": "자동 검토"
+    },
+    "prompt": {
+      "permission": "{site}에서 권한을 요청합니다: {what}",
+      "kinds": {
+        "camera": "카메라",
+        "microphone": "마이크",
+        "geolocation": "위치",
+        "clipboard": "클립보드",
+        "downloads": "여러 파일 다운로드",
+        "files": "파일 편집",
+        "fonts": "로컬 글꼴",
+        "midi": "MIDI 기기",
+        "windows": "창 관리"
+      },
+      "once": "이번만 허용",
+      "always": "항상 허용",
+      "no": "허용 안 함",
+      "app": "{site}에서 외부 앱을 열려고 합니다",
+      "popup": "{site}의 팝업을 차단했습니다",
+      "open": "열기",
+      "cancel": "취소",
+      "close": "닫기",
+      "thisPage": "이 페이지"
     }
   },
   "card": {
@@ -383,7 +444,8 @@
       "account": "계정 변경",
       "setting": "설정 변경",
       "print": "인쇄",
-      "submit": "제출"
+      "submit": "제출",
+      "press": "메뉴 명령 실행"
     },
     "deskWindow": "창",
     "deskTarget": "누를 컨트롤",
@@ -452,7 +514,12 @@
     "picture_too_large": "사진이 너무 큽니다. 더 작은 사진을 선택하세요.",
     "file_type": "지원하지 않는 파일 형식입니다. 사진이나 텍스트 파일을 보내세요.",
     "file_too_large": "파일이 너무 큽니다. 텍스트 파일은 최대 512KB입니다.",
-    "file_unreadable": "파일을 읽을 수 없습니다. 텍스트 파일인지 확인하세요."
+    "file_unreadable": "파일을 읽을 수 없습니다. 텍스트 파일인지 확인하세요.",
+    "manageMemory": "기억 관리",
+    "privateMark": "임시 채팅",
+    "privateNote": "기억을 읽거나 업데이트하지 않으며 채팅 기록에 남지 않습니다. 앱을 닫으면 지워집니다.",
+    "privateStart": "임시 채팅 시작",
+    "privateLeave": "임시 채팅 나가기"
   },
   "compact": {
     "full": "기본 창에서 열기",
@@ -745,7 +812,9 @@
     "clipName": "클립보드.txt",
     "shotName": "스크린샷.png",
     "clipPictureName": "클립보드.png",
-    "failed": "작업에 실패했습니다. 다시 시도하세요."
+    "failed": "작업에 실패했습니다. 다시 시도하세요.",
+    "private": "임시 채팅",
+    "privateHint": "기억을 읽거나 업데이트하지 않음"
   },
   "schedulechat": {
     "kinds": {
@@ -951,7 +1020,7 @@
     "cancel": "취소",
     "forget": "잊기",
     "forgetAsk": "이것을 잊을까요?",
-    "forgetText": "기억, 채팅 기록, 취향에서 함께 삭제되며 되돌릴 수 없습니다.",
+    "forgetText": "기억과 선호 설정에서 삭제되며 되돌릴 수 없습니다. 대화 기록은 기본적으로 유지됩니다.",
     "restore": "되돌리기",
     "until": "{from}~{to}",
     "allTitle": "모두 잊기",
@@ -961,7 +1030,41 @@
     "errors": {
       "activity_unavailable": "캐릭터가 지금 응답할 수 없습니다. 잠시 후 다시 시도하세요.",
       "activity_changed": "이 항목이 변경되어 다시 읽었습니다.",
-      "activity_restore_gone": "이 항목은 더 이상 되돌릴 수 없습니다."
+      "activity_restore_gone": "이 항목은 더 이상 되돌릴 수 없습니다.",
+      "memory_secret": "저장하지 않았습니다. 신분증 번호, 카드 번호, 비밀번호, 인증 코드는 저장하지 않습니다.",
+      "memory_not_instructions": "저장하지 않았습니다. 지시로 보이는 내용입니다.",
+      "memory_paused": "기억이 일시 중지되어 있습니다. '기억 사용 및 업데이트'를 켜면 추가할 수 있습니다.",
+      "memory_health_off": "저장하지 않았습니다. 건강 정보는 저장하지 않도록 설정되어 있습니다.",
+      "no_window": "파일은 앱 창에서만 저장할 수 있습니다."
+    },
+    "onTitle": "기억 사용 및 업데이트",
+    "onText": "켜면 캐릭터가 답장할 때 이 기억을 참고하고 대화에서 새 내용을 기록합니다. 끄면 기억을 사용하거나 추가하지 않으며, 기존 항목은 유지됩니다.",
+    "healthTitle": "건강 정보 저장",
+    "healthText": "알레르기, 질환, 복용 약 등. 기본으로 켜져 있어 캐릭터가 먹을 수 없거나 피해야 할 것을 피할 수 있습니다. 끄면 이런 정보를 저장하지 않으며, 이미 저장된 항목도 답장에 사용하지 않습니다.",
+    "kept": "{day} 기록",
+    "saidOpen": "원문 보기",
+    "saidClose": "원문 닫기",
+    "saidNone": "원문이 대화 기록에 더 이상 없습니다.",
+    "add": "추가",
+    "addLabel": "기억 추가",
+    "addPlaceholder": "예: 망고 알레르기, 주말마다 등산",
+    "moreTitle": "내보내기 및 가져오기",
+    "exportTitle": "내보내기",
+    "exportText": "여전히 유효한 기억을 모두 파일로 저장합니다.",
+    "exportSaved": "저장했습니다.",
+    "importTitle": "다른 어시스턴트에서 가져오기",
+    "importText": "다른 AI 어시스턴트가 내보낸 기억 목록을 한 줄에 한 항목씩 붙여 넣으세요. 읽은 뒤 항목별로 확인하며, 선택한 항목만 저장합니다. 내용은 정보로만 저장되며 지시로 실행되지 않습니다.",
+    "importLabel": "다른 어시스턴트의 기억 목록",
+    "importRead": "읽기",
+    "importKeep": "선택 항목 저장({count})",
+    "importNone": "가져올 항목을 찾지 못했습니다.",
+    "importDone": "{count}개를 가져왔습니다.",
+    "forgetChats": "이 항목을 언급한 문장을 대화 기록에서도 삭제",
+    "refused": {
+      "secret": "신분증 번호, 카드 번호, 비밀번호 또는 인증 코드가 포함되어 저장하지 않음",
+      "not_instructions": "지시로 보이는 내용이라 저장하지 않음",
+      "kept": "이미 기억에 있음",
+      "health_off": "건강 정보는 저장하지 않도록 설정됨"
     }
   },
   "setup_model": {
@@ -1194,11 +1297,27 @@
     },
     "browsingTitle": "앱 브라우저에서 읽은 내용을 캐릭터가 참고할 수 있음",
     "browsingText": "캐릭터가 참고할 때 페이지 제목과 본문이 모델 서비스로 전송될 수 있습니다. 비밀번호와 로그인 정보는 전송되지 않습니다. 로그인 페이지, 결제 페이지, 비공개 모드에서 읽은 페이지는 저장되지 않습니다.",
-    "clearTitle": "탐색 데이터 삭제",
-    "clearText": "앱 브라우저의 기록, 쿠키, 로그인 상태, 캐시를 삭제합니다.",
+    "historyTitle": "방문 기록",
+    "historyText": "선택한 기간의 앱 브라우저 방문 기록, 다운로드 기록, 캐시를 삭제합니다. 로그인 상태와 저장된 비밀번호는 유지되며 '연결'에서 관리할 수 있습니다.",
+    "clearRange": "기간",
+    "ranges": {
+      "hour": "지난 1시간",
+      "day": "지난 24시간",
+      "all": "전체 기간"
+    },
+    "historyFold": "방문 기록 보기",
+    "historySearch": "방문 기록 검색",
+    "historyNone": "아직 방문 기록이 없습니다. 앱 브라우저에서 읽은 페이지가 여기에 표시됩니다.",
+    "historyNoMatch": "일치하는 페이지가 없습니다.",
+    "historyMore": "더 보기",
+    "historyRemove": "방문 기록에서 '{title}' 삭제",
     "clear": "삭제",
-    "clearAsk": "탐색 데이터를 삭제할까요?",
-    "clearAskText": "앱 브라우저의 기록, 쿠키, 로그인 상태가 삭제되며 사이트마다 다시 로그인해야 합니다. 이 작업은 되돌릴 수 없습니다.",
+    "clearAsk": {
+      "hour": "지난 1시간의 방문 기록을 삭제할까요?",
+      "day": "지난 24시간의 방문 기록을 삭제할까요?",
+      "all": "모든 방문 기록을 삭제할까요?"
+    },
+    "clearAskText": "이 기간의 방문 기록, 다운로드 기록, 캐시가 삭제되며 추천에도 이 페이지들이 더 이상 반영되지 않습니다. 로그인 상태와 저장된 비밀번호는 유지됩니다. 이 작업은 되돌릴 수 없습니다.",
     "cleared": "삭제했습니다.",
     "sitesFold_zero": "사이트",
     "sitesFold_other": "사이트({count})",
@@ -1223,6 +1342,12 @@
     "errors": {
       "quiet_invalid": "스위치를 변경하지 못했습니다. 새로 고친 후 다시 시도하세요.",
       "remarks_invalid": "저장되지 않았습니다. 새로 고친 후 다시 시도하세요."
+    },
+    "permitsFold": "사이트 권한",
+    "permitsNone": "사이트에서 카메라, 마이크, 위치 등을 요청했을 때의 선택이 여기에 표시됩니다.",
+    "permitStates": {
+      "allow": "항상 허용",
+      "deny": "허용 안 함"
     }
   },
   "setup_programs": {
@@ -1269,7 +1394,10 @@
       "check": "체크",
       "uncheck": "체크 해제",
       "append": "추가",
-      "see": "이미지로 조작"
+      "see": "이미지로 조작",
+      "tier": "권한 변경",
+      "block": "금지 목록에 추가",
+      "unblock": "금지 목록에서 제거"
     },
     "statuses": {
       "ok": "완료",
@@ -1298,7 +1426,8 @@
       "account": "계정 변경",
       "setting": "설정 변경",
       "print": "인쇄",
-      "submit": "제출"
+      "submit": "제출",
+      "press": "메뉴 명령 실행"
     },
     "switchLine": {
       "turned on": "켰음",
@@ -1306,7 +1435,24 @@
       "pictures turned on": "이미지로 조작을 켰음",
       "pictures turned off": "이미지로 조작을 껐음"
     },
-    "typed": "입력한 내용"
+    "typed": "입력한 내용",
+    "modeName": "작업 방식",
+    "modeText": "보기만: 창을 읽기만 하고 아무 작업도 하지 않습니다. 매번 확인: 외부에 영향을 주는 작업은 모두 확인합니다. 자동 검토: 검토 모델이 먼저 판단하여 요청과 분명히 일치하는 전송과 제출은 바로 실행합니다. 결제, 삭제, 계정 관련 작업은 계속 확인합니다.",
+    "modes": {
+      "read": "보기만",
+      "ask": "매번 확인",
+      "auto": "자동 검토"
+    },
+    "tiers": {
+      "full": "전체 작업",
+      "click": "클릭만",
+      "view": "보기만"
+    },
+    "tierOf": "{name} 권한",
+    "blockText": "이름에 다음 단어가 들어간 프로그램도 작업하지 않습니다:",
+    "blockHint": "단어 추가(예: 프로그램 이름)",
+    "blockAdd": "추가",
+    "unblock": "{word} 제거"
   },
   "setup_recs": {
     "paceName": "빈도",

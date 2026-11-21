@@ -949,6 +949,12 @@ class AppWindow:
         import webview
         return list(self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=many) or [])
 
+    def save_file(self, name: str) -> str:
+        """The system's Save dialog over the app window (Settings › 记忆's export), offering `name`: the path chosen, or ""."""
+        import webview
+        picked = self._window.create_file_dialog(webview.FileDialog.SAVE, save_filename=name)
+        return (picked if isinstance(picked, str) else picked[0] if picked else "") or ""
+
     def take_goto(self) -> str:
         """Where the page was asked to go, once."""
         target, self._goto = self._goto, ""
@@ -1156,24 +1162,25 @@ class AppWindow:
             return {"error": "off"}
         return self._reader.read(url, runtime=self.storage.parent.parent, start=start)
 
-    def browse_recent(self, n: int) -> list:
-        return browsed.recent(self.storage.parent, n)
-
-    def browse_clear(self) -> None:
-        """The rows, the walls, the pane's page kept and site zooms, and its WebView2 folder (its cookies, storage
-        and cache) go."""
-        import shutil
-        desktop = self.storage.parent
+    def browse_clear(self, since: float = 0.0) -> None:
+        """The history from `since` on (all of it with 0): its rows and the library items they made (browsed.clear),
+        what the pane keeps of it (Pane.forget), and the profile's own history, download history and cache of that
+        time. Sign-ins and saved passwords stay: Settings › 连接 has them."""
+        from .signwatch import Profile
         if self._browser is not None:
-            self._browser.forget()
-        browsed.clear(desktop)
-        folder = desktop / "browser" / "webview"
-        # The pane's WebView2 processes take a moment to let go of the folder.
-        for _ in range(20):
-            shutil.rmtree(folder, ignore_errors=True)
-            if not folder.exists():
-                break
-            time.sleep(0.5)
+            # On the form's thread in this order, so the page open now is read as from now before the rows go.
+            self._browser.forget(zoom=not since)
+            Profile(self._browser).clear("history", since)
+        browsed.clear(self.storage.parent, since)
+
+    def browse_permits(self) -> list[dict]:
+        """The site permissions the person decided in the app's browser, by site (browser.Pane.permits)."""
+        return self._browser.permits() if self._browser is not None else []
+
+    def browse_unpermit(self, origin: str, kind: str) -> None:
+        """One site permission taken back: the site is asked again next time."""
+        if self._browser is not None:
+            self._browser.unpermit(origin, kind)
 
     def close(self) -> None:
         self._leaving = True

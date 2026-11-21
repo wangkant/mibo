@@ -45,6 +45,9 @@ class FollowUp:
         if not self.enabled or not chats or TextProcessing._is_sleep_hour():
             return None
         store = self.person_store
+        # Memory paused in Settings › 记忆: no plan is brought up.
+        if not store.on:
+            return None
         local = datetime.fromtimestamp(now, self._prompt_tz())
         today = local.date()
         if store.data["followed_day"] == today.isoformat():

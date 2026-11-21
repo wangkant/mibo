@@ -3,7 +3,7 @@ or the system's browser. Kept in the app's settings as "links"; the Settings pag
 reads and changes it here. The app window's own page also places the browser's
 pane and presses its bar's buttons here.
 
-The privacy switch (browsed.SHARE_KEY) and clearing what the browser kept are
+The privacy switch (browsed.SHARE_KEY), the person's history and clearing it are
 here too, and what the character's tools ask of the browser (a page read with
 the person's session, the pages read lately): from this computer alone, and
 nothing while the switch is off.
@@ -13,7 +13,10 @@ service's loop sends its steps to /api/browser/op, where `Operating` keeps the
 run's Hands, every action through the gate; a card for an action with an effect
 outside waits at /api/browser/confirm, which only the app window's own page
 can answer (its window key), never the service. The kinds the person let
-through per site are listed and revoked at /api/browser/allowed. What the
+through per site are listed and revoked at /api/browser/allowed, and the
+person's mode for the pane (acting.py) is read and set at /api/browser/acting;
+a run begins with its plan, on a card when the start address is the model's
+own pick of another site or the mode is auto. What the
 person types in the chat beside the page is a chat message like any other,
 marked for the page by its turn choice (turns.TURN_CHOICES), which the
 character does there itself."""
@@ -21,7 +24,9 @@ from __future__ import annotations
 
 import asyncio
 import re
+import secrets
 import sys
+import time
 from urllib.parse import quote_plus, urlsplit
 
 from fastapi import Request
@@ -42,23 +47,26 @@ SITES_LATELY = 8
 # plain (nobody named) and with whom or what it goes to.
 SAID = {
     "zh": {"wait": "等待确认：{act}", "yes": "已确认：{act}", "no": "已拒绝：{act}", "none": "确认超时：{act}",
-           "failed": "未成功", "unfinished": "已在此步停止",
+           "failed": "未成功", "unfinished": "已在此步停止", "plan": "计划：在 {sites} 上完成“{task}”",
            "acts": {"send": ("发送消息", "发送给 {to}"), "comment": ("发表评论", "发表评论：{to}"),
                     "like": ("按「{button}」", "按「{button}」"), "post": ("公开发布", "公开发布：{to}"),
                     "order": ("下单", "下单：{to}"), "delete": ("删除", "删除：{to}"),
                     "account": ("更改账号设置", "更改账号设置：{to}"), "grant": ("授权访问", "授权给 {to}"),
                     "submit": ("提交表单", "提交「{to}」"), "upload": ("上传文件", "上传「{to}」"),
                     "download": ("下载文件", "下载「{to}」"), "dialog": ("确认网页的询问", "确认网页的询问"),
-                    "leave": ("前往其他网站", "前往 {to}")}},
+                    "leave": ("前往其他网站", "前往 {to}"), "press": ("按「{button}」", "按「{button}」"),
+                    "plan": ("开始操作", "在 {to} 上开始操作")}},
     "en": {"wait": "Waiting for you: {act}", "yes": "You confirmed: {act}", "no": "You said no: {act}",
            "none": "No answer came: {act}", "failed": "It did not work", "unfinished": "Stopped at this step",
+           "plan": "Plan: “{task}” on {sites}",
            "acts": {"send": ("Send the message", "Send to {to}"), "comment": ("Post a comment", "Comment on {to}"),
                     "like": ("Press “{button}”", "Press “{button}”"), "post": ("Post publicly", "Post to {to}"),
                     "order": ("Place the order", "Order {to}"), "delete": ("Delete", "Delete {to}"),
                     "account": ("Change account settings", "Change {to}"), "grant": ("Grant access", "Grant {to} access"),
                     "submit": ("Submit the form", "Submit “{to}”"), "upload": ("Give the page a file", "Upload “{to}”"),
                     "download": ("Download a file", "Download “{to}”"), "dialog": ("Answer the page", "Answer the page"),
-                    "leave": ("Go to another site", "Go to {to}")}},
+                    "leave": ("Go to another site", "Go to {to}"), "press": ("Press “{button}”", "Press “{button}”"),
+                    "plan": ("Start", "Start on {to}")}},
 }
 
 
@@ -84,10 +92,13 @@ def act_of(card: dict, lang: str) -> str:
 class Operating:
     """One run at a time in the pane: its Hands, and the card waiting for the person, if any."""
 
-    def __init__(self, window, desktop):
+    def __init__(self, window, desktop, workspace):
+        from ..acting import Modes
         from ..web import gate
         self.window = window
+        self.workspace = workspace
         self.allowed = gate.Allowed(desktop)
+        self.modes = Modes(desktop)
         self.hands = None
         self.card: dict | None = None
         self.answer: asyncio.Future | None = None
@@ -101,24 +112,43 @@ class Operating:
         return "stopped" if op is None else op.get("held") or ""
 
     async def begin(self, task: str, start: str, lang: str = "zh", go_on: bool = False) -> dict:
-        from ..web.operate import SAID as STEP
-        from ..web.operate import Hands
+        from .. import acting, browsed
+        from ..web.operate import Hands, plan
         from ..web.tabs import PaneTab
         pane = self.window.pane
         if pane is None:
             return {"status": "no_app", "line": "[failed] the app's browser is not there"}
+        mode = self.modes.mode("browser")
+        if mode == "off":
+            return {"status": "acting_off", "line": "[off] the person turned acting in the app's browser off"}
         if self.hands is not None:
             await self.end("stopped", "")
         if not self.window.attended():
             await asyncio.to_thread(self.window.show)
-        if not await asyncio.to_thread(pane.ready, start):
-            return {"status": "no_page", "line": "[failed] no page is open in the browser; give a start address"}
         self.lang = "zh" if lang.startswith("zh") else "en"
         self.answered = None
+        here = await asyncio.to_thread(pane.address)
         await asyncio.to_thread(pane.operate, task, go_on)
-        if start and not go_on:
-            await asyncio.to_thread(pane.op_said, STEP[self.lang]["navigate"].format(host=urlsplit(start).hostname or ""))
-            await asyncio.to_thread(pane.op_result, "done")
+        if not go_on:
+            # The plan before the first step: the site the run works on, on a card when the start address is the
+            # model's own pick of another site, or in auto mode.
+            words = " ".join(m["text"] for m in await asyncio.to_thread(acting.asked, self.workspace))
+            laid = plan(start, here if browsed.web(here) else "", words, mode)
+            sites = "、".join(laid["sites"])
+            if laid["card"]:
+                answer = await self.ask({"id": secrets.token_urlsafe(8), "kind": "plan", "site": sites, "to": sites,
+                                         "text": task, "button": "", "skippable": False})
+                if not (answer and answer.get("yes")):
+                    await asyncio.to_thread(pane.op_end, "declined", "", SAID[self.lang]["unfinished"])
+                    return {"status": "declined", "kind": "plan",
+                            "line": f"[declined] the plan to work on {sites or 'this page'}: the person "
+                                    f"{'said no' if answer else 'did not answer'}, so nothing was done"}
+            elif sites:
+                await asyncio.to_thread(pane.op_said, SAID[self.lang]["plan"].format(sites=sites, task=task[:60]))
+                await asyncio.to_thread(pane.op_result, "done")
+        if not await asyncio.to_thread(pane.ready, start):
+            await asyncio.to_thread(pane.op_end, "failed", "", SAID[self.lang]["unfinished"])
+            return {"status": "no_page", "line": "[failed] no page is open in the browser; give a start address"}
         loop = asyncio.get_running_loop()
 
         def tell(line: str) -> None:
@@ -126,8 +156,16 @@ class Operating:
             loop.run_in_executor(None, pane.op_said, line)
         self.hands = Hands(PaneTab(pane), ask=self.ask, allowed=self.allowed, attended=self.window.attended,
                            held=self.held, tell=tell, lang=lang,
-                           downloads=lambda: (pane.op or {}).pop("downloads", []))
+                           downloads=lambda: (pane.op or {}).pop("downloads", []),
+                           mode=lambda: self.modes.mode("browser"), review=self.review)
         return {"status": "ok", "url": await asyncio.to_thread(pane.address)}
+
+    async def review(self, action: dict):
+        """Auto mode's reviewer on one action: the person's own messages of the turn under way, never the page."""
+        from .. import acting, review
+        request = await asyncio.to_thread(acting.asked, self.workspace)
+        return await review.decide("browser", request, action, ask=acting.reviewer(self.workspace),
+                                   attended=self.window.attended(), lang=self.lang)
 
     async def ask(self, card: dict) -> dict | None:
         """The card shows beside the page, its control ringed on the page, until the person presses, the run
@@ -235,18 +273,52 @@ def mount(app, workspace, body) -> None:
             raise ValueError("browse_invalid")
         return await asyncio.to_thread(window_or_none().browse_read, url, start)
 
-    @app.get("/api/browser/recent")
-    async def browser_recent(n: int = 20):
-        return {"pages": await asyncio.to_thread(browsed.recent, desktop, max(1, min(n, 100)))}
+    @app.get("/api/browser/history")
+    async def browser_history(q: str = "", before: float | None = None):
+        """The person's history in the app's browser, for Settings: a page of entries, newest first."""
+        return await asyncio.to_thread(browsed.history, desktop, q[:200], before)
+
+    @app.post("/api/browser/history")
+    async def browser_history_delete(request: Request):
+        """One entry of the history deleted: a page's visits of one day."""
+        payload = await body(request)
+        url, day = payload.get("url"), payload.get("day")
+        if not (isinstance(url, str) and browsed.web(url) and isinstance(day, str) and re.fullmatch(r"\d{4}-\d\d-\d\d", day)):
+            raise ValueError("browse_invalid")
+        await asyncio.to_thread(browsed.delete, desktop, url, day)
+        return {"ok": True}
 
     @app.post("/api/browser/clear")
-    async def browser_clear():
+    async def browser_clear(request: Request):
+        """The history of the last hour, day or all of it; sign-ins and saved passwords stay (panels/signins.py)."""
+        back = browsed.RANGES.get((await body(request)).get("range"))
+        if back is None:
+            raise ValueError("browse_invalid")
+        since = time.time() - back if back else 0.0
         window = getattr(app.state, "window", None)
         if window is None:
-            await asyncio.to_thread(browsed.clear, desktop)
+            await asyncio.to_thread(browsed.clear, desktop, since)
         else:
-            await asyncio.to_thread(window.browse_clear)
+            await asyncio.to_thread(window.browse_clear, since)
         return {"ok": True}
+
+    @app.get("/api/browser/permissions")
+    async def browser_permissions():
+        """The site permissions decided in the app's browser (camera, microphone, location ...), by site."""
+        return {"sites": await asyncio.to_thread(window_or_none().browse_permits)}
+
+    @app.post("/api/browser/permissions")
+    async def browser_permission_off(request: Request):
+        """One taken back ({origin, kind}): the site is asked again next time."""
+        from ..browser import ASKED, origin_of
+        payload = await body(request)
+        origin, kind = payload.get("origin"), payload.get("kind")
+        if not (isinstance(origin, str) and browsed.web(origin) and origin_of(origin) == origin
+                and kind in ASKED.values()):
+            raise ValueError("browse_invalid")
+        window = window_or_none()
+        await asyncio.to_thread(window.browse_unpermit, origin, kind)
+        return {"sites": await asyncio.to_thread(window.browse_permits)}
 
     def own_window(request: Request):
         # The app window's page alone: a browser tab on the same address has no pane to place.
@@ -282,7 +354,7 @@ def mount(app, workspace, body) -> None:
     def operating() -> Operating:
         window = window_or_none()
         if getattr(app.state, "operating", None) is None:
-            app.state.operating = Operating(window, desktop)
+            app.state.operating = Operating(window, desktop, workspace)
         return app.state.operating
 
     def lang() -> str:
@@ -384,6 +456,22 @@ def mount(app, workspace, body) -> None:
             files = await asyncio.to_thread(window.pick_files, bool(run.card.get("many")))
             yes = bool(files)
         return {"ok": run is not None and run.answer_card(ident, yes, never, files)}
+
+    @app.get("/api/browser/acting")
+    async def browser_acting():
+        from ..acting import Modes
+        return {"modes": await asyncio.to_thread(Modes(desktop).all)}
+
+    @app.post("/api/browser/acting")
+    async def browser_acting_set(request: Request):
+        """The person's mode for an area (acting.py), from the app window's own page alone: it holds from the run's
+        next step."""
+        from ..acting import AREAS, MODES, Modes
+        own_window(request)
+        payload = await body(request)
+        if payload.get("area") not in AREAS or payload.get("mode") not in MODES:
+            raise ValueError("browse_invalid")
+        return {"modes": await asyncio.to_thread(Modes(desktop).set, payload["area"], payload["mode"])}
 
     @app.get("/api/browser/allowed")
     async def browser_allowed():

@@ -305,7 +305,8 @@ class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
         convs = [only] if only else list(dirty)
         for conv in convs:
             self._log_chat(conv)
-            entry = self._recent_entry(conv)
+            # A 无痕对话 lives in memory only.
+            entry = None if channels.private_chat(conv) else self._recent_entry(conv)
             if entry is None:
                 store.drop(conv)
             else:

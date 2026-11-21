@@ -568,6 +568,19 @@ def take_back(runtime: Path, item: Item) -> None:
     model.fit(runtime)
 
 
+def forget_items(runtime: Path, ids: set[str]) -> None:
+    """Things taken out of the library (a page deleted from the browser's history): their events go, and the model
+    is fitted again without them."""
+    path = Path(runtime) / TASTE_FILE
+    with _lock:
+        events = _load(path)
+        kept = [e for e in events if e[1] not in ids]
+        if len(kept) == len(events):
+            return
+        _save(path, kept, load_topics(path))
+    model.fit(runtime)
+
+
 def keep_topics(runtime: Path, topics: list[str]) -> None:
     path = Path(runtime) / TASTE_FILE
     with _lock:

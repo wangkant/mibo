@@ -20,7 +20,12 @@ something (any that is not an image, a script, a style or a font) and its
 navigations: one that is not a GET and carries text typed in this run (a form
 that saves by itself when a field loses the focus) is held before it leaves and
 put to the person on the same card as a send; so is any such request that a
-bare 确认 or save sets off (gate's "watch"), with the fields it sends. A run
+press of a control code could not sort sets off, whatever its name (a 好的 that
+deletes), with the fields it sends. Once something was typed, images, scripts
+and styles are heard too, so none carries it to another site. How much asks
+is the person's mode for the browser (acting.py), read at every action: read
+only presses nothing that sends, auto puts plain sends to the reviewer first,
+and paying, deleting and accounts ask in every mode. A run
 keeps to its sites, as Gemini's origin sets and Claude in Chrome's per-site plan
 do: the site it began on, the sites the person named and those a link it
 followed led to. Going anywhere else, by an address the model wrote or by the
@@ -348,9 +353,14 @@ SAID = {
            "shows": "Wait for “{text}” to show", "gone": "Wait for “{text}” to go"},
 }
 # Requests the page makes while the character operates that are paused and looked at: navigations, and the kinds
-# that can send or change something. Images, scripts, styles, fonts and media load untouched.
+# that can send or change something. Images, scripts, styles, fonts and media load untouched until something is
+# typed (TYPED_WATCHED): from then on a picture's address could carry it to another site.
 WATCHED = [{"urlPattern": "*", "resourceType": kind, "requestStage": "Request"}
            for kind in ("Document", "XHR", "Fetch", "Ping", "Other")]
+TYPED_WATCHED = WATCHED + [{"urlPattern": "*", "resourceType": kind, "requestStage": "Request"}
+                           for kind in ("Image", "Script", "Stylesheet", "Font", "Media")]
+# A GraphQL body that only asks (no mutation): a request a plain press may set off without a card.
+ASKS_ONLY = re.compile(r"\s*(?:query\b|\{)")
 # After a link the run followed or an address it was let go to, how long the page may go on to other sites by
 # itself (a redirect, a search result's hop) without a card.
 FOLLOW_S = 10.0
@@ -463,6 +473,17 @@ def _values(body: str) -> list[str]:
         return [v for _, v in parse_qsl(body, keep_blank_values=True)]
 
 
+def _asks_only(request: dict) -> bool:
+    """A GraphQL request whose every operation is a query written out: it reads and changes nothing."""
+    try:
+        body = json.loads(str(request.get("postData") or ""))
+    except ValueError:
+        return False
+    items = body if isinstance(body, list) else [body]
+    return bool(items) and all(isinstance(i, dict) and isinstance(i.get("query"), str) and ASKS_ONLY.match(i["query"])
+                               for i in items)
+
+
 class Hands:
     """The pane's side: looks and acts on `tab`, every action through the gate. `ask(card)` shows the
     person a card and answers {"yes": bool, "never": bool}, or None when nobody answered; `attended()`
@@ -481,12 +502,16 @@ class Hands:
     page's own dialogs are caught and put to the person on cards; `downloads()` gives the files the pane began
     to save since it was last asked, each held until its `answer(yes)`. `close()` ends that, and after a run the
     person said no to or stopped, puts back what was typed and never let out, so the page cannot send it later
-    by itself."""
+    by itself.
+
+    `mode()` is the person's mode for the browser (acting.py), read at every action; `review(action)` is the
+    reviewer's verdict (review.decide) for what auto mode sends it."""
 
     def __init__(self, tab, *, ask: Callable[[dict], Awaitable[Optional[dict]]], allowed: gate.Allowed,
                  attended: Callable[[], bool], held: Callable[[], str] = lambda: "",
                  tell: Callable[[str], None] = lambda line: None, lang: str = "zh",
-                 downloads: Callable[[], list[dict]] = lambda: []):
+                 downloads: Callable[[], list[dict]] = lambda: [], mode: Callable[[], str] = lambda: "ask",
+                 review: Optional[Callable[[dict], Awaitable]] = None):
         self.page = Page(tab)
         self.tab = tab
         self.ask = ask
@@ -495,6 +520,8 @@ class Hands:
         self.held = held
         self.tell = tell
         self.downloads = downloads
+        self.mode = mode
+        self.review = review
         self.lang = "zh" if str(lang).startswith("zh") else "en"
         self.confirmed = False
         # What was typed this run into fields that are not search boxes: {"text", "field", "site", "node",
@@ -596,7 +623,7 @@ class Hands:
                             press["aside"].append(params)
                             continue
                         press["matched"] = True
-                elif self._watching is not None and sends:
+                elif self._watching is not None and sends and (carried or not _asks_only(request)):
                     hold = [self._watching, *carried]
                 elif carried:
                     hold = carried
@@ -651,7 +678,7 @@ class Hands:
         line."""
         held = await self._held_card(params, carried, top=True)
         self._told.append(held["line"])
-        if held["status"] != "ok":
+        if held["status"] == "declined":
             self._turned = held["kind"]
 
     async def _held_card(self, params: dict, carried: list[dict], top: bool = False) -> dict:
@@ -686,18 +713,32 @@ class Hands:
                         why="the page goes to a site that is not one of this run's")
             what = (f"the page went on to {site}, another site", f"the page tried to go on to {site}, another site")
         elif first.get("watch"):
-            # A bare submission: the card says what pressing it sends, the form's fields as the person sees them.
-            card.update(button=first["button"], to="", text=first["text"] or card["text"],
-                        why=f"pressing {first['button']!r} sends this ({label})")
+            # A press: the card says what pressing it sends, the form's fields as the person sees them; a press with
+            # no fields is named by its button alone.
+            card.update(kind="submit" if first["text"] else "press", button=first["button"], to="",
+                        text=first["text"] or card["text"], why=f"pressing {first['button']!r} sends this ({label})")
             what = (f"pressing {first['button']!r} sent {label}", f"pressing {first['button']!r} would send {label}")
         else:
             what = (f"the page sent {card['text'][:60]!r} by itself ({label})",
                     f"the page tried to send {card['text'][:60]!r} by itself ({label})")
-        try:
-            card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)
-        except Exception:
-            card["picture"] = ""
-        answer = await self.ask(card)
+        decision, passed = "ask", ""
+        if not first.get("leave"):
+            decision, passed = await self._decided(card["kind"], site, {"text": card["text"], "page_says": card["button"],
+                                                                         "effects": [label]})
+        if decision == "read":
+            await self._drop(params, top)
+            return {"status": "failed", "kind": card["kind"], "line": f"[read-only] {what[1]}; the person set the "
+                    f"browser to read only, so it was dropped"}
+        if decision == "turned":
+            await self._drop(params, top)
+            return {"status": "declined", "kind": card["kind"], "line": f"[declined] {what[1]}; {passed}"}
+        answer = {"yes": True} if decision == "go" else None
+        if answer is None:
+            try:
+                card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)
+            except Exception:
+                card["picture"] = ""
+            answer = await self.ask(card)
         if answer and answer.get("yes"):
             if first.get("leave"):
                 self.sites.add(site)
@@ -709,12 +750,32 @@ class Hands:
                 t["out"] = True
             await self.tab.cdp("Fetch.continueRequest", {"requestId": params["requestId"]})
             return {"status": "ok", "kind": card["kind"], "line": f"[{'went' if first.get('leave') else 'held'}] "
-                    f"{what[0]}: the person said yes on a card, and it went"}
+                    f"{what[0]}: " + (passed if decision == "go" else "the person said yes on a card") + ", and it went"}
         await self._drop(params, top)
         for t in self.typed if first.get("watch") else carried:
             t["no"] = True
         return {"status": "declined", "kind": card["kind"], "line": f"[declined] {what[1]}; the person "
                 f"{'said no' if answer else 'did not answer'}, so it was dropped"}
+
+    async def _decided(self, kind: str, site: str, action: dict) -> tuple[str, str]:
+        """What the person's mode makes of an outside action before any card: "read" (read only: nothing goes),
+        "go" (the reviewer passed it), "turned" (the reviewer turned it down) or "ask" (the card), with the
+        reviewer's line. Auto mode's reviewer sees only kinds and sites acting.decide sends it."""
+        from .. import acting
+        decision = acting.decide(self.mode(), kind, site)
+        if decision == "refuse":
+            return "read", ""
+        if decision != "review" or self.review is None:
+            return "ask", ""
+        verdict = await self.review({"kind": kind, "where": site, **action})
+        line = verdict.line(self.lang)
+        if verdict.decision == "go":
+            return "go", line
+        if verdict.decision == "refuse":
+            return "turned", line + ("; turned down three times in a row: stop and hand the task back to the person"
+                                     if verdict.stop else "")
+        self.tell(line)
+        return "ask", line
 
     async def _drop(self, params: dict, top: bool) -> None:
         """A held request that does not go: a navigation of the page answered 204 (nothing to show, the page stays
@@ -789,6 +850,9 @@ class Hands:
         (`file`, which run checks against their message) or lets them choose one, and on their yes it goes into
         the page's file field. Nothing is chosen without that yes."""
         chooser, self._file = self._file, None
+        if self.mode() == "read":
+            return {"status": "failed", "kind": "upload", "line": "[read-only] the page asked for a file; the person "
+                                                                  "set the browser to read only, so none was given"}
         ident, many = chooser["backendNodeId"], chooser.get("mode") == "selectMultiple"
         named = str(action.get("file") or "")
         files = [named] if named and Path(named).is_file() else []
@@ -990,7 +1054,7 @@ class Hands:
 
     async def act(self, action: dict) -> dict:
         """One action: {"status", "line", "said"} plus "step" (what a procedure keeps) when it was done."""
-        why = self.held()
+        why = self.held() or ("stopped" if self.mode() == "off" else "")
         if why:
             return {"status": why, "line": f"[{why}]"}
         self._last_do = action.get("do")
@@ -1307,18 +1371,22 @@ class Hands:
         else:
             if times > 1:
                 said += SAID[self.lang]["times"].format(n=times)
-            line = await press()
-            # The same control pressed again (`times`, a stepper or a calendar's arrow), found again where the page
-            # drew it anew; none once a press failed or the page went elsewhere.
-            pressed = 1
-            while pressed < times and line.startswith("[ok]") and "navigated to" not in line:
-                again = await press(again=True)
-                if not again.startswith("[ok]"):
-                    line += f"; press {pressed + 1} did not work: {clip(again, 120)}"
-                    break
-                pressed += 1
-            if times > 1:
-                line += f"; pressed {pressed} times"
+
+            async def presses() -> str:
+                line = await press()
+                # The same control pressed again (`times`, a stepper or a calendar's arrow), found again where the
+                # page drew it anew; none once a press failed or the page went elsewhere.
+                pressed = 1
+                while pressed < times and line.startswith("[ok]") and "navigated to" not in line:
+                    again = await press(again=True)
+                    if not again.startswith("[ok]"):
+                        line += f"; press {pressed + 1} did not work: {clip(again, 120)}"
+                        break
+                    pressed += 1
+                return line + (f"; pressed {pressed} times" if times > 1 else "")
+            # A link or a tab leads somewhere; any other control's press is watched whatever its name says.
+            line = await (presses() if facts.get("link") or facts.get("away") or role in ("link", "tab")
+                          else self._watched(presses, shown or element, facts, HEAR_S))
         if seen:
             line += await self._changed(seen["target"], seen, line)
         return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "step": step, "said": said}
@@ -1340,17 +1408,18 @@ class Hands:
         colon = "：" if self.lang == "zh" else ": "
         return "\n".join(f"{c}{colon}{v}" if c else v for c, v in facts.get("fields") or [])
 
-    async def _watched(self, act: Callable[[], Awaitable[str]], button: str, facts: dict) -> str:
-        """A bare submission (gate's "watch") pressed: a request that is not a GET and leaves on it is held for its
-        card, which act shows next with the fields it sends; nothing leaves, no card. Once the page's own question
-        about it had a yes on its card, the press is the person's."""
+    async def _watched(self, act: Callable[[], Awaitable[str]], button: str, facts: dict,
+                       tail: float = PRESS_TAIL_S) -> str:
+        """A press code could not sort, or a bare submission (gate's "watch"): a request that is not a GET and
+        leaves on it within `tail` is held for its card, which act shows next with the fields it sends; nothing
+        leaves, no card. Once the page's own question about it had a yes on its card, the press is the person's."""
         if self._again is not None:
             return await act()
         self._watching = {"watch": True, "button": clip(" ".join(button.split()), 40), "field": "", "out": False,
                           "text": self._fields(facts)}
         try:
             line = await act()
-            await asyncio.sleep(PRESS_TAIL_S)
+            await asyncio.sleep(tail)
         finally:
             self._watching = None
         return line
@@ -1370,7 +1439,8 @@ class Hands:
         if kind and kind != "watch" and ident:
             return {**await self._outside(kind, why, ident, facts.get("text") or facts.get("label") or "", facts, url,
                                           "", press, None), "said": said}
-        line = await (self._watched(press, str(facts.get("text") or element), facts) if kind == "watch" else press())
+        line = await self._watched(press, str(facts.get("text") or element), facts,
+                                   PRESS_TAIL_S if kind == "watch" else HEAR_S)
         return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "said": said}
 
     async def _drag(self, action: dict) -> dict:
@@ -1433,6 +1503,9 @@ class Hands:
             # put back if the run ends with it never let out.
             earlier = next((t for t in self.typed if t["node"] == ident and not t["out"]), None)
             before = earlier["before"] if earlier else await self.page.value(ident)
+            if not self.typed:
+                # From now on a picture or a script from another site could carry it out in its address.
+                await self.tab.cdp("Fetch.enable", {"patterns": TYPED_WATCHED})
             self.typed.append({"text": text.strip(), "field": clip(name or str(facts.get("label") or ""), 40),
                                "site": gate.site_of(self.page.frame_url(ident) or url), "node": ident,
                                "before": before, "out": False})
@@ -1454,9 +1527,8 @@ class Hands:
                                           lambda: self.page.press("Enter"), step and {**step, "enter": True})
             outside["line"] = f"{line}\n{outside['line']}"
             return {**outside, "said": said}
-        entered = await (self._watched(lambda: self.page.press("Enter"), str((facts.get("form") or {}).get("button") or "")
-                                       or f"Enter in {name or 'the field'}", facts)
-                         if kind == "watch" else self.page.press("Enter"))
+        entered = await self._watched(lambda: self.page.press("Enter"), str((facts.get("form") or {}).get("button") or "")
+                                      or f"Enter in {name or 'the field'}", facts, PRESS_TAIL_S if kind == "watch" else HEAR_S)
         return {**result, "line": f"{line}\n{entered}", "step": step and {**step, "enter": True}}
 
     async def _press(self, key: str) -> dict:
@@ -1488,15 +1560,22 @@ class Hands:
         before = await self._seen(None)
         line = await (self._watched(lambda: self.page.press(key), str((facts.get("form") or {}).get("button")
                                                                       or facts.get("text") or facts.get("label") or key),
-                                    facts) if kind == "watch" else self.page.press(key))
+                                    facts, PRESS_TAIL_S if kind == "watch" else HEAR_S)
+                      if kind == "watch" or mode in ("enter", "click") else self.page.press(key))
         return {"status": "ok", "line": line + await self._changed(None, before, line), "said": said}
 
     async def _outside(self, kind: str, why: str, ident: int, button: str, facts: dict, url: str, element: str,
                        press: Callable[[], Awaitable[str]], step: Optional[dict]) -> dict:
         """An action with an effect outside: the person's press on a card first (unless they let this kind
-        through on this site, at the app), then exactly one press, then a look for its result."""
+        through on this site, at the app, or auto mode's reviewer passed it), then exactly one press, then a look
+        for its result. In read only nothing is pressed."""
+        from .. import acting
         site = gate.site_of(url)
         said = str(facts.get("said") or "")
+        if acting.decide(self.mode(), kind, site) == "refuse":
+            return {"status": "failed", "kind": kind,
+                    "line": f"[read-only] {kind} ({button[:40]}): the person set the browser to read only, so nothing "
+                            f"was pressed; read and tell them, or ask_person"}
         once = (kind, _shape(url), button, said, self.page.near.get(ident, ""))
         if once in self.pressed and (kind == "like" or self.pressed[once] == await self._shown()):
             return {"status": "ok", "kind": kind, "proven": True,
@@ -1530,9 +1609,15 @@ class Hands:
                 # fields it sends.
                 "text": (said or (str(facts.get("row") or "") if kind in ("like", "delete") else
                                   self._fields(facts) if kind in ("submit", "account", "order") else ""))[:2000],
-                "skippable": kind in gate.SKIPPABLE}
-        skipped = self.attended() and self.allowed.skips(site, kind)
-        if not skipped:
+                "skippable": kind in gate.SKIPPABLE and not acting.sensitive(site)}
+        skipped = card["skippable"] and self.attended() and self.allowed.skips(site, kind)
+        decision, passed = ("ask", "") if skipped else await self._decided(kind, site, {
+            "target": [card["to"]] if card["to"] else [], "text": card["text"], "page_says": button[:120],
+            "fields": ["password"] if (facts.get("form") or {}).get("password") else []})
+        if decision == "turned":
+            return {"status": "declined", "kind": kind, "line": f"[declined] {kind} ({button[:40]}): {passed}; "
+                                                                "nothing was pressed"}
+        if not skipped and decision != "go":
             try:
                 card["picture"] = await self.page.screenshot()
             except Exception:
@@ -1550,7 +1635,7 @@ class Hands:
                         t["no"] = True
                 return {"status": "declined", "kind": kind,
                         "line": f"[declined] the person said no to {kind} ({button[:40]}); nothing was pressed"}
-            if answer.get("never") and kind in gate.SKIPPABLE:
+            if answer.get("never") and card["skippable"]:
                 self.allowed.set(site, kind, True)
             # What the card showed must still be what is pressed (a control drawn again is found again).
             again = None
@@ -1595,7 +1680,8 @@ class Hands:
         self.pressed[once] = await self._shown()
         if said:
             self.sent.add(words)
-        how ="let through by the person's setting for this site" if skipped else "confirmed by the person"
+        how = ("let through by the person's setting for this site" if skipped else passed if decision == "go"
+               else "confirmed by the person")
         return {"status": "ok", "kind": kind, "outside": True, "step": step,
                 "line": f"{line} ({kind}, {how}; pressed once){proof}"}
 
@@ -1710,6 +1796,16 @@ def _site_named(url: str, words: str) -> bool:
         return True
     row = signin.hint(sites.key_of(url))
     return any(len(n) > 1 and fold(n) in low for n in [*(row.get("name") or {}).values(), *row.get("also", [])])
+
+
+def plan(start: str, here: str, words: str, mode: str) -> dict:
+    """The run's plan, before its first step: the site it works on (the model's start address, else the page open
+    now) and whether it waits for the person's one press: always in auto, and in any mode when the start address
+    goes to a site that is neither the page open now nor one the person's own words name."""
+    where = start or here
+    site = gate.site_of(where) if where else ""
+    unnamed = bool(start) and site != (gate.site_of(here) if here else "") and not _site_named(start, words)
+    return {"sites": [site] if site else [], "card": mode == "auto" or unnamed}
 
 
 def _carried(url: str, read: str, own: str) -> str:

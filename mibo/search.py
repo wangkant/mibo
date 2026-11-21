@@ -432,6 +432,8 @@ _ERRAND_SAID = {
     "no_page": "nothing is open in the app's browser: they need to open the site, or give where to start",
     "no_app": "the app window with its browser is not open",
     "off": "they turned off your reading this site while they are on it; say so, do not read it another way",
+    "acting_off": "they set the app's browser so that you do not act there (the mode by the chat box); say so, and "
+                  "do not do it another way",
 }
 # The turn choices of a message typed beside the page (panels/browser.py): a new request, or going on with the
 # errand that waits on them. And the same endings said to the person, where the errand left no words of its own.

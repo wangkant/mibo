@@ -101,7 +101,14 @@
     "otherSteps": "{count} Schritte abgeschlossen",
     "sources_other": "{count} Quellen",
     "listSep": ", ",
-    "sources_one": "{count} Quelle"
+    "sources_one": "{count} Quelle",
+    "memUsed_one": "1 Erinnerung verwendet",
+    "memUsed_other": "{count} Erinnerungen verwendet",
+    "memSaved": "Gemerkt: {what}",
+    "memManage": "Verwalten",
+    "memForgotten": "Vergessen",
+    "memGone": "Diese Erinnerung gibt es nicht mehr.",
+    "memSep": "; "
   },
   "app": {
     "someone": "Ihre Figur",
@@ -137,7 +144,8 @@
       "asleepUntil": "Ruht bis {time}",
       "back": "Zurück · bringt {count} Empfehlungen mit",
       "home": "Zu Hause"
-    }
+    },
+    "privateChat": "Temporärer Chat"
   },
   "browse": {
     "back": "Zurück",
@@ -171,7 +179,6 @@
     "notSecure": "Nicht sicher",
     "notSecureTitle": "Die Verbindung zu dieser Website ist nicht verschlüsselt. Geben Sie hier keine Passwörter oder Zahlungsdaten ein.",
     "fit": "An Breite anpassen",
-    "fitOff": "100%",
     "fitTitle": "Die Seite ist an die Breite des Bereichs angepasst; klicken für die Originalgröße",
     "fitOffTitle": "Die Seite in Originalgröße (Strg +/- zoomt); klicken, um sie an die Breite des Bereichs anzupassen",
     "col": {
@@ -222,7 +229,9 @@
           "account": "Kontoeinstellungen ändern?",
           "grant": "Diesen Zugriff gewähren?",
           "submit": "Dieses Formular absenden?",
-          "leave": "Zu einer anderen Website wechseln?"
+          "leave": "Zu einer anderen Website wechseln?",
+          "plan": "Diese Aufgabe beginnen?",
+          "press": "Diese Schaltfläche drücken?"
         },
         "verbs": {
           "send": "Senden",
@@ -262,6 +271,59 @@
         "no": "Nicht erlauben",
         "gone": "Diese Karte wartet nicht mehr."
       }
+    },
+    "more": "Weitere Aktionen",
+    "zoom": "Zoom",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "zoomReset": "Auf 100 % zurücksetzen",
+    "find": "Auf Seite suchen",
+    "print": "Drucken",
+    "copyLink": "Link kopieren",
+    "copied": "Link kopiert",
+    "downloads": "Downloads",
+    "downloadOpen": "Öffnen",
+    "downloadFolder": "Im Ordner anzeigen",
+    "askSelection": "Mibo fragen",
+    "linkTab": "Link in neuem Tab öffnen",
+    "linkSystem": "Link im Systembrowser öffnen",
+    "downloadStates": {
+      "progress": "Wird heruntergeladen",
+      "progressPart": "Wird heruntergeladen: {n} %",
+      "waiting": "Wartet auf Bestätigung",
+      "failed": "Download fehlgeschlagen",
+      "cancelled": "Abgebrochen",
+      "gone": "Datei gelöscht"
+    },
+    "modes": {
+      "title": "Handeln in Seiten",
+      "off": "Aus",
+      "read": "Nur lesen",
+      "ask": "Jedes Mal fragen",
+      "auto": "Automatische Prüfung"
+    },
+    "prompt": {
+      "permission": "{site} fordert eine Berechtigung an: {what}",
+      "kinds": {
+        "camera": "Kamera",
+        "microphone": "Mikrofon",
+        "geolocation": "Standort",
+        "clipboard": "Zwischenablage",
+        "downloads": "mehrere Downloads",
+        "files": "Dateibearbeitung",
+        "fonts": "lokale Schriftarten",
+        "midi": "MIDI-Geräte",
+        "windows": "Fensterverwaltung"
+      },
+      "once": "Diesmal erlauben",
+      "always": "Immer erlauben",
+      "no": "Nicht erlauben",
+      "app": "{site} möchte eine externe Anwendung öffnen",
+      "popup": "Pop-up von {site} blockiert",
+      "open": "Öffnen",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "thisPage": "Diese Seite"
     }
   },
   "card": {
@@ -388,7 +450,8 @@
       "account": "Konto ändern",
       "setting": "Einstellung ändern",
       "print": "Drucken",
-      "submit": "Absenden"
+      "submit": "Absenden",
+      "press": "Menübefehl ausführen"
     },
     "deskWindow": "Fenster",
     "deskTarget": "Zu betätigendes Steuerelement",
@@ -457,7 +520,12 @@
     "picture_too_large": "Dieses Bild ist zu groß. Wählen Sie ein kleineres.",
     "file_type": "Dieser Dateityp wird nicht unterstützt. Senden Sie ein Bild oder eine Textdatei.",
     "file_too_large": "Diese Datei ist zu groß. Textdateien dürfen höchstens 512 KB groß sein.",
-    "file_unreadable": "Die Datei konnte nicht gelesen werden. Prüfen Sie, ob es eine Textdatei ist."
+    "file_unreadable": "Die Datei konnte nicht gelesen werden. Prüfen Sie, ob es eine Textdatei ist.",
+    "manageMemory": "Gedächtnis verwalten",
+    "privateMark": "Temporärer Chat",
+    "privateNote": "Nutzt und aktualisiert das Gedächtnis nicht, wird nicht im Chatverlauf gespeichert und beim Schließen der App gelöscht.",
+    "privateStart": "Temporären Chat starten",
+    "privateLeave": "Temporären Chat verlassen"
   },
   "compact": {
     "full": "Im Hauptfenster öffnen",
@@ -752,7 +820,9 @@
     "clipName": "zwischenablage.txt",
     "shotName": "screenshot.png",
     "clipPictureName": "zwischenablage.png",
-    "failed": "Das hat nicht funktioniert. Versuchen Sie es erneut."
+    "failed": "Das hat nicht funktioniert. Versuchen Sie es erneut.",
+    "private": "Temporärer Chat",
+    "privateHint": "Nutzt und aktualisiert das Gedächtnis nicht"
   },
   "schedulechat": {
     "kinds": {
@@ -958,7 +1028,7 @@
     "cancel": "Abbrechen",
     "forget": "Vergessen",
     "forgetAsk": "Das vergessen?",
-    "forgetText": "Es wird zugleich aus dem Gedächtnis, den Chatverläufen und Ihren Vorlieben entfernt und kommt nicht zurück.",
+    "forgetText": "Der Eintrag wird aus dem Gedächtnis und deinen Präferenzen entfernt und kann nicht wiederhergestellt werden. Die Chatverläufe bleiben standardmäßig erhalten.",
     "restore": "Zurückholen",
     "until": "{from} bis {to}",
     "allTitle": "Alles vergessen",
@@ -968,7 +1038,41 @@
     "errors": {
       "activity_unavailable": "Die Figur kann gerade nicht antworten. Versuchen Sie es gleich erneut.",
       "activity_changed": "Dieser Eintrag hat sich geändert; er wurde neu gelesen.",
-      "activity_restore_gone": "Dieser Eintrag lässt sich nicht mehr zurückholen."
+      "activity_restore_gone": "Dieser Eintrag lässt sich nicht mehr zurückholen.",
+      "memory_secret": "Nicht gespeichert: Ausweis- und Kartennummern, Passwörter und Codes werden nie gespeichert.",
+      "memory_not_instructions": "Nicht gespeichert: Der Text liest sich wie eine Anweisung.",
+      "memory_paused": "Das Gedächtnis ist pausiert. Aktiviere „Gedächtnis verwenden und aktualisieren“, um Einträge hinzuzufügen.",
+      "memory_health_off": "Nicht gespeichert: Gesundheitsangaben werden laut Einstellung nicht gespeichert.",
+      "no_window": "Dateien können nur im App-Fenster gespeichert werden."
+    },
+    "onTitle": "Gedächtnis verwenden und aktualisieren",
+    "onText": "Wenn aktiviert, greift die Figur in ihren Antworten auf diese Erinnerungen zurück und hält Neues aus den Chats fest. Wenn deaktiviert, wird nichts verwendet oder hinzugefügt; die Einträge bleiben erhalten.",
+    "healthTitle": "Gesundheitsangaben speichern",
+    "healthText": "Allergien, Erkrankungen und Medikamente. Standardmäßig aktiviert, damit die Figur meidet, was du nicht essen oder tun solltest. Wenn deaktiviert, werden solche Angaben nicht gespeichert und bereits gespeicherte nicht in Antworten verwendet.",
+    "kept": "Gespeichert am {day}",
+    "saidOpen": "Quelle anzeigen",
+    "saidClose": "Quelle ausblenden",
+    "saidNone": "Der ursprüngliche Wortlaut ist nicht mehr in den Chatverläufen.",
+    "add": "Hinzufügen",
+    "addLabel": "Erinnerung hinzufügen",
+    "addPlaceholder": "Zum Beispiel: allergisch gegen Mango, geht am Wochenende oft wandern",
+    "moreTitle": "Export und Import",
+    "exportTitle": "Exportieren",
+    "exportText": "Alles, was noch gilt, als Datei speichern.",
+    "exportSaved": "Gespeichert.",
+    "importTitle": "Aus einem anderen Assistenten importieren",
+    "importText": "Füge die Erinnerungsliste ein, die ein anderer KI-Assistent exportiert hat, ein Eintrag pro Zeile. Nach dem Einlesen prüfst du jeden Eintrag; nur die markierten werden gespeichert. Der Text wird nur als Information gespeichert und nie als Anweisung ausgeführt.",
+    "importLabel": "Erinnerungsliste eines anderen Assistenten",
+    "importRead": "Einlesen",
+    "importKeep": "Auswahl speichern ({count})",
+    "importNone": "Keine importierbaren Einträge gefunden.",
+    "importDone": "{count} importiert.",
+    "forgetChats": "Auch die Sätze, die ihn erwähnen, aus den Chats entfernen",
+    "refused": {
+      "secret": "Enthält eine Ausweis- oder Kartennummer, ein Passwort oder einen Code; nicht gespeichert",
+      "not_instructions": "Liest sich wie eine Anweisung; nicht gespeichert",
+      "kept": "Bereits im Gedächtnis",
+      "health_off": "Gesundheitsangaben werden laut Einstellung nicht gespeichert"
     }
   },
   "setup_model": {
@@ -1201,11 +1305,27 @@
     },
     "browsingTitle": "Die Figur darf nutzen, was Sie im Browser der App lesen",
     "browsingText": "Wenn die Figur sie nutzt, können Seitentitel und Text an den Modelldienst gesendet werden; Passwörter und Anmeldedaten nie. Anmeldeseiten, Zahlungsseiten und im privaten Modus gelesene Seiten werden nicht gespeichert.",
-    "clearTitle": "Browserdaten löschen",
-    "clearText": "Löscht den Verlauf des App-Browsers sowie seine Cookies, Anmeldungen und den Cache.",
+    "historyTitle": "Verlauf",
+    "historyText": "Löscht Verlauf, Downloadverlauf und Cache des App-Browsers für einen Zeitraum. Anmeldungen und gespeicherte Passwörter bleiben erhalten und werden unter „Verbindungen“ verwaltet.",
+    "clearRange": "Zeitraum",
+    "ranges": {
+      "hour": "Letzte Stunde",
+      "day": "Letzte 24 Stunden",
+      "all": "Gesamte Zeit"
+    },
+    "historyFold": "Verlauf anzeigen",
+    "historySearch": "Verlauf durchsuchen",
+    "historyNone": "Noch kein Verlauf. Seiten, die Sie im App-Browser lesen, werden hier aufgeführt.",
+    "historyNoMatch": "Keine passenden Seiten.",
+    "historyMore": "Mehr anzeigen",
+    "historyRemove": "„{title}“ aus dem Verlauf entfernen",
     "clear": "Löschen",
-    "clearAsk": "Browserdaten löschen?",
-    "clearAskText": "Verlauf, Cookies und Anmeldungen des App-Browsers werden gelöscht, und Websites fordern Sie erneut zur Anmeldung auf. Dies kann nicht rückgängig gemacht werden.",
+    "clearAsk": {
+      "hour": "Verlauf der letzten Stunde löschen?",
+      "day": "Verlauf der letzten 24 Stunden löschen?",
+      "all": "Gesamten Verlauf löschen?"
+    },
+    "clearAskText": "Verlauf, Downloadverlauf und Cache aus diesem Zeitraum werden gelöscht, und Empfehlungen berücksichtigen diese Seiten nicht mehr. Anmeldungen und gespeicherte Passwörter bleiben erhalten. Dies kann nicht rückgängig gemacht werden.",
     "cleared": "Gelöscht.",
     "sitesFold_zero": "Websites",
     "sitesFold_other": "Websites ({count})",
@@ -1233,7 +1353,13 @@
       "remarks_invalid": "Nicht gespeichert. Aktualisieren Sie die Seite und versuchen Sie es erneut."
     },
     "ignoreFold_one": "Programme, die sie nie ansieht ({count})",
-    "sitesFold_one": "Websites ({count})"
+    "sitesFold_one": "Websites ({count})",
+    "permitsFold": "Websiteberechtigungen",
+    "permitsNone": "Wenn eine Website Kamera, Mikrofon, Standort oder Ähnliches anfordert, erscheinen Ihre Entscheidungen hier.",
+    "permitStates": {
+      "allow": "Immer erlaubt",
+      "deny": "Nicht erlaubt"
+    }
   },
   "setup_programs": {
     "hint": "Die Figur darf auf Ihre Bitte im Chat die Fenster erlaubter Programme ansehen oder bedienen: im Editor schreiben, im Rechner etwas ausrechnen.",
@@ -1279,7 +1405,10 @@
       "check": "Angehakt",
       "uncheck": "Haken entfernt",
       "append": "Hinzugefügt",
-      "see": "Per Bild"
+      "see": "Per Bild",
+      "tier": "Rechte geändert",
+      "block": "Zur Sperrliste hinzugefügt",
+      "unblock": "Von der Sperrliste entfernt"
     },
     "statuses": {
       "ok": "Erledigt",
@@ -1308,7 +1437,8 @@
       "account": "Konto ändern",
       "setting": "Einstellung ändern",
       "print": "Drucken",
-      "submit": "Absenden"
+      "submit": "Absenden",
+      "press": "Menübefehl ausführen"
     },
     "switchLine": {
       "turned on": "Eingeschaltet",
@@ -1317,7 +1447,24 @@
       "pictures turned off": "Bedienen per Bild ausgeschaltet"
     },
     "typed": "Text",
-    "logFold_one": "Protokoll (letzter {count})"
+    "logFold_one": "Protokoll (letzter {count})",
+    "modeName": "Handlungsweise",
+    "modeText": "Nur lesen: liest das Fenster und tut nichts. Jedes Mal fragen: Alles mit Wirkung nach außen wartet auf Sie. Automatische Prüfung: Ein Prüfmodell sieht zuerst hin; eindeutig gewünschtes Senden und Absenden geht weiter, Bezahlen, Löschen und Kontoänderungen fragen weiterhin.",
+    "modes": {
+      "read": "Nur lesen",
+      "ask": "Jedes Mal fragen",
+      "auto": "Automatische Prüfung"
+    },
+    "tiers": {
+      "full": "Vollständig",
+      "click": "Nur klicken",
+      "view": "Nur ansehen"
+    },
+    "tierOf": "Rechte für {name}",
+    "blockText": "Programme, deren Name diese Wörter enthält, werden ebenfalls nie bedient:",
+    "blockHint": "Wort hinzufügen, etwa einen Programmnamen",
+    "blockAdd": "Hinzufügen",
+    "unblock": "{word} entfernen"
   },
   "setup_recs": {
     "paceName": "Häufigkeit",

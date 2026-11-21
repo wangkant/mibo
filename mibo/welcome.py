@@ -33,7 +33,7 @@ from dotenv import dotenv_values
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import __version__, home as homes, i18n, langs
+from . import __version__, channels, home as homes, i18n, langs
 from . import setup_wizard as sw
 from . import life
 from . import quiet
@@ -60,7 +60,7 @@ PET_FIGURES = ("mibo", "chatgpt", "deepseek", "claude")
 PAGE_ASSETS = ("i18n.js", "app.js", "app.css", "chat.js", "chat.css", "finds.js", "finds.css", "signin.css",
                "onboard.js", "onboard.css", "setup.js", "setup.css",
                "pet.js", "pet.css", "card.js", "card.css", "characters.js", "characters.css",
-               "browse.js", "browsetabs.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
+               "browse.js", "browsetabs.js", "browsemenu.js", "browsestrip.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
                "linkcard.js", "linkcard.css", "modelbar.js", "modelbar.css", "providermarks.js", "sites.js", "sites.css",
                "toolcard.js", "skilloffer.js", "petux.css", "petbox.js", "petline.js", "petedge.js", "petdial.js",
                "petclick.js", "petoff.js", "compact.js", "compact.css", "schedulechat.js")
@@ -73,6 +73,9 @@ MAX_BODY = 32_768
 # Characters; the shipped personas are under 800, imported cards often run past 4,000,
 # and the engine itself sets no limit. Every reply sends the whole persona.
 PERSONA_LIMIT = 16_000
+# Another assistant's memory list pasted into Settings › 记忆: characters read, items kept at most (person.FACTS_MAX).
+PERSON_PASTE_MAX = 8_000
+PERSON_IMPORT_MAX = 200
 CHAT_KEPT = 50
 # The chat that is the character's own: what it finds arrives there. The others are plain chats.
 MAIN_CHAT = "main"
@@ -193,6 +196,12 @@ def _stored_names(message: dict) -> set:
     return {message.get("picture"), *(a.get("name") for a in message.get("attachments") or ())} - {None}
 
 
+def _memories(rows) -> list[dict]:
+    """Kept items as a message carries them: {id, text}, at most six."""
+    return [{"id": str(r.get("id") or "")[:64], "text": str(r.get("text") or "")[:200]}
+            for r in rows or [] if isinstance(r, dict) and r.get("id")][:6]
+
+
 def _now_iso() -> str:
     return datetime.fromtimestamp(life.clock()).astimezone().isoformat(timespec="seconds")
 
@@ -236,14 +245,21 @@ class PageChat:
         `chat` changes when a new chat starts, so the page knows to start over."""
         messages = [dict(m) for m in self.history if after is None or m["seq"] > after]
         return {"messages": messages, "chat": self.tag(), "last": self.seq, "kept": CHAT_KEPT,
-                "trimmed": self.trimmed}
+                "trimmed": self.trimmed, **({"private": True} if self.private else {})}
 
     def reset(self) -> None:
         self.conversation = secrets.token_hex(12)
         self.history = []
         self.trimmed = False
 
+    @property
+    def private(self) -> bool:
+        """A 无痕对话: kept in this process only, and never in the character's record or memory."""
+        return channels.private_chat(self.conversation)
+
     def save(self) -> None:
+        if self.private:
+            return
         saved = {"conversation": self.conversation, "seq": self.seq, "messages": self.history,
                  "trimmed": self.trimmed}
         if self.id != MAIN_CHAT:
@@ -252,7 +268,7 @@ class PageChat:
         atomic_write_text(self.path, json.dumps(saved, ensure_ascii=False))
 
     def listed(self) -> dict:
-        return {"id": self.id, "title": self.title, "at": self.at}
+        return {"id": self.id, "title": self.title, "at": self.at, **({"private": True} if self.private else {})}
 
     def shared(self) -> list[dict]:
         """The messages that brought something the character found, oldest first."""
@@ -264,7 +280,7 @@ class Workspace:
         self.home = home.resolve()
         # The character this page talks to, started and stopped with the page (create_app's lifespan).
         self.character = Character(self.home, runtime=self._runtime, said=self.take_said,
-                                   chats=lambda: [chat.conversation for chat in self._all_chats()])
+                                   chats=lambda: [c.conversation for c in self._all_chats() if not c.private])
         self._lock = threading.RLock()
         self._chat_lock = asyncio.Lock()
         # (chat, message) while a reply to it is on its way: what the stop button stops.
@@ -509,10 +525,16 @@ class Workspace:
                          "last": main.history[-1]["seq"] if main.history else 0},
                 "chats": [chat.listed() for chat in listed]}
 
-    async def new_chat(self) -> dict:
+    async def new_chat(self, private: bool = False) -> dict:
+        """A new plain chat, or with `private` a 无痕对话; one of that kind not written in yet is given again."""
         async with self._chat_lock:
+            blank = next((c for c in self._chats.values() if not c.history and c.private == private), None)
+            if blank is not None:
+                return blank.listed()
             ident = secrets.token_hex(8)
             chat = PageChat(self._history_path.with_name("chats") / f"{ident}.json", ident)
+            if private:
+                chat.conversation = channels.PRIVATE_CHAT + secrets.token_hex(12)
             chat.at = _now_iso()
             self._chats[ident] = chat
             self._save_chat(chat)
@@ -574,9 +596,14 @@ class Workspace:
             thought = item.get("thinking") if isinstance(item.get("thinking"), dict) else {}
             thinking = {"s": int(thought["s"]) if isinstance(thought.get("s"), (int, float)) else 0,
                         "text": str(thought.get("text") or "")[:8000]} if thought.get("text") else None
+            # The memories the reply drew on (dm.py), listed under it.
+            used = _memories((item.get("memory") or {}).get("used"))
             return {"role": "assistant", "text": str(item["text"]), **({"card": card} if card else {}),
                     **({"sources": sources} if sources else {}), **({"trace": trace} if trace else {}),
-                    **({"thinking": thinking} if thinking else {})}
+                    **({"thinking": thinking} if thinking else {}), **({"memory": {"used": used}} if used else {})}
+        if kind == "memory" and _memories(item.get("saved")):
+            # What a fold kept from this chat: one quiet 已记住 line (character.py).
+            return {"role": "memory", "saved": _memories(item["saved"])}
         if kind == "image":
             name = self._keep_picture(item.get("b64"))
             if name:
@@ -907,7 +934,9 @@ class Workspace:
                 # The command and its answer stay as they are.
                 dropped = self._scrub_chats(scrub, room, {id(said), *map(id, entries)})
             self._save_chat(room)
-            await self._chat_finds(items, entries, asked.get("quote"))
+            if not room.private:
+                # A 无痕对话 tells the recommender nothing.
+                await self._chat_finds(items, entries, asked.get("quote"))
             reply = "\n".join(str(i.get("text", "")) for i in items if i.get("type") == "text")
             if dropped:
                 # Earlier messages went: the page draws the chat afresh.
@@ -1028,13 +1057,21 @@ class Workspace:
     # -- what the character knows of the one person (person.json)
 
     async def person_write(self, action: str, payload: dict) -> dict:
-        """forget, edit or restore one item, or forget all; the view after it."""
-        item, text = str(payload.get("id") or ""), str(payload.get("text") or "")
-        if (action not in PERSON_ACTIONS or len(item) > 64 or len(text) > 400
-                or (action != "forget_all" and not item) or (action == "edit" and not text)):
+        """forget, edit or restore one item, forget all, add one, the two switches, or a pasted list read and its
+        ticked items kept; the view after it."""
+        item, text, lines = str(payload.get("id") or ""), str(payload.get("text") or ""), payload.get("lines")
+        switches = {k: payload[k] for k in ("on", "health") if isinstance(payload.get(k), bool)}
+        if (action not in PERSON_ACTIONS or len(item) > 64
+                or len(text) > (PERSON_PASTE_MAX if action == "import_preview" else 400)
+                or (action in ("forget", "forget_chats", "edit", "restore") and not item)
+                or (action in ("edit", "add", "import_preview") and not text.strip())
+                or (action == "settings" and not switches)
+                or (action == "import" and not (isinstance(lines, list) and 0 < len(lines) <= PERSON_IMPORT_MAX
+                                                and all(isinstance(x, str) and 0 < len(x) <= 400 for x in lines)))):
             raise ValueError("invalid_chat")
         try:
-            raw = await self.character.person_write(action, self._main.conversation, item, text)
+            raw = await self.character.person_write(action, self._main.conversation, item, text,
+                                                    {**switches, "lines": lines})
         except NotReady:
             raise ValueError("activity_unavailable") from None
         scrub = raw.pop("scrub", None)
@@ -1498,8 +1535,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
 
     @app.post("/api/chats")
     async def new_chat(request: Request):
-        await body(request)
-        return await workspace.new_chat()
+        return await workspace.new_chat((await body(request)).get("private") is True)
 
     @app.post("/api/chats/rename")
     async def rename_chat(request: Request):
@@ -1531,6 +1567,38 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
             return await asyncio.to_thread(workspace.character.person_view)
         except MemoryFileDamaged:
             raise ValueError("activity_unavailable") from None
+
+    @app.get("/api/person/said/{item}")
+    async def person_said(item: str):
+        """The chat lines one kept item came from (查看原话)."""
+        try:
+            return {"lines": await workspace.character.person_said(item[:64])}
+        except NotReady:
+            raise ValueError("activity_unavailable") from None
+
+    def person_export(fmt: str) -> dict:
+        if fmt not in ("json", "md"):
+            raise ValueError("invalid_chat")
+        day = time.strftime("%Y-%m-%d")
+        return {"file": f"mibo-memory-{day}.{fmt}", "text": workspace.character.person_export(fmt)}
+
+    @app.get("/api/person/export")
+    async def person_export_get(format: str = "json"):
+        """Everything kept, as a file's name and words; a browser page saves it itself."""
+        return await asyncio.to_thread(person_export, format)
+
+    @app.post("/api/person/export")
+    async def person_export_save(request: Request):
+        """In the app window: the system's Save dialog, and the file written where the person chose; cancelled,
+        nothing is written."""
+        out = await asyncio.to_thread(person_export, str((await body(request)).get("format") or ""))
+        window = getattr(app.state, "window", None)
+        if window is None:
+            raise ValueError("no_window")
+        path = await asyncio.to_thread(window.save_file, out["file"])
+        if path:
+            await asyncio.to_thread(Path(path).write_text, out["text"], encoding="utf-8")
+        return {"saved": bool(path)}
 
     @app.post("/api/person/{action}")
     async def person_write(request: Request, action: str):

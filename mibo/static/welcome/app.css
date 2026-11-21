@@ -1084,6 +1084,17 @@ body.starting .side {
 .side-chat.untitled .side-chat-title {
   color: var(--pa-muted);
 }
+/* A 无痕对话: the dashed bubble before its title (app.js paintRow). */
+.side-chat.private .side-chat-open::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-right: calc(6px - var(--pa-s3));
+  background: var(--pa-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10.1 2.18a10 10 0 0 1 3.8 0M13.9 21.82a10 10 0 0 1-3.8 0M17.6 3.72a10 10 0 0 1 2.7 2.7M2.18 13.9a10 10 0 0 1 0-3.8M20.28 17.6a10 10 0 0 1-2.7 2.7M21.82 10.1a10 10 0 0 1 0 3.8M3.72 6.4a10 10 0 0 1 2.7-2.7M6.8 20.79l-3.9.9a.5.5 0 0 1-.6-.6l.9-3.9'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10.1 2.18a10 10 0 0 1 3.8 0M13.9 21.82a10 10 0 0 1-3.8 0M17.6 3.72a10 10 0 0 1 2.7 2.7M2.18 13.9a10 10 0 0 1 0-3.8M20.28 17.6a10 10 0 0 1-2.7 2.7M21.82 10.1a10 10 0 0 1 0 3.8M3.72 6.4a10 10 0 0 1 2.7-2.7M6.8 20.79l-3.9.9a.5.5 0 0 1-.6-.6l.9-3.9'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 /* On hover the title fades under one ⋯ button instead of being cut twice. */
 .side-chat:hover .side-chat-title,
 .side-chat:focus-within .side-chat-title,

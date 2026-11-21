@@ -3,9 +3,9 @@ person's press on a card, so that the plainly fine ones can go ahead.
 
 It sits under the gates (web/gate.py, desk/gate.py, the shell's), never in
 place of them. Code sorts first and the reviewer only sees what code already
-sorted as "allowed, with asking", and only in an area the person switched to
-"reviewed" in Settings (browser, other programs, commands; "ask every time" is
-the default and nothing is looser than "reviewed"). It can turn a card into
+sorted as "allowed, with asking", and only in an area the person set to auto
+(acting.py: off, read, ask, auto; ask is the default and nothing is looser
+than auto). It can turn a card into
 "go ahead", or keep it ("ask"), or turn the action down ("refuse"); it never
 unblocks anything. Paying, deleting, accounts, access, installing, settings
 and anything code could not sort go to the person; secrets, elevation,
@@ -33,25 +33,20 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import secrets
 import threading
 import time
 import unicodedata
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Awaitable, Callable
 
 AREAS = ("browser", "programs", "commands")
-MODES = ("ask", "reviewed")
-# The kinds code lets the reviewer see, per area; every other kind is the person's.
+# The kinds code lets the reviewer see, per area; every other kind is the person's. "press" is a control code
+# could not sort whose press sent something (web), or a menu command whose name does not say what it does (desk).
 REVIEWABLE = {
-    "browser": frozenset({"send", "comment", "like", "post", "submit"}),
-    "programs": frozenset({"send", "post", "submit", "file", "print"}),
+    "browser": frozenset({"send", "comment", "like", "post", "submit", "press"}),
+    "programs": frozenset({"send", "post", "submit", "file", "print", "press"}),
     "commands": frozenset({"command", "file"}),
 }
-MODES_FILE = "review-modes.json"
-LOG_FILE = "review-log.jsonl"
-LOG_KEPT = 500
 # Passes a day in one area; past it the card comes back.
 PASSES_A_DAY = 60
 # Refusals in a row that end the task and hand it to the person.
@@ -115,8 +110,6 @@ DECISIONS = ("go", "ask", "refuse")
 
 # The sentences code writes, zh and en.
 SAID = {
-    "mode": ("此类操作需由你确认（当前设置为“每次询问”）。",
-             "You confirm this kind yourself (Settings: ask every time)."),
     "away": ("你当前不在应用前，操作已暂缓。", "You are not at the app, so nothing goes ahead without you."),
     "kind": ("此类操作始终需由你确认：{kind}。", "You always confirm this kind yourself: {kind}."),
     "stale": ("未找到与此操作对应的近期指令，需要你确认。", "No recent request of yours covers this, so it asks you."),
@@ -168,21 +161,6 @@ LINES = {
     ("go", "review"): ("审查通过：{reason}", "Passed by review: {reason}"),
     ("ask", "review"): ("审查要求确认：{reason}", "Review asks you: {reason}"),
     ("refuse", "review"): ("审查已拦截：{reason}", "Review turned it down: {reason}"),
-}
-SETTINGS = {
-    "title": ("执行操作前", "Before acting for you"),
-    "areas": {"browser": ("应用内浏览器", "In the app's browser"),
-              "programs": ("其他程序", "In other programs"),
-              "commands": ("运行命令", "Running commands on the computer")},
-    "modes": {"ask": ("每次询问", "Ask me every time"),
-              "reviewed": ("自动审查，无风险的操作直接执行", "Review first; do the plainly fine ones")},
-    "warning": ("审查由模型完成，可能出错。付款、删除、更改账号、安装及无法归类的操作仍需你确认；每一步放行均记入操作记录，"
-                "可撤销的操作支持撤销；发现误放行时点击“报告”，该项将恢复为每次询问。",
-                "The review is a model too and can be wrong. Paying, deleting, account changes, installs and anything "
-                "unclear still ask you; every step it lets through shows in the steps, with undo where there is one, "
-                "and \"Report\" switches that area back to asking."),
-    "report": ("报告误放行", "This should not have gone ahead"),
-    "undo": ("撤销", "Undo"),
 }
 
 
@@ -586,99 +564,41 @@ async def review(request, action: dict, *, ask: ASK_MODEL, lang: str = "zh", now
     return Verdict(value["decision"], _reason(value["reason"]), "review", {k: value[k] for k in CHECKS})
 
 
-# ---------------------------------------------------------------- modes, the log, and the one call a gate makes
+# ---------------------------------------------------------------- the one call a gate makes
 
-class Modes:
-    """The person's choice per area, ask (default) or reviewed, in the desktop folder; the passes of the day; the
-    log of what the reviewer decided, which the step log reads and a report from there switches back."""
+class Tally:
+    """What the reviewer passed today and turned down in a row, per area, in this process: past PASSES_A_DAY the
+    card comes back, and REFUSALS_STOP in a row hand the task to the person."""
 
-    def __init__(self, desktop: Path):
-        self.path = Path(desktop) / MODES_FILE
-        self.log_path = Path(desktop) / LOG_FILE
+    def __init__(self):
         self.lock = threading.Lock()
         self.passes: dict[tuple[str, str], int] = {}
         self.refused: dict[str, int] = {}
 
-    def all(self) -> dict:
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            data = {}
-        data = data if isinstance(data, dict) else {}
-        return {area: "reviewed" if data.get(area) == "reviewed" else "ask" for area in AREAS}
 
-    def mode(self, area: str) -> str:
-        return self.all().get(area, "ask")
-
-    def set(self, area: str, mode: str) -> dict:
-        from .storage import atomic_write_text
-        with self.lock:
-            data = self.all()
-            if area in AREAS:
-                data[area] = "reviewed" if mode == "reviewed" else "ask"
-            atomic_write_text(self.path, json.dumps(data, ensure_ascii=False))
-        return data
-
-    def _count_pass(self, area: str) -> bool:
-        day = (time.strftime("%Y-%m-%d"), area)
-        with self.lock:
-            if self.passes.get(day, 0) >= PASSES_A_DAY:
-                return False
-            self.passes[day] = self.passes.get(day, 0) + 1
-        return True
-
-    def _note(self, area: str, action: dict, verdict: Verdict) -> str:
-        from .storage import atomic_write_text
-        ident = secrets.token_urlsafe(8)
-        row = {"id": ident, "at": int(time.time()), "area": area, "kind": action.get("kind"),
-               "where": str(action.get("where") or "")[:200], "target": _targets(action)[:20],
-               "text": str(action.get("text") or "")[:500], "decision": verdict.decision, "by": verdict.by,
-               "reason": verdict.reason, "undo": bool(action.get("undo"))}
-        with self.lock:
-            rows = self.recent(LOG_KEPT - 1) + [row]
-            atomic_write_text(self.log_path, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
-        return ident
-
-    def recent(self, n: int = 50) -> list[dict]:
-        try:
-            lines = self.log_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return []
-        rows = []
-        for line in lines[-n:] if n > 0 else []:
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
-        return rows
-
-    def report(self, ident: str) -> dict:
-        """The person says a pass was wrong: that area goes back to asking every time."""
-        row = next((r for r in self.recent(LOG_KEPT) if r.get("id") == ident), None)
-        if row is None or row.get("area") not in AREAS:
-            return self.all()
-        return self.set(row["area"], "ask")
+TALLY = Tally()
 
 
-async def decide(area: str, request, action: dict, *, modes: Modes, ask: ASK_MODEL, attended: bool,
-                 lang: str = "zh", now: float | None = None) -> tuple[Verdict, str]:
-    """The one call a gate makes for an action it sorted as allowed-with-asking: (verdict, log id). Only "go"
-    skips the card; "ask" shows it with the reason under the gate's own text; "refuse" ends the step, and
-    REFUSALS_STOP in a row set `stop`. The log id goes on the step line so the person can report it."""
+async def decide(area: str, request, action: dict, *, ask: ASK_MODEL, attended: bool, lang: str = "zh",
+                 now: float | None = None, tally: Tally = TALLY) -> Verdict:
+    """The one call a gate makes for an action that acting.decide sent to review. Only "go" skips the card; "ask"
+    shows it; "refuse" ends the step, and REFUSALS_STOP in a row set `stop`."""
     action = {**action, "area": area}
-    if modes.mode(area) != "reviewed":
-        return Verdict("ask", said("mode", lang), "code"), ""
     if not attended:
-        return Verdict("ask", said("away", lang), "code"), ""
+        return Verdict("ask", said("away", lang), "code")
     verdict = await review(request, action, ask=ask, lang=lang, now=now)
-    if verdict.decision == "go" and not modes._count_pass(area):
-        verdict = Verdict("ask", said("cap", lang), "code")
-    with modes.lock:
-        modes.refused[area] = modes.refused.get(area, 0) + 1 if verdict.decision == "refuse" else 0
-        if modes.refused[area] >= REFUSALS_STOP:
-            modes.refused[area] = 0
+    day = (time.strftime("%Y-%m-%d"), area)
+    with tally.lock:
+        if verdict.decision == "go":
+            if tally.passes.get(day, 0) >= PASSES_A_DAY:
+                verdict = Verdict("ask", said("cap", lang), "code")
+            else:
+                tally.passes[day] = tally.passes.get(day, 0) + 1
+        tally.refused[area] = tally.refused.get(area, 0) + 1 if verdict.decision == "refuse" else 0
+        if tally.refused[area] >= REFUSALS_STOP:
+            tally.refused[area] = 0
             verdict.stop = True
-    return verdict, modes._note(area, action, verdict)
+    return verdict
 
 
 def endpoint(base_url: str, api_key: str, model: str, *, usage: dict | None = None, extra: dict | None = None,
@@ -687,11 +607,13 @@ def endpoint(base_url: str, api_key: str, model: str, *, usage: dict | None = No
     window's, a script). Temperature 0, no retries; `usage` gathers calls and tokens."""
     import httpx
 
+    from .endpoints import chat_completions_url
+
     async def ask(system: str, msgs: list[dict]) -> str:
         payload = {"model": model, "messages": [{"role": "system", "content": system}, *msgs],
                    "temperature": 0, "max_tokens": max_tokens, **(extra or {})}
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
-            resp = await client.post(base_url.rstrip("/") + "/chat/completions", json=payload,
+            resp = await client.post(chat_completions_url(base_url), json=payload,
                                      headers={"Authorization": f"Bearer {api_key}"})
         if usage is not None:
             usage["calls"] = usage.get("calls", 0) + 1

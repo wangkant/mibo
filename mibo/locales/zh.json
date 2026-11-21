@@ -96,7 +96,13 @@
     "readPages_other": "已阅读 {count} 个网页",
     "otherSteps": "已完成 {count} 个步骤",
     "sources_other": "{count} 个来源",
-    "listSep": "，"
+    "listSep": "，",
+    "memUsed_other": "参考了 {count} 条记忆",
+    "memSaved": "已记住：{what}",
+    "memManage": "管理",
+    "memForgotten": "已忘记",
+    "memGone": "此条记忆已不存在。",
+    "memSep": "；"
   },
   "app": {
     "someone": "你的角色",
@@ -132,7 +138,8 @@
       "asleepUntil": "休息至 {time}",
       "back": "已返回 · 带回 {count} 条内容",
       "home": "在家"
-    }
+    },
+    "privateChat": "无痕对话"
   },
   "browse": {
     "back": "后退",
@@ -166,7 +173,6 @@
     "notSecure": "不安全",
     "notSecureTitle": "与此网站的连接未加密，请勿在此输入密码或付款信息",
     "fit": "适应宽度",
-    "fitOff": "100%",
     "fitTitle": "网页已按窗格宽度缩放；点击可按原始大小显示",
     "fitOffTitle": "按原始大小显示网页（Ctrl +/- 缩放）；点击可适应窗格宽度",
     "col": {
@@ -217,7 +223,9 @@
           "account": "更改账号设置？",
           "grant": "允许此授权？",
           "submit": "提交此表单？",
-          "leave": "前往其他网站？"
+          "leave": "前往其他网站？",
+          "plan": "开始执行此任务？",
+          "press": "按下此按钮？"
         },
         "verbs": {
           "send": "发送",
@@ -257,6 +265,59 @@
         "no": "不允许",
         "gone": "此卡片已失效。"
       }
+    },
+    "more": "更多操作",
+    "zoom": "缩放",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "zoomReset": "恢复为 100%",
+    "find": "在页面中查找",
+    "print": "打印",
+    "copyLink": "复制链接",
+    "copied": "已复制链接",
+    "downloads": "下载",
+    "downloadOpen": "打开",
+    "downloadFolder": "在文件夹中显示",
+    "askSelection": "询问 Mibo",
+    "linkTab": "在新标签页中打开链接",
+    "linkSystem": "在系统浏览器中打开链接",
+    "downloadStates": {
+      "progress": "正在下载",
+      "progressPart": "正在下载 {n}%",
+      "waiting": "等待确认",
+      "failed": "下载失败",
+      "cancelled": "已取消",
+      "gone": "文件已删除"
+    },
+    "modes": {
+      "title": "网页操作方式",
+      "off": "不操作",
+      "read": "仅查看",
+      "ask": "每次询问",
+      "auto": "自动审查"
+    },
+    "prompt": {
+      "permission": "{site} 请求{what}权限",
+      "kinds": {
+        "camera": "摄像头",
+        "microphone": "麦克风",
+        "geolocation": "位置信息",
+        "clipboard": "剪贴板读取",
+        "downloads": "自动下载",
+        "files": "文件编辑",
+        "fonts": "本机字体",
+        "midi": "电子乐器（MIDI）",
+        "windows": "窗口管理"
+      },
+      "once": "本次允许",
+      "always": "始终允许",
+      "no": "不允许",
+      "app": "{site} 请求打开外部应用",
+      "popup": "已阻止 {site} 打开的弹出窗口",
+      "open": "打开",
+      "cancel": "取消",
+      "close": "关闭",
+      "thisPage": "此网页"
     }
   },
   "card": {
@@ -383,7 +444,8 @@
       "account": "更改账号",
       "setting": "更改设置",
       "print": "打印",
-      "submit": "提交"
+      "submit": "提交",
+      "press": "执行菜单命令"
     },
     "deskWindow": "窗口",
     "deskTarget": "要点击的控件",
@@ -461,7 +523,12 @@
     "picture_too_large": "图片过大。请换一张较小的图片。",
     "file_type": "不支持此类文件。请发送图片或文本文件。",
     "file_too_large": "文件过大。文本文件最大 512 KB。",
-    "file_unreadable": "无法读取文件。请确认它是文本文件。"
+    "file_unreadable": "无法读取文件。请确认它是文本文件。",
+    "manageMemory": "管理记忆",
+    "privateMark": "无痕对话",
+    "privateNote": "不读取也不更新记忆，不写入对话记录，关闭应用后清除。",
+    "privateStart": "开始无痕对话",
+    "privateLeave": "退出无痕对话"
   },
   "compact": {
     "full": "在主窗口中打开",
@@ -763,7 +830,9 @@
     "clipName": "剪贴板文字.txt",
     "shotName": "截图.png",
     "clipPictureName": "剪贴板图片.png",
-    "failed": "操作失败，请重试。"
+    "failed": "操作失败，请重试。",
+    "private": "无痕对话",
+    "privateHint": "不读取也不更新记忆"
   },
   "schedulechat": {
     "kinds": {
@@ -970,7 +1039,7 @@
     "cancel": "取消",
     "forget": "忘记",
     "forgetAsk": "忘记此条？",
-    "forgetText": "此条将从记忆、对话记录和偏好中一并删除，且无法恢复。",
+    "forgetText": "此条将从记忆和偏好中删除，且无法恢复。对话记录默认保留。",
     "restore": "恢复",
     "until": "{from} 至 {to}",
     "allTitle": "全部忘记",
@@ -980,7 +1049,41 @@
     "errors": {
       "activity_unavailable": "角色暂时无法响应。请稍后重试。",
       "activity_changed": "此条已更改，已重新读取。",
-      "activity_restore_gone": "此条已无法恢复。"
+      "activity_restore_gone": "此条已无法恢复。",
+      "memory_secret": "未保存：身份证号、银行卡号、密码和验证码不会保存。",
+      "memory_not_instructions": "未保存：内容类似指令。",
+      "memory_paused": "记忆已暂停，开启“使用并更新记忆”后才能添加。",
+      "memory_health_off": "未保存：健康信息已设为不保存。",
+      "no_window": "仅可在应用窗口中保存文件。"
+    },
+    "onTitle": "使用并更新记忆",
+    "onText": "开启后，角色回复时参考这些记忆，并从对话中记录新的内容。关闭后不再使用或新增记忆，已有条目保留。",
+    "healthTitle": "保存健康信息",
+    "healthText": "如过敏、病情和用药，默认开启，以便角色避开你不能吃或不宜做的事。关闭后不再保存此类信息，已保存的条目不再用于回复。",
+    "kept": "记于 {day}",
+    "saidOpen": "查看原话",
+    "saidClose": "收起原话",
+    "saidNone": "原话已不在对话记录中。",
+    "add": "添加",
+    "addLabel": "添加一条记忆",
+    "addPlaceholder": "例如：对芒果过敏、周末常去爬山",
+    "moreTitle": "导出与导入",
+    "exportTitle": "导出",
+    "exportText": "将仍然有效的全部记忆保存为文件。",
+    "exportSaved": "已保存。",
+    "importTitle": "从其他助手导入",
+    "importText": "粘贴其他 AI 助手导出的记忆列表，每行一条。读取后逐条确认，仅保存勾选的条目；内容仅作为资料保存，不会作为指令执行。",
+    "importLabel": "其他助手的记忆列表",
+    "importRead": "读取",
+    "importKeep": "保存所选（{count}）",
+    "importNone": "未读取到可导入的条目。",
+    "importDone": "已导入 {count} 条。",
+    "forgetChats": "同时从对话记录中删除提及此条的句子",
+    "refused": {
+      "secret": "含证件号、卡号、密码或验证码，不予保存",
+      "not_instructions": "内容类似指令，不予保存",
+      "kept": "已在记忆中",
+      "health_off": "健康信息已设为不保存"
     }
   },
   "setup_model": {
@@ -1213,11 +1316,27 @@
     },
     "browsingTitle": "角色可参考你在内置浏览器中浏览的内容",
     "browsingText": "角色参考时，网页的标题和正文可能发送给模型服务；密码和登录信息始终不会发送。登录页、支付页和无痕模式下浏览的网页不会记录。",
-    "clearTitle": "清除浏览数据",
-    "clearText": "删除内置浏览器的浏览记录、Cookie、登录状态和缓存。",
+    "historyTitle": "浏览记录",
+    "historyText": "清除所选时间内的浏览记录、下载记录和缓存。登录状态和已保存的密码不受影响，可在“连接”中管理。",
+    "clearRange": "时间范围",
+    "ranges": {
+      "hour": "过去 1 小时",
+      "day": "过去 24 小时",
+      "all": "所有时间"
+    },
+    "historyFold": "查看浏览记录",
+    "historySearch": "搜索浏览记录",
+    "historyNone": "暂无浏览记录。在内置浏览器中阅读的网页将列于此处。",
+    "historyNoMatch": "未找到匹配的记录。",
+    "historyMore": "显示更多",
+    "historyRemove": "从浏览记录中删除“{title}”",
     "clear": "清除",
-    "clearAsk": "清除浏览数据？",
-    "clearAskText": "内置浏览器的浏览记录、Cookie 和登录状态将被删除，各网站需重新登录。此操作无法撤销。",
+    "clearAsk": {
+      "hour": "清除过去 1 小时的浏览记录？",
+      "day": "清除过去 24 小时的浏览记录？",
+      "all": "清除所有浏览记录？"
+    },
+    "clearAskText": "所选时间内的浏览记录、下载记录和缓存将被删除，推荐功能也不再参考这些网页。登录状态和已保存的密码将保留。此操作无法撤销。",
     "cleared": "已清除。",
     "sitesFold_zero": "网站",
     "sitesFold_other": "网站（{count}）",
@@ -1242,6 +1361,12 @@
     "errors": {
       "quiet_invalid": "无法更改此开关。请刷新后重试。",
       "remarks_invalid": "未能保存。请刷新后重试。"
+    },
+    "permitsFold": "网站权限",
+    "permitsNone": "网站请求摄像头、麦克风、位置信息等权限后，所作的选择显示在此处。",
+    "permitStates": {
+      "allow": "始终允许",
+      "deny": "不允许"
     }
   },
   "setup_programs": {
@@ -1288,7 +1413,10 @@
       "check": "勾选",
       "uncheck": "取消勾选",
       "append": "添加",
-      "see": "看图操作"
+      "see": "看图操作",
+      "tier": "更改权限",
+      "block": "加入禁止清单",
+      "unblock": "移出禁止清单"
     },
     "statuses": {
       "ok": "已完成",
@@ -1317,7 +1445,8 @@
       "account": "更改账号",
       "setting": "更改设置",
       "print": "打印",
-      "submit": "提交"
+      "submit": "提交",
+      "press": "执行菜单命令"
     },
     "switchLine": {
       "turned on": "已开启",
@@ -1325,7 +1454,24 @@
       "pictures turned on": "看图操作已开启",
       "pictures turned off": "看图操作已关闭"
     },
-    "typed": "输入的内容"
+    "typed": "输入的内容",
+    "modeName": "操作方式",
+    "modeText": "仅查看：只读取窗口，不执行任何操作。每次询问：有外部影响的操作均需你确认。自动审查：由审查模型先行判断，明确符合你要求的发送与提交直接执行；付款、删除及账号相关操作仍需确认。",
+    "modes": {
+      "read": "仅查看",
+      "ask": "每次询问",
+      "auto": "自动审查"
+    },
+    "tiers": {
+      "full": "完全操作",
+      "click": "仅点击",
+      "view": "仅查看"
+    },
+    "tierOf": "{name} 的权限",
+    "blockText": "名称含有以下词语的程序同样不会被操作：",
+    "blockHint": "添加词语，例如程序名称",
+    "blockAdd": "添加",
+    "unblock": "移除 {word}"
   },
   "setup_recs": {
     "paceName": "推荐频率",

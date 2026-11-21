@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>待办 - 小站</title>
+<link rel="stylesheet" href="/site.css">
+<style>.card .row { display: flex; gap: 10px; margin-top: 12px; } .card label { display: block; margin: 10px 0 4px; }</style>
+</head>
+<body>
+<header><b>小站待办</b><a href="/index.html">首页</a></header>
+<main>
+  <div class="card">
+    <h1>我的待办</h1>
+    <ul id="items"><li>交房租</li><li>取快递</li><li>买牛奶</li></ul>
+    <div class="row">
+      <button type="button" id="tidy">整理一下</button>
+      <button type="button" id="ok">好的</button>
+      <button type="button" id="reload">刷新列表</button>
+      <button type="button" id="del">删除</button>
+    </div>
+    <label for="note">留言</label><input id="note">
+    <div class="row"><button type="button" id="send">发送</button></div>
+    <p id="said"></p>
+  </div>
+</main>
+<script>
+// Buttons whose names say nothing of what they do: one posts a delete-all, one sends a DELETE. One only asks a
+// GraphQL query; one is named for what it does.
+const $ = (id) => document.getElementById(id);
+const post = (path, body, method = "POST") => fetch(path, {method, headers: {"Content-Type": "application/json"},
+  body: method === "DELETE" ? undefined : JSON.stringify(body)}).then(() => { $("said").textContent = "已完成"; });
+$("tidy").addEventListener("click", () => post("/api/delete-all", {all: true}));
+$("ok").addEventListener("click", () => post("/api/items/7", null, "DELETE"));
+$("reload").addEventListener("click", () => post("/api/graphql", {query: "query { items { id title } }"}));
+$("del").addEventListener("click", () => post("/api/delete", {item: 7}));
+$("send").addEventListener("click", () => post("/api/send", {text: $("note").value}));
+</script>
+</body></html>

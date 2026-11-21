@@ -7,6 +7,7 @@
 // context (the chip in its box) what is sent is done in the page (turns "page" / "page_on").
 // 最小化 or Settings put the page behind a chip: it goes on, with its sound and its history, and the chip
 // brings it back.
+// The bar's ··· menu (zoom, find, print, copy link, the system browser, downloads) is browsemenu.js.
 // While the character operates the page for the person (web/operate.py), the chat's box carries the run: each
 // step as it happens, a card when something needs their yes, and how it ended; a border round the page says
 // whose it is.
@@ -16,7 +17,6 @@
     forward: '<path d="M9 18l6-6-6-6" />',
     reload: '<path d="M20 12a8 8 0 1 1-2.34-5.66L20 8.5" /><path d="M20 3.5v5h-5" />',
     stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />',
-    system: '<path d="M14 4h6v6" /><path d="M10 14 20 4" /><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />',
     close: '<path d="M6 6l12 12M18 6 6 18" />',
     minimize: '<path d="M6 18h12" />',
     // The chat beside the page: a window with its right column marked.
@@ -32,11 +32,10 @@
     failed: '<path d="M7 7l10 10M17 7 7 17" />',
     stopped: '<path d="M7 12h10" />',
     plus: '<path d="M12 6v12M6 12h12" />',
-    // The address field: a search, a site, a site reached without encryption; and the fit's icon in a narrow bar.
+    // The address field: a search, a site, a site reached without encryption.
     search: '<circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" />',
     globe: '<circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5z" />',
     warn: '<path d="M12 4 21 19.5H3z" /><path d="M12 10v4.5M12 17.2v.3" />',
-    fit: '<path d="M3.5 12h17M7 8.5 3.5 12 7 15.5M17 8.5l3.5 3.5-3.5 3.5" />',
   };
   const say = (key) => paI18n.words("browse")[key];
   const col = () => paI18n.words("browse").col;
@@ -138,7 +137,7 @@
     }
   });
   // Under the field: what Enter opens (a search for the words, or the site), then the pages read that match.
-  const suggest = el("div", "browse-suggest");
+  const suggest = el("div", "browse-suggest browse-over");
   suggest.id = "browse-suggest";
   suggest.hidden = true;
   suggest.setAttribute("role", "listbox");
@@ -256,23 +255,14 @@
     icon(buttons.private, "private");
     pane.classList.toggle("private", on);
   }
-  // 100% / 适应宽度: the site at its own size, or fitted to the pane's width (browser.py); its zoom shown a
-  // moment as it changes, at the field's end. In a narrow bar the switch is its icon alone.
-  const fitButton = button("fit");
-  fitButton.classList.add("browse-text", "browse-fit");
+  // The site's zoom, shown a moment as it changes, at the field's end (the ··· menu changes it, and fits the site
+  // to the pane's width: browsemenu.js).
   const zoomTag = el("span", "browse-zoom");
   zoomTag.hidden = true;
   field.append(zoomTag);
   let zoomTimer = null;
-  function drawFit(on) {
-    fitButton.setAttribute("aria-pressed", String(on));
-    fitButton.innerHTML = svg("fit");
-    fitButton.append(el("span", "", say(on ? "fit" : "fitOff")));
-    fitButton.title = say(on ? "fitTitle" : "fitOffTitle");
-    fitButton.setAttribute("aria-label", fitButton.title);
-  }
-  bar.append(button("back"), button("forward"), button("reload"), field, button("mute"), fitButton,
-    button("private"), button("beside"), button("system"), button("minimize"), button("close"));
+  bar.append(button("back"), button("forward"), button("reload"), field, button("mute"),
+    button("private"), button("beside"), button("minimize"), button("close"));
   // With the chat out of sight, a run under way is said in one line under the page; a press brings the chat.
   const strip = el("div", "browse-strip");
   strip.hidden = true;
@@ -291,6 +281,8 @@
   body.append(frame);
   pane.append(bar, body, strip);
   const drawTabs = window.paBrowseTabs(pane, bar, post);
+  const drawMenu = window.paBrowseMenu({ pane, bar, stage, post, place, page: () => page, beside: setBeside, chat: () => chatNow() });
+  const drawStrip = window.paBrowseStrip({ pane, area, stage, post, place });
   // The suggestions lie over the page and over a chat laid on it.
   stage.append(pane, suggest);
 
@@ -314,6 +306,16 @@
   // The page in the chat's context: a chip in its box, taken out with its cross and put back with the button
   // that stands there then.
   const contextRow = el("div", "browse-context");
+  // How much the character may do in the page by itself (acting.py), beside the chip: read again at each step.
+  const modeSelect = el("select", "pa-select browse-mode");
+  for (const value of ["off", "read", "ask", "auto"]) modeSelect.append(new Option("", value));
+  modeSelect.addEventListener("change", () => post("browser/acting", { area: "browser", mode: modeSelect.value }));
+  fetch("/api/browser/acting", { headers: HEADERS, credentials: "same-origin" })
+    .then((response) => response.json())
+    .then((data) => {
+      modeSelect.value = data.modes.browser;
+    })
+    .catch(() => {});
 
   // The run as browser.py last told it ({task, held, end, why, note, steps, card}).
   let op = null;
@@ -590,13 +592,17 @@
     const form = beside ? chatNow()?.querySelector(".chat-composer") : null;
     if (!form) return contextRow.remove();
     if (contextRow.parentElement !== form) form.prepend(contextRow);
+    const modes = say("modes");
+    modeSelect.title = modes.title;
+    modeSelect.setAttribute("aria-label", modes.title);
+    for (const option of modeSelect.options) option.textContent = modes[option.value];
     if (!context) {
       const add = footButton("browse-context-add", say("contextAdd"), () => {
         context = true;
         drawContext();
       }, say("contextAddTitle"));
       add.insertAdjacentHTML("afterbegin", svg("plus"));
-      return contextRow.replaceChildren(add);
+      return contextRow.replaceChildren(add, modeSelect);
     }
     const chip = el("span", "browse-context-chip");
     chip.title = `${say("context")}\n${page.url}`;
@@ -609,7 +615,7 @@
     out.innerHTML = svg("close");
     out.setAttribute("aria-label", say("contextOff"));
     chip.append(out);
-    contextRow.replaceChildren(chip);
+    contextRow.replaceChildren(chip, modeSelect);
   }
   // Where everything is: the chat beside the page or over it, the chip and the run in its box, the WebView.
   function layout() {
@@ -725,10 +731,9 @@
   }
 
   function words() {
-    for (const name of ["back", "forward", "system", "minimize", "close"]) icon(buttons[name], name);
+    for (const name of ["back", "forward", "minimize", "close"]) icon(buttons[name], name);
     buttons.beside.innerHTML = svg("beside");
     drawPrivate(pane.classList.contains("private"));
-    drawFit(fitButton.getAttribute("aria-pressed") === "true");
     icon(buttons.reload, pane.classList.contains("loading") ? "stop" : "reload");
     address.setAttribute("aria-label", say("address"));
     address.placeholder = say("typeAddress");
@@ -739,7 +744,8 @@
   }
 
   // Where the WebView goes: the page's space inside its frame, in CSS px, what of this page lies over it (the chat
-  // in a narrow window, the suggestions with their shadow: the WebView is cut there, not made smaller), and the
+  // in a narrow window, the suggestions and the ··· menu with their shadow: the WebView is cut there, not made
+  // smaller), and the
   // page's device pixels per px. Told again only when it changed.
   let placed = "";
   function place() {
@@ -750,8 +756,9 @@
       const left = Math.max(box.left, Math.round(chatView.getBoundingClientRect().left));
       if (left < box.right) cuts.push([left - box.left, 0, box.right - left, box.height]);
     }
-    if (!suggest.hidden) {
-      const r = suggest.getBoundingClientRect();
+    for (const over of stage.querySelectorAll(".browse-over")) {
+      if (over.hidden) continue;
+      const r = over.getBoundingClientRect();
       const [x, y] = [Math.max(box.left, r.left - 12), Math.max(box.top, r.top)];
       const [x2, y2] = [Math.min(box.right, r.right + 12), Math.min(box.bottom, r.bottom + 16)];
       if (x2 > x && y2 > y) cuts.push([x - box.left, y - box.top, x2 - x, y2 - y]);
@@ -806,7 +813,6 @@
     if ("back" in state) buttons.back.disabled = !state.back;
     if ("forward" in state) buttons.forward.disabled = !state.forward;
     if ("loading" in state) pane.classList.toggle("loading", state.loading);
-    if ("fit" in state) fitButton.setAttribute("aria-pressed", String(state.fit));
     if ("zoom" in state) {
       zoomTag.textContent = `${state.zoom}%`;
       if (state.zoom_show) {
@@ -817,6 +823,8 @@
     }
     if ("operating" in state) showOp(state.operating);
     drawTabs(state);
+    drawMenu(state);
+    drawStrip(state);
     words();
   };
   // The sidebar while a page is in front: Settings needs the stage, so the page goes behind its chip; a chat,

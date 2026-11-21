@@ -83,11 +83,13 @@ class Model:
         self.spent = 0.0
         self.reasoning = {"enabled": False}
         self.answer = operate.ANSWER_LEAST
+        # Fields added to every call (--cheapest: OpenRouter's provider routing by price).
+        self.extra: dict = {}
 
     async def ask(self, system: str, messages: list[dict], log: list) -> str:
         payload = {"model": self.model, "messages": [{"role": "system", "content": system}, *messages],
                    "max_tokens": self.answer, "temperature": 0.2, "response_format": {"type": "json_object"},
-                   "usage": {"include": True}}
+                   "usage": {"include": True}, **self.extra}
         thinking_off(payload, self.base, False)
         began = time.monotonic()
         data, error = {}, ""
@@ -219,6 +221,7 @@ async def main(argv: list[str]) -> int:
     parser.add_argument("--data", default=str(DATA))
     parser.add_argument("--tools", choices=("no", "yes"), default="no",
                         help="whether the app's check found the model calling a tool by itself")
+    parser.add_argument("--cheapest", action="store_true", help="route each call to the host's cheapest provider")
     args = parser.parse_args(argv)
     env = read_env(Path(args.env))
     from mibo import abilities
@@ -243,6 +246,8 @@ async def main(argv: list[str]) -> int:
     server = serve(Path(args.data), args.port)
     model = Model(env["LLM_BASE_URL"], env["LLM_API_KEY"], args.model, args.budget)
     model.answer = operate.budget(able)["answer"]
+    if args.cheapest:
+        model.extra = {"provider": {"sort": "price"}}
     allowed = gate.Allowed(out)
     queue: asyncio.Queue = asyncio.Queue()
     for item in todo:

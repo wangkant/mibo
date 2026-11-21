@@ -100,7 +100,14 @@
     "readPages_one": "Read a page",
     "otherSteps": "Finished {count} steps",
     "sources_other": "{count} sources",
-    "listSep": ", "
+    "listSep": ", ",
+    "memUsed_one": "Used 1 memory",
+    "memUsed_other": "Used {count} memories",
+    "memSaved": "Saved to memory: {what}",
+    "memManage": "Manage",
+    "memForgotten": "Forgotten",
+    "memGone": "This memory no longer exists.",
+    "memSep": "; "
   },
   "app": {
     "someone": "Your character",
@@ -136,7 +143,8 @@
       "asleepUntil": "Asleep until {time}",
       "back": "Just back with {count} finds",
       "home": "At home"
-    }
+    },
+    "privateChat": "Temporary chat"
   },
   "browse": {
     "back": "Back",
@@ -170,7 +178,6 @@
     "notSecure": "Not secure",
     "notSecureTitle": "Your connection to this site is not encrypted. Do not enter passwords or payment details here.",
     "fit": "Fit width",
-    "fitOff": "100%",
     "fitTitle": "The page is fitted to the pane's width; click for its own size",
     "fitOffTitle": "The page at its own size (Ctrl +/- zooms); click to fit it to the pane's width",
     "col": {
@@ -221,7 +228,9 @@
           "account": "Change account settings?",
           "grant": "Grant this access?",
           "submit": "Submit this form?",
-          "leave": "Go to another site?"
+          "leave": "Go to another site?",
+          "plan": "Start this task?",
+          "press": "Press this button?"
         },
         "verbs": {
           "send": "Send",
@@ -261,6 +270,59 @@
         "no": "Don't allow",
         "gone": "This card is no longer waiting."
       }
+    },
+    "more": "More",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset to 100%",
+    "find": "Find on page",
+    "print": "Print",
+    "copyLink": "Copy link",
+    "copied": "Link copied",
+    "downloads": "Downloads",
+    "downloadOpen": "Open",
+    "downloadFolder": "Show in folder",
+    "askSelection": "Ask Mibo",
+    "linkTab": "Open link in new tab",
+    "linkSystem": "Open link in the system browser",
+    "downloadStates": {
+      "progress": "Downloading",
+      "progressPart": "Downloading {n}%",
+      "waiting": "Awaiting confirmation",
+      "failed": "Download failed",
+      "cancelled": "Cancelled",
+      "gone": "File deleted"
+    },
+    "modes": {
+      "title": "How it acts in pages",
+      "off": "Off",
+      "read": "Read only",
+      "ask": "Ask each time",
+      "auto": "Auto review"
+    },
+    "prompt": {
+      "permission": "{site} is requesting {what} permission",
+      "kinds": {
+        "camera": "camera",
+        "microphone": "microphone",
+        "geolocation": "location",
+        "clipboard": "clipboard",
+        "downloads": "multiple downloads",
+        "files": "file editing",
+        "fonts": "local fonts",
+        "midi": "MIDI devices",
+        "windows": "window management"
+      },
+      "once": "Allow this time",
+      "always": "Always allow",
+      "no": "Don't allow",
+      "app": "{site} wants to open an external app",
+      "popup": "Pop-up from {site} blocked",
+      "open": "Open",
+      "cancel": "Cancel",
+      "close": "Close",
+      "thisPage": "This page"
     }
   },
   "card": {
@@ -387,7 +449,8 @@
       "account": "Change the account",
       "setting": "Change a setting",
       "print": "Print",
-      "submit": "Submit"
+      "submit": "Submit",
+      "press": "Run a menu command"
     },
     "deskWindow": "Window",
     "deskTarget": "Control to press",
@@ -457,7 +520,12 @@
     "picture_too_large": "This picture is too large. Choose a smaller one.",
     "file_type": "This kind of file isn't supported. Send a picture or a text file.",
     "file_too_large": "This file is too large. Text files can be at most 512 KB.",
-    "file_unreadable": "The file could not be read. Check that it is a text file."
+    "file_unreadable": "The file could not be read. Check that it is a text file.",
+    "manageMemory": "Manage memory",
+    "privateMark": "Temporary chat",
+    "privateNote": "Doesn't use or update memory, isn't kept in the chat record, and is cleared when the app closes.",
+    "privateStart": "Start a temporary chat",
+    "privateLeave": "Leave the temporary chat"
   },
   "compact": {
     "full": "Open in the main window",
@@ -752,7 +820,9 @@
     "clipName": "clipboard.txt",
     "shotName": "screenshot.png",
     "clipPictureName": "clipboard.png",
-    "failed": "That did not work. Try again."
+    "failed": "That did not work. Try again.",
+    "private": "Temporary chat",
+    "privateHint": "Doesn't use or update memory"
   },
   "schedulechat": {
     "kinds": {
@@ -959,7 +1029,7 @@
     "cancel": "Cancel",
     "forget": "Forget",
     "forgetAsk": "Forget this?",
-    "forgetText": "It goes from the memory, the chat records and your preferences together, and cannot come back.",
+    "forgetText": "It is removed from the memory and your preferences and cannot come back. The chat records stay unless you choose otherwise.",
     "restore": "Bring back",
     "until": "{from} to {to}",
     "allTitle": "Forget everything",
@@ -969,7 +1039,41 @@
     "errors": {
       "activity_unavailable": "The character cannot answer right now. Try again in a moment.",
       "activity_changed": "This item has changed; it was read again.",
-      "activity_restore_gone": "This item can no longer be brought back."
+      "activity_restore_gone": "This item can no longer be brought back.",
+      "memory_secret": "Not kept: ID numbers, card numbers, passwords and codes are never saved.",
+      "memory_not_instructions": "Not kept: it reads as an instruction.",
+      "memory_paused": "Memory is paused. Turn on Use and update memory to add items.",
+      "memory_health_off": "Not kept: health details are set not to be kept.",
+      "no_window": "Files can be saved only in the app window."
+    },
+    "onTitle": "Use and update memory",
+    "onText": "When on, the character draws on these memories in its replies and notes new things from your chats. When off, nothing is used or added; the items stay.",
+    "healthTitle": "Keep health details",
+    "healthText": "Allergies, conditions and medication. On by default, so the character avoids what you cannot eat or should not do. When off, no such details are kept and those already kept are not used in replies.",
+    "kept": "Kept {day}",
+    "saidOpen": "Show source",
+    "saidClose": "Hide source",
+    "saidNone": "The original words are no longer in the chat records.",
+    "add": "Add",
+    "addLabel": "Add a memory",
+    "addPlaceholder": "For example: allergic to mango, goes hiking most weekends",
+    "moreTitle": "Export and import",
+    "exportTitle": "Export",
+    "exportText": "Save everything that still holds as a file.",
+    "exportSaved": "Saved.",
+    "importTitle": "Import from another assistant",
+    "importText": "Paste the memory list another AI assistant exported, one item per line. After reading it, review each item; only the ticked ones are kept. The text is kept as information only and is never followed as instructions.",
+    "importLabel": "Another assistant's memory list",
+    "importRead": "Read",
+    "importKeep": "Keep selected ({count})",
+    "importNone": "No items to import were found.",
+    "importDone": "{count} imported.",
+    "forgetChats": "Also remove the sentences that mention it from the chats",
+    "refused": {
+      "secret": "Contains an ID or card number, a password or a code; not kept",
+      "not_instructions": "Reads as an instruction; not kept",
+      "kept": "Already in memory",
+      "health_off": "Health details are set not to be kept"
     }
   },
   "setup_model": {
@@ -1202,11 +1306,27 @@
     },
     "browsingTitle": "The character may use what you read in the app's browser",
     "browsingText": "When the character uses them, page titles and text may be sent to the model service; passwords and sign-in data never are. Sign-in pages, payment pages and pages read in private mode are not kept.",
-    "clearTitle": "Clear browsing data",
-    "clearText": "Deletes the app browser's history, and its cookies, sign-ins and cache.",
+    "historyTitle": "History",
+    "historyText": "Clear the app browser's history, download history and cache for a time range. Sign-ins and saved passwords stay; manage them in Connections.",
+    "clearRange": "Time range",
+    "ranges": {
+      "hour": "Last hour",
+      "day": "Last 24 hours",
+      "all": "All time"
+    },
+    "historyFold": "Show history",
+    "historySearch": "Search history",
+    "historyNone": "No history yet. Pages you read in the app browser are listed here.",
+    "historyNoMatch": "No matching pages.",
+    "historyMore": "Show more",
+    "historyRemove": "Remove “{title}” from history",
     "clear": "Clear",
-    "clearAsk": "Clear browsing data?",
-    "clearAskText": "The app browser's history, cookies and sign-ins will be deleted, and sites will ask you to sign in again. This cannot be undone.",
+    "clearAsk": {
+      "hour": "Clear the last hour of history?",
+      "day": "Clear the last 24 hours of history?",
+      "all": "Clear all history?"
+    },
+    "clearAskText": "History, download history and cache from this time will be deleted, and recommendations will no longer draw on these pages. Sign-ins and saved passwords stay. This cannot be undone.",
     "cleared": "Cleared.",
     "sitesFold_zero": "Sites",
     "sitesFold_other": "Sites ({count})",
@@ -1232,6 +1352,12 @@
     "errors": {
       "quiet_invalid": "The switch was not changed. Refresh and try again.",
       "remarks_invalid": "Not saved. Refresh and try again."
+    },
+    "permitsFold": "Site permissions",
+    "permitsNone": "When a site asks for the camera, microphone, location and the like, your choices appear here.",
+    "permitStates": {
+      "allow": "Always allowed",
+      "deny": "Not allowed"
     }
   },
   "setup_programs": {
@@ -1278,7 +1404,10 @@
       "check": "Ticked",
       "uncheck": "Unticked",
       "append": "Added",
-      "see": "By picture"
+      "see": "By picture",
+      "tier": "Changed what it may do",
+      "block": "Added to the never list",
+      "unblock": "Removed from the never list"
     },
     "statuses": {
       "ok": "Done",
@@ -1307,7 +1436,8 @@
       "account": "Change the account",
       "setting": "Change a setting",
       "print": "Print",
-      "submit": "Submit"
+      "submit": "Submit",
+      "press": "Run a menu command"
     },
     "switchLine": {
       "turned on": "Turned on",
@@ -1315,7 +1445,24 @@
       "pictures turned on": "Work by picture turned on",
       "pictures turned off": "Work by picture turned off"
     },
-    "typed": "Text"
+    "typed": "Text",
+    "modeName": "How it acts",
+    "modeText": "Read only: it reads the window and does nothing. Ask each time: anything with an effect outside waits for you. Auto review: a reviewer looks first and plain sends and submissions you asked for go ahead; paying, deleting and account changes still ask you.",
+    "modes": {
+      "read": "Read only",
+      "ask": "Ask each time",
+      "auto": "Auto review"
+    },
+    "tiers": {
+      "full": "Full",
+      "click": "Clicks only",
+      "view": "Look only"
+    },
+    "tierOf": "What {name} may do",
+    "blockText": "Programs whose names hold these words are never operated either:",
+    "blockHint": "Add a word, such as a program's name",
+    "blockAdd": "Add",
+    "unblock": "Remove {word}"
   },
   "setup_recs": {
     "paceName": "How often",

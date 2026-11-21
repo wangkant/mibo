@@ -169,13 +169,16 @@ class Library:
             self._compact()
 
     def drop(self, gone) -> list[str]:
-        """Every item `gone(item)` is true of out of the file at once; their ids."""
+        """Every item `gone(item)` is true of out of the file at once, with its picture; their ids."""
         with _write:
             rows = self.items(newest_first=False)
             dropped = [r.id for r in rows if gone(r)]
             if dropped:
                 atomic_write_text(self.items_path, "".join(json.dumps(asdict(r), ensure_ascii=False) + "\n"
                                                            for r in rows if r.id not in dropped))
+            for r in rows:
+                if r.id in dropped and r.picture:
+                    (self.pictures / r.picture).unlink(missing_ok=True)
             return dropped
 
     def _reacted(self) -> tuple[set[str], set[str]]:

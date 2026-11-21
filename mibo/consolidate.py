@@ -182,6 +182,9 @@ class Consolidation:
             store.data["fold"]["tidy_day"] = memstate._day(now)
             store.tidy(now, self._prompt_tz())
             self._save_person()
+        # Memory paused in Settings › 记忆: nothing is folded.
+        if not store.on:
+            return None
         rows, newest = self._person_lines(store)
         if not rows:
             self.__dict__["_person_heard"] = False
@@ -265,13 +268,17 @@ class Consolidation:
             if any(self._memory_gen(c) != g for c, g in gens.items()):
                 logger.info("[Agent] person fold dropped: something was forgotten meanwhile")
                 return
+            held = {r.get("id") for r in store.facts() + store.plans()}
             done = self._apply_person_fold(store, plan, lines, facts, plans, time.time())
+            kept = [r for r in store.facts() + store.plans("open") if r.get("id") not in held]
             upto = fold.setdefault("upto", {})
             for conv, seq in newest.items():
                 upto[conv] = max(int(upto.get(conv) or 0), seq)
                 self._advance_cursor(conv, seq)
             fold.update(day=memstate._day(time.time()), failed=0, why="", at=time.time())
             self._save_person()
+            # What it newly kept: the page shows 已记住 under the chat each came from.
+            self._tell_saved(kept)
             budget.succeeded(PERSON_KEY)
             self._save_memory_state(force=False)
             logger.info("[Agent] person fold (%s): %s", reason, dict(done) or "nothing new")
@@ -350,7 +357,7 @@ class Consolidation:
                 src = source(op, says)
                 said = "\n".join(r["text"] for r in src)
                 text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}")) if src else ""
-                if not text:
+                if not text or not store.keeps(str(op.get("kind") or ""), text):
                     done["refused"] += 1
                     continue
                 at = _t(src[-1]) or now
@@ -387,7 +394,8 @@ class Consolidation:
                 text = text_of(op) if kind == "add" else (row or {}).get("text", "")
                 when = str(op.get("when") or "")
                 # Its words from any of their lines here ("博士申请文书截止" from "申请博士" and "文书…DDL").
-                if not text or (kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in mine))):
+                if not text or not store.keeps("", text) or (
+                        kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in mine))):
                     done["refused"] += 1
                     continue
                 # The day's words in the cited lines, else in a line of theirs about the plan that has them.

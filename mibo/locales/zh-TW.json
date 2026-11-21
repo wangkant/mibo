@@ -96,7 +96,13 @@
     "readPages_other": "已閱讀 {count} 個頁面",
     "otherSteps": "已完成 {count} 個步驟",
     "sources_other": "{count} 個來源",
-    "listSep": "、"
+    "listSep": "、",
+    "memUsed_other": "參考了 {count} 條記憶",
+    "memSaved": "已記住：{what}",
+    "memManage": "管理",
+    "memForgotten": "已忘記",
+    "memGone": "此條記憶已不存在。",
+    "memSep": "；"
   },
   "app": {
     "someone": "你的角色",
@@ -132,7 +138,8 @@
       "asleepUntil": "休息至 {time}",
       "back": "已返回 · 帶回 {count} 項內容",
       "home": "在家"
-    }
+    },
+    "privateChat": "無痕對話"
   },
   "browse": {
     "back": "返回",
@@ -166,7 +173,6 @@
     "notSecure": "不安全",
     "notSecureTitle": "與此網站的連線未加密，請勿在此輸入密碼或付款資訊",
     "fit": "符合寬度",
-    "fitOff": "100%",
     "fitTitle": "頁面已縮放至窗格寬度；按一下以原始大小顯示",
     "fitOffTitle": "頁面以原始大小顯示（Ctrl +/- 可縮放）；按一下以符合窗格寬度",
     "col": {
@@ -217,7 +223,9 @@
           "account": "要變更帳戶設定嗎？",
           "grant": "要授予此權限嗎？",
           "submit": "要提交此表單嗎？",
-          "leave": "前往其他網站？"
+          "leave": "前往其他網站？",
+          "plan": "開始執行此任務？",
+          "press": "按下此按鈕？"
         },
         "verbs": {
           "send": "傳送",
@@ -257,6 +265,59 @@
         "no": "不允許",
         "gone": "此卡片已不再等待。"
       }
+    },
+    "more": "更多動作",
+    "zoom": "縮放",
+    "zoomIn": "放大",
+    "zoomOut": "縮小",
+    "zoomReset": "恢復為 100%",
+    "find": "在頁面中尋找",
+    "print": "列印",
+    "copyLink": "複製連結",
+    "copied": "已複製連結",
+    "downloads": "下載",
+    "downloadOpen": "開啟",
+    "downloadFolder": "在資料夾中顯示",
+    "askSelection": "詢問 Mibo",
+    "linkTab": "在新分頁中開啟連結",
+    "linkSystem": "在系統瀏覽器中開啟連結",
+    "downloadStates": {
+      "progress": "正在下載",
+      "progressPart": "正在下載 {n}%",
+      "waiting": "等待確認",
+      "failed": "下載失敗",
+      "cancelled": "已取消",
+      "gone": "檔案已刪除"
+    },
+    "modes": {
+      "title": "網頁操作方式",
+      "off": "不操作",
+      "read": "僅檢視",
+      "ask": "每次詢問",
+      "auto": "自動審查"
+    },
+    "prompt": {
+      "permission": "{site} 要求{what}權限",
+      "kinds": {
+        "camera": "攝影機",
+        "microphone": "麥克風",
+        "geolocation": "位置資訊",
+        "clipboard": "剪貼簿讀取",
+        "downloads": "自動下載",
+        "files": "檔案編輯",
+        "fonts": "本機字型",
+        "midi": "電子樂器（MIDI）",
+        "windows": "視窗管理"
+      },
+      "once": "本次允許",
+      "always": "一律允許",
+      "no": "不允許",
+      "app": "{site} 要求開啟外部應用程式",
+      "popup": "已封鎖 {site} 開啟的快顯視窗",
+      "open": "開啟",
+      "cancel": "取消",
+      "close": "關閉",
+      "thisPage": "此網頁"
     }
   },
   "card": {
@@ -383,7 +444,8 @@
       "account": "變更帳戶",
       "setting": "變更設定",
       "print": "列印",
-      "submit": "提交"
+      "submit": "提交",
+      "press": "執行選單命令"
     },
     "deskWindow": "視窗",
     "deskTarget": "要按下的控制項",
@@ -452,7 +514,12 @@
     "picture_too_large": "圖片過大，請選擇較小的圖片。",
     "file_type": "不支援此類檔案，請傳送圖片或文字檔。",
     "file_too_large": "檔案過大，文字檔最大為 512 KB。",
-    "file_unreadable": "無法讀取檔案，請確認它是文字檔。"
+    "file_unreadable": "無法讀取檔案，請確認它是文字檔。",
+    "manageMemory": "管理記憶",
+    "privateMark": "無痕對話",
+    "privateNote": "不讀取也不更新記憶，不寫入對話紀錄，關閉應用程式後清除。",
+    "privateStart": "開始無痕對話",
+    "privateLeave": "退出無痕對話"
   },
   "compact": {
     "full": "在主視窗中開啟",
@@ -745,7 +812,9 @@
     "clipName": "剪貼簿.txt",
     "shotName": "螢幕截圖.png",
     "clipPictureName": "剪貼簿.png",
-    "failed": "操作失敗，請重試。"
+    "failed": "操作失敗，請重試。",
+    "private": "無痕對話",
+    "privateHint": "不讀取也不更新記憶"
   },
   "schedulechat": {
     "kinds": {
@@ -951,7 +1020,7 @@
     "cancel": "取消",
     "forget": "忘記",
     "forgetAsk": "忘記此條？",
-    "forgetText": "此條將從記憶、對話記錄和偏好中一併刪除，且無法恢復。",
+    "forgetText": "此條將從記憶和偏好中刪除，且無法復原。對話紀錄預設保留。",
     "restore": "恢復",
     "until": "{from} 至 {to}",
     "allTitle": "全部忘記",
@@ -961,7 +1030,41 @@
     "errors": {
       "activity_unavailable": "角色暫時無法回應。請稍後重試。",
       "activity_changed": "此條已變更，已重新讀取。",
-      "activity_restore_gone": "此條已無法恢復。"
+      "activity_restore_gone": "此條已無法恢復。",
+      "memory_secret": "未保存：身分證號、銀行卡號、密碼和驗證碼不會保存。",
+      "memory_not_instructions": "未保存：內容類似指令。",
+      "memory_paused": "記憶已暫停，開啟「使用並更新記憶」後才能新增。",
+      "memory_health_off": "未保存：健康資訊已設為不保存。",
+      "no_window": "僅可在應用程式視窗中儲存檔案。"
+    },
+    "onTitle": "使用並更新記憶",
+    "onText": "開啟後，角色回覆時參考這些記憶，並從對話中記錄新的內容。關閉後不再使用或新增記憶，現有條目保留。",
+    "healthTitle": "保存健康資訊",
+    "healthText": "如過敏、病情和用藥，預設開啟，以便角色避開你不能吃或不宜做的事。關閉後不再保存此類資訊，已保存的條目不再用於回覆。",
+    "kept": "記於 {day}",
+    "saidOpen": "查看原話",
+    "saidClose": "收起原話",
+    "saidNone": "原話已不在對話紀錄中。",
+    "add": "新增",
+    "addLabel": "新增一條記憶",
+    "addPlaceholder": "例如：對芒果過敏、週末常去爬山",
+    "moreTitle": "匯出與匯入",
+    "exportTitle": "匯出",
+    "exportText": "將仍然有效的全部記憶儲存為檔案。",
+    "exportSaved": "已儲存。",
+    "importTitle": "從其他助理匯入",
+    "importText": "貼上其他 AI 助理匯出的記憶清單，每行一條。讀取後逐條確認，僅保存勾選的條目；內容僅作為資料保存，不會作為指令執行。",
+    "importLabel": "其他助理的記憶清單",
+    "importRead": "讀取",
+    "importKeep": "保存所選（{count}）",
+    "importNone": "未讀取到可匯入的條目。",
+    "importDone": "已匯入 {count} 條。",
+    "forgetChats": "同時從對話紀錄中刪除提及此條的句子",
+    "refused": {
+      "secret": "含證件號、卡號、密碼或驗證碼，不予保存",
+      "not_instructions": "內容類似指令，不予保存",
+      "kept": "已在記憶中",
+      "health_off": "健康資訊已設為不保存"
     }
   },
   "setup_model": {
@@ -1194,11 +1297,27 @@
     },
     "browsingTitle": "角色可參考你在內建瀏覽器中瀏覽的內容",
     "browsingText": "角色參考時，網頁的標題和內文可能傳送給模型服務；密碼和登入資訊一律不會傳送。登入頁、付款頁和無痕模式下瀏覽的網頁不會記錄。",
-    "clearTitle": "清除瀏覽資料",
-    "clearText": "刪除內建瀏覽器的瀏覽記錄、Cookie、登入狀態和快取。",
+    "historyTitle": "瀏覽記錄",
+    "historyText": "清除所選時間內的瀏覽記錄、下載記錄和快取。登入狀態和已儲存的密碼不受影響，可在「連接」中管理。",
+    "clearRange": "時間範圍",
+    "ranges": {
+      "hour": "過去 1 小時",
+      "day": "過去 24 小時",
+      "all": "所有時間"
+    },
+    "historyFold": "查看瀏覽記錄",
+    "historySearch": "搜尋瀏覽記錄",
+    "historyNone": "尚無瀏覽記錄。在內建瀏覽器中閱讀的網頁將列於此處。",
+    "historyNoMatch": "找不到相符的記錄。",
+    "historyMore": "顯示更多",
+    "historyRemove": "從瀏覽記錄中刪除「{title}」",
     "clear": "清除",
-    "clearAsk": "清除瀏覽資料？",
-    "clearAskText": "內建瀏覽器的瀏覽記錄、Cookie 和登入狀態將被刪除，各網站需重新登入。此操作無法復原。",
+    "clearAsk": {
+      "hour": "清除過去 1 小時的瀏覽記錄？",
+      "day": "清除過去 24 小時的瀏覽記錄？",
+      "all": "清除所有瀏覽記錄？"
+    },
+    "clearAskText": "所選時間內的瀏覽記錄、下載記錄和快取將被刪除，推薦功能也不再參考這些網頁。登入狀態和已儲存的密碼將保留。此操作無法復原。",
     "cleared": "已清除。",
     "sitesFold_zero": "網站",
     "sitesFold_other": "網站（{count}）",
@@ -1223,6 +1342,12 @@
     "errors": {
       "quiet_invalid": "無法變更此開關。請重新整理後重試。",
       "remarks_invalid": "未能儲存。請重新整理後重試。"
+    },
+    "permitsFold": "網站權限",
+    "permitsNone": "網站要求攝影機、麥克風、位置資訊等權限後，所作的選擇會顯示在此處。",
+    "permitStates": {
+      "allow": "一律允許",
+      "deny": "不允許"
     }
   },
   "setup_programs": {
@@ -1269,7 +1394,10 @@
       "check": "勾選",
       "uncheck": "取消勾選",
       "append": "新增",
-      "see": "看圖操作"
+      "see": "看圖操作",
+      "tier": "變更權限",
+      "block": "加入禁止清單",
+      "unblock": "移出禁止清單"
     },
     "statuses": {
       "ok": "已完成",
@@ -1298,7 +1426,8 @@
       "account": "變更帳號",
       "setting": "變更設定",
       "print": "列印",
-      "submit": "提交"
+      "submit": "提交",
+      "press": "執行選單命令"
     },
     "switchLine": {
       "turned on": "已開啟",
@@ -1306,7 +1435,24 @@
       "pictures turned on": "看圖操作已開啟",
       "pictures turned off": "看圖操作已關閉"
     },
-    "typed": "輸入的內容"
+    "typed": "輸入的內容",
+    "modeName": "操作方式",
+    "modeText": "僅檢視：只讀取視窗，不執行任何操作。每次詢問：有外部影響的操作均需你確認。自動審查：由審查模型先行判斷，明確符合你要求的傳送與提交直接執行；付款、刪除及帳號相關操作仍需確認。",
+    "modes": {
+      "read": "僅檢視",
+      "ask": "每次詢問",
+      "auto": "自動審查"
+    },
+    "tiers": {
+      "full": "完全操作",
+      "click": "僅點擊",
+      "view": "僅檢視"
+    },
+    "tierOf": "{name} 的權限",
+    "blockText": "名稱含有以下詞語的程式同樣不會被操作：",
+    "blockHint": "新增詞語，例如程式名稱",
+    "blockAdd": "新增",
+    "unblock": "移除 {word}"
   },
   "setup_recs": {
     "paceName": "推薦頻率",

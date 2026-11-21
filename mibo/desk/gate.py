@@ -10,7 +10,12 @@ submitting what a single-line field holds. The same vocabularies as the
 browser's gate (web/gate.py) decide by a control's name; the rest are rules for
 desktop programs: Enter and the Delete key by where the focus is, the shell's
 file views, a dialog's confirming button by what the dialog says, and a
-program's settings window. It errs inclusive: a false positive costs one press.
+program's settings window. A name that says nothing is not taken as harmless:
+in a window where the task typed into a field, a button sends what was typed
+(submit) unless it only closes, goes back or opens another dialog; and a
+command of the program's own menu that is not a plain edit or view ("press")
+asks too, so a 整理 that deletes asks as a 删除 does. It errs inclusive: a
+false positive costs one press.
 """
 from __future__ import annotations
 
@@ -19,7 +24,15 @@ import re
 
 from ..web import gate as web
 
-KINDS = ("send", "post", "delete", "file", "open", "order", "account", "setting", "print", "submit")
+KINDS = ("send", "post", "delete", "file", "open", "order", "account", "setting", "print", "submit", "press")
+# Buttons that send nothing typed: they close, go back, browse or explain.
+NO_EFFECT = re.compile(r"^(?:cancel|close|back|previous|browse|help|minimi[sz]e|maximi[sz]e|restore|"
+                       r"取消|关闭|返回|上一步|浏览|帮助|最小化|最大化|还原)(?:\b|$|\s*\()", re.I)
+# Commands of a program's own menu that only edit in place or change the view.
+MENU_EDIT = re.compile(r"undo|redo|copy|cut|paste|select all|find(?: next| previous)?|go to|zoom(?: in| out)?|"
+                       r"restore default zoom|word wrap|font|status bar|view|new(?: tab| window)?|"
+                       r"撤销|重做|复制|剪切|粘贴|全选|查找(?:下一个|上一个)?|转到|缩放|放大|缩小|恢复默认缩放|自动换行|字体|状态栏|"
+                       r"查看|新建(?:标签页|窗口)?", re.I)
 FILE_WORDS = web._words(
     ["save", "save as", "save all", "replace", "overwrite", "move", "move to", "move here", "paste", "rename",
      "cut and paste", "replace the file", "replace the files", "keep both"],
@@ -83,11 +96,12 @@ def by_name(name: str) -> tuple[str, str] | None:
 
 
 def press(node, title: str, main: bool, dialog_text: str, folder_item: bool | None = None, do: str = "invoke",
-          program: str = "") -> tuple[str, str]:
+          program: str = "", typed: bool = False) -> tuple[str, str]:
     """(kind, why) of pressing `node` (`do`: invoke, click, toggle, select, expand, collapse): kind "" when it
     is free. `title` is its window's title, `main` whether that is the program's target window rather than a
     dialog it opened, `dialog_text` the words of that dialog, `folder_item` for a shell item whether it is a
-    folder (None: not known), `program` the executable's file name."""
+    folder (None: not known), `program` the executable's file name, `typed` whether this task typed into a
+    one-line field of that window."""
     name = " ".join(str(node.name or "").split())[:200]
     if node.role in ("listitem", "treeitem", "row") and in_shell_view(node):
         if do in ("select", "expand", "collapse"):
@@ -114,6 +128,14 @@ def press(node, title: str, main: bool, dialog_text: str, folder_item: bool | No
             return "file", f"{name!r} confirms replacing a file"
     if node.role in ("menuitem", "button") and OPEN_WORDS.fullmatch(name.strip()) and in_shell_view(node):
         return "open", f"{name!r} opens the selected file in its program"
+    bare = re.sub(r"\s*\(&?\w\)|&", "", name).strip()
+    opens = bare.endswith(("...", "…"))
+    if do in ("invoke", "click") and not opens:
+        if typed and node.role == "button" and not NO_EFFECT.search(bare):
+            return "submit", f"{name!r} in a window where this task typed into a field: it may send what was typed"
+        if (node.role == "menuitem" and "expand" not in (node.patterns or []) and not in_shell_view(node)
+                and bare and not MENU_EDIT.fullmatch(bare)):
+            return "press", f"{name!r} is a command of the program's own menu whose name does not say what it does"
     return "", "reading or moving about"
 
 

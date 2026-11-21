@@ -1,8 +1,9 @@
 "use strict";
 // Settings › Other programs: whether the character may operate other programs' windows on this computer
-// (/api/programs {on}), the programs granted always (/api/programs {revoke}),
-// what is never operated, and the record of what was done in which program (/api/programs/log). Everything about
-// it is decided by the app (mibo/desk), not the model.
+// (/api/programs {on}) and how much it does there by itself ({mode}: read only, ask, auto), the programs granted
+// always with each one's tier ({tier}, {revoke}), what is never operated with the person's own words ({block},
+// {unblock}), and the record of what was done in which program (/api/programs/log). Everything about it is
+// decided by the app (mibo/desk, mibo/acting.py), not the model.
 (() => {
 
   // Windows only: elsewhere the section is not there (mibo/desk is Windows UI Automation).
@@ -25,7 +26,13 @@
     // ---- Pictures of a window only a picture can work: a card asks each time; on here, always for this service.
     const pic = kit.switchRow("programs-pictures", t.pictures, "", (box) => setPictures(box.checked));
     pic.box.disabled = true;
-    main.append(sw.row, pic.row);
+    // ---- How much it does by itself once on.
+    const modeSelect = el("select", "setup-input setup-select setup-input-sm");
+    for (const value of ["read", "ask", "auto"]) modeSelect.append(new Option(t.modes[value], value));
+    modeSelect.disabled = true;
+    modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
+    const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
+    main.append(sw.row, modeRow.row, pic.row);
 
     // ---- The programs granted always.
     const granted = kit.card(t.grantsTitle);
@@ -35,6 +42,15 @@
 
     // ---- Never operated, and the record.
     const never = kit.fold(t.neverFold);
+    const blockInput = kit.input("setup-input-sm");
+    blockInput.placeholder = t.blockHint;
+    blockInput.setAttribute("aria-label", t.blockHint);
+    const blockError = kit.errorLine();
+    const blockAdd = kit.button("setup-button-secondary setup-button-sm", t.blockAdd, () => {
+      const word = blockInput.value.trim();
+      if (word) change({ block: word }, blockError).then(() => { blockInput.value = ""; });
+    });
+    const blockList = el("div", "setup-options");
     const record = kit.fold(paI18n.t("setup_programs.logFold", { count: 0 }));
     const logList = el("div", "setup-shell-log");
     const clear = kit.button("setup-button-secondary setup-button-sm", t.logClear, clearLog);
@@ -56,12 +72,19 @@
       pic.about.hidden = false;
       pic.box.checked = view.pictures.on;
       pic.box.disabled = !view.on;
+      modeSelect.value = view.mode === "off" ? "ask" : view.mode;
+      modeSelect.disabled = !view.on;
       granted.hidden = never.node.hidden = record.node.hidden = false;
       if (!view.grants.length) list.replaceChildren(el("p", "setup-help", t.grantsNone));
       else {
         list.replaceChildren(...view.grants.map((row) => {
           const controls = el("div", "setup-programs-controls");
-          controls.append(
+          const tier = el("select", "setup-input setup-select setup-input-sm");
+          for (const value of ["full", "click", "view"]) tier.append(new Option(t.tiers[value], value));
+          tier.value = row.tier;
+          tier.setAttribute("aria-label", paI18n.t("setup_programs.tierOf", { name: row.name }));
+          tier.addEventListener("change", () => change({ tier: { key: row.key, tier: tier.value } }));
+          controls.append(tier,
             kit.iconButton("setup-word-off", "cross", paI18n.t("setup_programs.revoke", { name: row.name }), () => change({ revoke: row.key })));
           const line = kit.optionRow(row.name, `${row.exe}${row.since ? ` · ${paI18n.t("setup_programs.since", { s: row.since })}` : ""}`, controls);
           line.about.title = row.exe;
@@ -70,7 +93,13 @@
       }
       const items = el("ul", "setup-shell-never");
       for (const row of view.never) items.append(el("li", "", zh ? row.zh : row.en));
-      never.body.replaceChildren(el("p", "setup-help", t.neverText), items);
+      blockList.replaceChildren(...view.block.map((word) => kit.optionRow(word, "",
+        kit.iconButton("setup-word-off", "cross", paI18n.t("setup_programs.unblock", { word }),
+          () => change({ unblock: word }, blockError))).row));
+      const adding = el("div", "setup-programs-controls");
+      adding.append(blockInput, blockAdd);
+      never.body.replaceChildren(el("p", "setup-help", t.neverText), items, el("p", "setup-help", t.blockText),
+        blockList, adding, blockError);
     }
 
     async function load() {

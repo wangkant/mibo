@@ -101,7 +101,14 @@
     "otherSteps": "A terminé {count} étapes",
     "sources_other": "{count} sources",
     "listSep": ", ",
-    "sources_one": "{count} source"
+    "sources_one": "{count} source",
+    "memUsed_one": "1 souvenir utilisé",
+    "memUsed_other": "{count} souvenirs utilisés",
+    "memSaved": "Mémorisé : {what}",
+    "memManage": "Gérer",
+    "memForgotten": "Oublié",
+    "memGone": "Ce souvenir n'existe plus.",
+    "memSep": " ; "
   },
   "app": {
     "someone": "Votre personnage",
@@ -137,7 +144,8 @@
       "asleepUntil": "Au repos jusqu'à {time}",
       "back": "De retour · rapporte {count} recommandations",
       "home": "À la maison"
-    }
+    },
+    "privateChat": "Discussion temporaire"
   },
   "browse": {
     "back": "Précédent",
@@ -171,7 +179,6 @@
     "notSecure": "Non sécurisé",
     "notSecureTitle": "La connexion à ce site n'est pas chiffrée. N'y saisissez ni mot de passe ni informations de paiement.",
     "fit": "Ajuster à la largeur",
-    "fitOff": "100%",
     "fitTitle": "La page est ajustée à la largeur du volet ; cliquez pour l'afficher à sa taille réelle",
     "fitOffTitle": "La page à sa taille réelle (Ctrl +/- pour zoomer) ; cliquez pour l'ajuster à la largeur du volet",
     "col": {
@@ -222,7 +229,9 @@
           "account": "Modifier les paramètres du compte ?",
           "grant": "Accorder cet accès ?",
           "submit": "Soumettre ce formulaire ?",
-          "leave": "Aller sur un autre site ?"
+          "leave": "Aller sur un autre site ?",
+          "plan": "Commencer cette tâche ?",
+          "press": "Appuyer sur ce bouton ?"
         },
         "verbs": {
           "send": "Envoyer",
@@ -262,6 +271,59 @@
         "no": "Ne pas autoriser",
         "gone": "Cette carte n'est plus en attente."
       }
+    },
+    "more": "Plus d'actions",
+    "zoom": "Zoom",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "zoomReset": "Rétablir à 100 %",
+    "find": "Rechercher dans la page",
+    "print": "Imprimer",
+    "copyLink": "Copier le lien",
+    "copied": "Lien copié",
+    "downloads": "Téléchargements",
+    "downloadOpen": "Ouvrir",
+    "downloadFolder": "Afficher dans le dossier",
+    "askSelection": "Demander à Mibo",
+    "linkTab": "Ouvrir le lien dans un nouvel onglet",
+    "linkSystem": "Ouvrir le lien dans le navigateur du système",
+    "downloadStates": {
+      "progress": "Téléchargement en cours",
+      "progressPart": "Téléchargement : {n} %",
+      "waiting": "En attente de confirmation",
+      "failed": "Échec du téléchargement",
+      "cancelled": "Annulé",
+      "gone": "Fichier supprimé"
+    },
+    "modes": {
+      "title": "Façon d'agir dans les pages",
+      "off": "Désactivé",
+      "read": "Lecture seule",
+      "ask": "Demander à chaque fois",
+      "auto": "Vérification automatique"
+    },
+    "prompt": {
+      "permission": "{site} demande une autorisation : {what}",
+      "kinds": {
+        "camera": "caméra",
+        "microphone": "micro",
+        "geolocation": "position",
+        "clipboard": "presse-papiers",
+        "downloads": "téléchargements multiples",
+        "files": "modification de fichiers",
+        "fonts": "polices locales",
+        "midi": "appareils MIDI",
+        "windows": "gestion des fenêtres"
+      },
+      "once": "Autoriser cette fois",
+      "always": "Toujours autoriser",
+      "no": "Ne pas autoriser",
+      "app": "{site} veut ouvrir une application externe",
+      "popup": "Fenêtre pop-up de {site} bloquée",
+      "open": "Ouvrir",
+      "cancel": "Annuler",
+      "close": "Fermer",
+      "thisPage": "Cette page"
     }
   },
   "card": {
@@ -388,7 +450,8 @@
       "account": "Modifier le compte",
       "setting": "Modifier un paramètre",
       "print": "Imprimer",
-      "submit": "Soumettre"
+      "submit": "Soumettre",
+      "press": "Exécuter une commande de menu"
     },
     "deskWindow": "Fenêtre",
     "deskTarget": "Contrôle à activer",
@@ -457,7 +520,12 @@
     "picture_too_large": "Cette image est trop volumineuse. Choisissez-en une plus petite.",
     "file_type": "Ce type de fichier n'est pas pris en charge. Envoyez une image ou un fichier texte.",
     "file_too_large": "Ce fichier est trop volumineux. Les fichiers texte sont limités à 512 Ko.",
-    "file_unreadable": "Impossible de lire le fichier. Vérifiez qu'il s'agit d'un fichier texte."
+    "file_unreadable": "Impossible de lire le fichier. Vérifiez qu'il s'agit d'un fichier texte.",
+    "manageMemory": "Gérer la mémoire",
+    "privateMark": "Discussion temporaire",
+    "privateNote": "N'utilise ni ne met à jour la mémoire, n'est pas conservée dans l'historique et s'efface à la fermeture de l'application.",
+    "privateStart": "Démarrer une discussion temporaire",
+    "privateLeave": "Quitter la discussion temporaire"
   },
   "compact": {
     "full": "Ouvrir dans la fenêtre principale",
@@ -752,7 +820,9 @@
     "clipName": "presse-papiers.txt",
     "shotName": "capture.png",
     "clipPictureName": "presse-papiers.png",
-    "failed": "L'opération a échoué. Réessayez."
+    "failed": "L'opération a échoué. Réessayez.",
+    "private": "Discussion temporaire",
+    "privateHint": "N'utilise ni ne met à jour la mémoire"
   },
   "schedulechat": {
     "kinds": {
@@ -958,7 +1028,7 @@
     "cancel": "Annuler",
     "forget": "Oublier",
     "forgetAsk": "Oublier ceci ?",
-    "forgetText": "Il est supprimé à la fois de la mémoire, des historiques de discussion et de vos préférences, et ne peut pas revenir.",
+    "forgetText": "L'élément est supprimé de la mémoire et de vos préférences, sans retour possible. L'historique des conversations est conservé, sauf choix contraire.",
     "restore": "Récupérer",
     "until": "Du {from} au {to}",
     "allTitle": "Tout oublier",
@@ -968,7 +1038,41 @@
     "errors": {
       "activity_unavailable": "Le personnage ne peut pas répondre pour le moment. Réessayez dans un instant.",
       "activity_changed": "Cet élément a changé ; il a été relu.",
-      "activity_restore_gone": "Cet élément ne peut plus être récupéré."
+      "activity_restore_gone": "Cet élément ne peut plus être récupéré.",
+      "memory_secret": "Non conservé : les numéros d'identité et de carte, les mots de passe et les codes ne sont jamais enregistrés.",
+      "memory_not_instructions": "Non conservé : cela ressemble à une instruction.",
+      "memory_paused": "La mémoire est en pause. Activez « Utiliser et mettre à jour la mémoire » pour ajouter des éléments.",
+      "memory_health_off": "Non conservé : les informations de santé sont réglées pour ne pas être conservées.",
+      "no_window": "Les fichiers ne peuvent être enregistrés que dans la fenêtre de l'application."
+    },
+    "onTitle": "Utiliser et mettre à jour la mémoire",
+    "onText": "Activée, le personnage s'appuie sur ces souvenirs dans ses réponses et note les nouveautés de vos conversations. Désactivée, rien n'est utilisé ni ajouté ; les éléments sont conservés.",
+    "healthTitle": "Conserver les informations de santé",
+    "healthText": "Allergies, maladies et traitements. Activé par défaut pour que le personnage évite ce que vous ne pouvez pas manger ou ne devriez pas faire. Désactivé, ces informations ne sont pas conservées et celles déjà conservées ne servent plus dans les réponses.",
+    "kept": "Conservé le {day}",
+    "saidOpen": "Voir la source",
+    "saidClose": "Masquer la source",
+    "saidNone": "Les propos d'origine ne figurent plus dans l'historique des conversations.",
+    "add": "Ajouter",
+    "addLabel": "Ajouter un souvenir",
+    "addPlaceholder": "Par exemple : allergique à la mangue, fait souvent de la randonnée le week-end",
+    "moreTitle": "Exporter et importer",
+    "exportTitle": "Exporter",
+    "exportText": "Enregistrer dans un fichier tout ce qui est encore valable.",
+    "exportSaved": "Enregistré.",
+    "importTitle": "Importer depuis un autre assistant",
+    "importText": "Collez la liste de souvenirs exportée par un autre assistant IA, un élément par ligne. Après la lecture, vérifiez chaque élément ; seuls ceux cochés sont conservés. Le texte est conservé comme information uniquement et n'est jamais suivi comme une instruction.",
+    "importLabel": "Liste de souvenirs d'un autre assistant",
+    "importRead": "Lire",
+    "importKeep": "Conserver la sélection ({count})",
+    "importNone": "Aucun élément à importer n'a été trouvé.",
+    "importDone": "{count} importé(s).",
+    "forgetChats": "Supprimer aussi des conversations les phrases qui le mentionnent",
+    "refused": {
+      "secret": "Contient un numéro d'identité ou de carte, un mot de passe ou un code ; non conservé",
+      "not_instructions": "Ressemble à une instruction ; non conservé",
+      "kept": "Déjà en mémoire",
+      "health_off": "Les informations de santé sont réglées pour ne pas être conservées"
     }
   },
   "setup_model": {
@@ -1201,11 +1305,27 @@
     },
     "browsingTitle": "Le personnage peut utiliser ce que vous lisez dans le navigateur de l'application",
     "browsingText": "Lorsque le personnage les utilise, les titres et le texte des pages peuvent être envoyés au service de modèles ; les mots de passe et les données de connexion jamais. Les pages de connexion, de paiement et celles lues en navigation privée ne sont pas conservées.",
-    "clearTitle": "Effacer les données de navigation",
-    "clearText": "Supprime l'historique du navigateur de l'application, ainsi que ses cookies, connexions et cache.",
+    "historyTitle": "Historique",
+    "historyText": "Efface l'historique, l'historique des téléchargements et le cache du navigateur de l'application pour une période. Les connexions et les mots de passe enregistrés sont conservés ; gérez-les dans Connexions.",
+    "clearRange": "Période",
+    "ranges": {
+      "hour": "Dernière heure",
+      "day": "Dernières 24 heures",
+      "all": "Toutes les périodes"
+    },
+    "historyFold": "Afficher l'historique",
+    "historySearch": "Rechercher dans l'historique",
+    "historyNone": "Aucun historique pour l'instant. Les pages lues dans le navigateur de l'application sont listées ici.",
+    "historyNoMatch": "Aucune page correspondante.",
+    "historyMore": "Afficher plus",
+    "historyRemove": "Retirer « {title} » de l'historique",
     "clear": "Effacer",
-    "clearAsk": "Effacer les données de navigation ?",
-    "clearAskText": "L'historique, les cookies et les connexions du navigateur de l'application seront supprimés, et les sites vous demanderont de vous reconnecter. Cette action est irréversible.",
+    "clearAsk": {
+      "hour": "Effacer l'historique de la dernière heure ?",
+      "day": "Effacer l'historique des dernières 24 heures ?",
+      "all": "Effacer tout l'historique ?"
+    },
+    "clearAskText": "L'historique, l'historique des téléchargements et le cache de cette période seront supprimés, et les recommandations ne s'appuieront plus sur ces pages. Les connexions et les mots de passe enregistrés sont conservés. Cette action est irréversible.",
     "cleared": "Effacé.",
     "sitesFold_zero": "Sites",
     "sitesFold_other": "Sites ({count})",
@@ -1233,7 +1353,13 @@
       "remarks_invalid": "Non enregistré. Actualisez la page et réessayez."
     },
     "ignoreFold_one": "Programmes qu'il ne regarde jamais ({count})",
-    "sitesFold_one": "Sites ({count})"
+    "sitesFold_one": "Sites ({count})",
+    "permitsFold": "Autorisations des sites",
+    "permitsNone": "Lorsqu’un site demande la caméra, le micro, la position ou d’autres autorisations, vos choix s’affichent ici.",
+    "permitStates": {
+      "allow": "Toujours autorisé",
+      "deny": "Non autorisé"
+    }
   },
   "setup_programs": {
     "hint": "Laissez le personnage consulter ou piloter les fenêtres des programmes que vous autorisez, quand vous le demandez dans la discussion : écrire dans le Bloc-notes, faire un calcul dans la Calculatrice.",
@@ -1279,7 +1405,10 @@
       "check": "A coché",
       "uncheck": "A décoché",
       "append": "A ajouté",
-      "see": "Par l'image"
+      "see": "Par l'image",
+      "tier": "Droits modifiés",
+      "block": "Ajouté à la liste d'exclusion",
+      "unblock": "Retiré de la liste d'exclusion"
     },
     "statuses": {
       "ok": "Terminé",
@@ -1308,7 +1437,8 @@
       "account": "Modifier le compte",
       "setting": "Modifier un réglage",
       "print": "Imprimer",
-      "submit": "Soumettre"
+      "submit": "Soumettre",
+      "press": "Exécuter une commande de menu"
     },
     "switchLine": {
       "turned on": "Activé",
@@ -1317,7 +1447,24 @@
       "pictures turned off": "Pilotage par l'image désactivé"
     },
     "typed": "Texte",
-    "logFold_one": "Historique (dernière {count})"
+    "logFold_one": "Historique (dernière {count})",
+    "modeName": "Façon d'agir",
+    "modeText": "Lecture seule : lit la fenêtre sans rien faire. Demander à chaque fois : toute action ayant un effet extérieur attend votre accord. Vérification automatique : un modèle vérifie d'abord ; les envois et soumissions clairement demandés se font, le paiement, la suppression et le compte demandent toujours.",
+    "modes": {
+      "read": "Lecture seule",
+      "ask": "Demander à chaque fois",
+      "auto": "Vérification automatique"
+    },
+    "tiers": {
+      "full": "Complet",
+      "click": "Clics seulement",
+      "view": "Lecture seule"
+    },
+    "tierOf": "Droits de {name}",
+    "blockText": "Les programmes dont le nom contient ces mots ne sont jamais utilisés non plus :",
+    "blockHint": "Ajouter un mot, par exemple un nom de programme",
+    "blockAdd": "Ajouter",
+    "unblock": "Retirer {word}"
   },
   "setup_recs": {
     "paceName": "Fréquence",

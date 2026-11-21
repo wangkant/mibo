@@ -202,11 +202,6 @@ body {
   font-size: var(--pa-fs-xs);
   text-overflow: ellipsis;
 }
-.browse-btn.browse-text {
-  width: auto;
-  padding: 0 10px;
-  font: var(--pa-fs-sm) / 1 var(--pa-font);
-}
 .browse-btn.on {
   display: inline-flex;
   align-items: center;
@@ -221,10 +216,6 @@ body {
 .browse.private .browse-field {
   border-color: var(--pa-accent-tint);
   background: var(--pa-accent-soft);
-}
-/* The fit switch: its word in a wide bar, its icon in a narrow one. */
-.browse-fit svg {
-  display: none;
 }
 .browse-zoom {
   grid-area: 1 / 3;
@@ -526,6 +517,16 @@ body.beside-over #chat-view {
   background: var(--pa-hover);
   color: var(--pa-ink);
 }
+/* The mode beside the chip: how much the character may do in the page by itself. */
+.browse-mode.pa-select {
+  width: auto;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 28px 0 10px;
+  border-radius: 999px;
+  background-position: right 9px center;
+  font-size: var(--pa-fs-sm);
+}
 
 /* ---- The character's run in the page, over the chat's box: a card waiting on the person's yes, then its state,
    its steps and what the person may press. */
@@ -808,15 +809,6 @@ body.beside-over #chat-view {
   .browse-btn {
     width: 30px;
   }
-  .browse-btn.browse-text {
-    width: 30px;
-    padding: 0;
-    justify-content: center;
-  }
-  .browse-fit svg {
-    display: block;
-  }
-  .browse-btn.browse-text span,
   .browse-mark span,
   .browse-where-title {
     display: none;
@@ -830,10 +822,205 @@ body.beside-over #chat-view {
     padding-right: 6px;
   }
 }
-/* Narrower still: forward while there is nowhere to go, and 在系统浏览器中打开, leave the bar. */
+/* Narrower still: forward leaves the bar while there is nowhere to go. */
 @container browse (max-width: 440px) {
-  .browse-forward:disabled,
-  .browse-system {
+  .browse-forward:disabled {
     display: none;
   }
+}
+
+/* ---- The bar's ··· menu (browsemenu.js), over the page as the suggestions are; a dot on its button marks a
+   download begun while it was shut. */
+.browse-more {
+  position: relative;
+}
+.browse-more.has-new::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pa-accent);
+  box-shadow: 0 0 0 2px var(--pa-chrome);
+}
+.browse-menu {
+  position: absolute;
+  z-index: 8;
+  width: 304px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - var(--pa-bar) - 64px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-lg);
+  background: var(--pa-surface);
+  box-shadow: var(--pa-shadow-2);
+}
+.browse-menu[hidden] {
+  display: none;
+}
+.browse-menu svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.browse-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-ink);
+  font: var(--pa-fs-sm) / 1.3 var(--pa-font);
+  text-align: left;
+  cursor: pointer;
+}
+.browse-menu-item svg {
+  color: var(--pa-muted);
+}
+.browse-menu-item:hover:not(:disabled) {
+  background: var(--pa-hover);
+}
+.browse-menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.browse-menu-words {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-menu-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 4px 0 10px;
+  color: var(--pa-ink);
+  font: var(--pa-fs-sm) / 1.3 var(--pa-font);
+}
+.browse-menu .browse-btn {
+  width: 28px;
+  height: 28px;
+}
+.browse-menu-zoom-value {
+  min-width: 48px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  background: transparent;
+  color: var(--pa-ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.browse-menu-zoom-value:hover {
+  background: var(--pa-hover);
+}
+.browse-menu-fit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-left: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pa-muted);
+  font: var(--pa-fs-xs) / 1 var(--pa-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.browse-menu-fit:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
+.browse-menu-fit[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--pa-accent-tint);
+  color: var(--pa-accent-ink);
+}
+.browse-menu-fit svg {
+  width: 14px;
+  height: 14px;
+}
+.browse-menu-line {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--pa-line);
+}
+.browse-menu-head {
+  margin: 4px 10px 2px;
+  color: var(--pa-muted);
+  font: 500 var(--pa-fs-xs) / 1.6 var(--pa-font);
+}
+.browse-download {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--pa-r-sm);
+}
+.browse-download:hover {
+  background: var(--pa-hover);
+}
+.browse-download-icon {
+  display: grid;
+  color: var(--pa-muted);
+}
+.browse-download-words {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.browse-download-name {
+  overflow: hidden;
+  color: var(--pa-ink);
+  font: var(--pa-fs-sm) / 1.35 var(--pa-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-download-state {
+  color: var(--pa-muted);
+  font: var(--pa-fs-xs) / 1.35 var(--pa-font);
+}
+/* What a site asks (browsestrip.js): the asking card's look, at the page's top left under the bar. */
+.browse-prompt {
+  position: absolute;
+  z-index: 7;
+  width: 400px;
+  margin: 0;
+  padding: 14px;
+  box-shadow: var(--pa-shadow-2);
+}
+.browse-prompt[hidden] {
+  display: none;
+}
+.browse-prompt .op-card-head {
+  margin: 0;
+}
+.browse-prompt .op-card-title {
+  font-size: var(--pa-fs-sm);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.browse-prompt .op-card-buttons {
+  margin-top: 12px;
+  padding-left: 48px;
 }

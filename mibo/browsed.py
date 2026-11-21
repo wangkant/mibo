@@ -13,7 +13,9 @@ reads a day, and the hosts where a check or a sign-in wall stopped it.
 The setting SHARE_KEY in the app's settings ("角色可以参考你在应用内浏览器里看过的
 内容", on unless turned off) lets the rows reach the library and the character's
 tools; off, they stay in the file alone and the tools get nothing. The person's
-own address bar suggests from them either way (suggest).
+own address bar suggests from them either way (suggest), and Settings › 隐私
+lists them as history (history): an entry or a time range deleted there takes
+the library item its reading made with it (delete, clear).
 """
 from __future__ import annotations
 
@@ -45,6 +47,9 @@ WALL_S = 7 * 86400
 # (Firefox's frecency buckets).
 SUGGEST_MAX = 6
 VISIT_WEIGHTS = ((4, 1.0), (14, 0.7), (31, 0.5), (90, 0.3), (float("inf"), 0.1))
+# History in Settings: entries a page of it holds, and the ranges it is cleared by (seconds back; 0 for all).
+HISTORY_PAGE = 50
+RANGES = {"hour": 3600, "day": 86400, "all": 0}
 
 # Sign-in, account and payment pages: never kept, whatever is on them.
 _SECRET_HOSTS = ("accounts.google.com", "login.microsoftonline.com", "login.live.com", "account.microsoft.com",
@@ -183,10 +188,55 @@ def keep_item(runtime: Path, row: dict, facts: dict) -> str:
     return ident
 
 
-def clear(desktop: Path) -> None:
+def _day(at: float) -> str:
+    return time.strftime("%Y-%m-%d", time.localtime(at))
+
+
+def history(desktop: Path, text: str = "", before: float | None = None, n: int = HISTORY_PAGE) -> dict:
+    """The history as a browser's history page lists it: one entry per page and day (at its latest visit), newest
+    first, those with every word of `text` in their title or address, from `before` (an entry's "at") on.
+    {"pages": [{"url", "title", "host", "at", "day", "visits"}], "next": the "at" to ask from next, or None}"""
+    words = text.lower().split()
+    entries: dict[tuple, dict] = {}
+    for row in _rows(desktop):
+        at = float(row.get("at") or 0)
+        entry = entries.setdefault((row["url"], _day(at)), {"url": row["url"], "title": "", "host": row.get("host") or "",
+                                                             "at": 0.0, "day": _day(at), "visits": 0})
+        entry["visits"] += 1
+        if at >= entry["at"]:
+            entry["at"], entry["title"] = at, row.get("title") or entry["title"]
+    found = sorted((e for e in entries.values() if (before is None or e["at"] < before)
+                    and all(word in f"{e['url']} {e['title']}".lower() for word in words)), key=lambda e: -e["at"])
+    return {"pages": found[:n], "next": found[n - 1]["at"] if len(found) > n else None}
+
+
+def delete(desktop: Path, url: str, day: str) -> None:
+    """One history entry: every visit of `url` on `day` (as history lists it)."""
+    _drop(desktop, lambda row: row["url"] == url and _day(float(row.get("at") or 0)) == day)
+
+
+def clear(desktop: Path, since: float = 0.0) -> None:
+    """The history from `since` on; with 0 all of it, and the walls the Reader met."""
+    _drop(desktop, lambda row: float(row.get("at") or 0) >= since)
+    if not since:
+        (Path(desktop) / WALLS_FILE).unlink(missing_ok=True)
+
+
+def _drop(desktop: Path, gone) -> None:
+    """The rows `gone(row)` is true of go, and with a page's last visit the library item its reading made and what
+    the recommender heard of it (feed.forget_items)."""
     with _lock:
-        for name in (BROWSED_FILE, WALLS_FILE):
-            (Path(desktop) / name).unlink(missing_ok=True)
+        rows = _rows(desktop)
+        kept = [row for row in rows if not gone(row)]
+        if len(kept) == len(rows):
+            return
+        atomic_write_text(Path(desktop) / BROWSED_FILE, "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in kept))
+    ids = {item_id(url) for url in {row["url"] for row in rows} - {row["url"] for row in kept}}
+    runtime = Path(desktop).parent
+    dropped = Library(runtime).drop(lambda item: item.id in ids and item.via == BROWSED)
+    if dropped:
+        from .panels import feed
+        feed.forget_items(runtime, set(dropped))
 
 
 # ---------------------------------------------------------------- reading with the session

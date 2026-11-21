@@ -15,7 +15,13 @@ Some programs are never operated, whatever was granted: password managers and
 credential dialogs, security and system settings, installers and elevation,
 the registry, shells and terminals, other agents and this app itself, banking
 and payment programs, anything running as administrator, and the taskbar,
-desktop, Start and Run box that share File Explorer's process.
+desktop, Start and Run box that share File Explorer's process; and any whose
+name holds a word the person added to their own list (`blocked`).
+
+A granted program has a tier, as Claude's computer use gives one: full; click
+(it presses but types nothing: an IDE, whose terminal pane runs what is typed);
+or view (it only looks: a web browser, whose pages go through the app's own
+browser and its gate instead). The person can change it per program.
 
 Everything done is written to a log the person can read, one line per action.
 """
@@ -86,6 +92,16 @@ NEVER_CLASS = {
     "Windows.UI.Core.CoreWindow:StartMenuExperienceHost", "$$$Secure UAP Dummy Window Class For Interim Dialog",
     "Shell_Flyout", "XamlExplorerHostIslandWindow", "TopLevelWindowForOverflowXamlIsland",
 }
+TIERS = ("full", "click", "view")
+# The tier a program gets until the person changes it: web browsers look only, IDEs and editors with a terminal
+# pane press only.
+VIEW_EXE = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "vivaldi.exe", "iexplore.exe",
+            "360se.exe", "360chrome.exe", "qqbrowser.exe", "sogouexplorer.exe", "2345explorer.exe", "arc.exe",
+            "chromium.exe", "maxthon.exe", "liebao.exe", "ucbrowser.exe", "quark.exe", "thorium.exe", "waterfox.exe"}
+CLICK_EXE = {"code.exe", "code - insiders.exe", "vscodium.exe", "devenv.exe", "idea64.exe", "pycharm64.exe",
+             "webstorm64.exe", "goland64.exe", "clion64.exe", "rider64.exe", "phpstorm64.exe", "rubymine64.exe",
+             "datagrip64.exe", "studio64.exe", "sublime_text.exe", "zed.exe", "fleet.exe", "eclipse.exe",
+             "spyder.exe", "rstudio.exe", "hbuilderx.exe"}
 # Processes that draw many unrelated things (File Explorer is also the taskbar and the desktop): only these
 # window classes are the program, and what they own.
 SHARED = {"explorer.exe": {"CabinetWClass"}}
@@ -168,6 +184,11 @@ def window_never(base: str, hwnd: int) -> str:
     return ""
 
 
+def default_tier(exe: str) -> str:
+    base = Path(exe).name.lower()
+    return "view" if base in VIEW_EXE else "click" if base in CLICK_EXE else "full"
+
+
 def key_of(program: dict) -> str:
     """How a stored grant names a program."""
     if program.get("package"):
@@ -223,10 +244,42 @@ class Grants:
             return g
         return None
 
+    def tier(self, program: dict) -> str:
+        """The tier of a running program: its stored grant's, else the default for its executable."""
+        found = self.find(program)
+        return found.get("tier") if found and found.get("tier") in TIERS else default_tier(program.get("exe", ""))
+
+    def set_tier(self, key: str, tier: str) -> None:
+        with self.lock:
+            data = self._read()
+            data["grants"] = [{**g, "tier": tier} if g["key"] == key else g for g in self.all()]
+            self._write(data)
+        self.log({"do": "tier", "line": f"{key}: {tier}"})
+
+    def blocked(self) -> list[str]:
+        return [w for w in self._read().get("block") or [] if isinstance(w, str) and w.strip()]
+
+    def block(self, word: str, on: bool) -> list[str]:
+        """The person's own never list: a word that, in a program's name or file name, keeps it from being
+        operated."""
+        word = " ".join(word.split())[:60]
+        with self.lock:
+            data = self._read()
+            data["block"] = [w for w in self.blocked() if w.lower() != word.lower()] + ([word] if on and word else [])
+            self._write(data)
+        self.log({"do": "block" if on else "unblock", "line": word})
+        return data["block"]
+
+    def blocked_by(self, program: dict) -> str:
+        """The word of the person's own list this program's name or file name holds, or ""."""
+        said = " ".join(str(program.get(k) or "") for k in ("name", "product")) + " " + Path(program.get("exe", "")).name
+        return next((w for w in self.blocked() if w.lower() in said.lower()), "")
+
     def grant(self, program: dict) -> dict:
         entry = {"key": key_of(program), "name": program.get("name", ""), "exe": program["exe"],
                  "signer": program.get("signer", ""), "package": program.get("package", ""),
-                 "hash": program.get("hash", ""), "since": time.strftime("%Y-%m-%d %H:%M")}
+                 "hash": program.get("hash", ""), "tier": default_tier(program["exe"]),
+                 "since": time.strftime("%Y-%m-%d %H:%M")}
         with self.lock:
             data = self._read()
             data["grants"] = [g for g in self.all() if g["key"] != entry["key"]] + [entry]

@@ -63,6 +63,8 @@ window.paChat = (() => {
     calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
     compass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z"/>',
     help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    // A dashed bubble: the 无痕对话.
+    ghost: '<path d="M10.1 2.18a10 10 0 0 1 3.8 0M13.9 21.82a10 10 0 0 1-3.8 0M17.6 3.72a10 10 0 0 1 2.7 2.7M2.18 13.9a10 10 0 0 1 0-3.8M20.28 17.6a10 10 0 0 1-2.7 2.7M21.82 10.1a10 10 0 0 1 0 3.8M3.72 6.4a10 10 0 0 1 2.7-2.7"/><path d="m6.8 20.79-3.9.9a.5.5 0 0 1-.6-.6l.9-3.9"/>',
   };
   const YOUTUBE = ["www.youtube-nocookie.com", "www.youtube.com", "youtube.com", "youtube-nocookie.com"];
 
@@ -269,7 +271,9 @@ window.paChat = (() => {
       // What rides on the next message: { key, kind, file, size, url, data } each, data once it is ready.
       attached = [],
       attachKey = 0,
-      dragDepth = 0;
+      dragDepth = 0,
+      // A 无痕对话: it reads no memory and leaves none (welcome.py PageChat.private).
+      privateChat = false;
     // Where the thread was last drawn to: the day, and the character's open run of messages.
     let lastDay = "",
       run = null;
@@ -293,7 +297,8 @@ window.paChat = (() => {
     };
     // What the link cards and the steps above a reply take from the chat (linkcard.js, activity.js).
     const links = { api: ctx.api, picture: blob, link: (url, className) => linkNode(url, className),
-      findCard: (card) => findCard(card), grew: () => keepEnd(), goOn: (text) => !sending && send(text), go: ctx.go };
+      findCard: (card) => findCard(card), grew: () => keepEnd(), goOn: (text) => !sending && send(text), go: ctx.go,
+      confirm: ctx.confirm };
     const linkCards = (text, skip = "") => window.paLinks.cards(window.paLinks.urls(text, [skip]), links);
 
     // ---- The page: the thread, or the empty and not-set-up states, and the composer
@@ -319,7 +324,11 @@ window.paChat = (() => {
     hello.append(ctx.bust("chat-bust"), parts.greet, parts.emptyText);
     parts.ideas = el("div", "chat-ideas");
     parts.emptySlot = el("div", "chat-empty-slot");
-    emptyCol.append(hello, parts.emptySlot, parts.ideas);
+    // A new plain chat can be made a 无痕对话 before its first message; its mark heads the chat.
+    parts.privateToggle = button("chat-private-toggle", "", () => setPrivate(!privateChat));
+    parts.mark = el("div", "chat-private");
+    parts.mark.hidden = true;
+    emptyCol.append(hello, parts.emptySlot, parts.ideas, parts.privateToggle);
     parts.empty.append(emptyCol);
     parts.empty.hidden = true;
 
@@ -363,6 +372,8 @@ window.paChat = (() => {
       pick: () => parts.picker.click(),
       attach, refuse, flash, attachItem,
       refresh: () => poll(),
+      private: () => privateChat,
+      setPrivate,
       quote(text) {
         const block = `${text.trim().split(/\r?\n/).map((line) => `> ${line}`).join("\n")}\n\n`;
         const at = parts.input.selectionStart ?? parts.input.value.length;
@@ -515,6 +526,8 @@ window.paChat = (() => {
       paintTray();
       for (const name of parts.messages.querySelectorAll(".ai-name")) name.textContent = displayName();
       paintQuote();
+      parts.mark.replaceChildren(svg(I.ghost), el("strong", "", say("privateMark")), el("span", "", say("privateNote")));
+      parts.privateToggle.replaceChildren(svg(I.ghost), el("span", "", say(privateChat ? "privateLeave" : "privateStart")));
     }
 
     // Which of the three the page shows: the thread, the empty start, or the way to set a model up.
@@ -537,6 +550,12 @@ window.paChat = (() => {
       if (parts.compose.parentNode !== place) place.append(parts.compose);
       parts.dock.hidden = !configured || empty;
       parts.compose.classList.toggle("in-empty", empty);
+      // The mark heads the empty start or the thread; the toggle is a plain chat's, before its first message.
+      parts.mark.hidden = !privateChat;
+      const marked = empty ? emptyCol : column;
+      if (parts.mark.parentNode !== marked) marked.prepend(parts.mark);
+      parts.privateToggle.hidden = main;
+      parts.privateToggle.setAttribute("aria-pressed", String(privateChat));
       parts.input.placeholder = held || say(empty ? "placeholderEmpty" : "placeholder");
       parts.banner.replaceChildren();
       parts.banner.hidden = !(configured && state.modelUnreachable);
@@ -951,6 +970,11 @@ window.paChat = (() => {
         if (item.choices?.length) node.append(plus.sent(item.choices));
         parts.messages.append(node);
         if (item.failed) failed(node, item.failed, item.text, item.seq, item.quote, item.attachments || [], item.choices || []);
+      } else if (item.role === "memory") {
+        // What the background memory kept from this chat: one quiet line under the last reply (activity.js).
+        node = window.paActivity.saved(item, links);
+        const last = parts.messages.lastElementChild;
+        (last?.classList.contains("ai") ? last.querySelector(".ai-body") : parts.messages).append(node);
       } else if (isRemark(item)) {
         // A passing remark: no face, quieter, on the text's edge.
         node = el("p", "aside");
@@ -981,6 +1005,9 @@ window.paChat = (() => {
         if (cards) node.append(cards);
         const from = window.paActivity.sources(item.sources, links);
         if (from) node.append(from);
+        // The memories the reply drew on, each with edit and forget (activity.js).
+        const recalled = window.paActivity.recalled(item, links);
+        if (recalled) node.append(recalled);
         // The files the reply changed, with 撤销这次的改动 (activity.js).
         const changed = window.paActivity.changes(item, links);
         if (changed) node.append(changed);
@@ -1085,6 +1112,10 @@ window.paChat = (() => {
       run = null;
       seen = 0;
       tag = value.chat || "";
+      if (privateChat !== Boolean(value.private)) {
+        privateChat = Boolean(value.private);
+        renderText();
+      }
       if (value.trimmed && value.messages.length) parts.messages.append(el("p", "chat-trimmed", say("trimmed")));
       for (const item of value.messages) showMessage(item, false, true);
       const said = value.messages.findLast((item) => item.role !== "user" && item.text);
@@ -1518,6 +1549,11 @@ window.paChat = (() => {
       if (text)
         parts.refused.append(svg(I.alert), el("span", "chat-refused-text", text),
           iconButton("chat-quote-x", I.x, say("dismiss"), () => refuse("")));
+    }
+
+    // A 无痕对话, or back to a plain chat: a new chat of that kind opens in its place (app.js).
+    function setPrivate(on) {
+      ctx.newChat(on);
     }
 
     // ---- Sending

@@ -33,7 +33,8 @@ python -I tools/bench/miniwob/report.py <folder>
 Another model is one flag: `--model <openrouter id>`. Other flags: `--tasks a,b` (a subset, or other MiniWoB++ tasks such as drag-items), `--seeds 0,1,2,3,4`
 (default), `--workers 4`, `--budget 0.38` (dollars from OpenRouter's usage.cost; no new episode past it),
 `--port`, `--data <miniwob html folder>`, `--tools no|yes` (whether the app's check found the model calling a tool
-by itself; the context window is read from the host's model list). Without `--out` the run goes to `../ref/bench/miniwob/<model>`. A rerun into the same folder skips the episodes already in
+by itself; the context window is read from the host's model list), `--cheapest` (OpenRouter's provider routing by
+price, same model). Without `--out` the run goes to `../ref/bench/miniwob/<model>`. A rerun into the same folder skips the episodes already in
 `results.jsonl`. Each episode's pages, model answers and cards go to `<folder>/episodes/`; the key is never
 printed or written. Python: the `.venv-web-platforms` interpreter (playwright, httpx).
 
@@ -86,3 +87,19 @@ includes the drawing and dexterity tasks left out here. These are other people's
 people: the numbers show what the lines and actions can and cannot reach, not how often an errand of theirs works.
 Two product versions are mixed: 192 episodes ran on one, and the 8 rerun episodes ran on a newer operate.py and
 pageops.py (the hashes are in each row's `code`).
+
+## Rerun (2026-11-20, deepseek/deepseek-v4.1-flash)
+
+80 episodes (seeds 0 and 1) on the tree at 04a212a, with the least able budget (`--tools no`, 12 calls) and
+`--cheapest`.
+
+- Success 58/80 = 72.5%. The first run had 49/80 = 61% on the same seeds, with another model (v4-flash) and older
+  code.
+  - Up on 13 episodes: native date and time 4/4 (were 0/4), choose-list, scroll-text, click-scroll-list,
+    choose-date, phone-book, click-widget and one email-inbox.
+  - Down on 4: click-checkboxes-soft twice, search-engine and multi-layouts.
+  - Still at 0: login-user and login-user-popup (by design), book-flight, search-engine. Inbox and feed are 1/8.
+- Per episode: 3.2 model calls, 7.3k input tokens (5.8k cached), 188 output tokens, 11.6 s, $0.00012. The 80
+  episodes cost $0.0096 in all.
+- Cards: 47, in 7 episodes, all on the inbox and feed tasks, the same comment card asked again on each press. The
+  first run had 44 in 35 of these 80 episodes. No card was raised on a bare Submit.

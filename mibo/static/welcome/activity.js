@@ -359,5 +359,95 @@ window.paActivity = (() => {
     return node;
   }
 
-  return { live, summary, sources, changes, diff };
+  // ---- Memory where it acts (person.py): what a reply drew on, and what the background memory kept.
+  const MEMORY = '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.3A3 3 0 0 0 9 17.5a2.5 2.5 0 0 0 3 2V5.5a2.5 2.5 0 0 0-3-1zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.3 3 3 0 0 1-4.5 4.7 2.5 2.5 0 0 1-3 2"/>';
+  const toMemory = (opts) => {
+    const go = el("button", "act-mem-manage", paI18n.words("activity").memManage);
+    go.type = "button";
+    go.addEventListener("click", () => opts.go?.("setup/memory"));
+    return go;
+  };
+
+  // Under a reply: the memories it drew on, folded; open, each with 编辑 and 忘记, as ChatGPT's sources list them.
+  function recalled(item, opts = {}) {
+    const used = item.memory?.used;
+    if (!used?.length || !opts.api) return null;
+    const m = paI18n.words("setup_memory");
+    const node = el("details", "act-mem");
+    const head = el("summary", "act-mem-head");
+    head.append(svg(MEMORY, "i act-mem-icon"), el("span", "", paI18n.t("activity.memUsed", { count: used.length })),
+      svg(ICONS.chevron, "i act-chevron"));
+    const list = el("ol", "act-mem-list");
+    for (const memory of used) {
+      const row = el("li", "act-mem-row");
+      const text = el("span", "act-mem-text", memory.text);
+      const tools = el("span", "act-mem-tools");
+      const tool = (label, run) => {
+        const press = el("button", "act-mem-tool", label);
+        press.type = "button";
+        press.addEventListener("click", run);
+        return press;
+      };
+      // What the page said back: the item is gone, or what was asked of it is done.
+      const told = (words) => {
+        text.classList.add("act-mem-gone");
+        tools.replaceChildren(el("span", "act-mem-told", words));
+      };
+      const write = (action, body) =>
+        opts.api(`person/${action}`, body).then(() => true, (failure) => (told(failure?.message === "activity_changed"
+          ? paI18n.words("activity").memGone : m.errors?.[failure?.message] || m.generic || ""), false));
+      const rest = () => tools.replaceChildren(
+        tool(m.edit, () => {
+          const field = el("input", "act-mem-field");
+          field.value = text.textContent;
+          field.maxLength = 60;
+          field.setAttribute("aria-label", m.edit);
+          const save = async () => {
+            const words = field.value.trim();
+            if (!words || words === memory.text) return back();
+            if (await write("edit", { id: memory.id, text: words })) {
+              memory.text = words;
+              back();
+            }
+          };
+          const back = () => {
+            field.replaceWith(text);
+            text.textContent = memory.text;
+            rest();
+          };
+          field.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.isComposing) save();
+            if (event.key === "Escape") back();
+          });
+          text.replaceWith(field);
+          tools.replaceChildren(tool(m.save, save), tool(m.cancel, back));
+          field.focus();
+        }),
+        tool(m.forget, async () => {
+          if (!(await opts.confirm?.({ title: m.forgetAsk, text: m.forgetText, ok: m.forget }))) return;
+          if (await write("forget", { id: memory.id })) told(paI18n.words("activity").memForgotten);
+        }),
+      );
+      rest();
+      row.append(text, tools);
+      list.append(row);
+    }
+    const foot = el("div", "act-mem-foot");
+    foot.append(toMemory(opts));
+    node.append(head, list, foot);
+    node.addEventListener("toggle", () => opts.grew?.());
+    return node;
+  }
+
+  // A quiet line in the chat a memory came from, once the background memory kept it: 已记住：… · 管理.
+  function saved(item, opts = {}) {
+    const w = paI18n.words("activity");
+    const node = el("p", "act-saved");
+    const words = (item.saved || []).map((row) => row.text).join(w.memSep);
+    node.append(svg(MEMORY, "i act-mem-icon"), el("span", "act-saved-text", fill(w.memSaved, { what: words })),
+      el("span", "act-saved-dot", "·"), toMemory(opts));
+    return node;
+  }
+
+  return { live, summary, sources, changes, diff, recalled, saved };
 })();
