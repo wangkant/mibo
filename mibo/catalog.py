@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from . import context, mcp_offer, pastchats, schedule_tool, search, surface
+from . import context, findtool, mcp_offer, pastchats, schedule_tool, search, surface
 from .desk import tool as desk_tool
 from .shell import tool as shell_tool
 from .skills import tool as skill_tool
@@ -51,6 +51,10 @@ async def _web(agent, called: dict, args: dict, lookups) -> str:
     return await agent._web_tool(called["name"], args, lookups)
 
 
+async def _finds(agent, called: dict, args: dict, lookups) -> str:
+    return await findtool.use(agent, called, args, lookups)
+
+
 async def _place(agent, called: dict, args: dict, lookups) -> str:
     return await surface.run(agent, called, args, lookups)
 
@@ -81,6 +85,8 @@ async def _mcp(agent, called: dict, args: dict, lookups) -> str:
 
 MODULES = (
     Module("web", lambda: search.TOOLS + [connect.TOOL], _web),
+    # bring_find and react: the person's finds in the chat (findtool.py).
+    Module("web", lambda: findtool.TOOLS, _finds),
     # open and look: pages, windows, files and folders by one name (surface.py). Opening what the person named
     # is free; reading another program's window asks for the programs switch inside the call.
     Module("place", lambda: surface.TOOLS, _place),
@@ -109,11 +115,11 @@ class Offer:
 
 
 def definitions() -> list:
-    """Every app module's definitions in order, use_skill naming the installed skills that are on (skills/tool.py)
-    and a scheduled run keeping to what it may use (schedule_tool.py). A switch that is off, a choice under "+" or
-    the words of a message change none of it."""
+    """Every app module's definitions in order, a scheduled run keeping to what it may use (schedule_tool.py). A
+    switch that is off, a skill installed or switched (their list is in the turn's context, skills/tool.py), a
+    choice under "+" or the words of a message change none of it."""
     tools = [t for module in MODULES[:-1] for t in module.definitions()]
-    return schedule_tool.offered(skill_tool.offered(tools))
+    return schedule_tool.offered(tools)
 
 
 def offered(budget: context.Budget) -> Offer:

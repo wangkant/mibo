@@ -548,6 +548,41 @@
     "today": "今日",
     "yesterday": "昨日"
   },
+  "reasons": {
+    "chip": {
+      "picked": "選択したトピック：{name}",
+      "said": "言及したトピック：{name}",
+      "subject": "よく見るトピック：{name}",
+      "often": "よく開くサイト：{name}",
+      "opened": "以前に開いたサイト：{name}",
+      "about": "トピック：{name}",
+      "new": "新着",
+      "from": "提供元：{name}"
+    },
+    "browsed": "内蔵ブラウザーでご自身が開いたページです（{site}）",
+    "topic": "選択したトピック「{name}」に該当します。提供元：{src}",
+    "like": "好きだと伝えた「{name}」に関連します。提供元：{src}",
+    "tookSubject": "同じ「{topic}」のトピックの「{title}」を{how}ことがあります",
+    "tookOrigin": "以前に{src}の「{title}」を{how}ことがあります",
+    "how": {
+      "like": "気に入った",
+      "open": "開いた",
+      "play": "最後まで見た"
+    },
+    "said": "{name}の推薦理由：{words}",
+    "what": "{src}の「{topic}」に関する内容",
+    "whatAbout": "{src}（{about}）",
+    "kinds": {
+      "video": "動画",
+      "page": "記事",
+      "text": "記事"
+    },
+    "try": "普段とは異なる分野の意図的な提案：{what}",
+    "tryFirst": "普段とは異なる分野の意図的な提案：{what}（これまで開いたことのない種類）",
+    "firstRun": "初回利用時のサンプルです。閲覧履歴はまだありません：{what}",
+    "empty": "参考にできる閲覧履歴がまだないため、新着順の提案です：{what}",
+    "new": "閲覧履歴との関連がまだないため、新着順の提案です：{what}"
+  },
   "modelbar": {
     "open": "モデルと思考",
     "thinking": "思考",
@@ -805,6 +840,7 @@
     "wonderPlaceholder": "何を調べますか？数語で入力してください",
     "wonderQueued": "本日の外出回数の上限に達しました。{what} を記録しました。明日の最初の外出で調べます。",
     "wonderGone": "{what} を調べに行きました。結果はここに表示されます。",
+    "wonderOff": "外出はオフになっています。{what} を記録しました。外出をオンにすると調べます。",
     "walkWhy": {
       "walks_off": "外出はオフです。設定でオンにできます",
       "no_browser": "Edge または Chrome が必要です",
@@ -949,6 +985,20 @@
     "check": "更新を確認",
     "checking": "確認中…",
     "dataTitle": "バックアップと復元",
+    "keptTitle": "設定とキー",
+    "keptFile": "設定は {path} に保存されており、テキストエディターで編集できます。",
+    "keptStore": "モデル、検索、ツールのキーは{store}に保存され、ファイルには書き込まれません。",
+    "keptPlain": "このシステムには資格情報ストアがないため、キーは {path} に保存されます。読み取れるのは現在のユーザーのみです。",
+    "keptUnknown": "設定ファイルの次の名前は設定項目ではないため、効果はありません：{names}",
+    "keptInvalid": "次の設定は値の型が合わないため、既定値を使用しています：{names}",
+    "stores": {
+      "Windows": " Windows 資格情報マネージャー",
+      "macOS": " macOS キーチェーン",
+      "SecretService": "システムのキーリング",
+      "libsecret": "システムのキーリング",
+      "kwallet": " KWallet ",
+      "other": "システムの資格情報ストア"
+    },
     "placeTitle": "バックアップの保存先",
     "places": {
       "desktop": "デスクトップ",
@@ -1344,8 +1394,6 @@
     "feedStopped": "前回、確認またはサインインが求められたため停止しました。解決したら再度オンにしてください。",
     "feedAsk": "このサイトをバックグラウンドで読みますか？",
     "feedYes": "オンにする",
-    "ways_other": "{count} 件の操作方法を保存済み",
-    "waysOff": "操作方法を削除",
     "forget": "このサイトを忘れる",
     "forgetAsk": "{site} を忘れますか？",
     "forgetText": "保存した操作方法、学習した検索方法、バックグラウンドでの読み取り、「今後確認しない」の設定がすべて消去されます。",
@@ -2052,12 +2100,10 @@
     "env": "環境変数",
     "none": "なし",
     "startNote": "通常のユーザー権限で実行され、ここに表示された環境変数のみを受け取り、Mibo の終了とともに停止します。",
-    "readDefault": "読み取り専用ツールは毎回確認しない",
-    "readDefaultNote": "「読み取り専用」はツール提供元による表示で、Mibo は確認できません。「設定 › 機能 › コネクター」で変更できます。",
+    "startDetails": "完全なコマンドと作業フォルダー",
     "toolTitle": "ツールを使用：{tool}",
     "toolMeta": "MCP サーバー {server}",
     "changed": "前回許可した後にこのツールが変更されたため、再度確認します。",
-    "readonly": "提供元はこのツールをデータの読み取りのみと表示しています。",
     "destructive": "提供元はこのツールをデータを削除・上書きできると表示しています。",
     "noArgs": "引数なし",
     "raw": "生の引数（JSON）",
@@ -2093,11 +2139,11 @@
   "cli": {
     "about": "Mibo：デスクトップに常駐し、あなたと会話し、あなたのことを覚え、代わりに操作するキャラクターです。",
     "noCommand": "コマンドを付けずに実行するとアプリが開きます。",
-    "home": ".env、persona.txt、runtime/ を置くフォルダー（既定：AGENT_HOME、Mibo をインストールしたこのフォルダー、または ~/mibo）",
+    "home": "settings.json、persona.txt、runtime/ を置くフォルダー（既定：AGENT_HOME、Mibo をインストールしたこのフォルダー、または ~/mibo）",
     "command": "以下のコマンドのいずれか",
     "commands": "コマンド:",
     "homeMissing": "Mibo：--home にはフォルダーが必要です",
-    "alsoHome": "\n--home DIR も指定できます（.env、persona.txt、runtime/ を置くフォルダー）。",
+    "alsoHome": "\n--home DIR も指定できます（settings.json、persona.txt、runtime/ を置くフォルダー）。",
     "broken": "Mibo を起動できませんでした。詳細は {log} にあります。",
     "argparse": {
       "usage": "使い方: ",

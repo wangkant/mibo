@@ -566,6 +566,41 @@
       "周六"
     ]
   },
+  "reasons": {
+    "chip": {
+      "picked": "你选择的主题：{name}",
+      "said": "你提到过：{name}",
+      "subject": "你常看：{name}",
+      "often": "你常打开：{name}",
+      "opened": "你打开过：{name}",
+      "about": "主题：{name}",
+      "new": "新发现",
+      "from": "来源：{name}"
+    },
+    "browsed": "你在内置浏览器中自行打开了此页（{site}）",
+    "topic": "符合你选择的主题「{name}」，来自{src}",
+    "like": "与你表示喜欢的「{name}」相关，来自{src}",
+    "tookSubject": "你{how}过同属「{topic}」主题的《{title}》",
+    "tookOrigin": "你此前{how}过{src}的《{title}》",
+    "how": {
+      "like": "喜欢",
+      "open": "打开",
+      "play": "看完"
+    },
+    "said": "{name}的推荐理由：{words}",
+    "what": "{src}的「{topic}」内容",
+    "whatAbout": "{src}（{about}）",
+    "kinds": {
+      "video": "视频",
+      "page": "文章",
+      "text": "文章"
+    },
+    "try": "有意尝试的新方向：{what}",
+    "tryFirst": "有意尝试的新方向：{what}，此类内容你此前未打开过",
+    "firstRun": "首次使用时的示例推荐，尚无阅读记录：{what}",
+    "empty": "尚无阅读记录可供参考，按新近程度推荐：{what}",
+    "new": "与你的阅读记录暂无关联，按新近程度推荐：{what}"
+  },
   "modelbar": {
     "open": "模型与思考强度",
     "thinking": "思考强度",
@@ -823,6 +858,7 @@
     "wonderPlaceholder": "输入希望浏览的主题",
     "wonderQueued": "今日外出次数已用完，已记录：{what}。明天首次外出时查看。",
     "wonderGone": "已外出查看：{what}。完成后在此告知结果。",
+    "wonderOff": "外出已关闭，已记录：{what}。开启外出后查看。",
     "walkWhy": {
       "walks_off": "外出已关闭，可在设置中开启",
       "no_browser": "未找到 Edge 或 Chrome 浏览器",
@@ -968,6 +1004,20 @@
     "check": "检查更新",
     "checking": "正在检查…",
     "dataTitle": "备份与恢复",
+    "keptTitle": "设置与密钥",
+    "keptFile": "设置保存在 {path}，可用文本编辑器修改。",
+    "keptStore": "模型、搜索和工具的密钥保存在{store}中，不写入任何文件。",
+    "keptPlain": "此系统没有可用的凭据库，密钥保存在 {path}，仅当前用户可读。",
+    "keptUnknown": "设置文件中的以下名称不是设置项，不会生效：{names}",
+    "keptInvalid": "以下设置的值类型不符，已按默认值处理：{names}",
+    "stores": {
+      "Windows": " Windows 凭据管理器",
+      "macOS": " macOS 钥匙串",
+      "SecretService": "系统密钥环",
+      "libsecret": "系统密钥环",
+      "kwallet": " KWallet ",
+      "other": "系统凭据库"
+    },
     "placeTitle": "备份位置",
     "places": {
       "desktop": "桌面",
@@ -1363,8 +1413,6 @@
     "feedStopped": "上次读取时遇到验证或登录，已停止。确认无误后可重新开启。",
     "feedAsk": "在后台读取此网站？",
     "feedYes": "开启",
-    "ways_other": "已记录 {count} 个操作方法",
-    "waysOff": "删除操作方法",
     "forget": "忘记此网站",
     "forgetAsk": "忘记 {site}？",
     "forgetText": "已记录的操作方法、搜索方式、后台读取和“不再询问”设置都将清除。",
@@ -2071,12 +2119,10 @@
     "env": "环境变量",
     "none": "无",
     "startNote": "程序以你的普通用户权限运行，只获得此处列出的环境变量，Mibo 退出时随之停止。",
-    "readDefault": "只读工具无需每次确认",
-    "readDefaultNote": "「只读」为工具提供方的标注，Mibo 无法核实。可在「设置 › 能力 › 连接器」中更改。",
+    "startDetails": "完整命令与工作文件夹",
     "toolTitle": "使用工具：{tool}",
     "toolMeta": "MCP 服务器 {server}",
     "changed": "此工具在上次允许后已更改，需要重新确认。",
-    "readonly": "工具提供方标注：只读取数据。",
     "destructive": "工具提供方标注：可能删除或覆盖数据。",
     "noArgs": "无参数",
     "raw": "原始参数（JSON）",
@@ -2112,11 +2158,11 @@
   "cli": {
     "about": "Mibo：常驻桌面的角色，可与你聊天、记住你的偏好，并代你执行操作。",
     "noCommand": "不带命令运行即可打开应用。",
-    "home": "存放 .env、persona.txt 和 runtime/ 的文件夹（默认依次为 AGENT_HOME、当前代码目录或 ~/mibo）",
+    "home": "存放 settings.json、persona.txt 和 runtime/ 的文件夹（默认依次为 AGENT_HOME、当前代码目录或 ~/mibo）",
     "command": "下列命令之一",
     "commands": "命令：",
     "homeMissing": "Mibo：--home 后须指定一个文件夹",
-    "alsoHome": "\n也可使用 --home DIR 指定存放 .env、persona.txt 和 runtime/ 的文件夹。",
+    "alsoHome": "\n也可使用 --home DIR 指定存放 settings.json、persona.txt 和 runtime/ 的文件夹。",
     "broken": "Mibo 未能启动。详情请查看 {log}。",
     "argparse": {
       "usage": "用法：",

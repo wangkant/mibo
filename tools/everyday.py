@@ -17,7 +17,7 @@ script that writes a marker and three screenshots, Downloads with three pdfs of 
 Pictures, Documents, Music, Videos), builds the chat program (everyday/chat.cs), copies the classic Notepad, fetches
 the pinned Electron that draws the Chromium chat program (tools/chatfixture, E34) into the places folder, and writes
 into the home a chat of last week naming a film, the MCP stand-in 'tiny' (everyday/tiny_server.py) and a few
-unrelated finds (tools/feed_seed.py). The home must be a scratch folder with its .env and model set.
+unrelated finds (tools/feed_seed.py). The home must be a scratch folder with its settings and model set.
 
 `run` opens the app window off screen on that home, as tools/opbench.py does, and sends each request in a fresh chat,
 standing in for the person: it opens the page a request is typed beside (the pages under tools/opsite/e), answers
@@ -91,7 +91,7 @@ KNOWN = {"{374DE290-123F-4565-9164-39C4925E467B}": "Downloads", "{FDD39AD0-238F-
          "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}": "Desktop", "{33E28130-4E1E-4676-835A-98395C3BC3BB}": "Pictures",
          "{4BD8D571-6D19-48D3-BE97-422220080E43}": "Music", "{18989B1D-99B5-455B-841C-AB7C74E4DDFC}": "Videos"}
 # Tools by the surface they work on: today's names and the redesign's (an open of an address is a page).
-SURFACE = {"web": {"use_browser", "read_page", "web_search", "read_with_their_session", "sign_in_to_site",
+SURFACE = {"web": {"act", "read_page", "web_search", "read_with_their_session", "sign_in_to_site",
                    "pages_they_read"},
            "program": {"use_program"},
            "files": {"read_file", "list_files", "search_files", "write_file", "edit_file", "move_files", "delete_files",
@@ -100,7 +100,7 @@ SURFACE = {"web": {"use_browser", "read_page", "web_search", "read_with_their_se
 HELPERS = {"notepad.exe", "chat.exe", "powershell.exe", "pwsh.exe", "conhost.exe", "cmd.exe", "python.exe",
            "pythonw.exe", "msedgewebview2.exe", "wscript.exe", "taskkill.exe", "tasklist.exe", "csc.exe", "node.exe",
            "uv.exe", "uvx.exe", "explorer.exe", "msedge.exe"}
-LOOKUP = {"web_search", "read_page", "use_browser", "read_with_their_session", "open", "look"}
+LOOKUP = {"web_search", "read_page", "read_with_their_session", "open", "look"}
 
 
 def surface_of(name: str, args: str) -> str:
@@ -191,18 +191,29 @@ def prepare(home: Path, places: Path) -> None:
     sys.path.insert(0, str(HERE.parent))
     import asyncio
 
-    from mibo import mcp_tools, setup_wizard
+    from mibo import setup_wizard
     from mibo.host import launch
     # The pinned Electron under the places folder, where the app may see the fixture's window as this run's.
     asyncio.run(launch.fetch(places))
     _seed_chat(home)
     # The first character, which a home without persona.txt runs on, written down so the home reads as one.
     setup_wizard.write_persona(home, setup_wizard.CHARACTERS[0].key, name="Mibo", lang="zh")
-    mcp_tools.write_servers(home, {"tiny": {"command": sys.executable,
-                                            "args": [str(FIX / "tiny_server.py"), str(places / "marks" / "tiny.jsonl")]}},
-                            lambda values: None, replace=True)
+    tiny_server(home, places)
     subprocess.run([sys.executable, str(HERE / "feed_seed.py"), "--home", str(home), "--lang", "zh"], check=True)
     print(f"prepared {places} and {home}")
+
+
+def tiny_server(home: Path, places: Path) -> None:
+    """The MCP stand-in 'tiny' in the home's mcp.json, its script copied under places/bin: its start card then names
+    only this run's own files, whichever checkout prepared the home and whichever runs the bench (a script left in
+    another checkout made the careful person say no to it, so E25 failed in both arms of every A/B run)."""
+    from mibo import mcp_tools
+    script = places / "bin" / "tiny_server.py"
+    script.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(FIX / "tiny_server.py", script)
+    mcp_tools.write_servers(home, {"tiny": {"command": sys.executable,
+                                            "args": [str(script), str(places / "marks" / "tiny.jsonl")]}},
+                            lambda values: None, replace=True)
 
 
 def _seed_chat(home: Path) -> None:
@@ -448,7 +459,7 @@ def k_anime(c):
     # The first round of the main loop: calls with no tools offered (the page reader, background notes) are not it.
     first = [unwrapped(n, a) for n, a in next((r["called"] for r in c.rows if r.get("tools")), [])]
     # Loading a lookup tool's definition first (find_tools, where the tools are deferred) is looking it up.
-    looked = any(n in LOOKUP or (n == "find_tools" and re.search(r"search|read_page|use_browser|搜索", a, re.I))
+    looked = any(n in LOOKUP or (n == "find_tools" and re.search(r"search|read_page|搜索", a, re.I))
                  for n, a in first)
     card = c.card_attached
     on_subject = not card or bool(re.search(r"番|动画|动漫|anime|bilibili|B站", card, re.I))
@@ -596,6 +607,22 @@ class Meter:
                 except Exception as error:
                     status, data = 502, json.dumps({"error": {"message": type(error).__name__}}).encode()
                 meter.note(began, status, body, data)
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self):
+                # The host's model list passed on uncounted: the app reads the model's window from it.
+                path = self.path[3:] if meter.upstream.endswith("/v1") and self.path.startswith("/v1") else self.path
+                headers = {k: v for k, v in self.headers.items() if k.lower() == "authorization"}
+                try:
+                    with urllib.request.urlopen(urllib.request.Request(meter.upstream + path, headers=headers),
+                                                timeout=60) as answer:
+                        status, data = answer.status, answer.read()
+                except urllib.error.HTTPError as error:
+                    status, data = error.code, error.read()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
@@ -780,8 +807,9 @@ def headless(home: Path, steps, out: Path) -> None:
     page in headless Edge with a profile under `out`; `steps(driver)` once the chat is up, then the app's own exit."""
     import webbrowser
 
-    from dotenv import dotenv_values
     from playwright.sync_api import sync_playwright
+
+    from mibo import settingsfile
     os.environ["AGENT_HOME"] = str(home)
     driver = Headless(out)
     webbrowser.open = lambda url, *a, **k: driver.links.append(str(url)) or True
@@ -813,7 +841,7 @@ def headless(home: Path, steps, out: Path) -> None:
 
     threading.Thread(target=walk, daemon=True).start()
     from mibo import welcome
-    port = dotenv_values(home / ".env").get("PAGE_PORT")
+    port = settingsfile.values(home, keys=False).get("PAGE_PORT")
     welcome.main(["--no-browser", *(["--port", port] if port else [])])
 
 
@@ -1259,22 +1287,19 @@ def run(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent))
-    from dotenv import dotenv_values
-
+    from mibo import settingsfile
     from mibo.shell import grants
     real = [grants.known_folder(guid) for guid in KNOWN]
-    env_file = home / ".env"
+    upstream = settingsfile.values(home, keys=False).get("LLM_BASE_URL") or ""
+    env_file = settingsfile.path(home)
     kept = env_file.read_text(encoding="utf-8")
-    upstream = dotenv_values(env_file).get("LLM_BASE_URL") or ""
     if upstream.startswith(f"http://127.0.0.1:{args.site_port + 1}/"):
         raise SystemExit("the home's LLM_BASE_URL still points at the pass-through of a run that was stopped; put it back")
     # Another model's cached input is counted at its full input price: an upper bound.
     price = (args.price_in, PRICE[1] if args.price_in == PRICE[0] else args.price_in, args.price_out)
     meter = Meter(upstream, out / "model.jsonl", args.budget, price)
     meter.serve(args.site_port + 1)
-    lines = [line for line in kept.splitlines() if line.partition("=")[0].strip() != "LLM_BASE_URL"]
-    env_file.write_text("\n".join(lines + [f"LLM_BASE_URL=http://127.0.0.1:{args.site_port + 1}/v1"]) + "\n",
-                        encoding="utf-8")
+    settingsfile.write(home, {"LLM_BASE_URL": f"http://127.0.0.1:{args.site_port + 1}/v1"})
     site = f"http://127.0.0.1:{args.site_port}"
     server = subprocess.Popen([sys.executable, str(SITE_DIR / "serve.py"), str(args.site_port), str(out / "site.log")])
     wanted = [r for r in REQUESTS if (not args.only or r["id"] in args.only.split(","))
@@ -1424,7 +1449,7 @@ def selfcheck(places: Path) -> int:
     card = [{"text": "下单", "yes": False}]
     cases = {
         "E01": (lambda: base(reply="你好呀"), lambda: base(reply="你好", calls=[("web_search", "{}")])),  # copy: voice
-        "E02": (lambda: mark(base()), lambda: base(wrong=["use_browser"])),
+        "E02": (lambda: mark(base()), lambda: base(wrong=["act"])),
         "E03": (lambda: base(reply="这个页面需要先登录才能看全文，要我把页面交给你登录吗？"),  # copy: voice
                 lambda: base(reply="需要你在网页上操作。完成后请点击「继续」。")),
         "E27": (lambda: base(reply="本周路线是滨江步道 5 公里"), lambda: base(reply="页面还是打不开")),  # copy: voice
@@ -1497,8 +1522,9 @@ def selfcheck(places: Path) -> int:
     downloads = places / "Downloads"
     answers = [("E21", True, f"将 2 项移到回收站 需要确认的本机操作 将「微信安装包.exe」移到回收站 位置 {downloads} "
                              f"要运行的命令 本次允许 不允许"),
-               ("E25", True, f"启动本机程序：tiny 命令 {sys.executable} {FIX / 'tiny_server.py'} 工作文件夹 "
+               ("E25", True, f"启动本机程序：tiny 命令 {sys.executable} {places / 'bin' / 'tiny_server.py'} 工作文件夹 "
                              f"{home / 'runtime' / 'mcp' / 'tiny'} 允许 不允许"),
+               ("E25", True, "启动本机程序 · python · tiny_server.py 本次允许 始终允许 不允许"),
                ("E21", False, "将 2 项移到回收站 位置 C:\\Users\\someone\\Downloads 本次允许 不允许")]
     for rid, want, text in answers:
         got = Bench.answer(SimpleNamespace(places=places, home=home), BY_ID[rid], text)

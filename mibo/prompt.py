@@ -41,8 +41,8 @@ _NOT_KEPT_NOTE = (
 
 #: What they chose under the chat's "+" for their last message (turns.TURN_CHOICES).
 _CHOICE_NOTES = {
-    "browser": "They chose \"operate the browser\" for it: they ask you to do it in the app's browser, so call "
-               "use_browser in this reply.",
+    "browser": "They chose \"operate the browser\" for it: they ask you to do it in the app's browser, so act "
+               "on the page in this reply; the page in front comes looked at.",
     "search_off": "They switched web search off for it: answer from what you already know, and do not say you "
                   "searched.",
     "schedule": "They chose \"scheduled task\" for it: make it with schedule_create in this reply, asking only "
@@ -194,7 +194,9 @@ class PromptBuilder:
             elif "[image]" in _strip_web_desc(last_user):
                 blind_note = _UNSEEN_PICTURE_NOTE
         # A 无痕对话 tells the recommender nothing: no find is offered to react to there.
-        finds = "" if private else recommend.chat_finds(today.runtime_of(self), time.time())
+        finds = "" if private else recommend.chat_finds(
+            today.runtime_of(self), channels.dm_user(pkey).split(":", 1)[-1], time.time(),
+            getattr(self, "chat_lang", "") or "zh", self.persona_name)
         finds = f"{finds}\n\n" if finds else ""
         # The day says what they did with each find.
         day = f"{today.block(self, last_user, time.time())}\n\n"

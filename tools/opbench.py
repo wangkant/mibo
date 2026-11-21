@@ -1,7 +1,7 @@
 """The operating benchmark: each task of tools/opsite/tasks.py sent through the chat, as a person would type it,
 in the real app window, with the home's own model. The character works the page open in the app's browser; the
 cards it raises are answered as the task says (yes, or no for the checkout); the site decides whether it was done,
-and how each errand ended is read from the chat's own record of the reply (GET /api/chat/history). With the chat
+and how each act ended is read from the chat's own record of the reply (GET /api/chat/history). With the chat
 beside the page and the page in its context the message is done in the page directly (tools/opcolumn.py makes
 sure of that); away from the page the reply model chooses.
 
@@ -14,7 +14,7 @@ computer that counts them; it keeps request bodies and answers in <out>/model.js
 The table lands in <out>/table.md and <out>/results.json: per task and run, success, model calls, input tokens,
 seconds, cards shown and, when it failed, the kind of failure. The site, the counter and the window's stand-in
 model take the site port and the two after it. `--pictures` says the home's model takes pictures; without it
-the drawn page (T25) passes only when it is handed back with nothing sent."""
+the drawn page (T25) passes only when nothing is sent."""
 from __future__ import annotations
 
 import argparse
@@ -117,19 +117,18 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
     wanted = [t for t in bench.TASKS if not args.tasks or t["id"] in args.tasks.split(",")]
 
-    from dotenv import dotenv_values
-    # The agent takes its model from the home's .env: for the run it points at the counter, and is put back after.
-    env_file = home / ".env"
+    from mibo import settingsfile
+    # The agent takes its model from the home's settings: for the run it points at the counter, and is put back after.
+    upstream = settingsfile.values(home, keys=False).get("LLM_BASE_URL") or ""
+    env_file = settingsfile.path(home)
     kept = env_file.read_text(encoding="utf-8")
-    upstream = dotenv_values(env_file).get("LLM_BASE_URL") or ""
     if upstream.startswith(f"http://127.0.0.1:{args.site_port + 1}/"):
-        # A run killed before it put the .env back: the counter would call itself.
+        # A run killed before it put the settings back: the counter would call itself.
         raise SystemExit("the home's LLM_BASE_URL still points at the counter of a run that was stopped; put it back")
     counter = Counter(upstream, out / "model.jsonl")
     through = {"LLM_BASE_URL": f"http://127.0.0.1:{counter.serve(args.site_port + 1)}/v1",
                **({"LLM_MODEL": args.model} if args.model else {})}
-    lines = [line for line in kept.splitlines() if line.partition("=")[0].strip() not in through]
-    env_file.write_text("\n".join(lines + [f"{k}={v}" for k, v in through.items()]) + "\n", encoding="utf-8")
+    settingsfile.write(home, through)
     site = f"http://127.0.0.1:{args.site_port}"
     server = subprocess.Popen([sys.executable, str(HERE / "opsite" / "serve.py"), str(args.site_port),
                                str(out / "site.log")])
@@ -234,7 +233,7 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
             said = [m for m in api("chat/history").get("messages", []) if m.get("role") != "user"]
             reply = " ".join(m.get("text", "") for m in said[-4:])
             verdict = _get(site + f"/__check?task={task['id']}")
-            # How each errand in the page ended, as the chat keeps it under the reply (forgotten before each task).
+            # How each act in the page ended, as the chat keeps it under the reply (forgotten before each task).
             outcomes = [t["status"] for m in said for t in m.get("trace") or [] if t.get("tool") == "operate"]
             rows = counter.rows[mark_rows:]
             row = {"task": task["id"], "kind": task["kind"], "run": n, "seconds": seconds, "cards": len(cards),
@@ -257,8 +256,7 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
 
 def _judge(task: dict, row: dict, verdict: dict, reply: str, cards: list[str], pictures: bool) -> tuple[bool, str]:
     """Success is the site's verdict, the read-off answer in the reply, and the cards a correct run shows; the
-    failure's kind comes from how the errand ended. A drawn page with a text-only model: handed back, nothing
-    sent.
+    failure's kind comes from how the last act ended. A drawn page with a text-only model: nothing sent.
 
     Under automatic review (acting.DEFAULT) the app's reviewer may pass an act the person asked for with no card:
     effects with no card shown at all are that pass, and the card count and read-back are not asked of the run.
@@ -272,7 +270,7 @@ def _judge(task: dict, row: dict, verdict: dict, reply: str, cards: list[str], p
             return False, "effect_before_card"
     if task.get("vision") and not pictures:
         sent = not verdict["why"].startswith("0 POSTs")
-        if row["outcomes"] and row["outcomes"][-1] == "handover" and not sent:
+        if not sent:
             return True, ""
         return False, "no_tool" if not row["outcomes"] else ("extra_effect" if sent else row["outcomes"][-1])
     if not row["outcomes"]:
@@ -293,7 +291,7 @@ def _judge(task: dict, row: dict, verdict: dict, reply: str, cards: list[str], p
     if re.search(r"unexpected POSTs|\b[2-9] POSTs", verdict["why"]):
         return False, "extra_effect"
     last = row["outcomes"][-1]
-    if last in ("cap", "handover", "asked", "declined", "stopped", "paused", "failed"):
+    if last in ("declined", "refused", "waiting", "stopped", "paused", "failed"):
         return False, last
     return False, "done_but_not" if "0 POSTs" in verdict["why"] or "reads=" in verdict["why"] else "wrong_effect"
 

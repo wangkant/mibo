@@ -554,6 +554,41 @@
     "today": "Heute",
     "yesterday": "Gestern"
   },
+  "reasons": {
+    "chip": {
+      "picked": "Weil Sie {name} gewählt haben",
+      "said": "Weil Sie {name} erwähnt haben",
+      "subject": "Sie öffnen oft {name}",
+      "often": "Sie öffnen oft {name}",
+      "opened": "Sie haben {name} schon geöffnet",
+      "about": "Thema: {name}",
+      "new": "Neuer Fund",
+      "from": "Von {name}"
+    },
+    "browsed": "Sie haben diese Seite selbst im integrierten Browser geöffnet ({site})",
+    "topic": "Zu {name}, einem von Ihnen gewählten Thema; von {src}",
+    "like": "Zu {name}, das Sie nach eigener Angabe mögen; von {src}",
+    "tookSubject": "Sie haben „{title}“ {how}, ebenfalls zu {topic}",
+    "tookOrigin": "Sie haben „{title}“ von {src} bereits {how}",
+    "how": {
+      "like": "mit „Gefällt mir“ markiert",
+      "open": "geöffnet",
+      "play": "angesehen oder gelesen"
+    },
+    "said": "{name}: {words}",
+    "what": "{topic} von {src}",
+    "whatAbout": "{src} ({about})",
+    "kinds": {
+      "video": "Video",
+      "page": "Artikel",
+      "text": "Artikel"
+    },
+    "try": "Ein bewusster Versuch abseits Ihrer Gewohnheiten: {what}",
+    "tryFirst": "Ein bewusster Versuch abseits Ihrer Gewohnheiten: {what}, eine Art, die Sie bisher nicht geöffnet haben",
+    "firstRun": "Ein Beispiel für den ersten Start, noch ohne Leseverlauf: {what}",
+    "empty": "Noch kein Leseverlauf vorhanden, daher ein aktueller Fund: {what}",
+    "new": "Ihr Leseverlauf weist noch nicht hierher, daher ein aktueller Fund: {what}"
+  },
   "modelbar": {
     "open": "Modell und Denken",
     "thinking": "Denken",
@@ -813,6 +848,7 @@
     "wonderPlaceholder": "Was soll erkundet werden? Ein paar Wörter",
     "wonderQueued": "Die heutigen Streifzüge sind aufgebraucht. {what} ist notiert und wird beim ersten Streifzug morgen erkundet.",
     "wonderGone": "Unterwegs, um {what} zu erkunden. Das Ergebnis erscheint hier.",
+    "wonderOff": "Streifzüge sind ausgeschaltet. {what} ist notiert und wird erkundet, sobald Streifzüge eingeschaltet sind.",
     "walkWhy": {
       "walks_off": "Ausflüge sind aus; in den Einstellungen einschalten",
       "no_browser": "Erfordert Edge oder Chrome",
@@ -957,6 +993,20 @@
     "check": "Nach Updates suchen",
     "checking": "Wird geprüft…",
     "dataTitle": "Sichern und wiederherstellen",
+    "keptTitle": "Einstellungen und Schlüssel",
+    "keptFile": "Die Einstellungen liegen in {path} und lassen sich mit einem Texteditor bearbeiten.",
+    "keptStore": "Schlüssel für Modell, Suche und Werkzeuge liegen in {store}, nie in einer Datei.",
+    "keptPlain": "Dieses System hat keinen Anmeldeinformationsspeicher; die Schlüssel liegen daher in {path}, lesbar nur für Ihr Benutzerkonto.",
+    "keptUnknown": "Diese Namen in der Einstellungsdatei sind keine Einstellungen und bleiben ohne Wirkung: {names}",
+    "keptInvalid": "Diese Einstellungen haben Werte vom falschen Typ und verwenden ihre Standardwerte: {names}",
+    "stores": {
+      "Windows": "der Windows-Anmeldeinformationsverwaltung",
+      "macOS": "dem macOS-Schlüsselbund",
+      "SecretService": "dem Schlüsselbund des Systems",
+      "libsecret": "dem Schlüsselbund des Systems",
+      "kwallet": "KWallet",
+      "other": "dem Anmeldeinformationsspeicher des Systems"
+    },
     "placeTitle": "Speicherort für Sicherungen",
     "places": {
       "desktop": "Desktop",
@@ -1352,9 +1402,6 @@
     "feedStopped": "Beim letzten Mal kam eine Prüfung oder Anmeldung, daher wurde angehalten. Schalten Sie es wieder ein, sobald das geklärt ist.",
     "feedAsk": "Diese Website im Hintergrund lesen?",
     "feedYes": "Einschalten",
-    "ways_one": "{count} Vorgehensweise gespeichert",
-    "ways_other": "{count} Vorgehensweisen gespeichert",
-    "waysOff": "Vorgehensweisen löschen",
     "forget": "Diese Website vergessen",
     "forgetAsk": "{site} vergessen?",
     "forgetText": "Gespeicherte Vorgehensweisen, die gelernte Suche, das Lesen im Hintergrund und jedes „Nicht mehr fragen“ werden entfernt.",
@@ -2069,12 +2116,10 @@
     "env": "Umgebungsvariablen",
     "none": "Keine",
     "startNote": "Es läuft mit Ihren normalen Benutzerrechten, erhält nur die hier aufgeführten Umgebungsvariablen und wird beendet, wenn Mibo beendet wird.",
-    "readDefault": "Nur lesende Werkzeuge ohne Rückfrage",
-    "readDefaultNote": "„Nur lesend“ ist die Angabe des Anbieters; Mibo kann sie nicht prüfen. Änderbar unter Einstellungen › Fähigkeiten › Konnektoren.",
+    "startDetails": "Vollständiger Befehl und Arbeitsordner",
     "toolTitle": "Ein Tool verwenden: {tool}",
     "toolMeta": "MCP-Server {server}",
     "changed": "Dieses Tool hat sich seit Ihrer letzten Erlaubnis geändert, daher wird erneut gefragt.",
-    "readonly": "Laut Anbieter liest es nur Daten.",
     "destructive": "Laut Anbieter kann es Daten löschen oder überschreiben.",
     "noArgs": "Keine Argumente",
     "raw": "Rohe Argumente (JSON)",
@@ -2110,11 +2155,11 @@
   "cli": {
     "about": "Mibo: eine Figur auf Ihrem Desktop, die mit Ihnen chattet, sich an Sie erinnert und für Sie handelt.",
     "noCommand": "Ohne Befehl ausführen, um die App zu öffnen.",
-    "home": "der Ordner mit .env, persona.txt und runtime/ (Standard: AGENT_HOME, dieser Klon oder ~/mibo)",
+    "home": "der Ordner mit settings.json, persona.txt und runtime/ (Standard: AGENT_HOME, dieser Klon oder ~/mibo)",
     "command": "einer der folgenden Befehle",
     "commands": "Befehle:",
     "homeMissing": "mibo: --home erfordert einen Ordner",
-    "alsoHome": "\nAuch möglich: --home DIR, der Ordner mit .env, persona.txt und runtime/.",
+    "alsoHome": "\nAuch möglich: --home DIR, der Ordner mit settings.json, persona.txt und runtime/.",
     "broken": "Mibo konnte nicht starten. Einzelheiten stehen in {log}.",
     "argparse": {
       "usage": "Verwendung: ",

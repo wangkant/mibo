@@ -554,6 +554,41 @@
     "today": "Hoje",
     "yesterday": "Ontem"
   },
+  "reasons": {
+    "chip": {
+      "picked": "Porque você escolheu {name}",
+      "said": "Porque você mencionou {name}",
+      "subject": "Você abre {name} com frequência",
+      "often": "Você abre {name} com frequência",
+      "opened": "Você já abriu {name}",
+      "about": "Tema: {name}",
+      "new": "Novidade",
+      "from": "De {name}"
+    },
+    "browsed": "Você mesmo abriu esta página no navegador integrado ({site})",
+    "topic": "Sobre {name}, um tema que você escolheu; de {src}",
+    "like": "Sobre {name}, que você disse que curte; de {src}",
+    "tookSubject": "Você {how} “{title}”, também sobre {topic}",
+    "tookOrigin": "Você já {how} “{title}” de {src}",
+    "how": {
+      "like": "curtiu",
+      "open": "abriu",
+      "play": "assistiu ou leu"
+    },
+    "said": "{name}: {words}",
+    "what": "{topic} de {src}",
+    "whatAbout": "{src} ({about})",
+    "kinds": {
+      "video": "vídeo",
+      "page": "artigo",
+      "text": "artigo"
+    },
+    "try": "Uma tentativa deliberada fora do seu habitual: {what}",
+    "tryFirst": "Uma tentativa deliberada fora do seu habitual: {what}, um tipo de conteúdo que você ainda não abriu",
+    "firstRun": "Um exemplo para o primeiro uso, ainda sem histórico de leitura: {what}",
+    "empty": "Ainda não há histórico de leitura, então uma descoberta recente: {what}",
+    "new": "Nada no seu histórico de leitura aponta para cá ainda, então uma descoberta recente: {what}"
+  },
   "modelbar": {
     "open": "Modelo e raciocínio",
     "thinking": "Raciocínio",
@@ -813,6 +848,7 @@
     "wonderPlaceholder": "O que ele deve pesquisar? Algumas palavras",
     "wonderQueued": "Os passeios de hoje se esgotaram. {what} foi anotado; ele vai pesquisar no primeiro passeio de amanhã.",
     "wonderGone": "Saiu para pesquisar {what}. O resultado aparecerá aqui.",
+    "wonderOff": "Os passeios estão desativados. {what} foi anotado; ele vai pesquisar quando os passeios forem ativados.",
     "walkWhy": {
       "walks_off": "Os passeios estão desativados; ative em Configurações",
       "no_browser": "Requer Edge ou Chrome",
@@ -957,6 +993,20 @@
     "check": "Verificar atualizações",
     "checking": "Verificando…",
     "dataTitle": "Backup e restauração",
+    "keptTitle": "Configurações e chaves",
+    "keptFile": "As configurações ficam em {path} e podem ser editadas em um editor de texto.",
+    "keptStore": "As chaves do modelo, da pesquisa e das ferramentas ficam em {store}, nunca em um arquivo.",
+    "keptPlain": "Este sistema não tem um repositório de credenciais, então as chaves ficam em {path}, legível apenas pela sua conta de usuário.",
+    "keptUnknown": "Estes nomes no arquivo de configurações não são configurações e não têm efeito: {names}",
+    "keptInvalid": "Estas configurações têm valores do tipo errado e usam o padrão: {names}",
+    "stores": {
+      "Windows": "o Gerenciador de Credenciais do Windows",
+      "macOS": "as Chaves do macOS",
+      "SecretService": "o chaveiro do sistema",
+      "libsecret": "o chaveiro do sistema",
+      "kwallet": "KWallet",
+      "other": "o repositório de credenciais do sistema"
+    },
     "placeTitle": "Onde ficam os backups",
     "places": {
       "desktop": "Área de trabalho",
@@ -1352,9 +1402,6 @@
     "feedStopped": "Da última vez encontrou uma verificação ou um login e parou. Ative de novo quando isso estiver resolvido.",
     "feedAsk": "Ler este site em segundo plano?",
     "feedYes": "Ativar",
-    "ways_one": "{count} método guardado",
-    "ways_other": "{count} métodos guardados",
-    "waysOff": "Excluir os métodos",
     "forget": "Esquecer este site",
     "forgetAsk": "Esquecer {site}?",
     "forgetText": "Os métodos guardados, a pesquisa aprendida, a leitura em segundo plano e todos os “não perguntar de novo” são removidos.",
@@ -2069,12 +2116,10 @@
     "env": "Variáveis de ambiente",
     "none": "Nenhuma",
     "startNote": "Ele é executado com suas permissões normais de usuário, recebe apenas as variáveis de ambiente listadas aqui e para quando o Mibo é encerrado.",
-    "readDefault": "Ferramentas somente leitura sem perguntar sempre",
-    "readDefaultNote": "«Somente leitura» é a indicação do fornecedor; o Mibo não pode verificá-la. É possível alterar em Configurações › Capacidades › Conectores.",
+    "startDetails": "Comando completo e pasta de trabalho",
     "toolTitle": "Usar uma ferramenta: {tool}",
     "toolMeta": "Servidor MCP {server}",
     "changed": "Esta ferramenta mudou desde a última vez que você a permitiu, por isso pergunta de novo.",
-    "readonly": "O criador indica que ela apenas lê dados.",
     "destructive": "O criador indica que ela pode excluir ou sobrescrever dados.",
     "noArgs": "Sem argumentos",
     "raw": "Argumentos brutos (JSON)",
@@ -2110,11 +2155,11 @@
   "cli": {
     "about": "Mibo: um personagem na sua área de trabalho que conversa com você, se lembra de você e age por você.",
     "noCommand": "Execute sem nenhum comando para abrir o aplicativo.",
-    "home": "a pasta que contém .env, persona.txt e runtime/ (padrão: AGENT_HOME, esta cópia ou ~/mibo)",
+    "home": "a pasta que contém settings.json, persona.txt e runtime/ (padrão: AGENT_HOME, esta cópia ou ~/mibo)",
     "command": "um dos comandos abaixo",
     "commands": "comandos:",
     "homeMissing": "mibo: --home requer uma pasta",
-    "alsoHome": "\nTambém é aceito: --home DIR, a pasta que contém .env, persona.txt e runtime/.",
+    "alsoHome": "\nTambém é aceito: --home DIR, a pasta que contém settings.json, persona.txt e runtime/.",
     "broken": "O Mibo não conseguiu iniciar. Os detalhes estão em {log}.",
     "argparse": {
       "usage": "uso: ",

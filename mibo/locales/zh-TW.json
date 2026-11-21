@@ -548,6 +548,41 @@
     "today": "今天",
     "yesterday": "昨天"
   },
+  "reasons": {
+    "chip": {
+      "picked": "你選擇的主題：{name}",
+      "said": "你提到過：{name}",
+      "subject": "你常看：{name}",
+      "often": "你常開啟：{name}",
+      "opened": "你開啟過：{name}",
+      "about": "主題：{name}",
+      "new": "新發現",
+      "from": "來源：{name}"
+    },
+    "browsed": "你在內建瀏覽器中自行開啟了此頁（{site}）",
+    "topic": "符合你選擇的主題「{name}」，來自{src}",
+    "like": "與你表示喜歡的「{name}」相關，來自{src}",
+    "tookSubject": "你{how}過同屬「{topic}」主題的《{title}》",
+    "tookOrigin": "你先前{how}過{src}的《{title}》",
+    "how": {
+      "like": "喜歡",
+      "open": "開啟",
+      "play": "看完"
+    },
+    "said": "{name}的推薦理由：{words}",
+    "what": "{src}的「{topic}」內容",
+    "whatAbout": "{src}（{about}）",
+    "kinds": {
+      "video": "影片",
+      "page": "文章",
+      "text": "文章"
+    },
+    "try": "刻意嘗試的新方向：{what}",
+    "tryFirst": "刻意嘗試的新方向：{what}，此類內容你先前未開啟過",
+    "firstRun": "首次使用時的範例推薦，尚無閱讀紀錄：{what}",
+    "empty": "尚無閱讀紀錄可供參考，依新近程度推薦：{what}",
+    "new": "與你的閱讀紀錄暫無關聯，依新近程度推薦：{what}"
+  },
   "modelbar": {
     "open": "模型與思考",
     "thinking": "思考",
@@ -805,6 +840,7 @@
     "wonderPlaceholder": "想讓它探索什麼？用幾個詞描述",
     "wonderQueued": "今日外出次數已用完，已記錄：{what}。明天首次外出時查看。",
     "wonderGone": "已外出查看：{what}。完成後在此告知結果。",
+    "wonderOff": "外出已關閉，已記錄：{what}。開啟外出後查看。",
     "walkWhy": {
       "walks_off": "外出已關閉，可在設定中開啟",
       "no_browser": "未找到 Edge 或 Chrome 瀏覽器",
@@ -949,6 +985,20 @@
     "check": "檢查更新",
     "checking": "正在檢查…",
     "dataTitle": "備份與還原",
+    "keptTitle": "設定與金鑰",
+    "keptFile": "設定儲存於 {path}，可用文字編輯器修改。",
+    "keptStore": "模型、搜尋和工具的金鑰儲存於{store}中，不寫入任何檔案。",
+    "keptPlain": "此系統沒有可用的憑證庫，金鑰儲存於 {path}，僅目前使用者可讀取。",
+    "keptUnknown": "設定檔中的下列名稱不是設定項目，不會生效：{names}",
+    "keptInvalid": "下列設定的值類型不符，已依預設值處理：{names}",
+    "stores": {
+      "Windows": " Windows 認證管理員",
+      "macOS": " macOS 鑰匙圈",
+      "SecretService": "系統金鑰圈",
+      "libsecret": "系統金鑰圈",
+      "kwallet": " KWallet ",
+      "other": "系統憑證庫"
+    },
     "placeTitle": "備份位置",
     "places": {
       "desktop": "桌面",
@@ -1344,8 +1394,6 @@
     "feedStopped": "上次讀取時遇到驗證或登入，已停止。確認無誤後可重新開啟。",
     "feedAsk": "在背景讀取此網站？",
     "feedYes": "開啟",
-    "ways_other": "已記錄 {count} 個操作方法",
-    "waysOff": "刪除操作方法",
     "forget": "忘記此網站",
     "forgetAsk": "忘記 {site}？",
     "forgetText": "已記錄的操作方法、搜尋方式、背景讀取和「不再詢問」設定都將清除。",
@@ -2052,12 +2100,10 @@
     "env": "環境變數",
     "none": "無",
     "startNote": "程式以你的一般使用者權限執行，只取得此處列出的環境變數，Mibo 結束時隨之停止。",
-    "readDefault": "唯讀工具無需每次確認",
-    "readDefaultNote": "「唯讀」為工具提供方的標註，Mibo 無法核實。可在「設定 › 能力 › 連接器」中變更。",
+    "startDetails": "完整命令與工作資料夾",
     "toolTitle": "使用工具：{tool}",
     "toolMeta": "MCP 伺服器 {server}",
     "changed": "此工具在上次允許後已變更，需要重新確認。",
-    "readonly": "工具提供方標註：只讀取資料。",
     "destructive": "工具提供方標註：可能刪除或覆寫資料。",
     "noArgs": "無參數",
     "raw": "原始參數（JSON）",
@@ -2093,11 +2139,11 @@
   "cli": {
     "about": "Mibo：常駐桌面的角色，可與你聊天、記住你的偏好，並代你執行操作。",
     "noCommand": "不帶命令執行即可開啟應用程式。",
-    "home": "存放 .env、persona.txt 和 runtime/ 的資料夾（預設：AGENT_HOME、目前的程式碼目錄或 ~/mibo）",
+    "home": "存放 settings.json、persona.txt 和 runtime/ 的資料夾（預設：AGENT_HOME、目前的程式碼目錄或 ~/mibo）",
     "command": "下列指令之一",
     "commands": "指令:",
     "homeMissing": "Mibo：--home 之後須指定一個資料夾",
-    "alsoHome": "\n亦可使用 --home DIR：存放 .env、persona.txt 和 runtime/ 的資料夾。",
+    "alsoHome": "\n亦可使用 --home DIR：存放 settings.json、persona.txt 和 runtime/ 的資料夾。",
     "broken": "Mibo 未能啟動。詳細資訊請參閱 {log}。",
     "argparse": {
       "usage": "用法: ",
