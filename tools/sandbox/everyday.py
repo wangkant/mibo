@@ -4,9 +4,9 @@ the cheapest, behind everyday.py's own meter, which refuses every call past the 
 
     python tools/sandbox/everyday.py --out <folder>
 
-It runs only on Windows (the bench needs the app window and its browser) and only with SANDBOX_MODEL_KEY set (the
-workflow sets it from the repository secret ANTHROPIC_API_KEY when its input asks); the cap is SANDBOX_BUDGET dollars
-(0.30 when unset). The key goes into a scratch home outside <out> and is never printed. Each request's verdict is the
+It runs only on Windows (the bench needs the app window and its browser) and only with SANDBOX_MODEL_KEY set, which
+happens in a sandbox on a person's own computer alone: no model key is kept on GitHub, so on a hosted runner this
+suite reports itself as not run. The cap is SANDBOX_BUDGET dollars (0.30 when unset). The key goes into a scratch home outside <out> and is never printed. Each request's verdict is the
 bench's own checker on what really happened; a failed request is the model's or the app's, read its row.
 """
 from __future__ import annotations
@@ -41,7 +41,7 @@ def main() -> int:
         suite.not_built(FEATURE, "the bench needs the Windows app window and its built-in browser")
         return suite.finish()
     if not key:
-        suite.skipped(FEATURE, "not run: no model key (start the run with real_model and the ANTHROPIC_API_KEY secret)")
+        suite.skipped(FEATURE, "not run: no model key here (this suite runs in a sandbox on the person's own computer)")
         return suite.finish()
     scrub_env()
     budget = os.environ.get("SANDBOX_BUDGET") or "0.30"

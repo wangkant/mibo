@@ -18,6 +18,8 @@ from mibo import paths as _paths
 from mibo.shell import run as _shell_run
 
 SUITE = Path(__file__).resolve().parent
+# The shared harness's fixtures (model, app, turn) for every folder.
+pytest_plugins = ("harness.fixtures",)
 # This system's name, read before any test stands in another.
 SYSTEM = os.name
 LOOPBACK_NAMES = {"localhost"}

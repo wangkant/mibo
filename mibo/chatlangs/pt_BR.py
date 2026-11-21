@@ -70,7 +70,8 @@ SPEC = Spec(
     }),
     letters="ãõ",
     unsaid=r"\bnão (?:guarda|guarde|anota|anote|lembra|lembre|salva|salve) (?:isso|disso)\b",
-    forget_that=(r"esque(?:ce|ça) (?:o que eu (?:disse|falei)|isso)\b"
+    # "não esquece isso" asks the opposite.
+    forget_that=(r"(?<!não )(?<!nao )esque(?:ce|ça) (?:o que eu (?:disse|falei)|isso)\b"
                  r"|finge que eu não (?:disse|falei) nada"),
     lead_in=r"bom|tá|ah",
     kinds=("Sobre você", "Gosta", "Não gosta", "Ultimamente", "Planos", "Como te tratar"),

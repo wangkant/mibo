@@ -1,14 +1,13 @@
 """Start a sandbox run on GitHub's hosted runners, wait for it, fetch its logs and pictures, print the table.
 
-    python tools/sandbox/run.py start [--suites pet,pane] [--systems windows,linux] [--ref main]
-                                      [--real-model] [--budget 0.30] --into <folder>
+    python tools/sandbox/run.py start [--suites pet,pane] [--systems windows,linux] [--ref main] --into <folder>
     python tools/sandbox/run.py fetch <run id> --into <folder>
     python tools/sandbox/run.py table <folder>
 
 `start` dispatches .github/workflows/sandbox.yml with the GitHub CLI (gh, signed in, run from a checkout), waits
 until the run ends, downloads each system's artifact into <folder>/sandbox-<system> and prints the table of feature
-by system. `--real-model` runs the suites that need a model on claude-haiku-5-5, capped at --budget dollars per
-suite; it needs the repository secret ANTHROPIC_API_KEY. Nothing runs on this computer: no window, no pointer.
+by system. The runners use stand-in models only: no model key is kept on GitHub. Nothing runs on this computer: no
+window, no pointer.
 `table` reads every result.json under a folder (fetched, or a suite's own --out) and prints one table per suite.
 The exit code is 0 when every check passed.
 """
@@ -63,7 +62,7 @@ def fetch(run: str, into: Path) -> None:
 def start(args) -> int:
     since = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     gh("workflow", "run", "sandbox.yml", "--ref", args.ref, "-f", f"suites={args.suites}", "-f",
-       f"systems={args.systems}", "-f", f"real_model={str(args.real_model).lower()}", "-f", f"budget={args.budget}")
+       f"systems={args.systems}")
     run = ""
     for _ in range(60):
         rows = json.loads(gh("run", "list", "--workflow", "sandbox.yml", "--branch", args.ref, "--event",
@@ -91,11 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="what", required=True)
     s = sub.add_parser("start")
-    s.add_argument("--suites", default="window,firstrun,pet,pane,programs,everyday")
+    s.add_argument("--suites", default="window,firstrun,pet,pane,programs")
     s.add_argument("--systems", default=",".join(SYSTEMS))
     s.add_argument("--ref", default="main")
-    s.add_argument("--real-model", action="store_true")
-    s.add_argument("--budget", default="0.30")
     s.add_argument("--into", type=Path, required=True)
     f = sub.add_parser("fetch")
     f.add_argument("run")

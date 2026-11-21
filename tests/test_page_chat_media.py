@@ -1,10 +1,9 @@
-"""The page's chat: pictures the character sends, and messages it sends later."""
+"""The page's chat: pictures the character sends, and messages it sends later. What the picture route
+refuses (other paths, links, folders that lead elsewhere) is a floor in tests/floors/boundary/."""
 from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
-import os
 
 from fastapi.testclient import TestClient
 import pytest
@@ -61,73 +60,6 @@ def test_a_picture_reply_is_kept_shown_and_served_only_to_the_page(client, works
         assert again.history()["messages"][-1]["picture"] == picture
     finally:
         again.close()
-
-
-def test_the_picture_route_reads_nothing_but_stored_pictures(client, workspace, tmp_path):
-    (workspace.home / ".env").write_text("LLM_API_KEY=secret\n", encoding="utf-8")
-    name = workspace._keep_picture(base64.b64encode(PNG).decode())
-    for bad in ("..%2F..%2F.env", "..%5C..%5C.env", "%2Fetc%2Fpasswd", "C%3A%5CWindows%5Cwin.ini",
-                ".env", name.upper(), name + ".png", name[:-4] + ".txt", "..", "%2E%2E"):
-        response = client.get(f"/api/chat/picture/{bad}", headers=HEADERS)
-        # A bare ".." is folded by the client into another route, which refuses a GET.
-        assert response.status_code in (404, 405), bad
-        assert b"secret" not in response.content
-    assert workspace.picture("../../.env") is None and workspace.picture(str(workspace.env)) is None
-
-
-def test_a_linked_picture_is_refused(client, workspace, tmp_path):
-    outside = tmp_path / "outside.png"
-    outside.write_bytes(PNG)
-    link = workspace._pictures / ("a" * 40 + ".png")
-    workspace._pictures.mkdir(parents=True, exist_ok=True)
-    workspace._append([{"role": "assistant", "picture": link.name}])
-    try:
-        os.symlink(outside, link)
-    except (OSError, NotImplementedError):
-        pytest.skip("this system does not let the test create a symbolic link")
-    assert client.get(f"/api/chat/picture/{link.name}", headers=HEADERS).status_code == 404
-
-
-def test_a_pictures_folder_that_leads_elsewhere_is_refused(client, workspace, tmp_path):
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    name = "b" * 40 + ".png"
-    (elsewhere / name).write_bytes(PNG)
-    workspace._pictures.parent.mkdir(parents=True, exist_ok=True)
-    workspace._append([{"role": "assistant", "picture": name}])
-    try:
-        if os.name == "nt":
-            import _winapi
-            _winapi.CreateJunction(str(elsewhere), str(workspace._pictures))
-        else:
-            os.symlink(elsewhere, workspace._pictures, target_is_directory=True)
-    except (OSError, NotImplementedError):
-        pytest.skip("this system does not let the test link a folder")
-    assert client.get(f"/api/chat/picture/{name}", headers=HEADERS).status_code == 404
-    # Nor is anything stored there or removed from there.
-    assert workspace._keep_picture(base64.b64encode(PNG).decode()) == ""
-    workspace.reset_chat()
-    assert (elsewhere / name).is_file()
-
-
-def test_a_picture_no_message_shows_is_not_served(client, workspace):
-    name = workspace._keep_picture(base64.b64encode(PNG).decode())
-    assert (workspace._pictures / name).is_file()
-    assert client.get(f"/api/chat/picture/{name}", headers=HEADERS).status_code == 404
-    workspace._append([{"role": "assistant", "picture": name}])
-    assert client.get(f"/api/chat/picture/{name}", headers=HEADERS).status_code == 200
-
-
-def test_a_link_in_the_pictures_folder_is_never_written_through(workspace, tmp_path):
-    outside = tmp_path / "outside.png"
-    workspace._pictures.mkdir(parents=True, exist_ok=True)
-    link = workspace._pictures / f"{hashlib.sha256(PNG).hexdigest()[:40]}.png"
-    try:
-        os.symlink(outside, link)
-    except (OSError, NotImplementedError):
-        pytest.skip("this system does not let the test create a symbolic link")
-    assert workspace._keep_picture(base64.b64encode(PNG).decode()) == ""
-    assert not outside.exists()
 
 
 def test_a_removed_picture_is_missing_and_what_is_not_a_picture_is_not_kept(client, workspace):

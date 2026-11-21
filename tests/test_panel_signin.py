@@ -1,6 +1,6 @@
 """Sign in with OpenRouter, against a stand-in for openrouter.ai: the page's
-attempt, the callback's admission rules, the terminal's code flow, and the
-models the saved service lists."""
+attempt, each way it fails, and the models the saved service lists. Who the
+callback admits, and its state used once, are floors in tests/floors/boundary/."""
 from __future__ import annotations
 
 import asyncio
@@ -199,21 +199,6 @@ def test_only_openrouter_signs_in_and_only_with_the_token(page) -> None:
 
 # ---- each way it fails
 
-def test_a_refusal_tells_the_tab_and_cannot_be_used_to_end_someone_s_attempt(page) -> None:
-    client = page["client"]
-    started = _start(client, pageLang="zh")
-    # OpenRouter returns no state when access is denied, and any page the person
-    # visits can send the same request: the tab is told, the attempt keeps waiting.
-    denied = _back(client, {})
-    assert denied.status_code == 400 and "未在 OpenRouter 上批准访问" in denied.text
-    assert "可以关闭此标签页" not in denied.text
-    assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
-    # With the attempt's own state and no code, it is this attempt that was refused.
-    state = parse_qs(urlsplit(started["url"]).query)["state"][0]
-    assert _back(client, {"state": state}).status_code == 400
-    assert client.get("/api/signin", headers=HEADERS).json()["error"] == "signin_denied"
-
-
 @pytest.mark.parametrize("status, error", [(403, "signin_code_rejected"), (400, "signin_exchange_failed"),
                                            (405, "signin_exchange_failed"), (500, "signin_exchange_failed")])
 def test_an_exchange_that_fails_says_why(page, openrouter, status, error) -> None:
@@ -272,51 +257,6 @@ def test_cancel_drops_the_attempt(page, openrouter) -> None:
     assert client.post("/api/signin/cancel", headers=HEADERS, json={}).json()["state"] == "idle"
     assert _back(client, {"code": back["code"], "state": back["state"]}).status_code == 400
     assert not [kind for kind, _ in openrouter.seen if kind == "keys"]
-
-
-# ---- who the callback admits
-
-@pytest.mark.parametrize("host", [f"127.0.0.1:{PORT}", "localhost:1", "localhost", f"evil.example:{PORT}",
-                                  f"localhost:{PORT}.evil.example"])
-def test_the_callback_admits_only_localhost_at_the_page_s_port(page, openrouter, host) -> None:
-    client = page["client"]
-    back = openrouter.approve(_start(client)["url"])
-    refused = _back(client, {"code": back["code"], "state": back["state"]}, host=host)
-    assert refused.status_code == 403
-    assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
-    assert _back(client, {"code": back["code"], "state": back["state"]}).status_code == 200
-
-
-def test_the_callback_refuses_a_forwarded_request(page, openrouter) -> None:
-    client = page["client"]
-    back = openrouter.approve(_start(client)["url"])
-    for header in ("x-forwarded-for", "x-forwarded-host", "forwarded"):
-        refused = _back(client, {"code": back["code"], "state": back["state"]}, **{header: "1.2.3.4"})
-        assert refused.status_code == 403, header
-    assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
-
-
-def test_another_device_cannot_end_the_attempt_with_a_borrowed_host(page, openrouter, tmp_path) -> None:
-    client = page["client"]
-    _start(client)
-    with TestClient(page["app"], base_url=f"http://127.0.0.1:{PORT}", client=("192.168.1.99", 50000)) as other:
-        for query in ({}, {"code": "x"}, {"error": "access_denied"}):
-            assert _back(other, query).status_code == 403, query
-    assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting"
-
-
-def test_the_state_binds_the_callback_to_its_attempt_once(page, openrouter) -> None:
-    client = page["client"]
-    back = openrouter.approve(_start(client)["url"])
-    for wrong in ({"code": back["code"], "state": "guess"}, {"code": back["code"]},
-                  {"code": back["code"], "state": back["state"][:-1]}):
-        assert _back(client, wrong).status_code == 400
-        assert client.get("/api/signin", headers=HEADERS).json()["state"] == "waiting", wrong
-    assert not [kind for kind, _ in openrouter.seen if kind == "keys"]
-    assert _back(client, {"code": back["code"], "state": back["state"]}).status_code == 200
-    replay = _back(client, {"code": back["code"], "state": back["state"]})
-    assert replay.status_code == 400 and "already been used" in replay.text
-    assert len([kind for kind, _ in openrouter.seen if kind == "keys"]) == 1
 
 
 def test_a_second_press_replaces_the_first(page, openrouter) -> None:

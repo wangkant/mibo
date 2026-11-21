@@ -50,7 +50,9 @@ SPEC = Spec(
     }),
     unsaid=(r"\b(?:don'?t|do not|no need to)\s+(?:remember|save|store|note|keep|write down)"
             r"\s+(?:this|that|it)\b|\boff the record\b"),
-    forget_that=(r"forget (?:what i (?:just )?(?:said|told you)|i (?:said|mentioned) (?:that|it|anything)"
+    # "don't forget it" and "I'll never forget that" ask the opposite.
+    forget_that=(r"(?<!n't )(?<!n’t )(?<!dont )(?<!not )(?<!never )"
+                 r"forget (?:what i (?:just )?(?:said|told you)|i (?:said|mentioned) (?:that|it|anything)"
                  r"|(?:that|this|it)(?: please)?[\s.!]*$)|pretend i (?:never|didn'?t) (?:said|say) (?:that|it|anything)"),
     lead_in=r"ok(?:ay)?|actually|never ?mind|well|oh|also|hey",
     kinds=("About you", "Likes", "Dislikes", "Lately", "Plans", "How you like to be treated"),

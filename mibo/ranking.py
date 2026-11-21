@@ -61,8 +61,6 @@ RETENTION_HALF_LIFE_DAYS = 30.0
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
            "Oct", "Nov", "Dec")
-_MONTH_NAMES = ("January", "February", "March", "April", "May", "June", "July",
-                "August", "September", "October", "November", "December")
 
 
 class Lexicon:
@@ -312,26 +310,3 @@ def day_label(t: float, tz=None) -> str:
     unless `tz` is given."""
     d = _local(t, tz)
     return f"{_WEEKDAYS[d.weekday()]} {d.day} {_MONTHS[d.month - 1]}"
-
-
-def month_label(t: float, tz=None) -> str:
-    """"September 2026", for a month's roll-up."""
-    d = _local(t, tz)
-    return f"{_MONTH_NAMES[d.month - 1]} {d.year}"
-
-
-def date_span(t0: float, t1: float, now: float, tz=None) -> str:
-    """When an event happened, made by code: "Mon 10 Nov, 19:00–20:30" within
-    a day, "10 to 12 Nov" across days; the year only when it is not this one."""
-    first, last = min(t0, t1), max(t0, t1)
-    a, b = _local(first, tz), _local(last, tz)
-    year = "" if a.year == b.year == _local(now, tz).year else f" {b.year}"
-    if a.date() == b.date():
-        hours = (f"{a:%H:%M}" if a.strftime("%H:%M") == b.strftime("%H:%M")
-                 else f"{a:%H:%M}–{b:%H:%M}")
-        return f"{day_label(first, tz)}{year}, {hours}"
-    if (a.year, a.month) == (b.year, b.month):
-        return f"{a.day} to {b.day} {_MONTHS[b.month - 1]}{year}"
-    left = f"{a.day} {_MONTHS[a.month - 1]}" + (
-        f" {a.year}" if a.year != b.year else "")
-    return f"{left} to {b.day} {_MONTHS[b.month - 1]}{year}"

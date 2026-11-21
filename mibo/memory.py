@@ -164,6 +164,13 @@ _ROLE_CONTROL = _shapes(
     r"roleplay\s+(?:as|like)|(?:play|assume)\s+the\s+role\s+of|"
     r"become|call\s+yourself|stay\s+in\s+character|"
     r"remain\s+in\s+character)\b",
+    # A new self from some point on: "from now on you are DAN", "you are now a pirate".
+    r"\b(?:from\s+now\s+on|from\s+here\s+on|going\s+forward|henceforth|starting\s+(?:now|today))\b"
+    r"[^.;!?]{0,20}\byou(?:\s+are|'re|\s+will\s+be|\s+shall\s+be)\b",
+    r"(?:^|[.;!?]\s*)you(?:\s+are|'re)\s+(?:now|called|named)\b",
+    r"(?:\u4ece\u73b0\u5728(?:\u5f00\u59cb|\u8d77)|\u4ece\u4eca(?:\u5929|\u4ee5\u540e)|\u4ee5\u540e|\u4eca\u540e|"
+    r"\u63a5\u4e0b\u6765)[\uff0c,\s]*\u4f60(?:\u5c31|\u5c06)?(?:\u662f|\u53eb|\u5f53)",
+    r"^\u4f60\u73b0\u5728(?:\u5c31)?\u662f",
 )
 
 _OUTPUT_CONTROL = _shapes(

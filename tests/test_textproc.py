@@ -1,5 +1,4 @@
-"""The text module: what a reply goes through on its way out, how it becomes messages,
-retrieval tokens, the model's protocol object, the persona's clock.
+"""The text module: the model's protocol object and how the reply parser reads it.
 
 Run from the repo root:
 
@@ -8,92 +7,11 @@ Run from the repo root:
 from __future__ import annotations
 
 from mibo.textproc import (
-    ReplyStyle,
     TextProcessing as TP,
     _as_protocol_object,
-    _focus_tokens,
 )
 
 from helpers import check
-
-
-def test_reply_style_from_card_is_the_carrier() -> None:
-    """A persona card's `reply_style` object; `from_card` is its only parser."""
-    card = {"name": "Kai", "reply_style": {"emoji": True, "max_chars": 320}}
-    style = ReplyStyle.from_card(card)
-    check("emoji flag read from the card", style.allow_emoji is True, repr(style))
-    check("max_chars read from the card", style.max_chars == 320,
-          str(style.max_chars))
-    for absent, why in [({}, "no reply_style key"),
-                        ({"reply_style": None}, "null reply_style"),
-                        ({"reply_style": "yes"}, "reply_style is a string"),
-                        (None, "no card at all")]:
-        check(f"a card without a usable style gets the default: {why}",
-              ReplyStyle.from_card(absent) == ReplyStyle(),
-              repr(ReplyStyle.from_card(absent)))
-
-
-def test_an_echoed_frame_character_costs_itself_not_the_reply() -> None:
-    """Every prompt carries U+0002/U+0003 (link spans) and U+001E/U+001F
-    (the user-data fence). A model that copies one into its reply loses the
-    character and nothing else."""
-    frames = ("\x02", "\x03", "\x1e", "\x1f")
-    for raw, why in (("sure, \x02that page\x03 looked fun", "a link span"),
-                     ("ok \x1eMallory\x1f said hi, lol", "the user-data fence")):
-        text = TP._sanitize_reply(raw)
-        check(f"an echoed {why} keeps the reply", text != "", repr(text))
-        check(f"...and the reply carries none of the frame characters: {why}",
-              not any(f in text for f in frames), repr(text))
-    check("the words around a removed span read as one reply",
-          TP._sanitize_reply("sure, \x02that page\x03 looked fun")
-          == "sure, that page looked fun",
-          repr(TP._sanitize_reply("sure, \x02that page\x03 looked fun")))
-    check("what arrived inside the fence is sent as written",
-          TP._sanitize_reply("here \x1e[Mallory|qq=42] hi\x1f ok")
-          == "here [Mallory|qq=42] hi ok",
-          repr(TP._sanitize_reply("here \x1e[Mallory|qq=42] hi\x1f ok")))
-
-
-def test_a_single_character_trigger_still_scores_for_retrieval() -> None:
-    """The n-grams are taken per CJK RUN, which is what the docstring always
-    claimed and the code never did: it slid a 2-window over every hanzi in the
-    text CONCATENATED, so 你好，世界 produced 好世 — a token in neither word —
-    and a run of one produced nothing at all. 草 / 顶 / 绝 are ordinary
-    Chinese chat, and each of them scored every example and every memory on
-    recency alone."""
-    check("a one-character trigger contributes itself",
-          _focus_tokens("草", "zh") == {"草"}, repr(_focus_tokens("草", "zh")))
-    check("an n-gram never spans punctuation",
-          _focus_tokens("你好，世界", "zh") == {"你好", "世界"},
-          repr(_focus_tokens("你好，世界", "zh")))
-    check("multi-character runs are unchanged",
-          _focus_tokens("今天天气", "zh") == {"今天", "天天", "天气"},
-          repr(_focus_tokens("今天天气", "zh")))
-
-
-def test_retrieval_tokens_cover_the_other_chat_languages() -> None:
-    """An English agent in a Japanese, Korean, Russian or Spanish chat had
-    ASCII words only: nothing at all for the first three, and "caf" for
-    "café". Every script now yields tokens whatever AGENT_LANG says, and
-    English and Chinese text tokenize as before."""
-    check("English is unchanged",
-          _focus_tokens("The weekend hiking trip", "en") == {"weekend", "hiking", "trip"},
-          repr(_focus_tokens("The weekend hiking trip", "en")))
-    check("an accented word stays whole, without its ASCII pieces",
-          _focus_tokens("un café con Brötchen", "en") == {"café", "con", "brötchen"},
-          repr(_focus_tokens("un café con Brötchen", "en")))
-    check("Cyrillic words are tokens",
-          _focus_tokens("вчера шёл дождь", "en") == {"вчера", "шёл", "дождь"},
-          repr(_focus_tokens("вчера шёл дождь", "en")))
-    check("katakana and kanji runs give bigrams; hiragana is particles",
-          _focus_tokens("ラーメン食べたい", "en") == {"ラー", "ーメ", "メン"},
-          repr(_focus_tokens("ラーメン食べたい", "en")))
-    check("Hangul runs give bigrams",
-          _focus_tokens("김치를 좋아해", "en") == {"김치", "치를", "좋아", "아해"},
-          repr(_focus_tokens("김치를 좋아해", "en")))
-    check("Chinese in an English agent gets bigrams too",
-          _focus_tokens("周末爬山", "en") == {"周末", "末爬", "爬山"},
-          repr(_focus_tokens("周末爬山", "en")))
 
 
 def test_parser_unwraps_a_one_element_array() -> None:

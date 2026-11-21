@@ -76,7 +76,6 @@ def test_the_judge_runs_no_never_ask_delete_or_network_command_with_one_folder_g
     (home / ".env").write_text("SECRET=1\n", encoding="utf-8")
     os.environ["AGENT_HOME"] = str(home)
     grants = Grants(home / "runtime" / "desktop", home)
-    grants.set_on(True)
     assert grants.add(str(files)) == ""
     ran = [row["cmd"] for row in CORPUS if row["label"] in ("never", "ask", "delete", "network")
            and reading.judge(bashread.read(row["cmd"], str(files), str(home)), grants).action == "run"]

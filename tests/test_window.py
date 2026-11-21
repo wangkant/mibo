@@ -1,10 +1,9 @@
-"""The window `mibo start` opens instead of a browser tab, and the
-shortcut that opens it. pywebview is stood in for: no window is drawn here."""
+"""The window `mibo start` opens instead of a browser tab. pywebview is
+stood in for: no window is drawn here."""
 from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import re
 import signal
 import sys
@@ -17,104 +16,17 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from mibo import cli, shortcut, welcome, window
+from harness.window import Server, fake_window, stand_in_webview
+from mibo import cli, welcome, window
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 
 
-class _Event:
-    def __init__(self) -> None:
-        self.handlers: list = []
-        self._flag = threading.Event()
-
-    def __iadd__(self, handler):
-        self.handlers.append(handler)
-        return self
-
-    def set(self) -> None:
-        self._flag.set()
-
-    def wait(self, timeout: float | None = None) -> bool:
-        return self._flag.wait(timeout)
-
-    def fire(self) -> None:
-        for handler in self.handlers:
-            handler()
-
-
-class _Window:
-    def __init__(self, gone: threading.Event, url: str | None) -> None:
-        self.events = types.SimpleNamespace(**{name: _Event() for name in (
-            "closing", "shown", "loaded", "minimized", "restored", "maximized", "before_show")})
-        self.url = url
-        self.calls: list[str] = []
-        self._gone = gone
-
-    def restore(self) -> None:
-        self.calls.append("restore")
-
-    def minimize(self) -> None:
-        self.calls.append("minimize")
-
-    def maximize(self) -> None:
-        self.calls.append("maximize")
-
-    def show(self) -> None:
-        self.calls.append("show")
-
-    def load_url(self, url: str) -> None:
-        self.url = url
-
-    def destroy(self) -> None:
-        self.calls.append("destroy")
-        self._gone.set()
-
-    def press_close(self) -> bool:
-        """The person clicks the X; True when the window went away."""
-        if any(handler() is False for handler in self.events.closing.handlers):
-            return False
-        self._gone.set()
-        return True
-
-
 @pytest.fixture
 def webview(monkeypatch):
-    """A stand-in pywebview whose `start` blocks until its window is gone.
-    `module.person` is what the person does once the window is up."""
-    module = types.ModuleType("webview")
-    module.renderer = "edgechromium"
-    module.shows = True
-    module.person = lambda shown: shown.press_close()
-    gone = threading.Event()
-
-    def create_window(title, url, **options):
-        module.created = (title, options)
-        module.window = _Window(gone, url)
-        return module.window
-
-    def start(func, **options):
-        module.started = options
-        # pywebview calls these on the window's own thread, before it shows.
-        module.window.events.before_show.fire()
-        if module.shows:
-            module.window.events.shown.set()
-            module.window.events.loaded.set()
-        ready = threading.Thread(target=func)
-        ready.start()
-        if module.shows:
-            ready.join()
-            module.person(module.window)
-        assert gone.wait(5), "the window never closed"
-        ready.join()
-
-    module.create_window = create_window
-    module.start = start
-    module.settings = {}
-    monkeypatch.setitem(sys.modules, "webview", module)
-    # WebView2's own events, which the stand-in has none of.
-    monkeypatch.setattr(window, "_own_pages", lambda shown, origin, open_link: None)
-    return module
+    """A stand-in pywebview (harness/window.py): `module.person` is what the person does once the window is up."""
+    return stand_in_webview(monkeypatch)
 
 
 def test_the_page_opens_in_a_private_window_with_the_app_icon(webview, tmp_path) -> None:
@@ -246,43 +158,6 @@ def test_ctrl_c_reaches_the_window_while_the_main_thread_is_elsewhere() -> None:
 
 # -- `mibo start` --------------------------------------------------
 
-class _Server:
-    """uvicorn's part: serve until told to exit."""
-
-    def __init__(self) -> None:
-        self.should_exit = False
-        self.ran = threading.Event()
-
-    def run(self, sockets=None) -> None:
-        self.ran.set()
-        while not self.should_exit:
-            time.sleep(0.01)
-
-
-def _fake_window(monkeypatch, run):
-    """AppWindow replaced by one whose `run` is `run(instance)`."""
-    made = []
-
-    class Fake:
-        def __init__(self, url, *, storage, **options):
-            self.url, self.storage, self.options = url, storage, options
-            self.error = ""
-            self.closed = 0
-            made.append(self)
-
-        def show(self) -> bool:
-            return True
-
-        def close(self) -> None:
-            self.closed += 1
-
-        def run(self) -> bool:
-            return run(self)
-
-    monkeypatch.setattr(welcome.appwindow, "AppWindow", Fake)
-    return made
-
-
 @pytest.fixture
 def page(tmp_path, monkeypatch):
     """A page app with nothing running, and a browser that only takes notes."""
@@ -296,8 +171,8 @@ def page(tmp_path, monkeypatch):
 
 
 def test_closing_the_window_stops_the_server_and_opens_no_browser(page, monkeypatch) -> None:
-    server = _Server()
-    made = _fake_window(monkeypatch, lambda fake: server.ran.wait(5))
+    server = Server()
+    made = fake_window(monkeypatch, lambda fake: server.ran.wait(5))
     welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/#token=t", page.home)
     assert server.should_exit and page.opened == []
     assert made[0].storage == page.home / "webview"
@@ -305,19 +180,19 @@ def test_closing_the_window_stops_the_server_and_opens_no_browser(page, monkeypa
 
 
 def test_quit_in_the_page_closes_the_window_too(page, monkeypatch) -> None:
-    server = _Server()
+    server = Server()
 
     def run(fake) -> bool:
         page.app.state.shutdown()
         return True
 
-    made = _fake_window(monkeypatch, run)
+    made = fake_window(monkeypatch, run)
     welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/", page.home)
     assert server.should_exit and made[0].closed >= 1
 
 
 def test_no_window_falls_back_to_the_browser_and_keeps_serving(page, monkeypatch, capsys) -> None:
-    server = _Server()
+    server = Server()
 
     def run(fake) -> bool:
         fake.error = "the WebView2 runtime is missing"
@@ -325,7 +200,7 @@ def test_no_window_falls_back_to_the_browser_and_keeps_serving(page, monkeypatch
         threading.Timer(0.2, page.app.state.shutdown).start()
         return False
 
-    _fake_window(monkeypatch, run)
+    fake_window(monkeypatch, run)
     welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/#token=t", page.home)
     assert page.opened == ["http://127.0.0.1:1/#token=t"]
     assert page.app.state.show is None
@@ -334,21 +209,21 @@ def test_no_window_falls_back_to_the_browser_and_keeps_serving(page, monkeypatch
 
 def test_ctrl_c_before_or_after_the_window_still_stops_the_server(page, monkeypatch) -> None:
     for outcome in (KeyboardInterrupt, False):
-        server = _Server()
+        server = Server()
 
         def run(fake, outcome=outcome) -> bool:
             if outcome is KeyboardInterrupt:
                 raise KeyboardInterrupt
             return outcome  # closed before it opened: no error, no fallback
 
-        _fake_window(monkeypatch, run)
+        fake_window(monkeypatch, run)
         welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/", page.home)
         assert server.should_exit and page.opened == []
 
 
 def test_the_window_hides_instead_of_closing_only_when_the_person_chose_that(page, monkeypatch) -> None:
-    server = _Server()
-    made = _fake_window(monkeypatch, lambda fake: True)
+    server = Server()
+    made = fake_window(monkeypatch, lambda fake: True)
     welcome._serve_in_window(page.app, server, None, "http://127.0.0.1:1/", page.home, hidden=True)
     options = made[0].options
     assert options["background"]() is False and options["start_hidden"] is False
@@ -356,8 +231,8 @@ def test_the_window_hides_instead_of_closing_only_when_the_person_chose_that(pag
     assert options["background"]() is True, "read at the moment of closing, not at start"
     assert set(options["words"]()) == {"open", "quit", "pet", "still", "settings", "bring", "snooze", "unsnooze",
                                        "characters", "hide"}
-    made = _fake_window(monkeypatch, lambda fake: True)
-    welcome._serve_in_window(page.app, _Server(), None, "http://127.0.0.1:1/", page.home, hidden=True)
+    made = fake_window(monkeypatch, lambda fake: True)
+    welcome._serve_in_window(page.app, Server(), None, "http://127.0.0.1:1/", page.home, hidden=True)
     assert made[0].options["start_hidden"] is True
 
 
@@ -546,50 +421,6 @@ def test_start_opens_the_window_when_it_can(tmp_path, monkeypatch, capsys,
     browser = not windowed and argv != ["--no-browser"]
     assert opened.wait(2 if browser else 0.2) is browser
     assert not (tmp_path / "runtime" / "desktop" / "welcome.json").exists()
-
-
-# -- the shortcut ---------------------------------------------------------
-
-def test_the_shortcut_runs_this_install_on_this_home_with_the_icon(tmp_path) -> None:
-    home = tmp_path / "it's home"
-    source = shortcut.script(home, folders=[tmp_path / "Desktop"])
-    program, arguments = shortcut.target(home)
-    assert program.parent == Path(sys.executable).parent
-    assert arguments == f'-m mibo start --home "{home}"'
-    assert "it''s home" in source, "a quote in a path stays inside its PowerShell string"
-    assert f"'{window.icon()}'" in source and "Mibo.lnk" in source
-    assert "GetFolderPath('Desktop')" in shortcut.script(home)
-    removal = shortcut.script(home, remove=True, folders=[tmp_path])
-    assert "Remove-Item" in removal and "CreateShortcut" not in removal
-
-
-@pytest.mark.skipif(not shortcut.WINDOWS, reason="Windows writes .lnk files")
-def test_windows_writes_the_link_and_takes_it_away(tmp_path) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    # Three scripts at once: no system code page spells this folder's name.
-    folder = tmp_path / "Desktop 桌面 바탕 デスク"
-    folder.mkdir()
-    assert shortcut.run(shortcut.script(home, folders=[folder])) == ""
-    assert (folder / shortcut.LINK).is_file()
-    assert shortcut.run(shortcut.script(home, remove=True, folders=[folder])) == ""
-    assert not (folder / shortcut.LINK).exists()
-    failed = shortcut.run(shortcut.script(home, folders=[tmp_path / "missing"]))
-    assert failed and "CLIXML" not in failed, "the reason is a sentence, not PowerShell's envelope"
-
-
-@pytest.mark.skipif(not shortcut.WINDOWS, reason="Windows writes .lnk files")
-def test_windows_reads_a_link_in_a_folder_no_code_page_spells(tmp_path, monkeypatch) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    folders = [tmp_path / name for name in ("桌面 바탕", "プログラム 程序", "起動 시작")]
-    for folder in folders:
-        folder.mkdir()
-    monkeypatch.setenv(shortcut.DIRS_ENV, os.pathsep.join(map(str, folders)))
-    assert shortcut.status(home) == {"desktop": "off", "programs": "off", "startup": "off"}
-    assert shortcut.run(shortcut.script(home)) == ""
-    assert shortcut.status(home) == {"desktop": "on", "programs": "on", "startup": "off"}
-    assert not list(Path(os.environ.get("PUBLIC") or tmp_path).glob("mibo-*.lnk")), "no copy is left behind"
 
 
 # -- the page's own chat ----------------------------------------------------

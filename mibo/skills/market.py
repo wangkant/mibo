@@ -256,6 +256,15 @@ def _https(url, host: str = "") -> str:
     return url[:500]
 
 
+def _plain_member(path: str) -> bool:
+    """Whether a file an entry lists lands as a plain file inside the skill's folder; one that would climb out
+    costs its entry, not the whole catalog."""
+    try:
+        return store._member_path(zipfile.ZipInfo(path))[1]
+    except ValueError:
+        return False
+
+
 def entry(raw) -> dict | None:
     """One catalog entry in the fixed shape, its strings clipped, or None when it does not hold that shape or
     points anywhere but a public https git host."""
@@ -280,8 +289,7 @@ def entry(raw) -> dict | None:
             or (path and (not _PATH.match(path) or ".." in path.split("/"))) or not _SHA.match(sha)
             or not _HASH.match(str(raw.get("hash") or "")) or found.get("risk") not in RISKS
             or raw.get("fit") not in FITS or not 0 < len(listed) <= store.MAX_MEMBERS
-            or not all(isinstance(v, str) and _HASH.match(v) and store._member_path(zipfile.ZipInfo(k))[1]
-                       for k, v in listed.items())
+            or not all(isinstance(v, str) and _HASH.match(v) and _plain_member(k) for k, v in listed.items())
             or listed_hash(listed) != raw["hash"]):
         return None
     places = layout()

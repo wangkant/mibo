@@ -213,11 +213,6 @@ def neutralize_markup_tags(value: object) -> str:
     out.append(text[cursor:])
     return "".join(out)
 
-
-def _example_field(value: object) -> str:
-    """One few-shot field, unable to open or close a prompt block or forge a frame."""
-    return neutralize_markup_tags(scrub_third_party_text(value))
-
 # Function words that would inflate every relevance score; chat-signal words
 # like lol stay, since they carry meaning for scenario matching.
 _EN_STOPWORDS = frozenset({

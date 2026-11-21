@@ -1349,6 +1349,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
                    "model_no_balance", "model_not_found",
                    "key_malformed", "key_again", "name_required",
                    "invalid_message", "invalid_chat", "activity_unavailable", "activity_changed",
+                   "memory_secret", "memory_not_instructions", "memory_paused", "memory_health_off",
                    "avatar_type", "avatar_too_large", "item_gone", "invalid_title",
                    "attach_too_many", "picture_type", "picture_too_large", "file_type", "file_too_large",
                    "file_unreadable"}

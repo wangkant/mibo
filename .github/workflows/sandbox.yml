@@ -10,18 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       suites:
-        description: "Suites, comma-separated: window,firstrun,pet,pane,programs,everyday"
-        default: "window,firstrun,pet,pane,programs,everyday"
+        description: "Suites, comma-separated: window,firstrun,pet,pane,programs"
+        default: "window,firstrun,pet,pane,programs"
       systems:
         description: "Systems, comma-separated: windows,linux,macos"
         default: "windows,linux,macos"
-      real_model:
-        description: "Run the suites that need a real model on claude-haiku-5-5 (needs the ANTHROPIC_API_KEY secret)"
-        type: boolean
-        default: false
-      budget:
-        description: "Spending cap in dollars for each suite that uses the real model"
-        default: "0.30"
 
 permissions:
   contents: read
@@ -57,7 +50,9 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.include) }}
     env:
-      SUITES: ${{ inputs.suites || 'window,firstrun,pet,pane,programs,everyday' }}
+      # Stand-in models only: a real model's key is never given to a hosted runner. The everyday suite, which
+      # needs one, runs in a sandbox on a person's own computer.
+      SUITES: ${{ inputs.suites || 'window,firstrun,pet,pane,programs' }}
       PYTHONIOENCODING: utf-8
     steps:
       - name: Checkout
@@ -101,9 +96,6 @@ jobs:
         env:
           # The runner forbids the user namespaces Chromium's sandbox needs.
           QTWEBENGINE_DISABLE_SANDBOX: "1"
-          # Only when asked for; GitHub masks it in every log, and the suites write it into scratch homes alone.
-          SANDBOX_MODEL_KEY: ${{ inputs.real_model && secrets.ANTHROPIC_API_KEY || '' }}
-          SANDBOX_BUDGET: ${{ inputs.budget || '0.30' }}
         run: |
           failed=""
           for suite in ${SUITES//,/ }; do
@@ -116,11 +108,6 @@ jobs:
             echo "::endgroup::"
           done
           python tools/sandbox/run.py table sandbox-out | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ -n "$SANDBOX_MODEL_KEY" ] && grep -rqF "$SANDBOX_MODEL_KEY" sandbox-out; then
-            echo "the key is in the results: they are not uploaded"
-            rm -rf sandbox-out
-            exit 1
-          fi
           if [ -n "$failed" ]; then
             echo "failed:$failed"
             exit 1

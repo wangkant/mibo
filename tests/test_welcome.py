@@ -1,4 +1,4 @@
-"""First-run setup and the browser chat boundary."""
+"""First-run setup and the browser chat; the server's boundary is a floor in tests/floors/boundary/."""
 from __future__ import annotations
 
 
@@ -28,25 +28,6 @@ def client(workspace):
     with TestClient(welcome.create_app(workspace.home, TOKEN, workspace=workspace),
                     base_url="http://127.0.0.1") as value:
         yield value
-
-
-def test_page_requires_no_key_but_every_api_requires_the_capability(client):
-    assert client.get("/").status_code == 200
-    assert client.get("/assets/app.js").status_code == 200
-    assert client.get("/assets/.env").status_code == 404
-    assert client.get("/api/state").status_code == 403
-    response = client.get("/api/state", headers=HEADERS)
-    assert response.status_code == 200 and response.json()["configured"] is False
-    assert response.headers["cache-control"] == "no-store"
-    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
-
-
-@pytest.mark.parametrize("extra", [
-    {"Origin": "https://other.example"}, {"Host": "other.example"},
-    {"X-Forwarded-Host": "localhost"}, {"Forwarded": "for=127.0.0.1"},
-])
-def test_browser_boundary_rejects_foreign_origins_and_proxy_headers(client, extra):
-    assert client.get("/api/state", headers={**HEADERS, **extra}).status_code == 403
 
 
 def test_one_key_is_enough_and_state_does_not_leak_it(client, workspace):
@@ -147,16 +128,11 @@ def test_the_catalog_names_each_character_and_its_portrait(client, portraits):
     assert characters["template"]["ownNames"] == []
 
 
-def test_portraits_are_served_for_characters_and_nothing_else(client, portraits):
+def test_a_portrait_is_served_as_a_picture_kept_for_a_day(client, portraits):
     response = client.get("/assets/characters/claude.webp")
     assert response.status_code == 200 and response.content == SPRITE
     assert response.headers["content-type"] == "image/webp"
     assert response.headers["cache-control"] == "max-age=86400"
-    (portraits / "stray.webp").write_bytes(SPRITE)
-    (portraits / "deepseek.webp").unlink()
-    for name in ("deepseek.webp", "template.webp", "stray.webp", "claude", "claude.png",
-                 "claude.webp.bak", "..%2Fwelcome%2Fapp.js", "..%2F..%2Fwelcome.py", "%2E%2E.webp"):
-        assert client.get(f"/assets/characters/{name}").status_code == 404, name
 
 
 def test_choosing_a_character_sets_its_portrait_and_editing_keeps_it(client, workspace, portraits,
@@ -258,12 +234,6 @@ def test_changing_the_api_endpoint_never_sends_the_saved_key(client, workspace, 
     response = client.post("/api/config", headers=HEADERS, json={"baseUrl": "https://new.example/v1"})
     # Said as such: the saved key stays with the address it was saved for.
     assert response.status_code == 400 and response.json()["error"] == "key_again"
-
-
-def test_large_and_malformed_posts_are_rejected(client):
-    assert client.post("/api/config", headers=HEADERS, content="x" * (welcome.MAX_BODY + 1)).status_code == 413
-    assert client.post("/api/config", headers=HEADERS, content="[]").status_code == 400
-    assert client.post("/api/config", headers=HEADERS, content="{").status_code == 400
 
 
 def test_chat_asks_the_character_and_is_kept(workspace, monkeypatch):

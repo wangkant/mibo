@@ -1,4 +1,5 @@
-"""The desk panel: start at sign-in, and backing up, restoring and resetting the home."""
+"""The desk panel: start at sign-in, and backing up, restoring and resetting the home. The token on its
+routes and the restores it refuses are floors in tests/floors/boundary/."""
 from __future__ import annotations
 
 import io
@@ -78,13 +79,6 @@ def seed(home):
 
 def post(client, path, payload=None):
     return client.post(f"/api/desk{path}", headers=HEADERS, json=payload or {})
-
-
-def test_every_route_needs_the_local_token(client):
-    assert client.get("/api/desk/data").status_code == 403
-    assert client.post("/api/desk/reset", json={}).status_code == 403
-    assert client.post("/api/desk/open", json={"place": "desktop"},
-                       headers={**HEADERS, "Origin": "https://other.example"}).status_code == 403
 
 
 def test_data_names_the_places_and_no_secret(client, workspace, tmp_path):
@@ -235,46 +229,6 @@ def test_a_restore_is_done_by_the_next_start_and_keeps_the_keys_here(client, wor
     told = client.get("/api/desk/data", headers=HEADERS).json()
     assert told["restored"] == {"error": ""}
     assert client.get("/api/desk/data", headers=HEADERS).json()["restored"] is None
-
-
-def make_zip(path, members, manifest=True):
-    with zipfile.ZipFile(path, "w") as archive:
-        if manifest:
-            archive.writestr(desk.MANIFEST, "{}")
-        for name, data in members.items():
-            archive.writestr(name, data)
-
-
-@pytest.mark.parametrize("members,manifest", [
-    ({"../evil.txt": "x"}, True),
-    ({"runtime/../../evil.txt": "x"}, True),
-    ({"/abs.txt": "x"}, True),
-    ({"C:/abs.txt": "x"}, True),
-    ({"runtime\\..\\evil.txt": "x"}, True),
-    ({"runtime/desktop/welcome.json": "{}"}, True),
-    ({"runtime/desktop/webview/x": "x"}, True),
-    ({"backups/mibo-backup-1.zip": "x"}, True),
-    ({"persona.txt": "x"}, False),
-])
-def test_restore_refuses_a_zip_with_unexpected_files(client, workspace, tmp_path, members, manifest):
-    seed(workspace.home)
-    make_zip(tmp_path / "Desktop" / "mibo-backup-bad.zip", members, manifest)
-    answer = post(client, "/restore", {"place": "desktop", "name": "mibo-backup-bad.zip"})
-    assert answer.json() == {"error": "desk_invalid_backup"}
-    assert client.app.state.restarts == []
-    assert not (workspace.home / "runtime" / "desktop" / "pending.json").exists()
-
-
-def test_restore_refusals(client, workspace, tmp_path):
-    for payload in ({"place": "desktop", "name": "../x.zip"}, {"place": "desktop", "name": "other.zip"},
-                    {"place": "elsewhere", "name": "mibo-backup-1.zip"}):
-        assert post(client, "/restore", payload).json() == {"error": "desk_invalid_backup"}
-    assert post(client, "/restore", {"place": "desktop", "name": "mibo-backup-none.zip"}).json() \
-        == {"error": "desk_missing"}
-    (tmp_path / "Desktop" / "mibo-backup-junk.zip").write_bytes(b"not a zip")
-    assert post(client, "/restore", {"place": "desktop", "name": "mibo-backup-junk.zip"}).json() \
-        == {"error": "desk_invalid_backup"}
-    assert client.app.state.restarts == []
 
 
 def test_a_restore_that_fails_midway_puts_the_present_back(client, workspace, monkeypatch):

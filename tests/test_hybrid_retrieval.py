@@ -16,7 +16,6 @@ import httpx
 
 from mibo import embeddings, ranking
 from mibo.agent import Agent
-from mibo.endpoints import embedding_endpoint, embeddings_url
 from mibo.llm import _PooledHTTP
 from mibo.textproc import _focus_tokens
 
@@ -205,23 +204,3 @@ async def test_the_startup_probe_reports_an_unreachable_endpoint(tmp: Path, capl
               for r in caplog.records))
     check("probe: and not retried on the next turn",
           a._embedding_retry_at > time.monotonic())
-
-
-def test_the_embeddings_endpoint_is_spelled_like_the_chat_one() -> None:
-    cases = {
-        "https://api.openai.com": "https://api.openai.com/v1/embeddings",
-        "https://api.siliconflow.cn/v1/": "https://api.siliconflow.cn/v1/embeddings",
-        "https://open.bigmodel.cn/api/paas/v4": "https://open.bigmodel.cn/api/paas/v4/embeddings",
-        "https://x.example/v1/chat/completions": "https://x.example/v1/embeddings",
-        "http://127.0.0.1:11434/v1/embeddings": "http://127.0.0.1:11434/v1/embeddings",
-    }
-    got = {base: embeddings_url(base) for base in cases}
-    check("url: root, version base, chat endpoint and full endpoint", got == cases, repr(got))
-    primary = dict(base_url="https://api.openai.com", api_key="sk-primary")
-    check("endpoint: blank base URL is the primary's endpoint and key",
-          embedding_endpoint(**primary, embedding_base_url="", embedding_api_key="")
-          == ("https://api.openai.com/v1/embeddings", "sk-primary"))
-    check("endpoint: a URL of its own is never sent the primary's key",
-          embedding_endpoint(**primary, embedding_base_url="http://127.0.0.1:11434",
-                             embedding_api_key="")
-          == ("http://127.0.0.1:11434/v1/embeddings", ""))

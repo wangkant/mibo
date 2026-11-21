@@ -148,18 +148,16 @@ class ChatLog:
     def last_seq(self, conv: str) -> int:
         return self._mark(conv)[0]
 
-    def search(self, conv: str, words: str = "", *, speakers: Iterable[str] = (),
+    def search(self, conv: str, words: str = "", *,
                since: float = 0.0, until: float = 0.0, limit: int = SEARCH_MAX,
                lang: str = "zh", skip: Iterable[int] = (),
                rows: Optional[list[dict]] = None) -> list[dict]:
-        """Lines by words (BM25 over focus tokens), by speaker ids, by time
-        range: best first when `words` is given, else newest first. Words
-        that make no token find nothing."""
-        uids = {str(u) for u in speakers if u}
+        """Lines by words (BM25 over focus tokens) and by time range: best
+        first when `words` is given, else newest first. Words that make no
+        token find nothing."""
         skipped = {_num(s, int) for s in skip}
         rows = [row for row in (self.read(conv) if rows is None else rows)
                 if row["seq"] not in skipped and row["text"].strip()
-                and (not uids or row["user_id"] in uids)
                 and (not since or _end(row) >= since)
                 and (not until or row["t"] <= until)]
         limit = max(0, min(int(limit), SEARCH_MAX))
