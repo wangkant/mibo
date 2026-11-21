@@ -50,6 +50,16 @@
   // On an arc of eight over its head, centred on the head, all inside the window.
   const RADIUS = 78;
   const SIZE = 26;
+  // Round a button for its focus ring (petux.css: 2 px, 1 px off).
+  const RING = 3;
+  // A node's box at its full size, about where it stands now: the buttons come out small and grow
+  // (petux.css), so the box measured as the dial comes out is the small one and would cut their sides.
+  const full = (node) => {
+    const [x, y, w, h] = petUx.boxOf(node);
+    const wide = node.offsetWidth + 2 + 2 * RING;
+    const high = node.offsetHeight + 2 + 2 * RING;
+    return [Math.floor(x - (wide - w) / 2), Math.floor(y - (high - h) / 2), wide, high];
+  };
   function place() {
     const top = (rig?.room ?? PAD[1]) - PAD[1];
     // The head's middle in the pet's 200 by 214, low enough that the arc and the pill stay in the window.
@@ -70,7 +80,7 @@
       labels();
     } else named(null);
     // All of the arc and its pill, so the pointer going from the figure to a button never leaves the window.
-    const boxes = [...buttons, pill].map((node) => petUx.boxOf(node));
+    const boxes = [...buttons, pill].map(full);
     const x0 = Math.min(...boxes.map((b) => b[0]));
     const y0 = Math.min(...boxes.map((b) => b[1]));
     const x1 = Math.max(...boxes.map((b) => b[0] + b[2]));
