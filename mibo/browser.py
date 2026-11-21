@@ -64,8 +64,10 @@ IDLE_S = 60
 TICK_MS = 20000
 # Shorter than this is a glance, not a reading.
 READ_MIN_S = 2
-# The share of its screen's width the window grows to by itself when a page comes to the front.
+# The share of its screen's width the window grows to by itself when a page comes to the front, and the shape
+# (width over height) it then takes: a window widened for a page is made taller with it.
 ROOM_SHARE = 0.75
+ROOM_SHAPE = 1.6
 # The page's own canvas (app.css), shown before the site draws: light, dark.
 CANVAS = ("#fcfcfd", "#202022")
 # The browser's own language, fixed when it first starts (see language()).
@@ -635,7 +637,7 @@ class Pane:
     def _room(self, wide: float, scale: float) -> None:
         """The pane came to the front and its page asks for a window `wide` of its CSS px wide (the sidebar, a site
         at the width a desktop layout wants, the chat beside it); with 0 the pane left the front. The window grows
-        to that once, within its monitor's work area, and never gets smaller; the size the person gave it while a
+        to that once, taller too so it keeps a page's shape, within its monitor's work area, and never gets smaller; the size the person gave it while a
         site was in front (KEPT) is used instead of the page's. When the pane leaves the front the window takes
         back the size it had for the chat. Not while maximized or in full screen."""
         from System.Drawing import Point, Rectangle, Size
@@ -657,8 +659,10 @@ class Pane:
         kept = self._kept["size"] or [(form.Width - form.ClientSize.Width + wide * scale) / unit, 0]
         # By itself it takes at most ROOM_SHARE of the screen's width; a size the person gave it may be the whole of it.
         most = area.Width if self._kept["size"] else max(form.Width, round(area.Width * ROOM_SHARE))
-        size = Size(min(max(form.Width, round(kept[0] * unit)), most),
-                    min(max(form.Height, round(kept[1] * unit)), area.Height))
+        width = min(max(form.Width, round(kept[0] * unit)), most)
+        # Widened by itself it is made as tall as a page's shape asks, within the screen.
+        high = kept[1] * unit if self._kept["size"] else width / ROOM_SHAPE
+        size = Size(width, min(max(form.Height, round(high)), area.Height))
         # It grows to the right and down; a window that stood on its screen is moved back only as far as keeps it there.
         left = min(form.Left, max(area.Left, area.Right - size.Width)) if form.Right <= area.Right else form.Left
         top = min(form.Top, max(area.Top, area.Bottom - size.Height)) if form.Bottom <= area.Bottom else form.Top
