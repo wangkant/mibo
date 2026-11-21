@@ -141,6 +141,10 @@ ASIDE = (1280, 800)
 BROWSER_ARGS = ("--disable-background-timer-throttling --disable-renderer-backgrounding "
                 "--disable-backgrounding-occluded-windows")
 VK_ESCAPE = 0x1B
+# The pointer's buttons (left, right, middle, the two side buttons) among the virtual keys.
+POINTER_BUTTONS = {0x01, 0x02, 0x04, 0x05, 0x06}
+# Shift, Ctrl, Alt (either side), the Windows keys, Caps Lock and Num Lock: they type nothing alone.
+QUIET_KEYS = {0x10, 0x11, 0x12, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C, 0x14, 0x90}
 # The steps of a run the column beside the page lists (browse.js), the ends after which the page is the person's
 # until they say to go on, and for how long a run going on from one of those keeps its steps.
 STEPS_KEPT = 40
@@ -172,6 +176,13 @@ def _last_input_tick() -> int:
     info.size = ctypes.sizeof(LastInput)
     ctypes.windll.user32.GetLastInputInfo(ctypes.byref(info))
     return int(info.time)
+
+
+def _keys_down() -> set[int]:
+    """The virtual keys and pointer buttons down now or pressed since the last read (GetAsyncKeyState, which clears
+    "pressed since" as it is read), less the keys that type nothing alone."""
+    keys = ctypes.windll.user32.GetAsyncKeyState
+    return {k for k in range(0x01, 0xFF) if keys(k) & 0x8001} - QUIET_KEYS
 
 
 def _dark() -> bool:
@@ -215,6 +226,21 @@ def on_page(x: float, y: float, wide: float, high: float, cuts: list, scale: flo
         return False
     return not any(cx * scale <= x < (cx + cw) * scale and cy * scale <= y < (cy + ch) * scale
                    for cx, cy, cw, ch in cuts)
+
+
+def cuts_at(tick: int, before: list, now: list) -> list:
+    """The cuts that stood at input tick `tick` (GetTickCount's, which wraps): the first of `before` (each the
+    cuts with the tick they ended at) that ended after it, else the ones standing `now`."""
+    return next((was for ended, was in before if ended != tick and (ended - tick) & 0xFFFFFFFF < 0x80000000), now)
+
+
+def went_to_page(pressed: bool, at_page: bool, typed: bool, focus_in_page: bool) -> bool:
+    """Whether the person's input went to the page in the pane: a pointer press goes where the pointer is (a press
+    on the chat, a card or the bar laid over the page is on the app's own page, whatever holds the focus), keys go
+    where the keyboard focus is."""
+    if pressed:
+        return at_page
+    return typed and focus_in_page
 
 
 def tell_script(state: dict) -> str:
@@ -363,6 +389,9 @@ class Pane:
         # narrow window, the address bar's suggestions): rects in its CSS px.
         self._box = None
         self._cuts: list = []
+        # The cuts that stood before, each with the input tick (GetTickCount) it ended at: a press on a card that
+        # closes it is judged by the cuts it was pressed on, not by the page laid out again after it.
+        self._cuts_before: list[tuple[int, list]] = []
         # While the pane is in front: the window as it stood for the chat, where it was put, and the size given it.
         self._roomed: dict | None = None
         # The page being read: its address, title, find id once known, seconds counted and since when
@@ -384,6 +413,7 @@ class Pane:
         self._op_last: dict | None = None
         self._op_timer = None
         self._op_seen = 0
+        self._op_looked = 0
         self._op_tick = lambda sender, args: self._input_tick()
         self._listeners: list = []
         # Zoom: the app page's px per CSS px, the person's own zoom per site (kept in KEPT; in private mode for this
@@ -683,6 +713,8 @@ class Pane:
         origin = self.form.browser.webview.Location
         x, y, wide, high = (int(round(v * scale)) for v in box)
         self._box = Rectangle(origin.X + x, origin.Y + y, max(wide, 1), max(high, 1))
+        if cuts != self._cuts:
+            self._cuts_before = [*self._cuts_before[-3:], (ctypes.windll.kernel32.GetTickCount(), self._cuts)]
         self._css, self._scale, self._cuts = box, scale, cuts
         if self._view is None:
             # An empty tab (Ctrl+T, the private button) waits for an address.
@@ -1633,6 +1665,9 @@ class Pane:
         timer = Timer()
         timer.Interval = WATCH_MS
         self._op_seen = _last_input_tick()
+        self._op_looked = ctypes.windll.kernel32.GetTickCount()
+        # A key pressed before the run (the Enter that sent the request) is cleared from "pressed since the last read".
+        _keys_down()
         timer.Tick += self._op_tick
         timer.Start()
         self._op_timer = timer
@@ -1644,26 +1679,30 @@ class Pane:
             self._op_timer = None
 
     def _input_tick(self) -> None:
-        """The person's own click or key on the page in the pane (a pointer only passing over it does not count,
-        nor a press on the chat or a card laid over it): Esc stops the run, anything else pauses it."""
+        """The person's own click or key on the page in the pane (a pointer passing over it or its wheel does not
+        count, nor a press on the chat or a card laid over it): Esc stops the run, anything else pauses it."""
         from System.Windows.Forms import Cursor
-        seen, where = _last_input_tick(), (Cursor.Position.X, Cursor.Position.Y)
+        seen = _last_input_tick()
         moved, self._op_seen = seen != self._op_seen, seen
-        before, self._op_where = getattr(self, "_op_where", where), where
+        looked, self._op_looked = self._op_looked, ctypes.windll.kernel32.GetTickCount()
         if not moved or self.op is None or self._view is None or self.op.get("held") or not self._view.Visible:
             return
-        keys = ctypes.windll.user32.GetAsyncKeyState
+        # The keys and buttons down or pressed since the last tick, read once.
+        down = _keys_down()
         point = self._view.PointToClient(Cursor.Position)
-        clicked = (on_page(point.X, point.Y, self._view.Width, self._view.Height, [] if self._full else self._cuts,
-                           self._scale)
-                   and any(keys(button) & 0x8001 for button in (0x01, 0x02, 0x04)))
-        typed = self._view.ContainsFocus and where == before
-        if not (clicked or typed):
+        # The cuts that stood when the input came, which a press on a card changes: for a press, the ones at the
+        # watch's last look (the page may be re-laid and the pointer moved on since the press); for keys, the ones
+        # at the newest input (GetLastInputInfo's tick).
+        cuts = cuts_at(looked if down & POINTER_BUTTONS else seen, self._cuts_before, self._cuts)
+        at_page = on_page(point.X, point.Y, self._view.Width, self._view.Height, [] if self._full else cuts,
+                          self._scale)
+        if not went_to_page(bool(down & POINTER_BUTTONS), at_page, bool(down - POINTER_BUTTONS),
+                            self._view.ContainsFocus):
             return
         # Waiting for their sign-in, the page is theirs to type in: only Esc stops the run.
-        if self.op.get("wait") and not keys(VK_ESCAPE) & 0x8001:
+        if self.op.get("wait") and VK_ESCAPE not in down:
             return
-        self.op["held"] = "stopped" if keys(VK_ESCAPE) & 0x8001 else "paused"
+        self.op["held"] = "stopped" if VK_ESCAPE in down else "paused"
         self._tell_op()
 
     def _shut(self, forget: bool = True) -> dict | None:
