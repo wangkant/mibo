@@ -27,6 +27,15 @@ from mibo.llm import ModelCalls
 from helpers import check, isolated_agent
 
 
+@pytest.fixture(autouse=True)
+def _example_com_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
+    """example.com resolves to its public address without asking a server; the suite refuses lookups."""
+    lookup = socket.getaddrinfo
+    monkeypatch.setattr(socket, "getaddrinfo", lambda host, *rest, **named: (
+        [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", rest[0] if rest else 443))]
+        if host == "example.com" else lookup(host, *rest, **named)))
+
+
 class Harness(ContentIngestion):
     _URL_SKIP_EXT = (
         ".zip", ".rar", ".7z", ".tar", ".gz", ".exe", ".pdf",

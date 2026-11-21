@@ -1,0 +1,61 @@
+{
+  "about": "Each safety floor and the tests that hold it. Every test listed here carries the floor marker; the hygiene test fails when one no longer exists, so moving, renaming or removing a floor test changes this file in the same diff. An empty list is a floor nothing tests yet.",
+  "floors": {
+    "secrets": [
+      "tests/test_welcome.py::test_one_key_is_enough_and_state_does_not_leak_it",
+      "tests/test_welcome.py::test_changing_the_api_endpoint_never_sends_the_saved_key",
+      "tests/test_panel_signin.py::test_signing_in_saves_the_form_with_the_new_key_and_never_shows_it",
+      "tests/test_panel_signin.py::test_the_listing_marks_the_free_models_and_keeps_the_key_on_the_server",
+      "tests/test_panel_tuning.py::test_view_lists_every_field_and_never_a_key",
+      "tests/test_panel_tuning.py::test_backup_model_key_is_kept_with_its_address_and_never_returned",
+      "tests/test_panel_detect.py::test_a_key_in_the_environment_is_named_and_never_shown",
+      "tests/test_panel_detect.py::test_a_key_from_the_environment_goes_only_to_its_own_service",
+      "tests/test_panel_desk.py::test_a_backup_holds_the_home_but_no_keys_logs_sign_ins_or_chat_record",
+      "tests/test_panel_desk.py::test_data_names_the_places_and_no_secret",
+      "tests/test_mcp_tools.py::test_a_server_program_never_sees_the_apps_secrets",
+      "tests/test_mcp_tools.py::test_secrets_go_to_the_credential_store_and_only_their_own_names_are_filled",
+      "tests/test_install_fixes.py::test_no_value_can_write_a_line_of_its_own",
+      "tests/test_ingestion.py::test_a_fetched_url_is_logged_as_its_host_only"
+    ],
+    "asked": [],
+    "injection": [
+      "tests/test_injection.py::test_memory_poisoning_corpus_is_rejected_without_disabling_memory",
+      "tests/test_injection.py::test_the_scrubber_removes_every_invisible_class",
+      "tests/test_injection.py::test_zwj_emoji_survive_the_scrubber",
+      "tests/test_injection.py::test_the_escaper_reads_what_a_model_reads",
+      "tests/test_mcp_tools.py::test_third_party_words_are_bounded_and_fenced",
+      "tests/test_roam.py::test_the_prompt_fences_page_text"
+    ],
+    "grants": [],
+    "private": [],
+    "boundary": [
+      "tests/test_welcome.py::test_page_requires_no_key_but_every_api_requires_the_capability",
+      "tests/test_welcome.py::test_browser_boundary_rejects_foreign_origins_and_proxy_headers",
+      "tests/test_welcome.py::test_portraits_are_served_for_characters_and_nothing_else",
+      "tests/test_welcome.py::test_large_and_malformed_posts_are_rejected",
+      "tests/test_page_chat_media.py::test_the_picture_route_reads_nothing_but_stored_pictures",
+      "tests/test_page_chat_media.py::test_a_linked_picture_is_refused",
+      "tests/test_page_chat_media.py::test_a_pictures_folder_that_leads_elsewhere_is_refused",
+      "tests/test_page_chat_media.py::test_a_link_in_the_pictures_folder_is_never_written_through",
+      "tests/test_panel_desk.py::test_every_route_needs_the_local_token",
+      "tests/test_panel_desk.py::test_restore_refuses_a_zip_with_unexpected_files",
+      "tests/test_ingestion.py::test_every_non_global_address_is_internal",
+      "tests/test_ingestion.py::test_host_is_internal",
+      "tests/test_ingestion.py::test_ssrf_redirect_hops",
+      "tests/test_ingestion.py::test_dns_resolution_is_pinned_once",
+      "tests/test_ingestion.py::test_html_wire_cap",
+      "tests/test_ingestion.py::test_html_decoded_cap",
+      "tests/test_life_endpoints.py::test_the_page_may_frame_the_listed_players_only",
+      "tests/test_panel_signin.py::test_the_callback_admits_only_localhost_at_the_page_s_port",
+      "tests/test_panel_signin.py::test_the_callback_refuses_a_forwarded_request",
+      "tests/test_panel_signin.py::test_the_state_binds_the_callback_to_its_attempt_once",
+      "tests/test_roam.py::test_internal_addresses_are_refused_by_rule"
+    ],
+    "honesty": [
+      "tests/test_disclosure.py::test_the_dm_prompt_does_not_instruct_denial",
+      "tests/test_disclosure.py::test_the_prompt_carries_the_honest_disclosure_clause",
+      "tests/test_disclosure.py::test_the_safety_exception_still_reaches_the_prompt",
+      "tests/test_persona_register.py::test_the_companionship_register_survives_every_knob_combination"
+    ]
+  }
+}

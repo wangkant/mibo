@@ -36,6 +36,10 @@ SHELL_STEPS = [
     ("cmd", 'git commit -q -m "step"'),
     ("edit", {"path": "a.txt", "old_string": "line 1", "new_string": "line 2"}),
     ("cmd", "git diff HEAD~1 --stat"),
+    # One-liners a person asks for in their own words: a script of theirs run with a chain, a pipe or a wildcard.
+    ("cmd", "python tidy.py; git status --short"),
+    ("cmd", "python tidy.py | Measure-Object -Line"),
+    ("cmd", "python tidy.py *.txt"),
     ("delete", {"paths": ["notes.txt"]}),
     ("cmd", "git push", "no"),
     ("cmd", "pip install requests", "no"),
@@ -75,7 +79,8 @@ SERVER = textwrap.dedent('''
 
 
 # The person's message the errands answer, as the chat record holds it.
-SAID = "看看这个仓库的状态，记几条笔记，提交一下，然后把 notes.txt 删掉；推送和安装先不要"
+SAID = ("看看这个仓库的状态，记几条笔记，提交一下，再运行 tidy.py 整理一下 txt 文件、数数它输出几行，"
+        "然后把 notes.txt 删掉；推送和安装先不要")
 REVIEWED = {"calls": 0}
 
 
@@ -104,6 +109,17 @@ def stand_in(verdict: str) -> None:
                                "decision": "go", "reason": "stand-in"})
         return ask
     acting.reviewer = reviewer
+
+
+def fresh_day() -> None:
+    """Each run is its own day: the reviewer's passes a day (review.Tally) start from none, as they would for one
+    person, instead of adding up across the runs of this process."""
+    try:
+        from mibo import review
+    except ImportError:
+        return
+    review.TALLY.passes.clear()
+    review.TALLY.refused.clear()
 
 
 def wipe(folder: Path) -> None:
@@ -166,11 +182,13 @@ async def shell_run(out: Path, policy: str) -> dict:
     workspace = workspace_for(home)
     app = SimpleNamespace(state=SimpleNamespace(window=None))
     shell = panel.Shell(app, workspace)
-    shell.grants.set_on(True)
     shell.grants.add(str(proj))
-    if policy.startswith("auto"):
-        from mibo.acting import Modes
-        Modes(shell.desktop).set("commands", "auto")
+    from mibo.acting import Modes
+    if hasattr(shell.grants, "set_on"):
+        # A snapshot from before the one mode: commands had their own switch and mode.
+        shell.grants.set_on(True)
+        if policy.startswith("auto"):
+            Modes(shell.desktop).set("commands", "auto")
 
     def press(card: dict, answer: str) -> None:
         if hasattr(shell, "press"):
@@ -268,6 +286,7 @@ def main() -> int:
     for policy in ("once", "chat", "always", "auto", "auto+always"):
         if "shell" in only:
             REVIEWED["calls"] = 0
+            fresh_day()
             got = asyncio.run(shell_run(out, policy))
             got["reviewed"] = REVIEWED["calls"]
             runs[f"shell/{policy}"] = got

@@ -237,13 +237,8 @@ def mount(app, workspace, body) -> None:
         return getattr(app.state, "window", None)
 
     def computer() -> bool:
-        from ..shell.grants import Grants
-        if Grants(desktop, Path(workspace.home)).on():
-            return True
-        if os.name != "nt":
-            return False
-        from ..desk.grants import Grants as DeskGrants
-        return DeskGrants(desktop).on()
+        from ..acting import Modes
+        return Modes(desktop).mode() != "off"
 
     def facts(request: Request, walker) -> dict:
         window = own_window(request)

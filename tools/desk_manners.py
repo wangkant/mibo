@@ -127,7 +127,6 @@ class Bench:
         self.g, self.hands_mod, self.operate, self.panel, self.strip_mod, self.uia, self.win32 = (
             grants, hands, operate, panel, strip, uia, win32)
         win32.dpi_aware()
-        grants.Grants(self.home / "runtime" / "desktop").set_on(True)
         self.worker = ThreadPoolExecutor(1, thread_name_prefix="desk")
         self.ours: set[int] = set()
         # Windows of a process that is not ours alone (File Explorer is also the taskbar and the person's folders).
@@ -166,7 +165,7 @@ class Bench:
 
     def card(self, card: dict) -> dict | None:
         kind = card.get("type")
-        answer = {"answer": "once"} if kind == "desk_grant" else {"yes": False}
+        answer = {"yes": False}
         self.cards.append({"type": kind, "kind": card.get("kind", ""), "target": card.get("target", ""),
                            "files": card.get("files", []), "answer": answer})
         return answer

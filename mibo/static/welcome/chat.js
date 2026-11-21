@@ -1743,8 +1743,7 @@ window.paChat = (() => {
       if (label) label.textContent = say("opWaiting");
       keepEnd();
     }
-    // A card from a task in another program (desk/panel.py): may the character use this program (this once,
-    // always, or no; one grant covers looking and operating), or may it do this one thing with an effect outside, shown
+    // A card from a task in another program (desk/panel.py): may it do this one thing with an effect outside, shown
     // with the program, the window, the control, the exact text or the files, and the window's picture. Only a
     // press here answers it, never words typed in the chat.
     function showDeskCard(card) {
@@ -1753,8 +1752,7 @@ window.paChat = (() => {
         deskCard = null;
       }
       if (!card || deskCard || !waiting) return;
-      const grant = card.type === "desk_grant";
-      // A grant, and the card that asks to send a window's pictures: this once, always, or no.
+      // The card that asks to send a window's pictures: this once, always, or no.
       const three = (card.choices || []).includes("always");
       const node = el("div", "op-card desk-card");
       node.dataset.id = card.id;
@@ -1762,14 +1760,7 @@ window.paChat = (() => {
       const fact = (key, value, className = "") => {
         if (value) facts.append(el("dt", "", say(key)), el("dd", className, value));
       };
-      if (grant) {
-        // Who asks for what, the program's publisher and file under it, and the request it is for.
-        const head = cardHead(I.window, card.text, [card.signer, (card.exe || "").split(/[\\/]/).pop()].filter(Boolean).join(" · "));
-        const meta = head.querySelector(".op-card-meta");
-        if (meta) meta.title = card.exe || "";
-        node.append(head);
-        if (card.task) node.append(el("p", "op-card-quote", card.task));
-      } else if (String(card.type).startsWith("see_") && (card.text || card.said)) {
+      if (String(card.type).startsWith("see_") && (card.text || card.said)) {
         // Working the window by its picture (see/): the app's own sentence, and the picture with the spot ringed.
         node.append(cardHead(I.window, card.said || card.text, card.window));
         if (card.said && card.text) node.append(el("p", "op-card-quote", card.text));
@@ -1796,7 +1787,7 @@ window.paChat = (() => {
       const answer = async (value) => {
         for (const b of node.querySelectorAll("button, input")) b.disabled = true;
         node.classList.add("answered");
-        const told = el("p", "op-card-told", say(three ? { once: "deskOnceDone", always: "deskAlwaysDone", no: grant ? "deskNoDone" : "deskRefused" }[value]
+        const told = el("p", "op-card-told", say(three ? { once: "deskOnceDone", always: "deskAlwaysDone", no: "deskRefused" }[value]
           : (value ? "deskDone" : "deskRefused")));
         node.append(told);
         try {

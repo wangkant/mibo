@@ -524,6 +524,22 @@ def _summary(request: dict) -> dict:
             "values": short, "body_chars": len(body)}
 
 
+def _reading(kind: str, does: str) -> str:
+    """The card's word for an act: the reviewer's reading of an outward act, else the gate's own ("press" for an
+    outward act nothing read)."""
+    if does in ("send", "comment", "like", "post", "submit"):
+        return does
+    if does == "follow":
+        return "like"
+    return "press" if kind == "outward" else kind
+
+
+def _leaving(url: str) -> dict:
+    """Going to another site as the reviewer reads it: the address, and its query and fragment as the text it
+    carries (where an address or a number the person never gave would ride along)."""
+    parts = urlsplit(url)
+    return {"target": [url[:300]], "text": unquote_plus(" ".join(filter(None, [parts.query, parts.fragment])))}
+
 
 class Hands:
     """The pane's side: looks and acts on `tab`, every action through the gate. `ask(card)` shows the
@@ -788,12 +804,14 @@ class Hands:
         else:
             what = (f"the page sent {card['text'][:60]!r} by itself ({label})",
                     f"the page tried to send {card['text'][:60]!r} by itself ({label})")
-        decision, passed = "ask", ""
-        # What was typed on one site going to another is never left to the reviewer.
-        if not first.get("leave") and all(c.get("site", site) == site for c in carried):
-            decision, passed = await self._decided(card["kind"], site, {
+        decision, passed, does = "ask", "", ""
+        # What was typed on one site going to another is never left to the reviewer; going on to another site with
+        # nothing typed carried is.
+        if all(c.get("site", site) == site for c in carried):
+            decision, passed, does = await self._decided(card["kind"], site, _leaving(url) if first.get("leave") else {
                 "text": card["text"], "page_says": card["button"], "request": _summary(request),
                 "effects": ["the page saves the choice the moment it is made"] if chose else []})
+        card["kind"] = _reading(card["kind"], does)
         if decision == "read":
             await self._drop(params, top)
             return {"status": "failed", "kind": card["kind"], "line": f"[read-only] {what[1]}; the person set the "
@@ -826,28 +844,29 @@ class Hands:
         return {"status": "declined", "kind": card["kind"], "line": f"[declined] {what[1]}; the person "
                 f"{'said no' if answer else 'did not answer'}, so it was dropped"}
 
-    async def _decided(self, kind: str, site: str, action: dict) -> tuple[str, str]:
+    async def _decided(self, kind: str, site: str, action: dict) -> tuple[str, str, str]:
         """What the person's mode makes of an outside action before any card: "read" (read only: nothing goes),
         "go" (the reviewer passed it), "turned" (the reviewer turned it down) or "ask" (the card), with the
-        reviewer's line. The reviewer sees only kinds and sites acting.decide sends it."""
+        reviewer's line and its reading of an outward act (review.DOES, or ""). The reviewer sees only kinds and
+        sites acting.decide sends it."""
         from .. import acting
         decision = acting.decide(self.mode(), kind, site)
         if decision == "refuse":
-            return "read", ""
+            return "read", "", ""
         if decision != "review" or self.review is None:
-            return "ask", ""
+            return "ask", "", ""
         key = json.dumps([kind, site, action], ensure_ascii=False, sort_keys=True, default=str)
         if key not in self._verdicts:
             self._verdicts[key] = await self.review({"kind": kind, "where": site, **action})
         verdict = self._verdicts[key]
         line = verdict.line(self.lang)
         if verdict.decision == "go":
-            return "go", line
+            return "go", line, verdict.does
         if verdict.decision == "refuse":
-            return "turned", line + ("; turned down three times in a row: stop and hand the task back to the person"
-                                     if verdict.stop else "")
+            return "turned", verdict.declined() + ("; turned down three times in a row: stop and hand the task back "
+                                                   "to the person" if verdict.stop else ""), verdict.does
         self.tell(line)
-        return "ask", line
+        return "ask", line, verdict.does
 
     async def _drop(self, params: dict, top: bool) -> None:
         """A held request that does not go: a navigation of the page answered 204 (nothing to show, the page stays
@@ -885,11 +904,20 @@ class Hands:
             self._told.append(f"[dialog] the page asked {said} " + ("as the press went out, which is not what the "
                               "person confirmed" if press else "by itself") + "; answered Cancel")
 
-    async def _card(self, kind: str, button: str, to: str, text: str, why: str, **more) -> Optional[dict]:
-        """A card for something the page asks for itself, with the page as the person sees it: their answer."""
+    async def _card(self, kind: str, button: str, to: str, text: str, why: str, review: Optional[dict] = None,
+                    **more) -> Optional[dict]:
+        """A card for something the page asks for itself, with the page as the person sees it: their answer. With
+        `review` (the action as the reviewer reads it) the mode is asked first: {"yes": True, "passed": line} when
+        the reviewer passed it, {"turned": line} when it turned it down, else the card."""
         url = await self._url()
         card = {"id": secrets.token_urlsafe(8), "kind": kind, "site": gate.site_of(url), "url": url, "button": button,
                 "to": to, "text": text, "label": "", "why": why, "skippable": False, **more}
+        if review is not None:
+            decision, passed, _ = await self._decided(kind, card["site"], review)
+            if decision == "go":
+                return {"yes": True, "passed": passed}
+            if decision == "turned":
+                return {"turned": passed}
         try:
             card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)
         except Exception:
@@ -902,7 +930,12 @@ class Hands:
         asked, self._asked = self._asked, None
         said = quote(asked["words"]) if asked["words"] else "whether to leave the page"
         text = asked["words"] or (SAID[self.lang]["leave"] if asked["type"] == "beforeunload" else "")
-        answer = await self._card(asked["kind"], "", "", text, f"the page's own {asked['type']}")
+        answer = await self._card(asked["kind"], "", "", text, f"the page's own {asked['type']}",
+                                  review={"text": text, "page_says": asked["words"]})
+        if answer and answer.get("turned"):
+            return {**result, "status": "declined", "kind": asked["kind"],
+                    "line": f"{result.get('line', '')}\n[declined] the page asked {said}; it was answered Cancel. "
+                            f"{answer['turned']}".strip()}
         if not (answer and answer.get("yes")):
             return {**result, "status": "declined", "kind": asked["kind"],
                     "line": f"{result.get('line', '')}\n[declined] the page asked {said}; the person "
@@ -914,7 +947,8 @@ class Hands:
             self._again = None
         self.confirmed = True
         return {**again, "kind": asked["kind"], "outside": True,
-                "line": f"[dialog] the page asked {said}; the person said yes on a card, so the step was done again "
+                "line": f"[dialog] the page asked {said}; "
+                        f"{answer.get('passed') or 'the person said yes on a card'}, so the step was done again "
                         f"and it was answered OK\n{again.get('line', '')}"}
 
     async def _upload(self, action: dict) -> dict:
@@ -929,10 +963,15 @@ class Hands:
         named = str(action.get("file") or "")
         files = [named] if named and Path(named).is_file() else []
         field = clip(self.page.last.get(ident, ("", ""))[1] or str((await self.page.facts(ident)).get("label") or ""), 40)
+        # Only a file the person named goes to the reviewer; choosing one is theirs.
         answer = await self._card("upload", field, "、".join(Path(f).name for f in files), "\n".join(files),
-                                  "the page asks for a file", many=many)
-        files = list(answer.get("files") or files) if answer and answer.get("yes") else []
+                                  "the page asks for a file", many=many,
+                                  review={"target": files, "page_says": field} if files else None)
         named = f" for {quote(field)}" if field else ""
+        if answer and answer.get("turned"):
+            return {"status": "declined", "kind": "upload",
+                    "line": f"[declined] the page asked for a file{named}; nothing was chosen. {answer['turned']}"}
+        files = list(answer.get("files") or files) if answer and answer.get("yes") else []
         if not files:
             return {"status": "declined", "kind": "upload",
                     "line": f"[declined] the page asked for a file{named}; the person "
@@ -944,7 +983,8 @@ class Hands:
         self.confirmed = True
         gave = ", ".join(f"{Path(f).name} ({_size(Path(f).stat().st_size)})" for f in files)
         return {"status": "ok", "kind": "upload", "outside": True,
-                "line": f"[ok] gave {gave} to the page's file field{named}: the person chose it on a card"
+                "line": f"[ok] gave {gave} to the page's file field{named}: "
+                        f"{answer.get('passed') or 'the person chose it on a card'}"
                         + await self._changed(None, before, "[ok]")}
 
     async def _saved(self) -> str:
@@ -1282,7 +1322,11 @@ class Hands:
                 if site not in self.sites and not action.get("named"):
                     # A site the person did not name and no link led to: going there is theirs to say.
                     answer = await self._card("leave", "", "", clip(url, 300), "the address goes to a site that is "
-                                              "not one of this run's", site=site)
+                                              "not one of this run's", review=_leaving(url), site=site)
+                    if answer and answer.get("turned"):
+                        return {"status": "declined", "kind": "leave",
+                                "line": f"[declined] going to {site}, another site; the page stayed here. "
+                                        f"{answer['turned']}"}
                     if not (answer and answer.get("yes")):
                         return {"status": "declined", "kind": "leave",
                                 "line": f"[declined] going to {site}, another site: the person "
@@ -1726,11 +1770,21 @@ class Hands:
                 # fields it sends.
                 "text": (said or (str(facts.get("row") or "") if kind in ("like", "delete") else
                                   self._fields(facts) if kind in ("submit", "account", "order") else ""))[:2000],
-                "skippable": kind in gate.SKIPPABLE and not acting.sensitive(site)}
+                "skippable": kind in gate.SKIPPABLE and not acting.sensitive(site) and why != gate.FRAME_WHY}
         skipped = card["skippable"] and self.attended() and self.allowed.skips(site, kind)
-        decision, passed = ("ask", "") if skipped else await self._decided(kind, site, {
-            "target": [card["to"]] if card["to"] else [], "text": card["text"], "page_says": button[:120],
-            "fields": ["password"] if (facts.get("form") or {}).get("password") else []})
+        # Whatever was typed on this site in this run and not let out yet may leave with the press, not only the
+        # box beside the button: the reviewer and code's floor (an address or number they never gave) see it all.
+        typed = [f"{t['field']}: {t['text']}" for t in self.typed if not t["out"] and t["site"] == site
+                 and _squeeze(t["text"]) not in _squeeze(card["text"])]
+        # Enter in another site's frame is the floor: the card, never the reviewer.
+        decision, passed, does = ("ask", "", "") if skipped or why == gate.FRAME_WHY else await self._decided(
+            kind, site, {"target": [card["to"]] if card["to"] else [],
+                         "text": "\n".join([card["text"], *typed]).strip()[:2000], "page_says": button[:120],
+                         "fields": ["password"] if (facts.get("form") or {}).get("password") else []})
+        if not skipped:
+            # The card names the act as the reviewer read it; 始终允许 is offered for that reading.
+            kind = card["kind"] = _reading(kind, does)
+            card["skippable"] = kind in gate.SKIPPABLE and not acting.sensitive(site) and why != gate.FRAME_WHY
         if decision == "turned":
             return {"status": "declined", "kind": kind, "line": f"[declined] {kind} ({button[:40]}): {passed}; "
                                                                 "nothing was pressed"}

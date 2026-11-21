@@ -1,15 +1,15 @@
 """Which programs the character may operate, decided here in code.
 
-The master switch is on unless the person turns it off in Settings. A program is
-granted on a card the first time it is needed: this once (for the task asked
-for in chat, kept in memory by `hands`), always (kept here, listed in Settings,
-revocable), or no. One grant covers looking and operating. A grant names the
-program by what cannot be faked by a window title or a look-alike name: for an
-app from a package, its package family (name and publisher hash, under
-WindowsApps, which only the system writes) and executable name; otherwise the
-executable's full path, the name on its signature when it is signed, and for
-an unsigned program outside the folders only an administrator can write, the
-file's hash, so a file swapped in at the same path is asked about again.
+Whether it operates programs at all is the one acting mode (acting.py). Any
+program that is not on the never list below is used for a task the person asked
+for in chat with no card to grant it, and what it does there goes through the
+gate (gate.py) and the reviewer. A grant kept here (from earlier, listed in
+Settings, revocable) only sets a program's tier. A grant names the program by
+what cannot be faked by a window title or a look-alike name: for an app from a
+package, its package family (name and publisher hash, under WindowsApps, which
+only the system writes) and executable name; otherwise the executable's full
+path, the name on its signature when it is signed, and for an unsigned program
+outside the folders only an administrator can write, the file's hash.
 
 Some programs are never operated, whatever was granted: password managers and
 credential dialogs, security and system settings, installers and elevation,
@@ -37,16 +37,17 @@ from pathlib import Path
 
 from . import win32
 
-# The one switch in Settings and the sentence under it.
+# The switch in Settings (the one acting mode) and the sentence under it.
 SWITCH = {
     "zh": {"label": "允许{who}操作电脑上的其他程序",
-           "sentence": "开启后，仅当你在对话中提出要求时，{who}才会查看或操作你逐个允许的程序。发送、删除、购买、更改设置等"
-                       "操作每次都需要你确认，可随时按 Esc 停止。始终不操作密码管理器、终端、系统设置和付款程序。"},
+           "sentence": "开启后，仅当你在对话中提出要求时，{who}才会查看或操作电脑上的程序。发送、发布等操作由自动审查核对"
+                       "你的原话后执行；删除、付款和更改账号每次都需要你确认，可随时按 Esc 停止。始终不操作密码管理器、终端、"
+                       "系统设置和付款程序。"},
     "en": {"label": "Let {who} operate other programs on this computer",
-           "sentence": "When on, {who} looks at or operates only the programs you allow one by one, and only while "
-                       "you ask in chat. Sending, deleting, buying and changing settings ask you every time, and Esc "
-                       "stops it. Password managers, terminals, system settings and payment programs are never "
-                       "touched."},
+           "sentence": "When on, {who} looks at or operates programs on this computer only while you ask in chat. "
+                       "Sending and posting go ahead once the automatic review finds them in your own words; deleting, "
+                       "paying and account changes ask you every time, and Esc stops it. Password managers, terminals, "
+                       "system settings and payment programs are never touched."},
 }
 DESK_FILE = "desk.json"
 LOG_FILE = "desk-log.jsonl"
@@ -197,7 +198,7 @@ def key_of(program: dict) -> str:
 
 
 class Grants:
-    """The switch, the "always" grants and the log, in the desktop folder."""
+    """The kept grants (a program's tier), the person's never list and the log, in the desktop folder."""
 
     def __init__(self, desktop: Path):
         self.desktop = Path(desktop)
@@ -215,18 +216,6 @@ class Grants:
     def _write(self, data: dict) -> None:
         from ..storage import atomic_write_text
         atomic_write_text(self.path, json.dumps(data, ensure_ascii=False, indent=1))
-
-    def on(self) -> bool:
-        """On unless the person turned it off."""
-        return self._read().get("on") is not False
-
-    def set_on(self, on: bool) -> dict:
-        with self.lock:
-            data = self._read()
-            data["on"] = bool(on)
-            self._write(data)
-        self.log({"do": "switch", "line": "turned on" if on else "turned off"})
-        return data
 
     def all(self) -> list[dict]:
         return [g for g in self._read().get("grants") or [] if isinstance(g, dict) and g.get("key")]
@@ -275,18 +264,6 @@ class Grants:
         """The word of the person's own list this program's name or file name holds, or ""."""
         said = " ".join(str(program.get(k) or "") for k in ("name", "product")) + " " + Path(program.get("exe", "")).name
         return next((w for w in self.blocked() if w.lower() in said.lower()), "")
-
-    def grant(self, program: dict) -> dict:
-        entry = {"key": key_of(program), "name": program.get("name", ""), "exe": program["exe"],
-                 "signer": program.get("signer", ""), "package": program.get("package", ""),
-                 "hash": program.get("hash", ""), "tier": default_tier(program["exe"]),
-                 "since": time.strftime("%Y-%m-%d %H:%M")}
-        with self.lock:
-            data = self._read()
-            data["grants"] = [g for g in self.all() if g["key"] != entry["key"]] + [entry]
-            self._write(data)
-        self.log({"do": "grant", "program": entry["name"], "exe": entry["exe"], "line": "always"})
-        return entry
 
     def revoke(self, key: str) -> bool:
         with self.lock:

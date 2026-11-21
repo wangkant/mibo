@@ -3,8 +3,14 @@ the real app window with the home's own model, each checked by code on what real
 
     python tools/everyday.py prepare <scratch home> --places <folder>
     python tools/everyday.py run <scratch home> --places <folder> --out <folder> [--only E01,E02] [--runs 3]
-                                 [--budget 0.07] [--site-port 59792] [--risky]
+                                 [--budget 0.07] [--price-in 0.0507] [--price-out 0.2028] [--site-port 59792]
+                                 [--risky] [--chat]
     python tools/everyday.py selfcheck --places <folder>
+
+Each request is marked with what it needs (NEEDS). `run --chat` runs only those that need no window, no pointer and
+no keys (talk, search and reading, commands and files on the stand-in folders, memory, skills, MCP, the schedule):
+the app runs without a window, its page in headless Edge, and nothing it does can open a window, start a program or
+reach another program's window (no_windows). table.md then lists the requests that wait for the sandbox run.
 
 `prepare` (the app not running) makes the stand-in folders under --places (Desktop with a "grok bot" shortcut to a
 script that writes a marker and three screenshots, Downloads with three pdfs of staggered dates and two installers,
@@ -82,7 +88,7 @@ SURFACE = {"web": {"use_browser", "read_page", "web_search", "read_with_their_se
 # What the app and this run start as helpers; any other program the app starts is reported.
 HELPERS = {"notepad.exe", "chat.exe", "powershell.exe", "pwsh.exe", "conhost.exe", "cmd.exe", "python.exe",
            "pythonw.exe", "msedgewebview2.exe", "wscript.exe", "taskkill.exe", "tasklist.exe", "csc.exe", "node.exe",
-           "uv.exe", "uvx.exe", "explorer.exe"}
+           "uv.exe", "uvx.exe", "explorer.exe", "msedge.exe"}
 LOOKUP = {"web_search", "read_page", "use_browser", "read_with_their_session", "open", "look"}
 
 
@@ -482,6 +488,17 @@ REQUESTS = [
      "wrong": {"program", "files"}, "yes": True, "check": k_english},
 ]
 BY_ID = {r["id"]: r for r in REQUESTS}
+# What each request needs beyond the chat: "chat" (nothing: talk, search and reading, commands and files on the
+# stand-in folders, memory, skills, MCP, the schedule), "page" (the app's browser pane, a window), "program" (another
+# program's window, the pointer or keys) or "settings" (the computer's own settings). `run --chat` runs only the "chat"
+# ones, with no window; the rest wait for the sandbox run (.github/workflows/sandbox.yml).
+NEEDS = {"E01": "chat", "E02": "program", "E03": "page", "E27": "page", "E04": "page", "E05": "page", "E06": "page",
+         "E07": "page", "E08": "program", "E09": "program", "E10": "program", "E28": "program", "E11": "page, program",
+         "E12": "chat", "E13": "chat", "E14": "page", "E15": "page", "E16": "page", "E17": "page", "E18": "program",
+         "E19": "page", "E20": "page", "E21": "chat", "E22": "chat", "E23": "chat", "E24": "chat", "E25": "chat",
+         "E26": "chat", "E29": "settings", "E30": "page", "E31": "chat", "E32": "page"}
+for _request in REQUESTS:
+    _request["needs"] = NEEDS[_request["id"]]
 
 
 # ---------------------------------------------------------------- the model's pass-through
@@ -490,8 +507,8 @@ class Meter:
     """Every model call passed on, with the tools offered and called, the tokens and the cost; calls past the
     budget are refused here, never sent."""
 
-    def __init__(self, upstream: str, log: Path, budget: float):
-        self.upstream, self.log, self.budget = upstream.rstrip("/"), log, budget
+    def __init__(self, upstream: str, log: Path, budget: float, price: tuple = PRICE):
+        self.upstream, self.log, self.budget, self.price = upstream.rstrip("/"), log, budget, price
         self.rows: list[dict] = []
         self.spent = 0.0
         self.lock = threading.Lock()
@@ -543,7 +560,7 @@ class Meter:
         tokens_in, tokens_out = usage.get("prompt_tokens") or 0, usage.get("completion_tokens") or 0
         cost = usage.get("cost")
         if cost is None:
-            cost = ((tokens_in - cached) * PRICE[0] + cached * PRICE[1] + tokens_out * PRICE[2]) / 1e6
+            cost = ((tokens_in - cached) * self.price[0] + cached * self.price[1] + tokens_out * self.price[2]) / 1e6
         message = ((got.get("choices") or [{}])[0].get("message") or {}) if isinstance(got, dict) else {}
         system = next((m.get("content") for m in sent.get("messages") or [] if m.get("role") == "system"), "") or ""
         system = system if isinstance(system, str) else json.dumps(system, ensure_ascii=False)
@@ -649,11 +666,99 @@ def brightness() -> str:
 
 # ---------------------------------------------------------------- run
 
-class Bench:
-    """One run: the app window `d` (tools/window_driver.py), the stand-in places, the site, the pass-through."""
+def app_api(home: Path, path: str, body: dict | None = None, timeout: float = 30) -> dict:
+    """The app's page API on `home`, as its page calls it; {"http": code} for a refusal."""
+    url = json.loads((home / "runtime" / "desktop" / "welcome.json").read_text(encoding="utf-8"))["url"]
+    base, _, token = url.partition("#token=")
+    request = urllib.request.Request(base.rstrip("/") + "/api/" + path, method="GET" if body is None else "POST",
+                                     data=None if body is None else json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", "x-mibo-setup-token": token})
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout) as r:
+            return json.loads(r.read().decode() or "{}")
+    except urllib.error.HTTPError as error:
+        return {"http": error.code}
 
-    def __init__(self, d, home: Path, places: Path, site: str, meter: Meter, out: Path, real: list[str]):
+
+class Headless:
+    """The app's page in headless Edge (playwright) for a run with no window: the js, click and log of
+    tools/window_driver.py's driver, with no pane (`app` is None) and the links the app would open kept in `links`."""
+
+    def __init__(self, out: Path):
+        self.out, self.app, self.page = out, None, None
+        self.links: list[str] = []
+        self._lines: list[str] = []
+
+    def log(self, text: str) -> None:
+        self._lines.append(text)
+        (self.out / "walk.log").write_text("\n".join(self._lines), encoding="utf-8")
+
+    def js(self, expression: str):
+        try:
+            return self.page.evaluate(expression)
+        except Exception as error:
+            return f"<<error: {error}>>"
+
+    def click(self, selector: str) -> bool:
+        """A click inside the headless page (no pointer of this computer moves); False when there is nothing."""
+        try:
+            self.page.locator(selector).first.click(timeout=3000)
+            return True
+        except Exception:
+            self.log(f"      (nothing to click at {selector})")
+            return False
+
+
+def headless(home: Path, steps, out: Path) -> None:
+    """The app on `home` without a window (as `mibo start --no-browser`, in this process so the stand-ins hold), its
+    page in headless Edge with a profile under `out`; `steps(driver)` once the chat is up, then the app's own exit."""
+    import webbrowser
+
+    from dotenv import dotenv_values
+    from playwright.sync_api import sync_playwright
+    os.environ["AGENT_HOME"] = str(home)
+    driver = Headless(out)
+    webbrowser.open = lambda url, *a, **k: driver.links.append(str(url)) or True
+    info = home / "runtime" / "desktop" / "welcome.json"
+    info.unlink(missing_ok=True)
+
+    def walk() -> None:
+        try:
+            for _ in range(240):
+                if info.exists() and json.loads(info.read_text(encoding="utf-8")).get("url"):
+                    break
+                time.sleep(0.5)
+            with sync_playwright() as p:
+                browser = p.chromium.launch_persistent_context(str(out / "edge-profile"), channel="msedge",
+                                                               headless=True, viewport={"width": 1240, "height": 900})
+                driver.page = browser.pages[0] if browser.pages else browser.new_page()
+                # The first-run tour is done, so the page opens on the chat.
+                app_api(home, "look/toured", {})
+                driver.page.goto(json.loads(info.read_text(encoding="utf-8"))["url"])
+                driver.page.wait_for_selector(".chat-send", state="attached", timeout=60000)
+                time.sleep(2)
+                steps(driver)
+                browser.close()
+        except Exception as error:
+            import traceback
+            driver.log(f"the walk stopped: {error!r}\n{traceback.format_exc()}")
+        finally:
+            app_api(home, "exit", {})
+
+    threading.Thread(target=walk, daemon=True).start()
+    from mibo import welcome
+    port = dotenv_values(home / ".env").get("PAGE_PORT")
+    welcome.main(["--no-browser", *(["--port", port] if port else [])])
+
+
+class Bench:
+    """One run: the app window `d` (tools/window_driver.py) or its page in headless Edge (Headless), the stand-in
+    places, the site, the pass-through. With `windows` false no window of this computer is moved or closed."""
+
+    def __init__(self, d, home: Path, places: Path, site: str, meter: Meter, out: Path, real: list[str],
+                 windows: bool = True):
         self.d, self.home, self.places, self.site, self.meter, self.out = d, home, places, site, meter, out
+        self.windows = windows
         self.real, self.real_print = real, fingerprint(real)
         self.ours: set[int] = set()
         self.seen_children: set[int] = set(children(os.getpid()))
@@ -662,16 +767,7 @@ class Bench:
         self.results: list[dict] = []
 
     def api(self, path: str, body: dict | None = None, timeout: float = 30) -> dict:
-        url = json.loads((self.home / "runtime" / "desktop" / "welcome.json").read_text(encoding="utf-8"))["url"]
-        base, _, token = url.partition("#token=")
-        request = urllib.request.Request(base.rstrip("/") + "/api/" + path, method="GET" if body is None else "POST",
-                                         data=None if body is None else json.dumps(body).encode(),
-                                         headers={"Content-Type": "application/json", "x-mibo-setup-token": token})
-        try:
-            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=timeout) as r:
-                return json.loads(r.read().decode() or "{}")
-        except urllib.error.HTTPError as error:
-            return {"http": error.code}
+        return app_api(self.home, path, body, timeout)
 
     def site_get(self, path: str, data: dict | None = None) -> dict:
         request = urllib.request.Request(self.site + path, data=None if data is None else json.dumps(data).encode(),
@@ -798,7 +894,8 @@ class Bench:
         time.sleep(2)
         idle, seen = 0, False
         while time.time() - began < TASK_S:
-            self.tidy_windows()
+            if self.windows:
+                self.tidy_windows()
             for pid, exe in children(os.getpid()).items():
                 if pid not in self.seen_children and exe.lower() not in HELPERS:
                     self.outside.append(exe)
@@ -891,7 +988,7 @@ class Bench:
             card_attached=" ".join(str((m.get("card") or {}).get("title") or "") for m in said).strip(),
             places=self.places, started=began, site_posts=[p for p in state.get("posts", []) if p.get("at", 0) >= began],
             site_reads=state.get("reads", []), chatlog=[(t, s) for t, s in log if s != "START"],
-            notepad=" ".join(window_text(h) for h, pid, kind, _ in top_windows()
+            notepad=" ".join(window_text(h) for h, pid, kind, _ in (top_windows() if self.windows else [])
                              if kind == "Notepad" and self._exe_of(pid).startswith(str(self.places).lower())),
             pane={"tabs_before": tabs_before, "tabs": len(getattr(pane, "_tabs", []) or []),
                   "address": pane.address() if pane is not None else "",
@@ -919,8 +1016,9 @@ class Bench:
             self.real_print = fingerprint(self.real)
         if stop.get("timeout"):
             note += f"; stopped by the bench after {TASK_S} s"
-        self.close_ours()
-        row = {"id": rid, "run": n, "say": request["say"], "ok": bool(ok), "note": note, "seconds": seconds,
+        if self.windows:
+            self.close_ours()
+        row = {"id": rid, "run": n, "say": request["say"], "needs": request["needs"], "ok": bool(ok), "note": note, "seconds": seconds,
                "calls": len(rows), "in_tokens": sum(r["in"] for r in rows), "cached": sum(r["cached"] for r in rows),
                "cost": round(sum(r["cost"] for r in rows), 6), "cards": len(cards), "card_texts": cards,
                "wrong": outcome.wrong, "tools": [name for name, _ in calls],
@@ -948,15 +1046,51 @@ class Bench:
         return {pid.value}
 
 
-def stand_ins(places: Path, bench_box: dict) -> None:
+# A command that would start a program: one of Windows' launchers, or a program or shortcut run by its path.
+LAUNCH = re.compile(r"(?<![\w-])(?:start-process|saps|start|invoke-item|ii|explorer|notepad|calc|mspaint|wscript|"
+                    r"cscript|rundll32|control|mshta)(?![\w-])|ms-settings:"
+                    r"|(?:^|[;|&(]\s*)&?\s*[\"']?[^\s\"';|&]+\.(?:exe|lnk|url|bat|cmd|vbs|msc|cpl)\b", re.I)
+
+
+def no_windows() -> None:
+    """For a run with no window: nothing the app does opens a window, starts a program or reaches another
+    program's window; each try is refused, and the model is told so."""
+    from mibo.desk import names, tool, win32
+    from mibo.shell import run as running
+    names.apps = lambda fresh=False: []
+    names.open_windows = lambda: []
+    win32.open_app = win32.open_file = lambda target: False
+
+    def nothing_opens(*args, **kwargs):
+        raise OSError("this run of the bench opens nothing on the screen")
+    os.startfile = nothing_opens
+
+    async def no_programs(agent, args, lookups) -> str:
+        return "Not done: other programs are not part of this run (it has no window, pointer or keys)."
+    tool.use = no_programs
+    plain = running.run
+
+    def run(command: str, cwd: str, **more) -> dict:
+        if LAUNCH.search(command):
+            return {"code": 1, "out": "", "err": "Not run: this run of the bench lets no command start a program.",
+                    "clipped": False, "timed_out": False, "stopped": False, "seconds": 0.0, "recycled": []}
+        return plain(command, cwd, **more)
+    running.run = run
+
+
+def stand_ins(places: Path, bench_box: dict, windows: bool = True) -> None:
     """The app given the stand-in places in place of the person's own, before it starts (it runs in this process):
     the known folders, the folders panels/desk.py reads, the browser's download folder, the Notepad and chat
-    program Start lists, and only this run's windows among the open ones."""
-    from mibo import browser
-    from mibo.desk import names, win32
+    program Start lists, and only this run's windows among the open ones; with `windows` false, no window at all
+    (no_windows)."""
     from mibo.shell import grants
     grants.known_folder = lambda guid: str(places / KNOWN[guid.upper()]) if guid.upper() in KNOWN else ""
     os.environ["MIBO_USER_DIRS"] = os.pathsep.join((str(places / "Desktop"), str(places / "Documents")))
+    if not windows:
+        no_windows()
+        return
+    from mibo import browser
+    from mibo.desk import names, win32
     downloading = browser.Pane._download
 
     def to_stand_in(self, sender, args):
@@ -1002,22 +1136,28 @@ def run(args) -> int:
     upstream = dotenv_values(env_file).get("LLM_BASE_URL") or ""
     if upstream.startswith(f"http://127.0.0.1:{args.site_port + 1}/"):
         raise SystemExit("the home's LLM_BASE_URL still points at the pass-through of a run that was stopped; put it back")
-    meter = Meter(upstream, out / "model.jsonl", args.budget)
+    # Another model's cached input is counted at its full input price: an upper bound.
+    price = (args.price_in, PRICE[1] if args.price_in == PRICE[0] else args.price_in, args.price_out)
+    meter = Meter(upstream, out / "model.jsonl", args.budget, price)
     meter.serve(args.site_port + 1)
     lines = [line for line in kept.splitlines() if line.partition("=")[0].strip() != "LLM_BASE_URL"]
     env_file.write_text("\n".join(lines + [f"LLM_BASE_URL=http://127.0.0.1:{args.site_port + 1}/v1"]) + "\n",
                         encoding="utf-8")
     site = f"http://127.0.0.1:{args.site_port}"
     server = subprocess.Popen([sys.executable, str(SITE_DIR / "serve.py"), str(args.site_port), str(out / "site.log")])
-    wanted = [r for r in REQUESTS if not args.only or r["id"] in args.only.split(",")]
+    wanted = [r for r in REQUESTS if (not args.only or r["id"] in args.only.split(","))
+              and (not args.chat or r["needs"] == "chat")]
     box: dict = {}
-    stand_ins(places, box)
+    stand_ins(places, box, windows=not args.chat)
     try:
-        import window_driver
-        window_driver.ThreadingHTTPServer = lambda address, handler: ThreadingHTTPServer(
-            (address[0], args.site_port + 2), handler)
-        window_driver.run(home, lambda d: _walk(d, home, places, site, meter, out, real, wanted, args, box), out=out,
-                          lang="zh")
+        if args.chat:
+            headless(home, lambda d: _walk(d, home, places, site, meter, out, real, wanted, args, box), out)
+        else:
+            import window_driver
+            window_driver.ThreadingHTTPServer = lambda address, handler: ThreadingHTTPServer(
+                (address[0], args.site_port + 2), handler)
+            window_driver.run(home, lambda d: _walk(d, home, places, site, meter, out, real, wanted, args, box),
+                              out=out, lang="zh")
     finally:
         # The venv's python.exe starts the real one as its child: the whole tree goes.
         subprocess.run(["taskkill", "/PID", str(server.pid), "/T", "/F"], capture_output=True)
@@ -1029,7 +1169,7 @@ def run(args) -> int:
 
 
 def _walk(d, home, places, site, meter, out, real, wanted, args, box) -> None:
-    bench = Bench(d, home, places, site, meter, out, real)
+    bench = Bench(d, home, places, site, meter, out, real, windows=not args.chat)
     bench.calc_before = processes("CalculatorApp.exe")
     box["bench"] = bench
     bench.api("look/toured", {})
@@ -1076,22 +1216,27 @@ def table(results: list[dict], out: Path, wanted: list[dict], spent: float) -> N
     by: dict[str, list[dict]] = {}
     for row in results:
         by.setdefault(row["id"], []).append(row)
-    lines = ["| id | request | success | calls | input tokens | cards | wrong-surface calls | seconds | note |",
-             "|---|---|---|---|---|---|---|---|---|"]
+    lines = ["| id | request | needs | success | calls | input tokens | cards | wrong-surface calls | seconds | cost "
+             "| note |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for request in wanted:
         rows = by.get(request["id"])
         if not rows:
-            lines.append(f"| {request['id']} | {request['say']} | not run | | | | | | |")
+            lines.append(f"| {request['id']} | {request['say']} | {request['needs']} | not run | | | | | | | |")
             continue
         avg = lambda key: round(sum(r[key] for r in rows) / len(rows), 1)  # noqa: E731
         wrong = sum(len(r["wrong"]) for r in rows)
-        lines.append(f"| {request['id']} | {request['say']} | {sum(r['ok'] for r in rows)}/{len(rows)} | {avg('calls')} | "
-                     f"{avg('in_tokens'):.0f} | {avg('cards')} | {wrong} | {avg('seconds')} | {rows[-1]['note'][:90]} |")
+        lines.append(f"| {request['id']} | {request['say']} | {request['needs']} | {sum(r['ok'] for r in rows)}/"
+                     f"{len(rows)} | {avg('calls')} | {avg('in_tokens'):.0f} | {avg('cards')} | {wrong} | "
+                     f"{avg('seconds')} | ${sum(r['cost'] for r in rows):.4f} | {rows[-1]['note'][:90]} |")
     firsts = [rows[0] for rows in by.values()]
     calls = sorted(r["calls"] for r in firsts)
     lines.append(f"\n{sum(r['ok'] for r in firsts)}/{len(firsts)} requests passed on their first run; cards "
                  f"{sum(r['cards'] for r in firsts)}; wrong-surface calls {sum(len(r['wrong']) for r in firsts)}; median "
                  f"model calls {calls[len(calls) // 2] if calls else 0}; cost ${spent:.4f}.")
+    waiting = [r for r in REQUESTS if r not in wanted and r["needs"] != "chat"]
+    if waiting:
+        lines.append("\nWaiting for the sandbox run (a window, the pointer or keys): "
+                     + ", ".join(f"{r['id']} ({r['needs']})" for r in waiting) + ".")
     (out / "table.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -1221,8 +1366,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--only", default="")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--budget", type=float, default=0.07)
+    parser.add_argument("--price-in", type=float, default=PRICE[0], help="dollars per million input tokens")
+    parser.add_argument("--price-out", type=float, default=PRICE[2], help="dollars per million output tokens")
     parser.add_argument("--site-port", type=int, default=59792)
     parser.add_argument("--risky", action="store_true", help="also run E08, which saves through Notepad's dialog")
+    parser.add_argument("--chat", action="store_true",
+                        help="only the requests that need no window, pointer or keys, with the app windowless")
     args = parser.parse_args(argv)
     if args.what == "selfcheck":
         return selfcheck(Path(args.places).resolve())

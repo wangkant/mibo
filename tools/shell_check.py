@@ -186,7 +186,6 @@ def main() -> int:
     (home / ".env").write_text("SECRET=1\n", encoding="utf-8")
     os.environ["AGENT_HOME"] = str(home)
     grants = Grants(home / "runtime" / "desktop", home)
-    grants.set_on(True)
     if not grants.folders():
         assert grants.add(str(files)) == "", grants.add(str(files))
     wrong = 0

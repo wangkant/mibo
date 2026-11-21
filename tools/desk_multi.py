@@ -145,7 +145,6 @@ class Bench:
         self.g, self.hands_mod, self.operate, self.panel, self.strip_mod, self.win32 = (
             grants, hands, operate, panel, strip, win32)
         win32.dpi_aware()
-        grants.Grants(self.home / "runtime" / "desktop").set_on(True)
         self.worker = ThreadPoolExecutor(1, thread_name_prefix="desk")
         self.ours: set[int] = set()
         self.cards: list[dict] = []
@@ -179,9 +178,7 @@ class Bench:
 
     def card(self, card: dict) -> dict | None:
         kind = card.get("type")
-        if kind == "desk_grant":
-            answer = {"answer": "once"}
-        elif kind in ("see_grant",):
+        if kind == "see_grant":
             answer = {"answer": "once"}
         else:
             answer = {"yes": card.get("kind") in self.allow or kind in self.allow}

@@ -110,5 +110,13 @@ dev-mode-dirs = ["."]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# The suites import the checkout, and the tools under tools/.
-pythonpath = [".", "tools"]
+# The suites import the checkout, the tools under tools/, and tests/harness.
+pythonpath = [".", "tools", "tests"]
+# Test files are imported by path, so two folders may each hold a test_x.py.
+addopts = "-m 'not window' --strict-markers --import-mode=importlib"
+markers = [
+    "browser: drives a headless Chromium-family browser through Playwright; with MIBO_REQUIRE_BROWSER=1 a skip fails",
+    "window: needs a real display, pointer or keys; runs only with CI=true and MIBO_SANDBOX=1",
+    "slow: takes over 2 s; the hygiene test caps how many",
+    "floor: holds a safety floor (tests/floors/ and the tests floors/manifest.json names)",
+]

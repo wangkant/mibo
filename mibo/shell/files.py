@@ -394,6 +394,11 @@ def search(path: str, text: str, places, pattern: str = "") -> str:
             continue
         if pattern and not fnmatch.fnmatch(entry.name.lower(), pattern.lower()):
             continue
+        # The name is matched first, so a binary or a large file is found by it too.
+        if needle in entry.name.lower():
+            hits.add(entry.path)
+            if len(found) < SEARCH_ROWS:
+                found.append(f"{os.path.relpath(entry.path, path)}: (the name holds it)")
         if entry.stat(follow_symlinks=False).st_size > TEXT_MAX:
             continue
         files += 1
@@ -407,8 +412,6 @@ def search(path: str, text: str, places, pattern: str = "") -> str:
             if decoded is None:
                 continue
             lines = decoded[0].splitlines()
-        if needle in os.path.basename(entry.path).lower():
-            hits.add(entry.path)
         for n, line in enumerate(lines, 1):
             if needle in line.lower():
                 hits.add(entry.path)

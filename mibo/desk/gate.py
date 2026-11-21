@@ -1,21 +1,27 @@
 """The fixed line, in another program, between what the character may do by
-itself once the program is granted and what the person confirms each time.
+itself and what goes to the reviewer or the person.
 
 Reading, scrolling, moving the focus and typing into a document or a field are
-free. An action with an effect outside the window waits for the person's press
-on a card: sending a message, posting, deleting or overwriting a file, moving
-files out of where they were, opening a file (which starts its program),
-buying, changing an account, changing a setting of the program, printing, and
-submitting what a single-line field holds. The same vocabularies as the
-browser's gate (web/gate.py) decide by a control's name; the rest are rules for
-desktop programs: Enter and the Delete key by where the focus is, the shell's
-file views, a dialog's confirming button by what the dialog says, and a
-program's settings window. A name that says nothing is not taken as harmless:
-in a window where the task typed into a field, a button sends what was typed
-(submit) unless it only closes, goes back or opens another dialog; and a
-command of the program's own menu that is not a plain edit or view ("press")
-asks too, so a 整理 that deletes asks as a 删除 does. It errs inclusive: a
-false positive costs one press.
+free. The floor asks the person on a card every time: deleting or throwing away
+work, buying, changing an account or access, changing a setting of the program,
+and opening a file (which starts its program). The browser gate's floor
+vocabularies (web/gate.py) decide those by a control's name; the rest are rules
+for desktop programs: Enter and the Delete key by where the focus is, the
+shell's file views, a dialog's confirming button by what the dialog says, and
+a program's settings window.
+
+The reviewer judges the rest, when the mode is automatic review: writing or
+replacing a file (file), printing (print), a menu command whose name does not
+say what it does (press), and any act that sends something out of the window.
+That last is one kind, "outward" (review.judged): the send, post, comment and
+like words, a button in a window where the task typed into a field (submit),
+and Enter or Ctrl+Enter in a one-line field are only readings of it, passed to
+the reviewer as a hint and naming the card, never deciding whether it goes. A
+name that says nothing is not taken as harmless: in a window where the task
+typed into a field, a button may send what was typed unless it only closes,
+goes back or opens another dialog; and a 整理 of the program's own menu goes to
+the reviewer as a 删除 would go to the person. It errs inclusive: a false
+positive costs one review or one press.
 """
 from __future__ import annotations
 
@@ -74,7 +80,8 @@ def in_settings(node, title: str) -> bool:
 
 
 def by_name(name: str) -> tuple[str, str] | None:
-    """The kinds a control's name alone decides, in another program."""
+    """The kind a control's name alone gives, in another program: the floor kinds first, then file and print,
+    then the readings of an outward act (send, post)."""
     if web.PAY_WORDS.search(name):
         return "order", f"the name {name!r} is payment vocabulary"
     if DISCARD_WORDS.search(name):

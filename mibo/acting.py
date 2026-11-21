@@ -1,9 +1,9 @@
-"""How much the character may do by itself when it acts for the person: one mode for pages in the app's browser,
-one for other programs' windows and one for commands and files, each chosen by the person in one place (the
-pane's chat box, Settings › programs, Settings › files and commands) and read again at every action, so a change
+"""How much the character may do by itself when it acts for the person: one mode for every place it acts in
+(pages in the app's browser, other programs' windows, commands and files), chosen by the person (the pane's chat box,
+Settings › programs, Settings › files and commands all set the same mode) and read again at every action, so a change
 made while a task runs holds from its next step.
 
-    off    it does not act there at all
+    off    it does not act at all; an acting call shows the turn-on card inside the call (turnon.py)
     read   it looks, reads, scrolls and moves between pages; nothing it does sends, saves or changes anything
            (in a program: it only looks; by command: it only reads files in the granted folders)
     auto   automatic review, the default: code first lets through what plainly only reads or moves about, or can
@@ -14,7 +14,7 @@ made while a task runs holds from its next step.
 
 What no mode loosens, decided here in code: paying or buying, deleting, an account's security or access (`HARD`)
 ask every time, with no always-allow and no reviewer; a password, payment detail or code is never typed or read
-by the character (the gates); sending and posting skip the card only by the person's always-allow for that site or
+by the character (the gates); an outward act skips the card only by the person's always-allow for that site or
 the reviewer's pass, never on a sensitive site (`sensitive`: banks and payment, health, mail and accounts), where
 every kind asks. The reviewer passes nothing while no request of the person's own is under way.
 
@@ -30,7 +30,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-AREAS = ("browser", "programs", "commands")
 MODES = ("off", "read", "auto")
 DEFAULT = "auto"
 FILE = "acting.json"
@@ -53,65 +52,37 @@ def sensitive(site: str) -> bool:
 
 def decide(mode: str, kind: str, site: str = "", area: str = "browser") -> str:
     """What an action of an outside `kind` gets in `mode`: "refuse" (read only), "review" (a kind the reviewer
-    may pass, on a site that is not sensitive) or "ask" (a card)."""
-    from .review import REVIEWABLE
+    may pass, on a site that is not sensitive) or "ask" (a card). A gate's reading of a press (send, like, a
+    form) is judged as the one kind "outward" (review.judged)."""
+    from .review import REVIEWABLE, judged
     if mode in ("off", "read"):
         return "refuse"
-    if kind not in HARD and kind in REVIEWABLE[area] and not sensitive(site):
+    if kind not in HARD and judged(area, kind) in REVIEWABLE[area] and not sensitive(site):
         return "review"
     return "ask"
 
 
 class Modes:
-    """The person's mode per area, in the desktop folder. The off of programs and of commands is their own switch
-    (desk.json, shell.json), so the two can never disagree; the level beside it is kept here."""
+    """The person's one mode, in the desktop folder's acting.json: {"mode": "off" | "read" | "auto"}."""
 
     def __init__(self, desktop: Path):
         self.desktop = Path(desktop)
         self.path = self.desktop / FILE
         self.lock = threading.Lock()
 
-    def _read(self) -> dict:
+    def mode(self) -> str:
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return {}
-        return data if isinstance(data, dict) else {}
+            kept = json.loads(self.path.read_text(encoding="utf-8")).get("mode")
+        except (OSError, ValueError, AttributeError):
+            return DEFAULT
+        return kept if kept in MODES else DEFAULT
 
-    def _switch(self, area: str):
-        """The area's own on/off switch, or None (the browser has none)."""
-        if area == "programs":
-            from .desk.grants import Grants
-            return Grants(self.desktop)
-        if area == "commands":
-            from .shell.grants import Grants as ShellGrants
-            return ShellGrants(self.desktop, self.desktop.parents[1])
-        return None
-
-    def mode(self, area: str) -> str:
-        switch = self._switch(area)
-        if switch is not None and not switch.on():
-            return "off"
-        kept = self._read().get(area)
-        return kept if kept in MODES and not (switch is not None and kept == "off") else DEFAULT
-
-    def all(self) -> dict:
-        return {area: self.mode(area) for area in AREAS}
-
-    def set(self, area: str, mode: str) -> dict:
+    def set(self, mode: str) -> str:
         from .storage import atomic_write_text
-        switch = self._switch(area)
-        if switch is not None and switch.on() != (mode != "off"):
-            switch.set_on(mode != "off")
         with self.lock:
-            data = self._read()
-            if switch is not None and mode == "off":
-                data.pop(area, None)
-            else:
-                data[area] = mode
             self.desktop.mkdir(parents=True, exist_ok=True)
-            atomic_write_text(self.path, json.dumps(data, ensure_ascii=False))
-        return self.all()
+            atomic_write_text(self.path, json.dumps({"mode": mode}, ensure_ascii=False))
+        return mode
 
 
 def asked(workspace) -> list[dict]:

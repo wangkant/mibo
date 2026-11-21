@@ -118,7 +118,7 @@ class Operating:
         pane = self.window.pane
         if pane is None:
             return {"status": "no_app", "line": "[failed] the app's browser is not there"}
-        mode = self.modes.mode("browser")
+        mode = self.modes.mode()
         if mode == "off":
             return {"status": "acting_off", "line": "[off] the person turned acting in the app's browser off"}
         if self.hands is not None:
@@ -157,7 +157,7 @@ class Operating:
         self.hands = Hands(PaneTab(pane), ask=self.ask, allowed=self.allowed, attended=self.window.attended,
                            held=self.held, tell=tell, lang=lang,
                            downloads=lambda: (pane.op or {}).pop("downloads", []),
-                           mode=lambda: self.modes.mode("browser"), review=self.review)
+                           mode=self.modes.mode, review=self.review)
         return {"status": "ok", "url": await asyncio.to_thread(pane.address)}
 
     async def review(self, action: dict):
@@ -460,18 +460,18 @@ def mount(app, workspace, body) -> None:
     @app.get("/api/browser/acting")
     async def browser_acting():
         from ..acting import Modes
-        return {"modes": await asyncio.to_thread(Modes(desktop).all)}
+        return {"modes": {"browser": await asyncio.to_thread(Modes(desktop).mode)}}
 
     @app.post("/api/browser/acting")
     async def browser_acting_set(request: Request):
-        """The person's mode for an area (acting.py), from the app window's own page alone: it holds from the run's
-        next step."""
-        from ..acting import AREAS, MODES, Modes
+        """The person's one acting mode (acting.py), from the app window's own page alone: it holds from the run's
+        next step in every place the character acts."""
+        from ..acting import MODES, Modes
         own_window(request)
         payload = await body(request)
-        if payload.get("area") not in AREAS or payload.get("mode") not in MODES:
+        if payload.get("mode") not in MODES:
             raise ValueError("browse_invalid")
-        return {"modes": await asyncio.to_thread(Modes(desktop).set, payload["area"], payload["mode"])}
+        return {"modes": {"browser": await asyncio.to_thread(Modes(desktop).set, payload["mode"])}}
 
     @app.get("/api/browser/allowed")
     async def browser_allowed():

@@ -1,8 +1,8 @@
-"""The person's permissions for commands: the switch, the granted folders, the never list, the log.
+"""The person's permissions for commands: the granted folders, the never list, the log.
 
 All of it lives in the desktop folder of the app's home, which no command may
-read or change (`blocked` names the home as the app's own). The switch is on
-unless the person turns it off in Settings. A fresh home may read the person's
+read or change (`blocked` names the home as the app's own). Whether commands
+run at all is the one acting mode (acting.py). A fresh home may read the person's
 own folders (Desktop, Documents, Downloads, Pictures, Music, Videos); other
 folders are granted from a card in the chat or in Settings, and any is taken
 back in Settings.
@@ -164,7 +164,7 @@ class Places:
 
 
 class Grants:
-    """The switch and the granted folders in `desktop`/shell.json, and the log beside it."""
+    """The granted folders in `desktop`/shell.json, and the log beside it."""
 
     def __init__(self, desktop: Path, home: Path):
         self.desktop = Path(desktop)
@@ -185,16 +185,6 @@ class Grants:
     def _write(self, data: dict) -> None:
         self.desktop.mkdir(parents=True, exist_ok=True)
         atomic_write_text(self.desktop / SETTINGS_FILE, json.dumps(data, ensure_ascii=False, indent=1))
-
-    def on(self) -> bool:
-        """On unless the person turned it off."""
-        return self._read().get("on") is not False
-
-    def set_on(self, on: bool) -> None:
-        with self.lock:
-            data = self._read()
-            data["on"] = bool(on)
-            self._write(data)
 
     def folders(self) -> list[str]:
         """Granted folders as the person chose them, the ones that are still grantable."""

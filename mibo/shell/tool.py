@@ -260,7 +260,10 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
     """(what the model is told, what the step log shows) for an outcome that is not done."""
     reason = _STATUS.get(status, status)
     shown = reason
-    if status == "refused":
+    if status == "refused" and outcome.get("declined"):
+        # The app's review turned this one call down (review.Verdict.declined).
+        shown, reason = outcome["why"][lang], outcome["declined"]
+    elif status == "refused":
         shown = outcome.get("why", {}).get(lang, "")
         reasons = "; ".join(outcome.get("reasons") or [])
         reason += (f" The app found that it {reasons}. Tell them in a sentence why this is never done "

@@ -689,7 +689,22 @@ class Workspace:
                         pass
 
     def _save_chat(self, chat: PageChat | None = None) -> None:
-        (chat or self._main).save()
+        from . import person
+        chat = chat or self._main
+        if not chat.private:
+            # No ID or card number, password or code is kept in the page's copy (person.mask): not in a line, its
+            # steps or the chat's title, nor where a reply repeats a password of theirs without its word.
+            values = {k: v for m in chat.history if m.get("role") == "user" and isinstance(m.get("text"), str)
+                      for k, v in person.secret_values(m["text"]).items()}
+            chat.title = person.mask(chat.title, values)[0]
+            for m in chat.history:
+                if isinstance(m.get("text"), str):
+                    m["text"] = person.mask(m["text"], values)[0]
+                for step in m.get("trace") or []:
+                    for key in ("what", "out"):
+                        if isinstance(step.get(key), str):
+                            step[key] = person.mask(step[key], values)[0]
+        chat.save()
         self._prune_pictures()
         self.chat_changed()
 
@@ -931,8 +946,8 @@ class Workspace:
             dropped = 0
             scrub = next((i["scrub"] for i in items if isinstance(i.get("scrub"), dict)), None)
             if scrub:
-                # The command and its answer stay as they are.
-                dropped = self._scrub_chats(scrub, room, {id(said), *map(id, entries)})
+                # A memory command and its answer stay as they are; a turn not to keep goes whole.
+                dropped = self._scrub_chats(scrub, room, {id(said), *map(id, entries)} if command else set())
             self._save_chat(room)
             if not room.private:
                 # A 无痕对话 tells the recommender nothing.

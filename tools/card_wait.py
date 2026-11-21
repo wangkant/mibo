@@ -99,8 +99,7 @@ def press(page: Page, kind: str, card: dict) -> None:
     if kind == "shell":
         page("shell/card", {"id": card["id"], "yes": True})
     elif kind == "desk":
-        page("programs/card", {"id": card["id"], "answer": "no"} if card.get("type") == "desk_grant"
-             else {"id": card["id"], "yes": False})
+        page("programs/card", {"id": card["id"], "yes": False})
     else:
         page("mcp/card", {"id": card["id"], "answer": "once"})
 

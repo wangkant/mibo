@@ -147,16 +147,14 @@ def open_one(name: str, home: Path) -> int:
     """Through panel.Desk, as a chat task would: the card, the start from Start's entry, the grant, a look."""
     from types import SimpleNamespace
 
-    from mibo.desk import grants as g, panel, win32
+    from mibo.desk import panel, win32
     win32.dpi_aware()
-    desktop = home / "runtime" / "desktop"
-    g.Grants(desktop).set_on(True)
     desk = panel.Desk(None, SimpleNamespace(home=home, config=lambda: {"PERSONA_NAME": "Mibo"}))
     cards = []
 
     def answer(card: dict) -> dict:
         cards.append({k: v for k, v in card.items() if k != "picture"})
-        return {"answer": "once"} if card.get("type") == "desk_grant" else {"yes": False}
+        return {"yes": False}
     desk.ask = answer
     before = set(win32.top_windows())
     began = time.monotonic()

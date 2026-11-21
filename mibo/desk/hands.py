@@ -1,4 +1,4 @@
-"""One task in another program, asked for by the person in chat: the grants,
+"""One task in another program, asked for by the person in chat: the never list,
 the look, every action through the gate, the card for what has an effect
 outside, the strip, the stop and the log, put together.
 
@@ -44,27 +44,8 @@ PROVED = ("read back", "looked again: the field is empty", "now shows as", "no l
 # The common Save and Open dialogs: the file name box and the address band, in English and Chinese Windows.
 FILE_NAME = re.compile(r"(?:file name|文件名)\s*(?:\(&?\w\))?\s*[:：]?", re.I)
 ADDRESS = re.compile(r"(?:address|地址)\s*[:：]\s*(.+)", re.I)
-GRANT_TEXT = {
-    "zh": {"use": "允许{who}查看并操作「{program}」？", "open": "允许{who}打开并操作「{program}」？",
-           "off": "电脑操作未开启：请先在设置中开启“允许{who}操作电脑上的其他程序”。", "unknown": "发布者未知"},
-    "en": {"use": "Let {who} look at and operate {program}?", "open": "Let {who} open and operate {program}?",
-           "off": "Operating other programs is off: turn it on in Settings first.", "unknown": "Unknown publisher"},
-}
-
-
-def grant_text(lang: str, who: str, program: str, kind: str = "use") -> str:
-    """What the card asks. A name in Latin letters stands apart from the Chinese round it."""
-    if lang == "zh" and who.isascii():
-        who = f" {who} "
-    return GRANT_TEXT[lang][kind].format(who=who, program=program)
-
-
-def published_by(lang: str, exe: str, signer: str, package: str = "") -> str:
-    """The publisher line of a grant card: the name on the file's signature, or that it has none to show
-    (an unsigned file outside the folders only an administrator or the system writes)."""
-    if signer or package or not exe or g.protected(exe):
-        return signer
-    return GRANT_TEXT[lang]["unknown"]
+OFF_TEXT = {"zh": "电脑操作未开启：请先在设置中开启“允许{who}操作电脑上的其他程序”。",
+            "en": "Operating other programs is off: turn it on in Settings first."}
 
 
 class Hands:
@@ -81,7 +62,6 @@ class Hands:
         self.who = who
         self.lang = "zh" if lang.startswith("zh") else "en"
         self.task = ""
-        self.once: set[str] = set()
         self.target = None
         self.target_id = 0
         self.view: uia.View | None = None
@@ -96,29 +76,19 @@ class Hands:
 
     def begin(self, task: str) -> dict:
         """Only from a task the person asked for in chat; never on a timer."""
-        if not self.grants.on():
-            return {"status": "off", "line": GRANT_TEXT[self.lang]["off"].format(who=self.who)}
+        if self.modes.mode() == "off":
+            return {"status": "off", "line": OFF_TEXT[self.lang].format(who=self.who)}
         self.end("replaced", "")
         self.task = " ".join(str(task).split())[:300]
-        self.once = set()
         self.typed_tops = set()
         return {"status": "ok"}
 
     def held(self) -> str:
-        if not self.task or not self.grants.on():
+        if not self.task or self.modes.mode() == "off":
             return "stopped"
         if self.strip and self.strip.halted:
             return self.strip.halted
-        if self.program and not self._granted():
-            # Taken back in Settings: the run stops now, not when the task ends.
-            if self.strip:
-                self.strip.stop("stopped", "the grant was taken back in Settings")
-            return "stopped"
         return ""
-
-    def _granted(self) -> bool:
-        """Whether the program is granted now: this once, or by a stored grant still in Settings."""
-        return g.key_of(self.program) in self.once or self.grants.find(self.program) is not None
 
     def step(self, n: int, note: str) -> None:
         if self.strip:
@@ -136,25 +106,24 @@ class Hands:
 
     # --- the program
 
-    def use(self, hwnd: int, sight: str = "", allowed: str = "") -> dict:
-        """Attach to a program's window. Asks the person on a card when the program is not granted, unless
-        `allowed` is their answer ("once" or "always") on the card that asked to open it. `sight` names the
-        model when it takes pictures, else ""."""
+    def use(self, hwnd: int, sight: str = "") -> dict:
+        """Attach to a program's window, unless the program is never operated. `sight` names the model when it
+        takes pictures, else ""."""
         self.sees = sight
         if not self.task:
             return {"status": "stopped", "line": "[stopped] no task asked for in chat"}
-        prog, refused = self._grant(hwnd, allowed)
+        prog, refused = self._grant(hwnd)
         if refused:
             return refused
         self._attach(hwnd, prog)
         return {"status": "ok", "sight": bool(self.sees), "program": prog["name"], "line": f"[ok] using {prog['name']}"}
 
-    def also(self, hwnd: int, allowed: str = "") -> dict:
+    def also(self, hwnd: int) -> dict:
         """Another program the task moves to (read in one, typed or pasted in another), granted as `use` grants; the window
         in use stays, and the switch action goes to this one."""
         if not self.task:
             return {"status": "stopped", "line": "[stopped] no task asked for in chat"}
-        prog, refused = self._grant(hwnd, allowed)
+        prog, refused = self._grant(hwnd)
         if refused:
             return refused
         key = g.key_of(prog)
@@ -162,8 +131,9 @@ class Hands:
             self.parts.append({"name": prog["name"], "key": key, "hwnd": hwnd})
         return {"status": "ok", "program": prog["name"], "line": f"[ok] {prog['name']} is in this task too"}
 
-    def _grant(self, hwnd: int, allowed: str) -> tuple[dict, dict | None]:
-        """(the program of `hwnd`, None) once it may be used for the task, or ({}, the result that ends it)."""
+    def _grant(self, hwnd: int) -> tuple[dict, dict | None]:
+        """(the program of `hwnd`, None) when it may be used for the task, or ({}, the result that ends it): any
+        program off the never lists, with no card to grant it."""
         prog = g.identify(g.program_pid(hwnd))
         why = g.never(prog, hwnd)
         if not why:
@@ -182,24 +152,6 @@ class Hands:
                              "status": "refused", "line": why})
             return {}, {"status": "refused", "line": f"[refused] {prog.get('name') or 'this program'} is never "
                                                      f"operated: {why}"}
-        key = g.key_of(prog)
-        if key not in self.once and self.grants.find(prog) is None:
-            answer = allowed
-            if not answer:
-                card = {"id": secrets.token_urlsafe(8), "type": "desk_grant", "program": prog["name"],
-                        "exe": prog["exe"], "package": prog.get("package", ""), "task": self.task,
-                        "signer": published_by(self.lang, prog["exe"], prog.get("signer", ""), prog.get("package", "")),
-                        "text": grant_text(self.lang, self.who, prog["name"]), "choices": ["once", "always", "no"]}
-                answer = (self.ask(card) or {}).get("answer")
-                self.grants.log({"do": "ask", "program": prog["name"], "exe": prog["exe"],
-                                 "status": answer or "unanswered"})
-                if answer not in ("once", "always"):
-                    return {}, {"status": "declined", "line": f"[declined] the person did not grant {prog['name']}; "
-                                                              f"do not use it for this task"}
-            if answer == "always":
-                self.grants.grant(prog)
-            else:
-                self.once.add(key)
         return prog, None
 
     def _attach(self, hwnd: int, prog: dict) -> None:
@@ -242,8 +194,6 @@ class Hands:
         why = g.never(prog, hwnd) or self.grants.blocked_by({**prog, "name": part["name"]})
         if why:
             return {"status": "refused", "line": f"[refused] that window of {part['name']} is never operated: {why}"}
-        if g.key_of(prog) not in self.once and self.grants.find(prog) is None:
-            return {"status": "stopped", "line": f"[stopped] {part['name']} is no longer granted"}
         self._attach(hwnd, {**prog, "name": part["name"]})
         return {"status": "ok", "line": f"[ok] switch to {part['name']}: its window is the one read and acted in now"}
 
@@ -389,7 +339,7 @@ class Hands:
         if do in LOOKS:
             return ""
         tier = self.grants.tier(self.program)
-        if self.modes.mode("programs") == "read" or tier == "view":
+        if self.modes.mode() == "read" or tier == "view":
             why = "the person set other programs to read only" if tier != "view" else (
                 f"{self.program['name']} is set to be looked at only")
             return f"[read-only] {do}: {why}, so nothing was done; read and tell them, or ask_person"
@@ -644,13 +594,13 @@ class Hands:
         window = clip(win32.title_of(node.top if node else v.hwnd), 120)
         how = "confirmed by the person"
         answer = None
-        if self.review is not None and acting.decide(self.modes.mode("programs"), kind, "", "programs") == "review":
+        if self.review is not None and acting.decide(self.modes.mode(), kind, "", "programs") == "review":
             verdict = self.review({"kind": kind, "where": f"{self.program['name']} — {window}",
                                    "target": files[:50] or ([name] if name else []), "text": text[:2000],
                                    "page_says": name})
             if verdict.decision == "refuse":
                 return {"status": "declined", "kind": kind,
-                        "line": f"[declined] {kind} ({clip(name, 40)}): {verdict.line(self.lang)}; nothing was done"
+                        "line": f"[declined] {kind} ({clip(name, 40)}), nothing was done. {verdict.declined()}"
                                 + ("; turned down three times in a row: stop and hand the task back" if verdict.stop
                                    else "")}
             if verdict.decision == "go":

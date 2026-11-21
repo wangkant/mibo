@@ -730,6 +730,67 @@ def secret(text: str) -> bool:
     return any(_luhn(re.sub(r"\D", "", m.group())) for m in _CARD.finditer(text))
 
 
+# The value after a password's or a code's word, as `_SECRET` finds it; a question ("密码是什么") has none.
+_SECRET_VALUE = re.compile(rf"((?:{_SECRET_WORD})\s*(?:是|为|為|は|는|은|:|：|=|\bis\b|\bist\b|\bes\b|\best\b|\bé\b|—)\s*)"
+                           rf"(?!什么|甚么|多少|啥|哪)([^\s，,。;；!！?？、]+)|((?:{_SECRET_WORD})\D{{0,6}}?)(\d{{4,}})",
+                           re.IGNORECASE)
+# A card number as cards print it: 13 to 19 digits in a row, in groups of four, or Amex's 4-6-5. No card network
+# issues numbers starting 19 or 20, which is how dates and times begin ("2026-11-18 141500").
+_CARD_SHOWN = re.compile(r"(?<![\d-])(?!19|20)(?:\d{13,19}|\d{4}(?:[ -]\d{4}){2,3}(?:[ -]\d{1,3})?"
+                         r"|\d{4}[ -]\d{6}[ -]\d{5})(?![\d-])")
+
+
+def _masked(text: str, found: dict[str, str]) -> str:
+    """`text` with each secret hidden; `found` gets {the secret as written: what it became}."""
+    def hidden(raw: str, shown: str) -> str:
+        found[raw] = shown
+        return shown
+
+    def digits(m: re.Match) -> str:
+        d = re.sub(r"\D", "", m.group())
+        return hidden(m.group(), f"{d[:2]}****{d[-2:]}")
+
+    def checked(m: re.Match) -> str:
+        right = "10X98765432"[sum(int(c) * w for c, w in zip(m.group(), _ID_WEIGHTS)) % 11] == m.group()[-1].upper()
+        return digits(m) if right else m.group()
+
+    def value(m: re.Match) -> str:
+        raw = m.group(2) or m.group(4)
+        return m.group() if raw == "****" else (m.group(1) or m.group(3)) + hidden(raw, "****")
+
+    text = _ID18.sub(checked, text)
+    text = _CARD_SHOWN.sub(lambda m: digits(m) if _luhn(re.sub(r"\D", "", m.group())) else m.group(), text)
+    return _SECRET_VALUE.sub(value, text)
+
+
+def secret_values(text: str) -> dict[str, str]:
+    """{each secret in `text` as written: what `mask` shows for it}, so other lines that repeat it without its word
+    hide it too. Values shorter than 4 characters are left out: they would hide ordinary words."""
+    found: dict[str, str] = {}
+    for form in {str(text or ""), unicodedata.normalize("NFKC", str(text or ""))}:
+        _masked(form, found)
+    return {raw: shown for raw, shown in found.items() if len(raw) >= 4}
+
+
+def mask(text: str, values: dict[str, str] | None = None) -> tuple[str, bool]:
+    """`text` with what `secret` finds hidden, and whether anything was: an ID or card number keeps its first 2 and
+    last 2 digits around ****; a password or code after its word becomes ****; `values` (secret_values of the
+    turn's other lines) are hidden wherever they stand. Other text is unchanged."""
+    text = str(text or "")
+    masked = text
+    for raw, shown in (values or {}).items():
+        masked = masked.replace(raw, shown)
+    if secret(masked):
+        hidden = _masked(masked, {})
+        if hidden == masked:
+            # Full-width digits or letters, as secret() reads them.
+            plain = unicodedata.normalize("NFKC", masked)
+            hidden = _masked(plain, {})
+            hidden = hidden if hidden != plain else masked
+        masked = hidden
+    return masked, masked != text
+
+
 # ---- a 记住 said in chat: what it is about, read in code -------------------------------
 
 # Their name and what to call them, in the ten chat languages.

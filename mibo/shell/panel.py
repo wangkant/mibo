@@ -14,8 +14,8 @@ process tree.
 The person's mode for commands (acting.py) is read at every step: read only
 runs nothing that changes or starts anything; automatic review lets changes to
 files inside folders that may be changed go without a card, as the turn's
-checkpoint can put them back, and puts a program run inside a granted folder
-to the reviewer (review.py) before any card. A card about a program run in a granted folder offers
+checkpoint can put them back, and puts a program run or a step outside the
+granted folders to the reviewer (review.py) before any card. A card about a program run in a granted folder offers
 本次对话内允许 and 对此程序在此文件夹始终允许 (a rule in shell.json that
 Settings lists and takes back), one about edits 本次对话内允许; a delete, the
 network or an install is asked each time, as OpenCode's and Codex's approvals.
@@ -49,6 +49,8 @@ FIND_MOST = 20000
 READ_KEPT_S = 5.0
 # How a step that asked went ahead after a press on its card (without one: "auto_edit", "rule", "this_chat", "").
 PRESSED = ("once", "chat", "always")
+# The reasons a command asks that the reviewer may pass in automatic review.
+REVIEWED = ("program", "outside", "move_out")
 # The step log's line for a step the read-only mode held.
 READ_MODE = {"zh": "当前为只读模式，未进行任何更改", "en": "Read only: nothing was changed"}
 
@@ -95,9 +97,9 @@ class Shell:
         return self.cards.press(ident, value)
 
     def mode(self) -> str:
-        """The person's mode for commands and files (acting.py): off, read or auto (automatic review)."""
+        """The person's one acting mode (acting.py): off, read or auto (automatic review)."""
         from ..acting import Modes
-        return Modes(self.desktop).mode("commands")
+        return Modes(self.desktop).mode()
 
     def _scope(self, read_: reading.Reading, verdict: reading.Verdict, cwd: str) -> dict | None:
         """What a wider press on this card could cover: {"key": "edit"} for changes to files inside folders that
@@ -172,7 +174,7 @@ class Shell:
 
     def ready(self, conversation: str) -> dict | None:
         """Why nothing may run now, as the outcome, or None."""
-        if not self.grants.on():
+        if self.mode() == "off":
             return {"status": "off"}
         if running.elevated():
             return {"status": "elevated"}
@@ -198,14 +200,15 @@ class Shell:
         if not self.turn_on(conversation):
             return {"status": "unanswered"}
         place = self.cwd_for(folder)[1] if folder else ""
-        off = not self.grants.on()
+        off = self.mode() == "off"
         if not off and not place:
             return {"status": "on", "folder": "", "read_only": False}
         answer = await self.ask(self.folder_card(place, False, off), conversation)
         if not answer:
             return {"status": "declined" if answer is False else "unanswered"}
         if off:
-            self.grants.set_on(True)
+            from ..acting import Modes
+            Modes(self.desktop).set("auto")
             self.grants.log({"granted": place, "outcome": "turned_on"})
         if place and not self.grants.add(place, read_only=answer == "read"):
             self.last = place
@@ -291,8 +294,10 @@ class Shell:
             self.last = cwd
         scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" else None
         context["how"] = self._passed(scope, mode, conversation)
-        if verdict.action == "ask" and not context["how"] and scope and scope.get("program") and mode == "auto":
-            # A program run inside a granted folder: the reviewer first, on the person's own words of this turn.
+        if verdict.action == "ask" and not context["how"] and mode == "auto" and all(
+                a.kind in REVIEWED for a in verdict.reasons):
+            # A program run, or a step outside the granted folders: the reviewer first, on the person's own words of
+            # this turn. A delete, the network, an install and what cannot be told ask each time.
             from .. import acting, review
             passed = await review.decide("commands", await asyncio.to_thread(acting.asked, self.workspace), {
                 "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6]},
@@ -302,7 +307,7 @@ class Shell:
             elif passed.decision == "refuse":
                 self.log(command, cwd, read_, verdict, "refused", said=asked_said, how="review")
                 return {"status": "refused", "said": asked_said, "why": {"zh": passed.reason, "en": passed.reason},
-                        "reasons": [passed.reason]}, context
+                        "reasons": [passed.reason], "declined": passed.declined()}, context
         if verdict.action == "ask" and not context["how"]:
             # 本次 always; 本次对话内允许 for a program or for edits; 始终允许 for a program in this folder. Never for a
             # delete, the network or an install, which are asked each time.
@@ -584,7 +589,7 @@ class Shell:
         folders = self.grants.folders()
         granted, read_only = {norm(p) for p in folders}, self.grants.read_only()
         return {
-            "on": self.grants.on(), "elevated": running.elevated(), "mode": self.mode(),
+            "on": self.mode() != "off", "elevated": running.elevated(), "mode": self.mode(),
             "folders": [{"path": p, "zh": words.folder_name(p, "zh"), "en": words.folder_name(p, "en"),
                          "read_only": norm(p) in read_only} for p in folders],
             "rules": [{"program": r["program"], "shown": r["shown"], "folder": r["folder"],
@@ -618,9 +623,10 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         grants = shell().grants
         if isinstance(payload.get("on"), bool):
-            await asyncio.to_thread(grants.set_on, payload["on"])
-        elif payload.get("mode") in ("read", "auto") and grants.on():
-            await asyncio.to_thread(Modes(shell().desktop).set, "commands", payload["mode"])
+            # The switch is the one acting mode: on is automatic review, off stops every acting place.
+            await asyncio.to_thread(Modes(shell().desktop).set, "auto" if payload["on"] else "off")
+        elif payload.get("mode") in ("read", "auto") and shell().mode() != "off":
+            await asyncio.to_thread(Modes(shell().desktop).set, payload["mode"])
         elif isinstance(payload.get("forget"), dict):
             rule = payload["forget"]
             await asyncio.to_thread(grants.forget, str(rule.get("program") or ""), str(rule.get("folder") or ""))
@@ -669,7 +675,7 @@ def mount(app, workspace, body) -> None:
         command = payload.get("command")
         if not isinstance(command, str) or not command.strip():
             return _error("generic")
-        if shell().grants.on():
+        if shell().mode() != "off":
             await asyncio.to_thread(running.SPARE.warm)
         cwd = shell().cwd_for(str(payload.get("folder") or ""))[0] or os.environ.get("USERPROFILE", "")
         read_ = await asyncio.to_thread(reading.read, command, cwd)

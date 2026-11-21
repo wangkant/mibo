@@ -164,7 +164,6 @@ class Bench:
         from mibo.desk import grants, hands, operate, panel, uia, win32
         self.g, self.hands_mod, self.operate, self.panel, self.uia, self.win32 = grants, hands, operate, panel, uia, win32
         win32.dpi_aware()
-        grants.Grants(self.home / "runtime" / "desktop").set_on(True)
         self._instrument()
         screens = win32.monitors()
         self.screen = next((s for s in screens if not s["primary"]), screens[0])
@@ -342,7 +341,7 @@ class Bench:
 
     def card(self, card: dict) -> dict | None:
         kind = card.get("type")
-        if kind in ("desk_grant", "see_grant"):
+        if kind == "see_grant":
             answer = {"answer": "once"}
         elif kind == "see_lease":
             answer = {"yes": bool(self.task.get("sight"))}

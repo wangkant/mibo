@@ -1,5 +1,5 @@
 """The app page's side of operating other programs: where a task's steps run, the cards wait, and Settings'
-section reads the switch, the grants, the never list and the log.
+section reads the one acting mode, the kept tiers, the never list and the log.
 
 The character's turn runs in the service; its loop (operate.py) sends each step here (/api/programs/op). Here one
 `Hands` does it on one worker thread (UI Automation, the input and the per-monitor scale belong to the thread
@@ -9,8 +9,7 @@ person's own chat turn is under way in the app, and a card waits for them there 
 nobody started, on a timer or in the background. The turn stopped in the chat stops the run and closes the strip.
 
 Which program a name means is found the way Start finds one (names.py): a window of it already open, the
-front-most first, or else its entry in Start, opened for the task once the person said yes on a card; never a
-path from the model. No name at all means the window that was in front before the person came to the app. A
+front-most first, or else its entry in Start, opened for the task with no card; never a path from the model. No name at all means the window that was in front before the person came to the app. A
 program on the never list is refused by its name before any window is looked for.
 
 A window only a picture can work sends no picture to the model service before the person's yes on a card at the
@@ -220,8 +219,7 @@ class Desk:
         """Shows `card` and waits on the worker thread: the person's answer, or None when nobody answered,
         the turn ended or the strip halted the run."""
         program = card.get("program") or ""
-        what = ({"zh": f"使用{program}", "en": f"Use {program}"} if card.get("type") == "desk_grant"
-                else {"zh": f"在{program}中操作", "en": f"An action in {program}"})
+        what = {"zh": f"在{program}中操作", "en": f"An action in {program}"}
 
         def halted() -> bool:
             return self.hands is not None and self.hands.strip is not None and self.hands.strip.halted
@@ -234,7 +232,8 @@ class Desk:
                     also: tuple[str, ...] = ()) -> dict:
         """A task in `program`, and in the programs `also` names when it moves across them (read in one, written
         in another): each found, opened and granted as the first is, before anything is done."""
-        if not self.grants.on():
+        from ..acting import Modes
+        if Modes(self.desktop).mode() == "off":
             return {"status": "off"}
         if not self.turn_on(conversation):
             return {"status": "unwatched"}
@@ -260,10 +259,10 @@ class Desk:
         self.hands = hands
         result = self._window(program)
         if result.get("hwnd"):
-            result = hands.use(result["hwnd"], sight=sight, allowed=result.get("allowed", ""))
+            result = hands.use(result["hwnd"], sight=sight)
         for name in also if result["status"] == "ok" else ():
             found = self._window(name)
-            more = hands.also(found["hwnd"], allowed=found.get("allowed", "")) if found.get("hwnd") else found
+            more = hands.also(found["hwnd"]) if found.get("hwnd") else found
             if more["status"] != "ok":
                 result = more
                 break
@@ -275,8 +274,7 @@ class Desk:
         return result
 
     def _window(self, program: str) -> dict:
-        """The window a name means: {"hwnd"}, with "allowed" when a card to open it was answered; or the
-        result that ends the task before it began."""
+        """The window a name means: {"hwnd"}, or the result that ends the task before it began."""
         from . import names, win32
         if program.lower() in FRONT:
             hwnd = win32.root_owner(self.front) if win32.shown(self.front) else 0
@@ -301,11 +299,10 @@ class Desk:
               f"another name, use the tool again with that name; otherwise tell them it was not found.")}
 
     def _launch(self, app) -> dict:
-        """A program Start or the Desktop lists and no window shows, opened from its entry once the person said yes
-        on a card (or granted it always before): {"hwnd", "allowed"}, or the result that ends the task. A shortcut
-        to something that is not a program is opened at once, and that ends the task."""
+        """A program Start or the Desktop lists and no window shows, opened from its entry with no card when it is
+        off the never lists: {"hwnd"}, or the result that ends the task. A shortcut to something that is not a
+        program is opened at once, and that ends the task."""
         from . import names, win32
-        from .hands import grant_text, published_by
         why = never_named(app.name) or never_named(Path(app.target).name)
         word = "" if why else self.grants.blocked_by({"name": app.name, "exe": app.target or ""})
         if word:
@@ -325,19 +322,6 @@ class Desk:
 
         def its(exe: str) -> bool:
             return names.runs(app, exe) or names.beside(app, exe)
-        allowed = ""
-        if not any(its(row["exe"]) for row in self.grants.all()):
-            signer = win32.signer(app.target) if app.target else ""
-            answer = self.ask({"type": "desk_grant", "program": app.name, "exe": app.target, "package": app.family,
-                               "signer": published_by(self.lang, app.target, signer, app.family),
-                               "task": self.hands.task, "text": grant_text(self.lang, self.who(), app.name, "open"),
-                               "open": True, "choices": ["once", "always", "no"]}) or {}
-            allowed = answer.get("answer") or ""
-            self.grants.log({"do": "ask", "program": app.name, "exe": app.target or app.aumid,
-                             "status": allowed or "unanswered", "line": "to open it"})
-            if allowed not in ("once", "always"):
-                return {"status": "declined", "line": f"[declined] the person did not let you open {app.name}; do "
-                                                      f"not use it for this task"}
         before = {w.hwnd for w in names.open_windows() if not win32.minimized(w.hwnd)}
         if app.file:
             win32.open_file(app.file)
@@ -352,7 +336,7 @@ class Desk:
             if hwnd:
                 self.grants.log({"do": "open", "program": app.name, "exe": app.target or app.aumid, "status": "ok",
                                  "line": "opened from Start"})
-                return {"hwnd": hwnd, "allowed": allowed}
+                return {"hwnd": hwnd}
         return {"status": "failed", "line": f"[failed] {app.name} was started, but no window of it showed"}
 
     async def op(self, op: str, payload: dict) -> dict:
@@ -430,8 +414,8 @@ class Desk:
         from ..see import when
         who, service = self.who(), self.service()
         return {
-            "on": self.grants.on(),
-            "mode": Modes(self.desktop).mode("programs"),
+            "on": Modes(self.desktop).mode() != "off",
+            "mode": Modes(self.desktop).mode(),
             "block": self.grants.blocked(),
             # Pictures of a window only a picture can work: asked on a card each time unless always for this service.
             "pictures": {"on": when.Switch(self.desktop).on(service),
@@ -483,7 +467,7 @@ def mount(app, workspace, body) -> None:
             from ..acting import MODES, Modes
             if payload["mode"] not in MODES:
                 return _error("generic")
-            await asyncio.to_thread(Modes(state.desktop).set, "programs", payload["mode"])
+            await asyncio.to_thread(Modes(state.desktop).set, payload["mode"])
             if payload["mode"] == "off":
                 await state.end("stopped", "turned off in Settings")
             return await asyncio.to_thread(state.view)
@@ -502,7 +486,9 @@ def mount(app, workspace, body) -> None:
             await asyncio.to_thread(when.Switch(state.desktop).set, state.service() if payload["pictures"] else "")
             state.grants.log({"do": "switch", "line": f"pictures turned {'on' if payload['pictures'] else 'off'}"})
         elif isinstance(payload.get("on"), bool):
-            await asyncio.to_thread(state.grants.set_on, payload["on"])
+            # The switch is the one acting mode: on is automatic review, off stops every acting place.
+            from ..acting import Modes
+            await asyncio.to_thread(Modes(state.desktop).set, "auto" if payload["on"] else "off")
             if not payload["on"]:
                 await state.end("stopped", "turned off in Settings")
         elif isinstance(payload.get("revoke"), str):

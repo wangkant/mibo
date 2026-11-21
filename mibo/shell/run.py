@@ -31,6 +31,8 @@ import threading
 import time
 from pathlib import Path
 
+from .grants import SECRET_NAMES, SECRET_SUFFIXES
+
 POWERSHELL = os.path.join(os.environ.get("SystemRoot") or r"C:\Windows",
                           r"System32\WindowsPowerShell\v1.0\powershell.exe")
 # Seconds a command may run, unless the tool asks for less.
@@ -112,6 +114,22 @@ WAIT = ("$__line = [Console]::In.ReadLine()\nif (-not $__line) { exit }\n"
         ". ([ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($__line))))\n")
 # Error records as Windows PowerShell writes them to a redirected stderr (CLIXML).
 CLIXML_ERROR = re.compile(r'<S S="(?:Error|warning)">(.*?)</S>', re.DOTALL)
+# A path or a file name whose last part is a key file's, as grants.Places.blocked tells one. In a command's output it
+# becomes HIDDEN, so no route names a file list_files hides. A name that is also a plain word (credentials, cookies,
+# login data) counts only as a path's last part, or alone at the end of a listing's row, so prose keeps it.
+_PART = r"[^\s\\/\"'<>|*?]"
+_END = r"(?=$|[\s\"'<>|,;:)\]])"
+_WORDS = "(?:" + "|".join(re.escape(n) for n in SECRET_NAMES if not re.search(r"[._]", n)) + ")"
+_KEY = (rf"(?:{'|'.join(re.escape(n) for n in SECRET_NAMES if re.search(r'[._]', n))}"
+        rf"|(?:\.env|id_rsa|id_ed25519|id_ecdsa){_PART}*|{_PART}*(?:{'|'.join(map(re.escape, SECRET_SUFFIXES))}))")
+SECRET_PATH = re.compile(rf"(?<![^\s\"'(\[<>|=,;])(?:{_PART}*[\\/])*{_KEY}{_END}|(?:{_PART}*[\\/])+{_WORDS}{_END}"
+                         rf"|(?:^|(?<=\d))(?P<lead>[ \t]*){_WORDS}[ \t]*$", re.IGNORECASE | re.MULTILINE)
+HIDDEN = "[hidden: key file]"
+
+
+def hide_secret_names(text: str) -> str:
+    """`text` with every key file's name or path as HIDDEN."""
+    return SECRET_PATH.sub(lambda m: (m.group("lead") or "") + HIDDEN, text)
 
 
 def environment() -> dict:
@@ -273,7 +291,7 @@ def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threadin
 
     def drain() -> None:
         for raw in iter(process.stdout.readline, b""):
-            kept.add(_line(raw.rstrip(b"\r\n")))
+            kept.add(hide_secret_names(_line(raw.rstrip(b"\r\n"))))
             if progress is not None:
                 progress["last"] = kept.last
 
@@ -303,7 +321,7 @@ def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threadin
     job.close()
     recycled = [line for line in Path(bin_log).read_text(encoding="utf-8").splitlines() if line]
     os.unlink(bin_log)
-    return {"code": process.returncode, "out": kept.text(), "err": errors_of(b"".join(err)),
+    return {"code": process.returncode, "out": kept.text(), "err": hide_secret_names(errors_of(b"".join(err))),
             "clipped": bool(kept.dropped), "timed_out": timed_out, "stopped": stopped,
             "seconds": round(time.monotonic() - started, 1), "recycled": recycled}
 

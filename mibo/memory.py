@@ -376,6 +376,17 @@ class Memory:
                 dirty.add(conv)
         return removed
 
+    def _mask_lines(self, conv: str, values: dict[str, str]) -> int:
+        """Hide ID and card numbers, passwords and codes (person.mask, with the turn's `values`) in this chat's recent
+        lines, wherever _purge_lines walks, and in the steps its replies keep; how many lines changed."""
+        changed = self._purge_lines(conv, lambda text: person.mask(text, values)[1],
+                                    lambda text: person.mask(text, values)[0])
+        # A step of the reply (dm.py keeps its words with it) may carry the number too.
+        for row in getattr(self, "dm_history", {}).get(channels.dm_user(conv), []):
+            if row.get("steps"):
+                row["steps"] = [person.mask(step, values)[0] for step in row["steps"]]
+        return changed
+
     def _log_forget(self, conv: str, gone: Callable[[dict], object]) -> int:
         """Remove the lines `gone` is true for from the chat's log, and give
         those it returns words for those words; how many changed."""
@@ -490,7 +501,11 @@ class Memory:
 
     def _person_turn(self, conv: str, said: str, reply: str, mem) -> None:
         """After a sent reply: the plans it asked about (person.apply_turn); a turn they asked not to keep
-        leaves its words only as hashes. What they said of themselves is the fold's."""
+        leaves its words only as hashes. What they said of themselves is the fold's. A number or a code said in
+        it is masked in the chat's record: this turn saw it, no later one does."""
+        values = {**person.secret_values(said), **person.secret_values(reply)}
+        if values:
+            self._mask_lines(conv, values)
         store = self.person_store
         now = time.time()
         if person.unsaid(said):
