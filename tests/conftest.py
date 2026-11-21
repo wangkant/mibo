@@ -18,6 +18,8 @@ from mibo import paths as _paths
 from mibo.shell import run as _shell_run
 
 SUITE = Path(__file__).resolve().parent
+# This system's name, read before any test stands in another.
+SYSTEM = os.name
 LOOPBACK_NAMES = {"localhost"}
 
 
@@ -41,7 +43,11 @@ def _one_home_at_a_time(tmp_path_factory: pytest.TempPathFactory):
     os.environ.update(environment)
     _home.FROM_ENV_FILE.clear()
     _home.FROM_ENV_FILE.update(from_file)
-    _paths.use_home(root)
+    # A test may still be standing in another system's name here (its monkeypatch is put back later), and
+    # before Python 3.12 a path cannot be made under a foreign name.
+    with pytest.MonkeyPatch.context() as real:
+        real.setattr(os, "name", SYSTEM)
+        _paths.use_home(root)
 
 
 def _is_ip(host: str) -> bool:
