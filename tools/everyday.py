@@ -1,8 +1,9 @@
 """The everyday requests bench: thirty-five things a person asks of Mibo on their computer, sent through the chat of
-the real app window with the home's own model, each checked by code on what really happened.
+the real app window with a real model, each checked by code on what really happened.
 
     python tools/everyday.py prepare <scratch home> --places <folder>
-    python tools/everyday.py run <scratch home> --places <folder> --out <folder> [--only E01,E02] [--runs 3]
+    python tools/everyday.py run <scratch home> --places <folder> [--keys <file>] --out <folder> [--only E01,E02]
+                                 [--model deepseek/deepseek-v4.1-flash] [--runs 3]
                                  [--budget 0.07] [--price-in 0.0507] [--price-out 0.2028] [--site-port 59792]
                                  [--risky] [--chat]
     python tools/everyday.py selfcheck --places <folder>
@@ -17,7 +18,9 @@ script that writes a marker and three screenshots, Downloads with three pdfs of 
 Pictures, Documents, Music, Videos), builds the chat program (everyday/chat.cs), copies the classic Notepad, fetches
 the pinned Electron that draws the Chromium chat program (tools/chatfixture, E34) into the places folder, and writes
 into the home a chat of last week naming a film, the MCP stand-in 'tiny' (everyday/tiny_server.py) and a few
-unrelated finds (tools/feed_seed.py). The home must be a scratch folder with its settings and model set.
+unrelated finds (tools/feed_seed.py). The home is a scratch one (tools/scratchhome.py) whose computer is the places
+folder; `run` takes the model from --keys (LLM_API_KEY and LLM_BASE_URL, read and never printed), the key only
+through the app's environment; without --keys they are read from this process's environment.
 
 `run` opens the app window off screen on that home, as tools/opbench.py does, and sends each request in a fresh chat,
 standing in for the person: it opens the page a request is typed beside (the pages under tools/opsite/e), answers
@@ -164,7 +167,9 @@ def fingerprint(folders: list[str]) -> str:
 # ---------------------------------------------------------------- prepare
 
 def prepare(home: Path, places: Path) -> None:
-    places.mkdir(parents=True, exist_ok=True)
+    sys.path.insert(0, str(HERE.parent))
+    import scratchhome
+    scratchhome.make(home, pc=places, AGENT_LANG="zh")
     binary = places / "bin"
     binary.mkdir(exist_ok=True)
     marker = places / "marks" / "grok-bot.txt"
@@ -188,7 +193,6 @@ def prepare(home: Path, places: Path) -> None:
             (binary / lang).mkdir(exist_ok=True)
             shutil.copy2(system / lang / "notepad.exe.mui", binary / lang / "notepad.exe.mui")
     make_places(places)
-    sys.path.insert(0, str(HERE.parent))
     import asyncio
 
     from mibo import setup_wizard
@@ -607,6 +611,7 @@ class Meter:
                 except Exception as error:
                     status, data = 502, json.dumps({"error": {"message": type(error).__name__}}).encode()
                 meter.note(began, status, body, data)
+                data = meter.handed(status, data)
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
@@ -614,23 +619,14 @@ class Meter:
                 self.wfile.write(data)
 
             def do_GET(self):
-                # The host's model list passed on uncounted: the app reads the model's window from it.
-                path = self.path[3:] if meter.upstream.endswith("/v1") and self.path.startswith("/v1") else self.path
-                headers = {k: v for k, v in self.headers.items() if k.lower() == "authorization"}
-                try:
-                    with urllib.request.urlopen(urllib.request.Request(meter.upstream + path, headers=headers),
-                                                timeout=60) as answer:
-                        status, data = answer.status, answer.read()
-                except urllib.error.HTTPError as error:
-                    status, data = error.code, error.read()
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(data)))
-                self.end_headers()
-                self.wfile.write(data)
+                relay_get(self, meter.upstream)
 
         server = ThreadingHTTPServer(("127.0.0.1", port), Pass)
         threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    def handed(self, status: int, data: bytes) -> bytes:
+        """The answer the app is given for a call: the host's own."""
+        return data
 
     def note(self, began: float, status: int, body: bytes, data: bytes) -> None:
         try:
@@ -666,6 +662,22 @@ class Meter:
             with self.log.with_name("model-full.jsonl").open("a", encoding="utf-8") as out:
                 out.write(json.dumps({"at": row["at"], "messages": sent.get("messages"), "answer": message},
                                      ensure_ascii=False) + "\n")
+
+
+def relay_get(handler: BaseHTTPRequestHandler, upstream: str) -> None:
+    """A GET (the host's model list) passed on to `upstream` uncounted: the app reads the model's window from it."""
+    path = handler.path[3:] if upstream.endswith("/v1") and handler.path.startswith("/v1") else handler.path
+    headers = {k: v for k, v in handler.headers.items() if k.lower() == "authorization"}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(upstream + path, headers=headers), timeout=60) as answer:
+            status, data = answer.status, answer.read()
+    except urllib.error.HTTPError as error:
+        status, data = error.code, error.read()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
 
 
 # ---------------------------------------------------------------- Windows: windows and processes
@@ -1259,7 +1271,6 @@ def stand_ins(places: Path, bench_box: dict, windows: bool = True) -> None:
     with `windows` false, no window at all (no_windows)."""
     from mibo.shell import grants
     grants.known_folder = lambda guid: str(places / KNOWN[guid.upper()]) if guid.upper() in KNOWN else ""
-    os.environ["MIBO_USER_DIRS"] = os.pathsep.join((str(places / "Desktop"), str(places / "Documents")))
     only_our_windows(bench_box)
     if not windows:
         no_windows()
@@ -1305,19 +1316,16 @@ def run(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent))
-    from mibo import settingsfile
+    import scratchhome
     from mibo.shell import grants
     real = [grants.known_folder(guid) for guid in KNOWN]
-    upstream = settingsfile.values(home, keys=False).get("LLM_BASE_URL") or ""
-    env_file = settingsfile.path(home)
-    kept = env_file.read_text(encoding="utf-8")
-    if upstream.startswith(f"http://127.0.0.1:{args.site_port + 1}/"):
-        raise SystemExit("the home's LLM_BASE_URL still points at the pass-through of a run that was stopped; put it back")
+    model = scratchhome.keys(args.keys)
     # Another model's cached input is counted at its full input price: an upper bound.
     price = (args.price_in, PRICE[1] if args.price_in == PRICE[0] else args.price_in, args.price_out)
-    meter = Meter(upstream, out / "model.jsonl", args.budget, price)
+    meter = Meter(model["LLM_BASE_URL"], out / "model.jsonl", args.budget, price)
     meter.serve(args.site_port + 1)
-    settingsfile.write(home, {"LLM_BASE_URL": f"http://127.0.0.1:{args.site_port + 1}/v1"})
+    os.environ.update(scratchhome.make(home, pc=places, key=model["LLM_API_KEY"], LLM_MODEL=args.model,
+                                       LLM_BASE_URL=f"http://127.0.0.1:{args.site_port + 1}/v1"))
     site = f"http://127.0.0.1:{args.site_port}"
     server = subprocess.Popen([sys.executable, str(SITE_DIR / "serve.py"), str(args.site_port), str(out / "site.log")])
     wanted = [r for r in REQUESTS if (not args.only or r["id"] in args.only.split(","))
@@ -1336,7 +1344,6 @@ def run(args) -> int:
     finally:
         # The venv's python.exe starts the real one as its child: the whole tree goes.
         subprocess.run(["taskkill", "/PID", str(server.pid), "/T", "/F"], capture_output=True)
-        env_file.write_text(kept, encoding="utf-8")
     results = json.loads((out / "results.json").read_text(encoding="utf-8")) if (out / "results.json").exists() else []
     table(results, out, wanted, meter.spent)
     print((out / "table.md").read_text(encoding="utf-8"))
@@ -1558,6 +1565,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("home", nargs="?")
     parser.add_argument("--places", required=True)
     parser.add_argument("--out", default="")
+    parser.add_argument("--keys", default="", help="a file with LLM_API_KEY and LLM_BASE_URL lines (run)")
+    parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     parser.add_argument("--only", default="")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--budget", type=float, default=0.07)

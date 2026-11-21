@@ -15,9 +15,13 @@ live in `<home>/runtime/desktop/mcp-grants.json`. A tool is known by a
 fingerprint of its whole description, so a tool renamed or changed after it was
 allowed asks again. What a server says (descriptions, results) is third-party
 material: fenced, cut to size, never obeyed. Its annotations are hints the
-specification says a client may act on only for a server it trusts: a server
-the person added and allowed to run is one, so a tool it marks read-only runs
-without a card, and one it marks destructive always asks.
+specification says not to trust alone: a tool runs with no reviewer only when
+its server marks it read-only and its name reads by its own words (`reads`),
+and one marked destructive always asks. Hints can only add a card, never take
+one away: whether a call pays, deletes or changes an account's security or
+access is decided here from the tool's name, parameters, description and the
+call's arguments with the app's one floor vocabulary (`hard`, web/gate.py), and
+such a call always asks.
 
 The page process runs the servers (mcp_hub.py); the reply model reaches them
 through it (mcp_offer.py).
@@ -36,6 +40,7 @@ from urllib.parse import urlsplit
 
 from .storage import atomic_write_text
 from .textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source, scrub_third_party_text
+from .web import gate
 
 logger = logging.getLogger("agent.tools")
 
@@ -59,8 +64,8 @@ SCHEMA_CHARS = 20_000
 #: Characters of one result the model reads, and the record keeps.
 RESULT_CHARS = 4000
 LOG_KEPT = 500
-# auto: a tool marked read-only runs; any other, the reviewer (review.py) looks first and a card comes only where it
-# does not pass. always; never.
+# auto: a tool in the read group (group_of) runs; any other, the reviewer (review.py) looks first and a card comes
+# only where it does not pass. always; never.
 AUTO, ALWAYS, NEVER = "auto", "always", "never"
 MODES = (AUTO, ALWAYS, NEVER)
 
@@ -455,11 +460,14 @@ def clean_tool(raw: dict) -> dict | None:
     hints = {k: annotations[k] for k in _HINTS if isinstance(annotations.get(k), bool)}
     whole = json.dumps({"name": name, "title": title, "description": raw.get("description") or "",
                         "inputSchema": schema, "hints": hints}, sort_keys=True, ensure_ascii=False)
-    return {"name": name,
+    tool = {"name": name,
             "title": scrub_third_party_text(title if isinstance(title, str) else "").strip()[:100],
             "description": scrub_third_party_text(raw.get("description") or "").strip()[:DESCRIPTION_CHARS],
             "inputSchema": schema, "hints": hints,
             "fp": hashlib.sha256(whole.encode()).hexdigest()[:16]}
+    # What it does by its name, parameters and description: a floor kind asks every time.
+    tool["hard"] = hard(tool)
+    return tool
 
 
 def clean_tools(raw: list) -> list[dict]:
@@ -475,15 +483,237 @@ def clean_tools(raw: list) -> list[dict]:
 # --------------------------------------------------------------- grants --
 
 def group_of(tool: dict) -> str:
-    """"read" for a tool its provider marks read-only and not destructive, else "write" (writes or deletes)."""
+    """"read" for a tool that runs with no reviewer: its provider marks it read-only and not destructive (a hint, which
+    the MCP specification says not to trust alone), its name reads by its words (`reads`), and it is no floor kind
+    (`hard`); else "write"."""
     hints = tool["hints"]
-    return "read" if hints.get("readOnlyHint") is True and hints.get("destructiveHint") is not True else "write"
+    return "read" if hints.get("readOnlyHint") is True and hints.get("destructiveHint") is not True \
+        and reads(tool["name"]) and not tool.get("hard") else "write"
+
+
+def asks_each_time(tool: dict) -> bool:
+    """A tool that may never be always allowed: its provider marks it destructive, or what it does is a floor kind."""
+    return tool["hints"].get("destructiveHint") is True or bool(tool.get("hard"))
+
+
+# What a call does, decided by code before any reviewer and whatever the server's hints say. The words are the app's
+# one floor vocabulary (web/gate.py), read in every word of the tool's name, then, for a name not led by a verb that
+# reads, in its parameters and its description, and always in the call's arguments. A read verb leading a name takes a
+# thing as its object (get_payment reads a payment), but never hides a later verb (get_or_create_payment,
+# fetch_and_pay, list_and_delete, check_out). Carding a harmless write is the cheap mistake, so the words lean wide.
+_READS = frozenset("get list read search find query fetch show view describe lookup look count check browse inspect "
+                   "preview retrieve peek poll status info explain summarize summarise analyze analyse calculate "
+                   "compute estimate compare validate verify ping echo whoami is has can snapshot screenshot scrape "
+                   "crawl extract convert diff scroll hover wait".split())
+# Words that are only ever verbs that change, run or send something: a name holding one does not read. Words that
+# are also things (issue, post, run, order, update in getUpdates) are not here: after a read verb they name what is
+# read, and after "and" or "or" they count as verbs anyway.
+_VERBS = frozenset("edit modify reset replace add remove send create submit execute exec initiate approve cancel write "
+                   "save upload publish insert upsert append move rename install uninstall kill restart invoke "
+                   "navigate drag apply deploy revert confirm capture set delete".split())
+# Words of the vocabulary that name a thing a read verb may take: list_payouts, list_trash.
+_THINGS = frozenset({"payment", "payout", "deposit", "trash"})
+# Verbs that are things too (list_runs, list_calls): they count only as the name's first verb (run_query).
+_DOES = frozenset({"run", "call"})
+_FLOOR_VERBS = frozenset(w for w in gate.PAY + gate.PAY_TOOLS + gate.DELETE + gate.DELETE_TOOLS + gate.ACCOUNT
+                         + gate.GRANT if " " not in w) - _THINGS
+_SECRET_FIELDS = re.compile(r"password|passwd|passcode|(?:^|_)(?:pin|otp|secret)(?:$|_)", re.I)
+_ACCESS_FIELDS = re.compile(r"^(?:role|roles|permission|permissions|access_?level)$", re.I)
+# Money counts only with whom it goes to or its currency beside it: a scroll's amount pays nobody.
+# A least or a most (min_amount, maxPrice) filters a search and pays nobody; so does a currency or a destination.
+_MONEY_FIELDS = re.compile(r"^(?!min|max).*(?:amount|price|total|cost(?!ing)|fee(?![dl]))", re.I)
+_TO_FIELDS = re.compile(r"recipient|payee|beneficiary|iban|card_?number|account_?number|routing|^to$", re.I)
+# Fields that hold a statement or a command; a tool that says it runs them has every argument read so.
+_CODE_KEYS = frozenset("sql statement command cmd script code shell".split())
+# Fields that hold a statement in a database's tool and plain words in a search: there only a whole statement
+# counts, at the start or after a semicolon, never the words inside a question.
+_ASKED_KEYS = frozenset("query expression".split())
+_NAMED = r"[\w.\"`\[\]]+"
+_SQL_STATEMENT = re.compile(
+    r"(?:^|;)\s*(?:delete\s+from\s+" + _NAMED + r"|drop\s+(?:table|database|schema|index|collection|view)\s+"
+    r"(?:if\s+exists\s+)?" + _NAMED + r"|truncate\s+(?:table\s+)?" + _NAMED + r")\s*(?:;|$|where\b|cascade\b|"
+    r"restrict\b)", re.I)
+_RUNS_NAME = frozenset("sql shell bash powershell terminal command cmd script python javascript code exec execute eval "
+                       "run".split())
+_RUNS_SAID = re.compile(r"\b(?:sql|cypher|shell commands?|statements?)\b", re.I)
+_SQL_DELETES = re.compile(r"\bdelete\s+from\b|\bdrop\s+(?:table|database|schema|index|collection|view)\b|"
+                          r"\btruncate\s+(?:table\s+)?\w", re.I)
+_SQL_SECURITY = re.compile(r"\bupdate\s+\S+\s+set\b[^;]*\b(?:password|passwd)\b|"
+                           r"\b(?:grant|revoke)\s+(?:all|select|insert|update|delete|usage|execute)\b[^;]*\bon\b", re.I)
+_CODE_DELETES = re.compile(
+    r"(?:^|[\s;&|(])(?:rm|del|erase|rmdir|rd|Remove-Item|ri|shred|unlink)\s+\S|\bformat\s+[a-z]:|\bgit\s+clean\b|"
+    r"\bfind\b[^;|&\n]*\s-delete\b|\brmtree\s*\(|\bos\.(?:remove|unlink|rmdir|removedirs)\s*\(|\.unlink\s*\(|"
+    r"\bfs\.(?:rm|rmdir|unlink)(?:Sync)?\s*\(|\brimraf\b|\b(?:File|Directory)\.Delete\s*\(", re.I)
+_ACTION_KEYS = frozenset("action operation op method intent verb httpmethod".split())
+# A request that writes to where payments are made.
+_PAY_PATH = re.compile(r"/(?:charges|payments?|payouts?|transfers|refunds|checkout|payment_intents|invoices/[^/]+/pay|"
+                       r"subscriptions)\b", re.I)
+_MUTATION = re.compile(r"^\s*mutation\b[^{]*\{(.*)", re.S)
+
+
+def _one(word: str) -> str:
+    """A word without its plural or third-person s: payouts, Deletes, Places, searches."""
+    low = word.lower()
+    if len(low) > 4 and (low.endswith(("ches", "shes")) or (low.endswith("es") and low[-3] in "sxz")):
+        return word[:-2]
+    return word[:-1] if len(low) > 3 and low.endswith("s") and not low.endswith(("ss", "us", "is")) else word
+
+
+def _words(name: str) -> list[str]:
+    """A tool name's words, lowercased: sendMoney, send_money, send-money, payouts.send and ns/sendMoney all give
+    send, money; addSSHKey gives add, ssh, key."""
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", " ", str(name or ""))
+    return [_one(w).lower() for w in re.findall(r"[A-Za-z]+|\d+[A-Za-z]*", spaced)]
+
+
+def _said(text: str) -> list[tuple[str, str]]:
+    """(kind, phrase) of each floor phrase of the vocabulary in `text`."""
+    return [(kind, m.group().lower()) for kind, words in gate.TOOL_WORDS for m in words.finditer(text)]
+
+
+def _leads(words: list[str]) -> bool:
+    """The first verb of the name is one that reads: get_balance, browser_tab_list, stripe_list_customers."""
+    first = next((w for w in words if w in _READS or w in _VERBS or w in _DOES or w in _FLOOR_VERBS), "")
+    return first in _READS
+
+
+def _paired(bag: set) -> str:
+    """The kind a change verb and what it changes say, anywhere in a name (update_user_email)."""
+    for kind, verbs, things in gate.EVERY_PAIR:
+        if bag & set(verbs) and any(set(thing.split()) <= bag for thing in things):
+            return kind
+    return ""
+
+
+def _text_kind(text: str, bag: set, leads: bool) -> str:
+    """The first floor kind `text` says, a thing after a leading read verb and a git checkout aside; a secret it
+    names is the account's."""
+    for kind, phrase in _said(text):
+        if (leads and phrase in _THINGS) or (phrase in ("checkout", "check out") and bag & {"git", "branch"}):
+            continue
+        return kind
+    return "account" if gate.SECRET_WORDS.search(text) else ""
+
+
+def _name_kind(words: list[str]) -> str:
+    return _text_kind(" ".join(words), set(words), _leads(words)) or _paired(set(words))
+
+
+def reads(name: str) -> bool:
+    """A name that reads by its words: a read verb leads, no word is a change or a floor word, and no verb follows
+    "and" or "or" (get_or_create). The things a read takes (list_payments, list_trash) are not floor words there."""
+    words = _words(name)
+    joined = [b for a, b in zip(words, words[1:]) if a in ("and", "or")]
+    return _leads(words) and not set(words) & _VERBS and all(w in _READS for w in joined) \
+        and all(phrase in _THINGS for _, phrase in _said(" ".join(words))) and not _name_kind(words)
+
+
+def _walk(value, key: str = "", depth: int = 0, out: list | None = None) -> list[tuple[str, object]]:
+    """(key, value) of every field of an argument value, nested dicts and lists of operations included, to a bound."""
+    out = [] if out is None else out
+    if len(out) >= 4096 or depth > 6:
+        return out
+    if isinstance(value, dict):
+        for inner_key, inner in list(value.items())[:64]:
+            out.append((str(inner_key), inner))
+            _walk(inner, str(inner_key), depth + 1, out)
+    elif isinstance(value, list):
+        for inner in value[:32]:
+            if not isinstance(inner, (dict, list)):
+                out.append((key, inner))
+            _walk(inner, key, depth + 1, out)
+    return out
+
+
+def cut(value, depth: int = 0) -> bool:
+    """Whether arguments are larger than the floor reads whole (_walk's bounds): such a call is asked about, since
+    what was not read cannot be judged."""
+    if depth > 6:
+        return True
+    if isinstance(value, dict):
+        return len(value) > 64 or any(cut(inner, depth + 1) for inner in value.values())
+    if isinstance(value, list):
+        return sum(isinstance(inner, (dict, list)) for inner in value) > 32 or any(
+            cut(inner, depth + 1) for inner in value)
+    return False
+
+
+def _arguments_kind(tool: dict, arguments: dict) -> str:
+    """The floor kind what a call sends says: a statement or a command that deletes, an action field naming a floor
+    act at any depth, a GraphQL mutation, a DELETE request or one that posts to a payments address, a password, or an
+    amount with whom it goes to."""
+    fields = _walk(arguments)
+    keys = {re.sub(r"[^a-z0-9]", "", k.lower()) for k, _ in fields}
+    runs = bool(set(_words(tool["name"])) & _RUNS_NAME) or bool(_RUNS_SAID.search(tool.get("description") or ""))
+    for key, value in fields:
+        if not isinstance(value, str):
+            continue
+        if runs or set(_words(key)) & _CODE_KEYS:
+            if _SQL_SECURITY.search(value):
+                return "account"
+            if _SQL_DELETES.search(value) or _CODE_DELETES.search(value):
+                return "delete"
+        elif set(_words(key)) & _ASKED_KEYS:
+            if _SQL_SECURITY.search(value):
+                return "account"
+            if _SQL_STATEMENT.search(value):
+                return "delete"
+        mutation = _MUTATION.match(value)
+        if mutation:
+            for field in re.findall(r"([A-Za-z_]\w*)\s*[({]", mutation.group(1)):
+                kind = _name_kind(_words(field))
+                if kind:
+                    return kind
+        name = re.sub(r"[^a-z0-9]", "", key.lower())
+        if name in _ACTION_KEYS:
+            if value.strip().upper() == "DELETE":
+                return "delete"
+            kind = _name_kind(_words(value)[:3])
+            if kind:
+                return kind
+            if value.strip().upper() in ("POST", "PUT", "PATCH") and any(
+                    isinstance(v, str) and _PAY_PATH.search(v) for _, v in fields):
+                return "order"
+        if _SECRET_FIELDS.search(key) and value:
+            return "account"
+    if any(_MONEY_FIELDS.search(k) for k in keys) and any(_TO_FIELDS.search(k) for k, _ in fields):
+        return "order"
+    return ""
+
+
+def hard(tool: dict, arguments: dict | None = None) -> str:
+    """The floor kind of a tool (and of one call of it, given its `arguments`): "order" (pays, buys, books or
+    changes a payment), "delete", "account" (its security, sign-in or details) or "grant" (who may reach what);
+    "" for anything else. Hints are not read: a tool that says it only reads is judged by what it is."""
+    words = _words(tool["name"])
+    kind = _name_kind(words)
+    if kind:
+        return kind
+    if not _leads(words):
+        fields = list(((tool.get("inputSchema") or {}).get("properties") or {}).keys())
+        if any(_SECRET_FIELDS.search(f) for f in fields):
+            return "account"
+        if any(_ACCESS_FIELDS.search(f) for f in fields):
+            return "grant"
+        if any(_MONEY_FIELDS.search(f) for f in fields) and any(_TO_FIELDS.search(f) for f in fields):
+            return "order"
+        said = _one_each(f"{tool.get('title') or ''} {tool.get('description') or ''}"[:600])
+        kind = _text_kind(said, set(words) | set(_words(said)), False)
+        if kind:
+            return kind
+    return _arguments_kind(tool, arguments) if isinstance(arguments, dict) and arguments else ""
+
+
+def _one_each(text: str) -> str:
+    """Prose with each word's plural or third-person s dropped, as names are read."""
+    return re.sub(r"[A-Za-z]+", lambda m: _one(m.group()), text)
 
 
 class Grants:
     """The person's choices, in the desktop folder: per tool, per server for its tools that write or delete (Claude's
     connectors set that group at once the same way), and local programs allowed to start. A tool's own choice comes
-    before its group's. A tool its provider marks destructive is never always allowed."""
+    before its group's. A tool its provider marks destructive, or one that pays, deletes or changes an account or
+    access (`hard`), is never always allowed."""
 
     def __init__(self, home: Path):
         self.path = desktop_dir(home) / GRANTS_FILE
@@ -507,9 +737,8 @@ class Grants:
         """(auto, always or never, and whether an "always" was given to a tool that has changed since)."""
         data = self.read()
         row = data["tools"].get(f"{server}/{tool['name']}")
-        destructive = tool["hints"].get("destructiveHint") is True
         if isinstance(row, dict) and row.get("mode") in (ALWAYS, NEVER):
-            if row["mode"] == ALWAYS and (row.get("fp") != tool["fp"] or destructive):
+            if row["mode"] == ALWAYS and (row.get("fp") != tool["fp"] or asks_each_time(tool)):
                 return AUTO, row.get("fp") != tool["fp"]
             return row["mode"], False
         return (self.group(server) if group_of(tool) == "write" else AUTO), False

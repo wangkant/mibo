@@ -14,7 +14,8 @@ to look at, with nothing chosen (the third complaint of 2026-11-21): it passes w
 pane and no card came. The model is recorded as measured with tools and JSON, no pictures, thinking off and a
 1,048,576-token window, the same for every tree. --tree runs another copy of the code (a snapshot from before a
 change) under this harness. One line a task; <out>/results.jsonl keeps them with each reply and trace. The key
-goes only into the run's home .env, which is deleted at the end; it is never printed."""
+reaches the app only through this process's environment (tools/scratchhome.py) and is never printed; the home and
+its stand-in computer are deleted at the end."""
 from __future__ import annotations
 
 import argparse
@@ -22,7 +23,6 @@ import importlib.util
 import io
 import json
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -47,25 +47,21 @@ def load(name: str, path: Path):
     return module
 
 
-def read_env(path: Path) -> dict:
-    return {k.strip(): v.strip() for k, _, v in (line.partition("=") for line in path.read_text().splitlines()) if v}
-
-
 class Run:
     """The app on a scratch home, its model behind the pass-through, and the page API as its page calls it."""
 
     def __init__(self, home: Path, base: str, key: str, model: str, port: int):
+        import os
+
+        import scratchhome
         import uvicorn
         from everyday import no_windows
         from mibo import abilities, paths, situation, welcome
-        from mibo import setup_wizard as sw
         from mibo.endpoints import chat_completions_url
         from mibo.panels import modelbar
         from mibo.storage import atomic_write_text
         self.home = home
-        sw.write_env(home / ".env", {"LLM_BASE_URL": base, "LLM_API_KEY": key, "LLM_MODEL": model,
-                                     "PERSONA_NAME": "Mibo", "AGENT_LANG": "zh", "ROAM_ENABLED": "false",
-                                     "UPDATE_CHECK_ENABLED": "false"})
+        os.environ.update(scratchhome.make(home, key=key, LLM_BASE_URL=base, LLM_MODEL=model, AGENT_LANG="zh"))
         paths.use_home(home)
         url = chat_completions_url(base)
         record = {"url": url, "model": model, "at": time.time(), "tools": "yes", "pictures": "no", "json": "yes",
@@ -205,7 +201,8 @@ def main(argv: list[str]) -> int:
         def go(self, url: str) -> None:
             self.cdp("Page.navigate", {"url": url})
     tasks = load("opsite_tasks", HERE / "opsite" / "tasks.py")
-    env = read_env(Path(args.env))
+    import scratchhome
+    env = scratchhome.keys(args.env)
     out = Path(args.out).resolve()
     home = out / "home"
     home.mkdir(parents=True, exist_ok=True)
@@ -238,9 +235,7 @@ def main(argv: list[str]) -> int:
     finally:
         run.close()
         server.terminate()
-        # The key's file first: the app may still hold others of the home open.
-        (home / ".env").unlink()
-        shutil.rmtree(home, ignore_errors=True)
+        scratchhome.clear(home)
     calls = sum(r["calls"] for r in rows)
     print(f"{sum(r['ok'] for r in rows)}/{len(rows)} ok; {calls} model calls, {calls / max(len(rows), 1):.2f} a task; "
           f"spent ${meter.spent:.4f}; kept in {out}")

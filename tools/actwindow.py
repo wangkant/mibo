@@ -21,6 +21,7 @@ The last lines say how many checks failed and list them; the exit code is 0 when
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import threading
@@ -189,12 +190,11 @@ def main() -> int:
     base = int(sys.argv[sys.argv.index("--ports") + 1]) if "--ports" in sys.argv else 59935
     site = f"http://127.0.0.1:{base + 2}"
     out.mkdir(parents=True, exist_ok=True)
-    home.mkdir(parents=True, exist_ok=True)
     model_url = f"http://127.0.0.1:{base + 3}/v1"
-    (home / ".env").write_text(
-        f"PAGE_PORT={base}\nSERVER_PORT={base + 1}\nUPDATE_CHECK_ENABLED=false\nROAM_ENABLED=false\nAGENT_LANG=en\n"
-        f"PERSONA_NAME=Mibo\nLLM_BASE_URL={model_url}\nLLM_MODEL=stub\nLLM_API_KEY=stub\n", encoding="utf-8")
+    import scratchhome
     import window_driver
+    os.environ.update(scratchhome.make(home, key="stub", PAGE_PORT=base, AGENT_LANG="en", PERSONA_NAME="Mibo",
+                                       LLM_BASE_URL=model_url, LLM_MODEL="stub"))
 
     from mibo import abilities
     from mibo.endpoints import chat_completions_url

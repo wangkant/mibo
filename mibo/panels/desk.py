@@ -24,6 +24,8 @@ from keyring.errors import KeyringError
 
 from .. import __version__, autostart, db, secretstore, settingsfile
 from .. import setup_wizard as sw
+# The one switch for the person's folders (tests and scratch homes): DIRS_ENV.
+from ..shell.grants import DIRS_ENV, stand_in  # noqa: F401
 from ..storage import atomic_write_text
 
 ERRORS: frozenset[str] = frozenset({
@@ -32,8 +34,6 @@ ERRORS: frozenset[str] = frozenset({
 
 # Where an archive may be written and found; nothing from a request is ever a path.
 TARGETS = ("desktop", "documents", "backups")
-# "desktop;documents" in place of the real folders, for tests and trial runs.
-DIRS_ENV = "MIBO_USER_DIRS"
 PREFIX = "mibo-backup-"
 BACKUP_NAME = re.compile(r"mibo-backup-[0-9A-Za-z_-]{1,64}\.zip")
 MANIFEST = "mibo-backup.json"
@@ -70,10 +70,9 @@ def open_path(path: Path) -> None:
 
 
 def _known_folder(kind: str) -> Path | None:
-    override = os.environ.get(DIRS_ENV, "").strip()
-    if override:
-        parts = dict(zip(("desktop", "documents"), override.split(os.pathsep)))
-        return Path(parts[kind]) if parts.get(kind) else None
+    given = stand_in(kind)
+    if given is not None:
+        return Path(given) if given else None
     if os.name == "nt":
         import ctypes
 

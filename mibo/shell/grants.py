@@ -63,11 +63,25 @@ def under(path: str, root: str) -> bool:
     return path == root or path.startswith(root.rstrip("\\/") + os.sep)
 
 
+# "desktop;documents;downloads;pictures;music;videos" in place of the person's own folders, for tests and the
+# measuring scripts' scratch homes: one switch for every known folder the app reads (grants, Settings, backups).
+DIRS_ENV = "MIBO_USER_DIRS"
+DIRS = ("desktop", "documents", "downloads", "pictures", "music", "videos")
+
+
+def stand_in(key: str) -> str | None:
+    """The folder DIRS_ENV gives in place of the known folder `key` ("" when it gives none), or None when unset."""
+    given = os.environ.get(DIRS_ENV, "").strip()
+    return dict(zip(DIRS, given.split(os.pathsep))).get(key, "") if given else None
+
+
 def known_folder(guid: str) -> str:
-    """A known folder's real place (Downloads may be moved, Documents may be in OneDrive); "" when none. The
-    Desktop may be given instead in USER_DESKTOP_DIR (the measuring scripts' stand-in Desktop)."""
-    if guid == KNOWN[2][1] and os.environ.get("USER_DESKTOP_DIR"):
-        return os.environ["USER_DESKTOP_DIR"]
+    """A known folder's real place (Downloads may be moved, Documents may be in OneDrive), or its stand-in from
+    DIRS_ENV; "" when none."""
+    key = next((row[0] for row in KNOWN if row[1] == guid), "")
+    given = stand_in(key) if key else None
+    if given is not None:
+        return given
     if sys.platform != "win32":
         return ""
     import ctypes

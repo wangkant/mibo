@@ -133,7 +133,8 @@ def run(fixture: Path, copy: Path) -> dict:
     shutil.rmtree(copy, ignore_errors=True)
     shutil.copytree(fixture / "home", copy)
     home, runtime = copy, copy / "runtime"
-    os.environ["AGENT_HOME"] = str(home)
+    import scratchhome
+    os.environ.update(scratchhome.make(home))
     out: dict = {"python": sys.version.split()[0], "sqlite": sqlite3.sqlite_version, "size_before_open": _size(runtime)}
     from fastapi.testclient import TestClient
 

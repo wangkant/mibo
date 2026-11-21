@@ -1,11 +1,13 @@
 """The chat battery on the real model, with no window: each turn of a turns file sent through the app's own page
 API, the model calls counted by everyday.py's pass-through, and a few plain checks read from the replies.
 
-    python tools/chatbench.py <home> <turns.jsonl> --out <folder> [--budget 0.10] [--meter-port 59903]
+    python tools/chatbench.py <scratch home> <turns.jsonl> --keys <file> --out <folder> [--model M] [--budget 0.10]
+                              [--port 59902] [--meter-port 59903]
     python tools/chatbench.py table <folder>          the table again from a run's saved results
 
 A turns file has one {"label", "chat", "text"} a line; "main" is the main chat, any other name a new plain chat.
-The home's settings are used as they are (LLM_BASE_URL is pointed at the pass-through for the run and put back)."""
+The home is a scratch one (tools/scratchhome.py): <file> gives LLM_API_KEY and LLM_BASE_URL, read and never printed;
+the key reaches the app only through its environment, the model's address in the home is the pass-through's."""
 from __future__ import annotations
 
 import argparse
@@ -110,34 +112,28 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("home")
     parser.add_argument("turns")
+    parser.add_argument("--keys", required=True)
+    parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     parser.add_argument("--out", required=True)
     parser.add_argument("--budget", type=float, default=0.10)
     parser.add_argument("--price-in", type=float, default=PRICE[0])
     parser.add_argument("--price-out", type=float, default=PRICE[2])
+    parser.add_argument("--port", type=int, default=59902)
     parser.add_argument("--meter-port", type=int, default=59903)
     args = parser.parse_args(argv)
     home, out = Path(args.home).resolve(), Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    from mibo import settingsfile
-    saved = settingsfile.values(home, keys=False)
-    env_file = settingsfile.path(home)
-    kept = env_file.read_text(encoding="utf-8")
-    upstream = saved.get("LLM_BASE_URL") or ""
-    if upstream.startswith(f"http://127.0.0.1:{args.meter_port}/"):
-        raise SystemExit("the home's LLM_BASE_URL still points at the pass-through of a run that was stopped; put it back")
-    meter = Meter(upstream, out / "model.jsonl", args.budget, (args.price_in, args.price_in, args.price_out))
+    import scratchhome
+    model = scratchhome.keys(args.keys)
+    meter = Meter(model["LLM_BASE_URL"], out / "model.jsonl", args.budget, (args.price_in, args.price_in, args.price_out))
     meter.serve(args.meter_port)
-    settingsfile.write(home, {"LLM_BASE_URL": f"http://127.0.0.1:{args.meter_port}/v1"})
-    os.environ["AGENT_HOME"] = str(home)
+    os.environ.update(scratchhome.make(home, key=model["LLM_API_KEY"], LLM_MODEL=args.model, AGENT_LANG="zh",
+                                       LLM_BASE_URL=f"http://127.0.0.1:{args.meter_port}/v1"))
     no_windows()
     (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
     threading.Thread(target=walk, args=(home, _turns(Path(args.turns)), meter, out), daemon=True).start()
-    try:
-        from mibo import welcome
-        port = saved.get("PAGE_PORT")
-        welcome.main(["--no-browser", *(["--port", port] if port else [])])
-    finally:
-        env_file.write_text(kept, encoding="utf-8")
+    from mibo import welcome
+    welcome.main(["--no-browser", "--port", str(args.port)])
     results = json.loads((out / "results.json").read_text(encoding="utf-8")) if (out / "results.json").exists() else []
     print(table(results, out, meter.spent))
     return 0

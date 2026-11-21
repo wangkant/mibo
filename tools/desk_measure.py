@@ -1,7 +1,7 @@
 """Measure, step by step, how accurately Mibo operates other programs (mibo/desk) with a real model.
 
-    python tools/desk_measure.py --home DIR --model deepseek/deepseek-v4-flash [--sees] [--only calc,notepad]
-                                 [--tasks C1,T5] [--tree DIR] [--script FILE] [--out FILE]
+    python tools/desk_measure.py --home DIR --keys FILE --model deepseek/deepseek-v4-flash [--sees]
+                                 [--only calc,notepad] [--tasks C1,T5] [--tree DIR] [--script FILE] [--out FILE]
 
 A fixed set of tasks across Calculator, Notepad (a copy of the classic one, which opens empty), File Explorer on a
 folder of its own, Character Map, a small test program it builds, and Paint. Each task runs the product's own loop
@@ -17,7 +17,7 @@ It only operates programs it starts itself, on the second monitor when there is 
 them. Real keys and clicks are sent only while one of its own windows is in front; otherwise the run stops.
 `--tree` measures another copy of the package (an earlier one, for a before and after); `--script` replays fixed
 model answers from a JSON file ({"T1": [reply, ...]}) instead of calling a model. LLM_API_KEY and LLM_BASE_URL are
-read from DIR's settings and never printed.
+read from FILE and never printed.
 """
 from __future__ import annotations
 
@@ -205,14 +205,9 @@ class Bench:
     # --- the model
 
     def key(self) -> tuple[str, str]:
-        try:
-            from mibo import settingsfile
-            env = settingsfile.values(self.home)
-        except ImportError:
-            # An earlier copy of the package (--tree) keeps them in .env.
-            env = dict(line.split("=", 1) for line in (self.home / ".env").read_text(encoding="utf-8").splitlines()
-                       if "=" in line)
-        return env["LLM_BASE_URL"].strip().rstrip("/"), env["LLM_API_KEY"].strip()
+        import scratchhome
+        found = scratchhome.keys(self.args.keys)
+        return found["LLM_BASE_URL"].rstrip("/"), found["LLM_API_KEY"]
 
     def spent(self) -> float:
         base, key = self.key()
@@ -829,6 +824,7 @@ PROGRAMS = {"calc": calculator, "notepad": notepad, "explorer": explorer, "charm
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--home", required=True)
+    parser.add_argument("--keys", default="", help="a file with LLM_API_KEY and LLM_BASE_URL lines")
     parser.add_argument("--model", default="deepseek/deepseek-v4-flash")
     parser.add_argument("--sees", action="store_true", help="the model takes pictures")
     parser.add_argument("--only", default=",".join(PROGRAMS))

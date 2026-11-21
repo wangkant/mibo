@@ -1,11 +1,13 @@
 """The MCP bench: twelve requests a person makes of their MCP servers, sent through the app's own chat route with the
-home's real model, each checked on what the stand-in servers received; and two checks over the whole run.
+real model, each checked on what the stand-in servers received; and two checks over the whole run.
 
-    python tools/mcpbench.py run <scratch home> --out <folder> [--tree <checkout>] [--only M01,M05] [--budget 0.05]
-                                 [--price-in 0.0507] [--price-out 0.2028] [--meter-port 59948] [--cloud-port 59949]
+    python tools/mcpbench.py run <scratch home> --keys <file> --out <folder> [--tree <checkout>] [--only M01,M05]
+                                 [--model deepseek/deepseek-v4.1-flash] [--budget 0.05] [--price-in 0.0507]
+                                 [--price-out 0.2028] [--port 59947] [--meter-port 59948] [--cloud-port 59949]
 
-The home must be a scratch folder whose .env names the model (and PAGE_PORT); its mcp.json and grants are written
-here. The servers are the stand-ins in tools/everyday/mcp: notes (read, add, delete, a failing sync, a note carrying
+The home is a scratch one (tools/scratchhome.py), laid out here with its mcp.json and grants; <file> gives
+LLM_API_KEY and LLM_BASE_URL, read and never printed, and the key reaches the app only through its environment.
+The servers are the stand-ins in tools/everyday/mcp: notes (read, add, delete, a failing sync, a note carrying
 an injected order), kit (fifteen read-only converters), flaky (a tool whose program exits mid-call, one whose count
 must be at least 1), weather (never allowed to start: its card is answered no) and cloud, an address on this computer
 that answers 401 to everything. notes, kit and flaky were allowed to start always beforehand, as a person who added
@@ -168,28 +170,25 @@ def run(args) -> int:
     home, out, tree = Path(args.home).resolve(), Path(args.out).resolve(), Path(args.tree).resolve()
     out.mkdir(parents=True, exist_ok=True)
     sys.path[:0] = [str(tree), str(HERE)]
-    from dotenv import dotenv_values
-
     import everyday
+    import scratchhome
     from mibo import review
+    model = scratchhome.keys(args.keys)
+    made = scratchhome.make(home, key=model["LLM_API_KEY"], LLM_MODEL=args.model, AGENT_LANG="zh",
+                            LLM_BASE_URL=f"http://127.0.0.1:{args.meter_port}/v1")
     data = out / "servers"
     data.mkdir(exist_ok=True)
     write_home(home, data, args.cloud_port)
     cloud(args.cloud_port)
-    env_file = home / ".env"
-    kept = env_file.read_text(encoding="utf-8")
-    meter = everyday.Meter(dotenv_values(env_file).get("LLM_BASE_URL") or "", out / "model.jsonl", args.budget,
+    meter = everyday.Meter(model["LLM_BASE_URL"], out / "model.jsonl", args.budget,
                            (args.price_in, everyday.PRICE[1], args.price_out))
     meter.serve(args.meter_port)
-    lines = [line for line in kept.splitlines() if line.partition("=")[0].strip() != "LLM_BASE_URL"]
-    env_file.write_text("\n".join(lines + [f"LLM_BASE_URL=http://127.0.0.1:{args.meter_port}/v1"]) + "\n",
-                        encoding="utf-8")
     info = home / "runtime" / "desktop" / "welcome.json"
     info.unlink(missing_ok=True)
-    port = dotenv_values(env_file).get("PAGE_PORT") or "59945"
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
-                            f"sys.exit(welcome.main(['--no-browser', '--port', '{port}']))"],
-                           cwd=str(tree), env={**os.environ, "AGENT_HOME": str(home), "PYTHONPATH": str(tree)},
+                            f"sys.exit(welcome.main(['--no-browser', '--port', '{args.port}']))"],
+                           cwd=str(tree), env={**os.environ, **made,
+                                               "PYTHONPATH": os.pathsep.join([str(tree), made["PYTHONPATH"]])},
                            stdout=(out / "app.log").open("w", encoding="utf-8"), stderr=subprocess.STDOUT)
     results, base, token = [], "", ""
     try:
@@ -226,7 +225,6 @@ def run(args) -> int:
             app.wait(30)
         except subprocess.TimeoutExpired:
             subprocess.run(["taskkill", "/PID", str(app.pid), "/T", "/F"], capture_output=True)
-        env_file.write_text(kept, encoding="utf-8")
     table(results, log, out, meter.spent)
     return 0
 
@@ -313,12 +311,15 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     go = sub.add_parser("run")
     go.add_argument("home")
+    go.add_argument("--keys", required=True)
+    go.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     go.add_argument("--out", required=True)
     go.add_argument("--tree", default=str(HERE.parent))
     go.add_argument("--only", default="")
     go.add_argument("--budget", type=float, default=0.05)
     go.add_argument("--price-in", type=float, default=0.0507)
     go.add_argument("--price-out", type=float, default=0.2028)
+    go.add_argument("--port", type=int, default=59947)
     go.add_argument("--meter-port", type=int, default=59948)
     go.add_argument("--cloud-port", type=int, default=59949)
     args = parser.parse_args(argv)

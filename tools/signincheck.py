@@ -15,6 +15,7 @@ errand loop; a sign-in wall is now a Noticed line of a look for the reply model.
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 import sys
@@ -447,13 +448,11 @@ def main() -> int:
     base = int(sys.argv[sys.argv.index("--ports") + 1]) if "--ports" in sys.argv else 59740
     SITE, PROV = f"http://127.0.0.1:{base + 2}", f"http://localhost:{base + 3}"
     out.mkdir(parents=True, exist_ok=True)
-    home.mkdir(parents=True, exist_ok=True)
-    from mibo import settingsfile
-    settingsfile.write(home, {
-        "PAGE_PORT": base, "UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false", "AGENT_LANG": "zh",
-        "PERSONA_TZ_OFFSET_HOURS": "-8", "PERSONA_NAME": "Mibo", "LLM_BASE_URL": f"http://127.0.0.1:{base + 4}/v1",
-        "LLM_MODEL": "stub", "LLM_API_KEY": "stub"})
+    import scratchhome
     import window_driver
+    os.environ.update(scratchhome.make(
+        home, key="stub", PAGE_PORT=base, AGENT_LANG="zh", PERSONA_TZ_OFFSET_HOURS="-8", PERSONA_NAME="Mibo",
+        LLM_BASE_URL=f"http://127.0.0.1:{base + 4}/v1", LLM_MODEL="stub"))
 
     from mibo import window as appwindow
     from mibo.welcome import save_app_settings

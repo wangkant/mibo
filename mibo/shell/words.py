@@ -16,8 +16,10 @@ _HIDING = re.compile("[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")
 
 
 def visible(text: str) -> str:
-    """Text for the card and the step log with its direction and invisible marks shown, not obeyed."""
-    return _HIDING.sub(lambda m: f"[U+{ord(m.group()):04X}]", text)
+    """Text for the card and the step log with its direction and invisible marks shown, not obeyed, and valid
+    Unicode: a lone surrogate (a model's JSON can carry half an emoji, a file name half a pair) becomes U+FFFD."""
+    whole = text.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+    return _HIDING.sub(lambda m: f"[U+{ord(m.group()):04X}]", whole)
 
 
 def _known() -> dict:

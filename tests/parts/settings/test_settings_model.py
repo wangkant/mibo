@@ -17,6 +17,8 @@ READERS = {"env_int", "env_float", "env_bool", "env_str", "env_csv"}
 NOT_SETTINGS = {
     "AGENT_HOME",
     "PATH", "TEMP", "USERPROFILE", "COMPUTERNAME",
+    # Python's own search path, which the measuring scripts' scratch homes extend (tools/scratchhome.py).
+    "PYTHONPATH",
     # The OpenAI SDK's own variable, read to know whose key OPENAI_API_KEY is (panels/detect.py).
     "OPENAI_BASE_URL",
     # A hosted runner's own scratch folder, where the sandbox suites keep their homes (tools/sandbox/_suite.py).
@@ -28,7 +30,6 @@ NOT_SETTINGS = {
 # decides otherwise.
 SWITCHES = {
     "SHELL_OPEN_DRY",  # tools/computer_tasks.py: report what would open, open nothing
-    "USER_DESKTOP_DIR",  # the measuring scripts' stand-in Desktop
     "TOOL_CALLS",  # =written: written tool calls for an endpoint whose own are poor
     "RECSIM_TIRE", "RECSIM_CURIOUS", "RECSIM_BAIT",  # tools/recsim's simulated people
     "SANDBOX_MODEL_KEY", "SANDBOX_BUDGET",  # the sandbox workflow's real-model run and its spending cap

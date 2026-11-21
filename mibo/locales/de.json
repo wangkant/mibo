@@ -2145,6 +2145,7 @@
     "toolMeta": "MCP-Server {server}",
     "changed": "Dieses Tool hat sich seit Ihrer letzten Erlaubnis geändert, daher wird erneut gefragt.",
     "destructive": "Laut Anbieter kann es Daten löschen oder überschreiben.",
+    "hard": "Dies zahlt, löscht oder ändert die Sicherheit oder den Zugriff eines Kontos und wird daher jedes Mal erfragt.",
     "noArgs": "Keine Argumente",
     "raw": "Rohe Argumente (JSON)",
     "once": "Dieses Mal erlauben",

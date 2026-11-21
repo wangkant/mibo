@@ -10,7 +10,9 @@ paying (PAY_WORDS, a confirm next to an amount, CHECKOUT's link only going to
 the cart), deleting (DELETE_WORDS, DELETE_CLASSES), granting access
 (GRANT_WORDS, an affirmative on a consent page), an account's security
 (ACCOUNT_WORDS, a submit in a form that holds a password, a switch that saves a
-setting). These kinds ask every time, whatever the mode or the reviewer.
+setting). These kinds ask every time, whatever the mode or the reviewer. The
+word sets are the whole app's: a program's controls (desk/gate.py) and MCP
+tools (mcp_tools.hard) are sorted by them too.
 
 The judgment, which the reviewer makes: any other press, Enter or form that
 sends something out of the page is one kind, "outward" (review.judged). What
@@ -77,22 +79,99 @@ def _words(english: list[str], chinese: list[str]) -> re.Pattern:
     return re.compile(r"\b(?:" + "|".join(spelled) + r")\b|" + "|".join(map(re.escape, chinese)), re.I)
 
 
-# nanobrowser classify.ts, ported; 提交订单 and 确认订单 are ours.
-PAY_WORDS = _words(
-    ["pay", "payment", "pay now", "buy", "buy now", "purchase", "checkout", "check out", "place order",
-     "place the order", "order now", "complete order", "complete purchase", "complete booking", "book now",
-     "subscribe", "donate", "confirm and pay", "transfer money", "top up", "add to cart"],
-    ["付款", "支付", "购买", "下单", "结账", "结算", "充值", "订阅", "转账", "捐款", "立即购买", "加入购物车",
-     "投币", "充电", "打赏", "提交订单", "确认订单",
-     # Ours: Japanese and Korean, matched anywhere as the Chinese are.
-     "購入", "注文する", "注文を確定", "支払", "결제", "구매", "주문하기"])
-DELETE_WORDS = _words(
-    ["delete", "remove", "discard", "deactivate", "destroy", "erase", "purge", "trash", "unsubscribe",
-     "cancel subscription", "cancel my subscription", "cancel account", "cancel membership", "cancel order",
-     "close account"],
-    ["删除", "移除", "清空", "注销", "取消订阅", "撤回"])
-GRANT_WORDS = _words(["authorize", "authorise", "allow access", "grant access", "give access"],
-                     ["授权", "允许访问", "授予访问"])
+# One vocabulary for every floor of the app: a control's name on a page (classify) or in another program
+# (desk/gate.py), and an MCP tool's name, description and arguments (mcp_tools.hard). Per kind: phrases in English
+# and other Latin-script languages, matched on word boundaries; phrases in other scripts, matched anywhere.
+# nanobrowser classify.ts, ported; 提交订单 and 确认订单, the other languages and the words after "top up" are ours.
+PAY = ["pay", "payment", "pay now", "buy", "buy now", "purchase", "checkout", "check out", "place order",
+       "place the order", "order now", "complete order", "complete purchase", "complete booking", "book now",
+       "subscribe", "donate", "confirm and pay", "transfer money", "top up", "add to cart",
+       "pagar", "comprar", "acheter", "bezahlen", "kaufen", "оплатить", "купить", "оплата"]
+# A tool's words only: on a page these name a section or a product more often than an act ("Sell", "Deposit" in a
+# site's menu), and the press that pays there is caught by its own name.
+PAY_TOOLS = ["payout", "reserve", "withdraw", "deposit", "remit", "sell", "payer", "commander"]
+# French for paying and ordering, which English uses for other things (Total Commander): on a page, only as a
+# control's first word.
+PAY_LEADING = ("payer", "commander")
+PAY_OTHER = ["付款", "支付", "购买", "下单", "结账", "结算", "充值", "订阅", "转账", "捐款", "立即购买", "加入购物车",
+             "投币", "充电", "打赏", "提交订单", "确认订单", "購買", "結帳", "訂閱", "轉帳",
+             "購入", "注文する", "注文を確定", "支払", "決済", "振込", "振り込み", "送金",
+             "결제", "구매", "주문하기", "송금", "이체"]
+DELETE = ["delete", "remove", "discard", "deactivate", "destroy", "erase", "purge", "trash", "unsubscribe",
+          "cancel subscription", "cancel my subscription", "cancel account", "cancel membership", "cancel order",
+          "close account", "wipe", "uninstall", "unlink", "empty trash", "clear history", "clear data",
+          "eliminar", "borrar", "excluir", "supprimer", "löschen", "entfernen", "удалить"]
+# A tool's words only: on a page RM is a currency.
+DELETE_TOOLS = ["rm", "rmdir"]
+DELETE_OTHER = ["删除", "移除", "清空", "注销", "取消订阅", "撤回", "刪除", "註銷", "取消訂閱",
+                "削除", "解約", "退会", "삭제", "탈퇴", "해지"]
+ACCOUNT = ["sign out", "log out", "logout", "signout", "change password", "update password", "save settings",
+           "save changes", "update profile", "cerrar sesión", "se déconnecter", "déconnexion", "abmelden"]
+ACCOUNT_OTHER = ["退出登录", "退出账号", "登出", "修改密码", "更改密码", "保存设置", "保存修改", "保存资料",
+                 "拉黑", "屏蔽", "举报", "退出登入", "修改密碼", "更改密碼", "封鎖", "檢舉",
+                 "ログアウト", "パスワードを変更", "ブロック", "通報", "로그아웃", "비밀번호 변경", "차단", "신고"]
+GRANT = ["authorize", "authorise", "allow access", "grant access", "give access", "revoke access"]
+GRANT_OTHER = ["授权", "允许访问", "授予访问", "授權", "允許存取", "アクセスを許可", "권한 부여", "액세스 허용"]
+# Acts done to a person: a page names one by its verb alone, as a button beside someone's post ("Block"); a tool's
+# name names the person too (ban_member), so those words count there only with one of PEOPLE.
+TO_PEOPLE = ["block", "report", "mute"]
+# With the person named beside them, on a page or in a tool's name.
+TO_PEOPLE_NAMED = TO_PEOPLE + ["kick", "ban", "suspend"]
+PEOPLE = ("user", "member", "account", "contact", "follower", "participant", "collaborator", "guest", "person")
+# A change verb with what it changes is a floor act: on a page the two side by side ("change email", "make public"),
+# in a tool's name anywhere in it (update_user_email, payouts.create).
+EDITS = ("change", "update", "set", "edit", "modify", "reset", "replace", "add", "remove")
+MOVES = ("send", "make", "create", "submit", "place", "schedule", "process", "execute", "initiate", "confirm",
+         "complete", "approve", "capture", "issue", "transfer", "add", "update", "change", "set", "modify",
+         "edit")
+# What a cancel ends: said as an end, not as a payment.
+CANCELLED = ("payment", "transaction", "invoice", "subscription", "billing", "payout", "order", "booking",
+             "reservation", "transfer", "membership", "plan")
+PAIRS = (
+    ("order", MOVES, ("money", "payment", "fund", "transaction", "invoice", "subscription", "billing", "payout",
+                      "order", "booking", "reservation", "wallet", "iban", "charge", "refund", "bid", "tip",
+                      "donation")),
+    ("order", ("book", "reserve", "order", "rent"), ("flight", "hotel", "room", "table", "ticket", "seat",
+                                                     "appointment", "trip", "car", "ride", "taxi", "meal")),
+    ("account", EDITS + ("enable", "disable", "turn on", "turn off", "require", "enforce", "configure", "enroll"),
+     ("password", "two-factor", "two factor", "2fa", "mfa", "totp", "passkey", "security key", "sso", "recovery")),
+    ("account", ("update", "change", "modify", "set", "reset", "disable", "enable", "deactivate", "suspend", "lock",
+                 "unlock"), ("user", "account", "profile", "member")),
+    ("account", ("create", "add", "rotate", "regenerate", "generate", "revoke"),
+     ("ssh key", "api key", "access token", "deploy key", "gpg key", "personal access token")),
+    ("account", TO_PEOPLE_NAMED, PEOPLE),
+    ("grant", EDITS + ("make", "assign", "give", "grant", "revoke", "transfer"),
+     ("permission", "role", "access", "acl", "owner", "ownership", "collaborator", "admin", "visibility", "public")),
+    ("grant", ("share", "unshare", "invite"), ("file", "folder", "document", "drive", "repo", "repository", "calendar",
+                                               "user", "member", "people")),
+    ("delete", ("cancel",), CANCELLED),
+    ("delete", ("terminate", "decommission", "deprovision"),
+     ("instance", "server", "cluster", "vm", "machine", "container", "pod", "database", "volume", "deployment",
+      "environment", "resource", "stack")),
+)
+# Pairs a tool's name or words say and a page's control does not: there "Add email", "Start plan" or "Clear queue"
+# opens a form or is no loss, and the press that does the act is caught by its own name.
+TOOL_PAIRS = (
+    ("order", ("renew", "upgrade", "downgrade", "extend", "activate", "start"),
+     ("subscription", "plan", "membership", "license", "licence", "trial")),
+    ("order", ("tip", "sponsor", "fund"), ("creator", "author", "artist", "user", "member", "project", "campaign")),
+    ("order", ("link", "connect", "add", "attach", "save", "update", "change", "remove"),
+     ("bank account", "bank", "credit card", "debit card", "payment method")),
+    ("account", EDITS, ("email", "email address", "phone", "phone number", "username")),
+    ("delete", ("drop", "truncate", "clear", "empty"), ("table", "database", "collection", "schema", "index", "bucket",
+                                                        "cache", "trash", "history", "inbox", "queue")),
+)
+
+
+def _paired(kind: str, pairs: tuple = PAIRS) -> list[str]:
+    return [f"{verb} {thing}" for k, verbs, things in pairs if k == kind for verb in verbs for thing in things]
+
+
+# What a page's or a program's control is, by its name.
+PAY_WORDS = re.compile(_words(PAY + _paired("order"), PAY_OTHER).pattern
+                       + r"|^\s*(?:" + "|".join(PAY_LEADING) + r")\b", re.I)
+DELETE_WORDS = _words(DELETE + _paired("delete"), DELETE_OTHER)
+GRANT_WORDS = _words(GRANT + _paired("grant"), GRANT_OTHER)
 AFFIRMATIVE = re.compile(r"^(?:allow|continue|accept|approve|agree|yes|允许|继续|接受|同意|批准)(?:\b|$)", re.I)
 CONSENT_PATH = re.compile(r"oauth|authori[sz]e|consent", re.I)
 # A confirm next to an amount pays: the floor's own rule, never a reading.
@@ -101,10 +180,17 @@ GENERIC_CONFIRM = re.compile(r"^(?:confirm|ok|okay|continue|next|proceed|agree|s
 # Ours: words that answer a box's question; such a press is the act the box asks about.
 AFFIRM = re.compile(r"^(?:confirm|ok|okay|yes|sure|continue|确认|确定|好的|好|是|是的|继续)(?:\b|$)", re.I)
 DELETE_CLASSES = re.compile(r"(^|[\s_-])(delete|remove|destroy|trash|discard)([\s_-]|$)", re.I)
-ACCOUNT_WORDS = _words(["sign out", "log out", "logout", "signout", "change password", "update password",
-                        "save settings", "save changes", "update profile", "block", "report", "mute"],
-                       ["退出登录", "退出账号", "登出", "修改密码", "更改密码", "保存设置", "保存修改", "保存资料",
-                        "拉黑", "屏蔽", "举报"])
+ACCOUNT_WORDS = _words(ACCOUNT + TO_PEOPLE + _paired("account"), ACCOUNT_OTHER)
+# What a tool's name or description says: the same, but an act done to a person only with the person named.
+EVERY_PAIR = PAIRS + TOOL_PAIRS
+TOOL_WORDS = (("order", _words(PAY + PAY_TOOLS + _paired("order", EVERY_PAIR), PAY_OTHER)), ("grant", GRANT_WORDS),
+              ("delete", _words(DELETE + DELETE_TOOLS + _paired("delete", EVERY_PAIR), DELETE_OTHER)),
+              ("account", _words(ACCOUNT + _paired("account", EVERY_PAIR), ACCOUNT_OTHER)))
+# What holds a secret: a tool named for one reads or changes the account's security (a page's secret fields are
+# pageops.secret's).
+SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "totp", "credential", "credentials",
+                       "apikey", "api key", "private key", "secret key", "client secret", "recovery code"],
+                      ["密码", "口令", "密碼", "パスワード", "비밀번호"])
 # A name with no letters in it: a count, a sign, nothing.
 NO_WORDS = re.compile(r"^[\W\d_]*$")
 # Enter in another site's frame sends what nothing here can see: the floor, a card every time.

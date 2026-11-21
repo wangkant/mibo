@@ -2139,6 +2139,7 @@
     "toolMeta": "MCP server {server}",
     "changed": "This tool changed since you last allowed it, so it asks again.",
     "destructive": "Its maker marks it as able to delete or overwrite data.",
+    "hard": "This pays, deletes or changes an account's security or access, so it asks every time.",
     "noArgs": "No arguments",
     "raw": "Raw arguments (JSON)",
     "once": "Allow this time",

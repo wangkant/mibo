@@ -10,8 +10,9 @@ and nothing wrong in either.
     python tools/memory_life.py <workdir> --score               (score again, no model call)
     add --life <file> for another life written the same way (tools/memory_life_move.py)
 
-<file> holds LLM_API_KEY and LLM_BASE_URL; only those two lines are copied into
-the fresh home's .env, and never printed. The home runs on its own movable clock
+<file> holds LLM_API_KEY and LLM_BASE_URL; only those two lines are read, never
+printed, and the key reaches the app only through its environment (a scratch home
+by tools/scratchhome.py). The home runs on its own movable clock
 (a sitecustomize in <workdir>/site) and folds are started through a control
 channel in that process. Every model call is recorded with its turn in
 out/rec.jsonl. --replay answers each call from such a recording instead: with
@@ -415,8 +416,7 @@ class Life:
             return e.code, e.read().decode()[:600]
 
     def start(self):
-        env = dict(os.environ, AGENT_HOME=str(self.home), PYTHONPATH=str(self.work / "site") + os.pathsep + str(REPO),
-                   FAKECLOCK_FILE=str(self.clock), MEMCTL_DIR=str(self.ctl), PYTHONUTF8="1", **self.env)
+        env = dict(os.environ, FAKECLOCK_FILE=str(self.clock), MEMCTL_DIR=str(self.ctl), PYTHONUTF8="1", **self.env)
         (self.ctl / "ready").unlink(missing_ok=True)
         (self.home / "runtime/desktop/welcome.json").unlink(missing_ok=True)
         log = open(self.out / "app.log", "ab")
@@ -489,22 +489,23 @@ class Life:
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else empty
 
 
-def make_home(work: Path, port: int, model: str, env_file: Path | None):
+def make_home(work: Path, port: int, model: str, env_file: Path | None) -> dict:
+    """A fresh scratch home under `work`, and the environment its app runs with."""
     home = work / "home"
     if work.exists():
         shutil.rmtree(work)
-    for d in (home, work / "ctl", work / "out", work / "site"):
+    shutil.rmtree(f"{home}-pc", ignore_errors=True)
+    for d in (work / "ctl", work / "out", work / "site"):
         d.mkdir(parents=True)
     (work / "site/sitecustomize.py").write_text(SITE, encoding="utf-8")
-    lines = [f"PAGE_PORT={port}", f"SERVER_PORT={port + 1}", "UPDATE_CHECK_ENABLED=false", "ROAM_ENABLED=false",
-             "AGENT_LANG=zh", "PERSONA_TZ_OFFSET_HOURS=-8", "PERSONA_NAME=Mibo",
-             f"LLM_MODEL={model}", f"LLM_JUDGE_MODEL={model}"]
-    if env_file is None:
-        lines += ["LLM_BASE_URL=http://127.0.0.1:59299/v1", "LLM_API_KEY=stub"]
-    else:
-        lines += [l for l in env_file.read_text(encoding="utf-8").splitlines()
-                  if l.split("=", 1)[0].strip() in ("LLM_API_KEY", "LLM_BASE_URL")]
-    (home / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    sys.path.insert(0, str(REPO))
+    import scratchhome
+    keys = scratchhome.keys(env_file) if env_file else {"LLM_API_KEY": "stub",
+                                                        "LLM_BASE_URL": "http://127.0.0.1:59299/v1"}
+    made = scratchhome.make(home, key=keys["LLM_API_KEY"], LLM_BASE_URL=keys["LLM_BASE_URL"], PAGE_PORT=port,
+                            AGENT_LANG="zh", PERSONA_TZ_OFFSET_HOURS="-8", PERSONA_NAME="Mibo", LLM_MODEL=model,
+                            LLM_JUDGE_MODEL=model)
+    return {**made, "PYTHONPATH": os.pathsep.join([str(work / "site"), str(REPO), made["PYTHONPATH"]])}
 
 
 def live(life_spec, work: Path, port: int, env: dict):
@@ -640,11 +641,10 @@ def main() -> int:
     if not args.score:
         if not (args.env or args.stub or args.replay):
             ap.error("--env <file>, --stub or --replay <workdir>")
-        env = {}
         if args.replay:
             # Read before make_home clears a workdir that is the same one.
             recording = (args.replay.resolve() / "out/rec.jsonl").read_text(encoding="utf-8")
-        make_home(work, args.port, "stub" if args.stub else args.model, args.env)
+        env = make_home(work, args.port, "stub" if args.stub else args.model, args.env)
         if args.replay:
             (work / "from.jsonl").write_text(recording, encoding="utf-8")
             env["MEMREC_FROM"] = str(work / "from.jsonl")

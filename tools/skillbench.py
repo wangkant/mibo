@@ -1,10 +1,12 @@
 """The skills bench: fifteen requests a person types to Mibo, each in a fresh chat of the real app on a scratch home with
-the home's own model, scored from what the turn did.
+a real model, scored from what the turn did.
 
-    python tools/skillbench.py <scratch home> --places <folder> --out <folder> [--only K01,K02] [--budget 0.06]
-                                [--price-in 0.0507] [--price-out 0.2028] [--port 59957]
+    python tools/skillbench.py <scratch home> --places <folder> --keys <file> --out <folder> [--only K01,K02]
+                                [--model deepseek/deepseek-v4.1-flash] [--budget 0.06] [--price-in 0.0507]
+                                [--price-out 0.2028] [--port 59957] [--page-port 59955]
 
-The home must be a scratch folder with its .env and model set. The app runs in this process without a window (as
+The home is a scratch one (tools/scratchhome.py) whose computer is the places folder; <file> gives LLM_API_KEY and
+LLM_BASE_URL, read and never printed, and the key reaches the app only through its environment. The app runs in this process without a window (as
 `mibo start --no-browser`), with the stand-in folders of tools/everyday.py in place of the person's own and nothing
 that opens a window or starts a program; every card the app raises is answered no. Model calls go through a counting
 pass-through (everyday.Meter) that refuses calls past --budget dollars.
@@ -218,21 +220,16 @@ def score(request: dict, reply: str, rows: list, sent: list, photos_before: list
 def run(args) -> int:
     home, places, out = Path(args.home).resolve(), Path(args.places).resolve(), Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    from dotenv import dotenv_values
+    import scratchhome
+    model = scratchhome.keys(args.keys)
+    os.environ.update(scratchhome.make(home, pc=places, key=model["LLM_API_KEY"], LLM_MODEL=args.model,
+                                       AGENT_LANG="zh", LLM_BASE_URL=f"http://127.0.0.1:{args.port}/v1"))
     prepare(home, places)
-    env_file = home / ".env"
-    kept = env_file.read_text(encoding="utf-8")
-    upstream = dotenv_values(env_file).get("LLM_BASE_URL") or ""
-    if upstream.startswith("http://127.0.0.1:"):
-        raise SystemExit("the home's LLM_BASE_URL points at a pass-through left by a stopped run; put it back")
-    meter = Meter(upstream, out / "model.jsonl", args.budget, (args.price_in, ev.PRICE[1], args.price_out))
+    meter = Meter(model["LLM_BASE_URL"], out / "model.jsonl", args.budget, (args.price_in, ev.PRICE[1], args.price_out))
     meter.serve(args.port)
-    lines = [line for line in kept.splitlines() if line.partition("=")[0].strip() != "LLM_BASE_URL"]
-    env_file.write_text("\n".join(lines + [f"LLM_BASE_URL=http://127.0.0.1:{args.port}/v1"]) + "\n", encoding="utf-8")
     ev.stand_ins(places, {}, windows=False)
     wanted = [r for r in REQUESTS if not args.only or r["id"] in args.only.split(",")]
     results: list = []
-    os.environ["AGENT_HOME"] = str(home)
     info = home / "runtime" / "desktop" / "welcome.json"
     info.unlink(missing_ok=True)
 
@@ -277,11 +274,8 @@ def run(args) -> int:
             ev.app_api(home, "exit", {})
 
     threading.Thread(target=walk, daemon=True).start()
-    try:
-        from mibo import welcome
-        welcome.main(["--no-browser", "--port", str(dotenv_values(env_file).get("PAGE_PORT") or 59955)])
-    finally:
-        env_file.write_text(kept, encoding="utf-8")
+    from mibo import welcome
+    welcome.main(["--no-browser", "--port", str(args.page_port)])
     replies = [r for r in meter.rows if reply_round(r)]
     done = [r for r in results if "right" in r]
     summary = {"right": sum(r["right"] for r in done), "of": len(done), "wrong_skill_loads": sum(len(r["wrong"]) for r in done),
@@ -307,12 +301,15 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("home")
     parser.add_argument("--places", required=True)
+    parser.add_argument("--keys", required=True)
+    parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     parser.add_argument("--out", required=True)
     parser.add_argument("--only", default="")
     parser.add_argument("--budget", type=float, default=0.06)
     parser.add_argument("--price-in", type=float, default=ev.PRICE[0])
     parser.add_argument("--price-out", type=float, default=ev.PRICE[2])
     parser.add_argument("--port", type=int, default=59957)
+    parser.add_argument("--page-port", type=int, default=59955)
     if sys.platform != "win32":
         raise SystemExit("the bench gives the app Windows' known folders as stand-ins")
     return run(parser.parse_args(argv))

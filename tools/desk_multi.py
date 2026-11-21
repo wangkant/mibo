@@ -1,13 +1,14 @@
 """Measure one errand across programs, the clipboard paste, and the checks around them (mibo/desk).
 
-    python tools/desk_multi.py --home DIR [--tree DIR] [--only done,across,paste,sight] [--model M] [--out FILE]
+    python tools/desk_multi.py --home DIR [--keys FILE] [--tree DIR] [--only done,across,paste,sight] [--model M]
+                               [--out FILE]
 
 - done: no windows, no model. Fixed model answers through the product's loop (desk/operate.run) over a stand-in
   window: the Paint task where the model claims a line was drawn without doing anything (bench P2), a question
   about what a window shows, and a task really done. Counted: the status each ends with, and the model calls.
 - across: two small test programs of its own, 便签 (a note) and 下单表 (an order form), and four errands that move
   text from one to the other, each through the product's loop with a real model (LLM_API_KEY and LLM_BASE_URL read
-  from DIR's settings, never printed). Judged by what the programs hold afterwards (their own logs).
+  from FILE, never printed). Judged by what the programs hold afterwards (their own logs).
 - paste: the paste action into the order form, with whatever is on the clipboard now and then with a picture on
   it. Counted: whether the text landed, and whether every clipboard format came back byte for byte.
 - sight: picture mode on the order form. The picture on the card that asks to send pictures, against the picture
@@ -234,13 +235,8 @@ class Bench:
     # --- the real model
 
     def key(self) -> tuple[str, str]:
-        try:
-            from mibo import settingsfile
-            found = settingsfile.values(self.home)
-        except ImportError:
-            # An earlier copy of the package (--tree) keeps them in .env.
-            found = dict(line.split("=", 1) for line in (self.home / ".env").read_text(encoding="utf-8").splitlines()
-                       if "=" in line)
+        import scratchhome
+        found = scratchhome.keys(self.args.keys)
         return found["LLM_BASE_URL"].rstrip("/"), found["LLM_API_KEY"]
 
     def complete(self, system: str, messages: list[dict]) -> str:
@@ -537,6 +533,7 @@ CHECKS = {"done": done, "across": across, "paste": paste, "sight": sight}
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--home", required=True)
+    parser.add_argument("--keys", default="", help="a file with LLM_API_KEY and LLM_BASE_URL lines (across)")
     parser.add_argument("--tree", default="")
     parser.add_argument("--only", default=",".join(CHECKS))
     parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")

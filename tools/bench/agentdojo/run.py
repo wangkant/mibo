@@ -1,7 +1,7 @@
 """AgentDojo (ETH SPY Lab, MIT) with Mibo as the agent: a suite's user tasks without attack and under the
 important_instructions attack, scored by AgentDojo's own functions.
 
-    <agentdojo python> -I tools/bench/agentdojo/run.py --home <scratch home> --out <folder>
+    <agentdojo python> -I tools/bench/agentdojo/run.py --home <scratch home> --keys <file> --out <folder>
         [--suites banking] [--budget 0.34] [--model deepseek/deepseek-v4.1-flash]
         [--upstream https://openrouter.ai/api/v1] [--app-python <the app's python>] [--ports 59720]
         [--only user_task_0,user_task_3] [--injections injection_task_0] [--attack important_instructions|none|both]
@@ -12,8 +12,9 @@ random.Random(SEED) (`sample_pairs`), so every injection task appears N times, r
 injection task, so that a budget's cut drops whole rounds. Without it every pair runs.
 
 The run needs two Pythons: one with agentdojo (pip install agentdojo==0.1.35) for this script, and the app's own
-for the app. The app is the agent, as a person runs it: started without a window on --home (its .env holds the
-person's key), the suite's tools added as a local MCP server (home.py, mcp_server.py), each user task sent as one
+for the app. The app is the agent, as a person runs it: started without a window on --home, a scratch home laid out
+by tools/scratchhome.py (the key from --keys, a file with an LLM_API_KEY line, reaches the app only through its
+environment), the suite's tools added as a local MCP server (home.py, mcp_server.py), each user task sent as one
 chat turn in a fresh private chat through /api/chat, so the app's reply loop, find_tools and use_tool, the fence around
 tool results, the reviewer and the cards all run. Nothing of the app is changed.
 
@@ -199,7 +200,10 @@ class Replay:
 
     def answer(self, sent: dict) -> dict:
         names = [t.get("function", {}).get("name") for t in sent.get("tools") or []]
-        system = str((sent.get("messages") or [{}])[0].get("content") or "")
+        content = (sent.get("messages") or [{}])[0].get("content") or ""
+        # The system prompt as text, whether sent as a string or as content parts.
+        system = content if isinstance(content, str) else "".join(
+            str(part.get("text") or "") for part in content if isinstance(part, dict))
         if self.go and system.startswith("You review ONE action"):
             return {"role": "assistant", "content": json.dumps({
                 "kind_asked": True, "target_named": True, "text_given": True, "nothing_added": True,
@@ -221,16 +225,15 @@ class Replay:
 # ---------------------------------------------------------------- the app, as its page talks to it
 
 class App:
-    def __init__(self, home: Path, python: str, port: int, out: Path):
-        self.home, self.python, self.port, self.out = home, python, port, out
+    def __init__(self, home: Path, python: str, port: int, out: Path, env: dict):
+        self.home, self.python, self.port, self.out, self.env = home, python, port, out, env
         self.proc = None
         self.base = self.token = ""
 
     def start(self) -> None:
         info = self.home / "runtime" / "desktop" / "welcome.json"
         info.unlink(missing_ok=True)
-        env = {**os.environ, "AGENT_HOME": str(self.home), "PYTHONIOENCODING": "utf-8",
-               "USER_DESKTOP_DIR": f"{self.home}-pc"}
+        env = {**os.environ, **self.env, "PYTHONIOENCODING": "utf-8"}
         self.log = (self.out / "app.log").open("a", encoding="utf-8")
         self.proc = subprocess.Popen(
             [self.python, "-c", "import sys; from mibo import welcome; "
@@ -471,6 +474,7 @@ def read_done(path: Path) -> set:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--home", required=True)
+    parser.add_argument("--keys", default="", help="a file with an LLM_API_KEY line (not needed with --proof)")
     parser.add_argument("--out", required=True)
     parser.add_argument("--suites", default="banking")
     parser.add_argument("--budget", type=float, default=0.34)
@@ -489,10 +493,8 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     home, out = Path(args.home).resolve(), Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    from dotenv import set_key
-    set_key(str(home / ".env"), "LLM_BASE_URL", f"http://127.0.0.1:{args.ports + 2}/v1", quote_mode="never")
-    set_key(str(home / ".env"), "LLM_MODEL", "stub" if args.proof else args.model, quote_mode="never")
-    set_key(str(home / ".env"), "PAGE_PORT", str(args.ports), quote_mode="never")
+    from dotenv import dotenv_values
+    key = "stub" if args.proof else dotenv_values(args.keys)["LLM_API_KEY"]
     MODEL_NAMES["deepseek-v4.1-flash"] = "DeepSeek"
     if args.proof:
         model = Replay(args.ports + 2, "", go=args.proof == "replay-go")
@@ -503,16 +505,18 @@ def main(argv: list[str]) -> int:
     cases_file = out / "cases.jsonl"
     done = read_done(cases_file)
     cut: list[str] = []
-    app = App(home, args.app_python, args.ports, out)
+    app = App(home, args.app_python, args.ports, out, {"LLM_API_KEY": key})
     for suite_name in args.suites.split(","):
         suite = get_suite(VERSION, suite_name)
         server = SERVERS[suite_name]
         bridge = Bridge(suite, args.ports + 3)
         if isinstance(model, Replay):
             model.server = server
-        subprocess.run([args.app_python, str(HERE / "home.py"), str(home), server, args.app_python,
-                        f"http://127.0.0.1:{args.ports + 3}"], cwd=str(REPO), check=True,
-                       creationflags=NO_WINDOW if os.name == "nt" else 0)
+        laid = subprocess.run([args.app_python, str(HERE / "home.py"), str(home), server, args.app_python,
+                               f"http://127.0.0.1:{args.ports + 3}", f"http://127.0.0.1:{args.ports + 2}/v1",
+                               "stub" if args.proof else args.model, str(args.ports)], cwd=str(REPO), check=True,
+                              capture_output=True, text=True, creationflags=NO_WINDOW if os.name == "nt" else 0)
+        app.env.update(json.loads(laid.stdout.splitlines()[-1]))
         agent = Mibo(app, bridge, suite, server, model, args.proof, {})
         agent.contains = args.contains
         attack = load_attack("important_instructions", suite, agent)

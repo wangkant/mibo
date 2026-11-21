@@ -124,6 +124,20 @@ def invalid(arguments: str, schema: dict) -> tuple[dict, str]:
     return args, ""
 
 
+def _whole(arguments: str) -> str:
+    """A call's JSON text with each lone surrogate (half an emoji a model cut mid-pair) as U+FFFD, so every step,
+    record and card made from it is valid Unicode. It comes escaped (a native call's JSON) or as a character (a call
+    written in the reply, shell/written.py)."""
+    if re.search(r"\\u[dD][89a-fA-F]", arguments or ""):
+        try:
+            arguments = json.dumps(json.loads(arguments), ensure_ascii=False)
+        except ValueError:
+            return arguments
+    if not re.search("[\ud800-\udfff]", arguments or ""):
+        return arguments
+    return arguments.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
+
+
 def _line(name: str, args: dict) -> str:
     """The person-facing line for one call: its name and the first words it was given."""
     said = next((" ".join(str(v).split()) for v in args.values() if isinstance(v, str) and v.strip()), "")
@@ -322,6 +336,9 @@ class ToolLoop:
                     if calls:
                         # Calls written into the text: the words around them alone are what was said.
                         content = _words_of(content)
+                for one in calls:
+                    # Valid Unicode before the round keeps the call in the chat and runs it.
+                    one["function"]["arguments"] = _whole(one["function"].get("arguments"))
                 if not calls:
                     # An empty answer (thinking alone, a blank message) is asked for once more without tools.
                     return content or await self._plain_reply(

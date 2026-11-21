@@ -115,7 +115,8 @@ _STATUS = {
     "unwatched": "Not done: this runs only during a turn they started in the app's chat.",
     "bad_folder": "Not done: that folder cannot be granted (a system folder, a whole drive or the user folder, or "
                   "one that does not exist). Ask them which folder they mean.",
-    "folder_declined": "Not done: they said no to letting you use that folder. Do not ask again this turn.",
+    "folder_declined": "Not done: they said no to letting you use that folder. Do not ask for it again this turn; "
+                       "other steps of their request go on as usual.",
     "read_mode": "Not done: they set commands and files to read only in Settings, so nothing is made, moved, changed "
                  "or run. Tell them in one sentence; they can change the mode there.",
     "read_only": "Not done: they allowed that folder for reading only, so nothing in it may be made, moved or changed. "
@@ -125,7 +126,8 @@ _STATUS = {
                  "no computed names, member calls or loops over unknown items). Never send this command again.",
     "unanswered": "Not done: the card waited ten minutes with no answer. Say in one sentence that it still needs "
                   "their confirmation and that 继续 under this reply asks again; then stop.",
-    "declined": "Not done: they said no on the card. Nothing was changed. Do not try it another way this turn.",
+    "declined": "Not done: they said no on the card for this step, so nothing was changed by it. Do not try this step "
+                "another way this turn; other steps of their request go on as usual.",
     "changed": "Not done: the files changed between the card and the press, so nothing was done. Say so; they can "
                "ask again.",
     "invalid": "Not run: PowerShell could not parse the command. Fix it and try once more, or tell them.",
@@ -226,6 +228,13 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
                    f"({outcome.get('why', {}).get('en', '')}), and do not try another way round it.")
     elif status in ("declined", "unanswered"):
         shown = ("；" if lang == "zh" else "; ").join((outcome.get("asked") or {}).get(lang) or []) or reason
+        if outcome.get("again"):
+            # The same step again in a turn where they said no to it: refused with no second card.
+            reason = ("Not done: they already said no to this same step on a card in this turn, so it was not asked "
+                      "again and nothing was changed. Do not ask for it again this turn.")
+    elif status == "folder_declined" and outcome.get("again"):
+        reason = ("Not done: they already said no to that folder in this turn, so it was not asked again. Do not ask "
+                  "for it again this turn.")
     elif status == "other_way":
         shown = ("；" if lang == "zh" else "; ").join((outcome.get("asked") or {}).get(lang) or [])
     elif status == "read_mode":
@@ -244,10 +253,9 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
 
 
 def _hold(lookups, status: str) -> None:
-    """No more commands or changes this turn after a no on a card, or while a card still waits."""
-    if status in ("declined", "folder_declined"):
-        lookups.shell_held = "they said no on a card"
-    elif status == "unanswered":
+    """No more commands or changes this turn while a card waits with no answer: they are away. A no holds for its
+    own step only (the page refuses that same step again with no card)."""
+    if status == "unanswered":
         lookups.shell_held = "a card is still waiting for their answer"
 
 
@@ -273,7 +281,7 @@ async def use(agent, args: dict, lookups) -> str:
         outcome = await _away(lookups, asyncio.to_thread(
             _ask, home, "POST", "/api/shell/do", 2 * WAIT_S + 300 + 60,
             json={"command": command, "folder": folder, "conversation": lookups.conversation, "limit": limit,
-                  "turn": _turn(lookups)}))
+                  "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None))}))
     finally:
         ticker.cancel()
     _changed(lookups, outcome or {})
@@ -334,7 +342,7 @@ async def use_file(agent, name: str, args: dict, lookups) -> str:
     outcome = await _away(lookups, asyncio.to_thread(
         _ask, home, "POST", "/api/shell/file", 2 * WAIT_S + 120,
         json={"op": op, "args": args, "folder": folder, "conversation": lookups.conversation,
-              "turn": _turn(lookups)}))
+              "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None))}))
     _changed(lookups, outcome or {})
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or file_doing(op, args, lang, done=True)

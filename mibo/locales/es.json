@@ -2145,6 +2145,7 @@
     "toolMeta": "Servidor MCP {server}",
     "changed": "Esta herramienta cambió desde la última vez que la permitió, así que vuelve a preguntar.",
     "destructive": "Su creador indica que puede eliminar o sobrescribir datos.",
+    "hard": "Esto paga, elimina o cambia la seguridad o el acceso de una cuenta, por lo que se pregunta cada vez.",
     "noArgs": "Sin argumentos",
     "raw": "Argumentos sin procesar (JSON)",
     "once": "Permitir esta vez",

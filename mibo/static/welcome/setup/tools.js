@@ -102,6 +102,7 @@
       modeLabel: (name) => `${name} 的权限`,
       modeRead: "直接运行",
       destructiveHint: "提供方标注为可能删除或覆盖数据",
+      hardHint: "涉及付款、删除或账户安全与权限，每次均需确认",
       changed: "已更改，需要重新确认",
       groupRead: (n) => `只读工具（${n}）`,
       groupReadText: "提供方标注为只读、且未标注会删除数据的工具，无需确认即可运行。此标注由提供方填写，Mibo 无法核实；如需阻止，可将单个工具设为禁止。",
@@ -288,6 +289,7 @@
       modeLabel: (name) => `Permission for ${name}`,
       modeRead: "Runs without asking",
       destructiveHint: "Its maker marks it as able to delete or overwrite data",
+      hardHint: "It pays, deletes or changes an account's security or access, so it asks every time",
       changed: "Changed: asks again",
       groupRead: (n) => `Read-only tools (${n})`,
       groupReadText: "Tools their maker marks read-only, and not as deleting data, run without asking. The maker writes that mark; Mibo cannot check it. To stop one, set it to Never.",
@@ -683,7 +685,8 @@
       }
       // Its tools in two groups (Claude's connectors): those marked read-only run without asking, each may be set
       // to never; those that write or delete are set at once to auto review or never, and each also to always,
-      // except a tool marked destructive, which asks every time.
+      // except a tool marked destructive or one that pays, deletes or changes an account (mcp_tools.hard), which
+      // asks every time.
       if (row.tools.length) {
         const fold = kit.fold(kit.fill(t.tools, { n: row.tools.length }));
         for (const group of ["read", "write"]) {
@@ -699,7 +702,7 @@
           }
           fold.body.append(head.row);
           for (const tool of tools) {
-            const marks = [tool.destructive ? t.destructiveHint : "", tool.changed ? t.changed : ""]
+            const marks = [tool.hard ? t.hardHint : tool.destructive ? t.destructiveHint : "", tool.changed ? t.changed : ""]
               .filter(Boolean).join(zh ? "；" : "; ");
             const read = group === "read";
             const modes = read ? [["auto", t.modeRead], ["never", t.mode.never]]

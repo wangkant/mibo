@@ -49,6 +49,8 @@ UNCHANGING = ("look", "wait", "switch", "focus", "scroll")
 # How much of another program's last look the prompt carries.
 OTHER_SHOWN = 3000
 HELD = ("stopped", "paused", "handover", "refused", "declined")
+# How a step's line says its card got no answer (hands.py), which use_program reads to hold the turn (tool.py).
+UNANSWERED = "nobody answered the card"
 NUMBER = re.compile(r"\d[\d,.]*\d|\d")
 IDENT = re.compile(r"\[(\d+)\]")
 # Before an errand gives up on a name or asks, it hears once which nameless controls it has not tried.

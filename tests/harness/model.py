@@ -242,8 +242,9 @@ class ScriptedModel:
             message["reasoning_content"] = step["think"]
         if step.get("calls"):
             message["tool_calls"] = [{"id": f"call_{next(self._ids)}", "type": "function",
-                                      "function": {"name": c["name"],
-                                                   "arguments": json.dumps(c["arguments"], ensure_ascii=False)}}
+                                      # Arguments given as text are the model's own JSON, sent as written.
+                                      "function": {"name": c["name"], "arguments": c["arguments"] if isinstance(
+                                          c["arguments"], str) else json.dumps(c["arguments"], ensure_ascii=False)}}
                                      for c in step["calls"]]
         finish = step.get("finish") or ("tool_calls" if step.get("calls") else "stop")
         return 200, {"id": f"chatcmpl-{len(self.requests)}", "object": "chat.completion", "model": MODEL,

@@ -2,8 +2,8 @@
 (mibo/desk/operate.run): does hello reach the program's main agent, in each variant of the fixture?
 
     python tools/chatfixture_errand.py replay --looks <looks.json> [--home <home>] [--model stub|real]
-                                              [--eyes none|look] [--runs N] [--out <file>]
-    python tools/chatfixture_errand.py window --home <folder> [--model stub|real] [--out <file>]
+                                              [--keys <file>] [--eyes none|look] [--runs N] [--out <file>]
+    python tools/chatfixture_errand.py window --home <folder> [--model stub|real] [--keys <file>] [--out <file>]
 
 replay runs no window: the fixture's looks were read off its real window beforehand (tools/chat_fixture.py
 --record, read only, nothing pressed), and a stand-in program serves them, changing as the fixture does (the chat
@@ -16,8 +16,8 @@ window starts the fixture and works it through the real program layer (mibo/desk
 the send confirmed on a stand-in card: it needs a screen and moves windows, so it runs on the sandbox's runners,
 never on someone's own desktop.
 
---model real calls the person's model (LLM_BASE_URL, LLM_API_KEY and LLM_MODEL from <home>'s settings) and counts what
-each answer cost; stub is a scripted stand-in that presses what the look names or describes. The last lines give,
+--model real calls deepseek/deepseek-v4.1-flash (LLM_BASE_URL and LLM_API_KEY from --keys, never printed) and counts
+what each answer cost; stub is a scripted stand-in that presses what the look names or describes. The last lines give,
 per variant, how many runs ended with hello in the main agent's chat and nowhere else. Exit 0 when every run did.
 """
 from __future__ import annotations
@@ -38,6 +38,7 @@ from mibo.desk import operate  # noqa: E402
 
 TASK = "给主agent发一个hello"  # copy: voice
 PROGRAM = "Lumen"
+MODEL = "deepseek/deepseek-v4.1-flash"
 CHATS = ["Daily notes", "Travel plan", "Code review", "Reading list"]
 
 
@@ -46,10 +47,10 @@ CHATS = ["Daily notes", "Travel plan", "Code review", "Reading list"]
 class Real:
     """The person's model through its OpenAI-compatible service, as tool.use calls it for this loop."""
 
-    def __init__(self, home: Path):
-        from mibo import settingsfile
-        env = settingsfile.values(home)
-        self.url, self.key, self.model = env["LLM_BASE_URL"].rstrip("/"), env["LLM_API_KEY"], env["LLM_MODEL"]
+    def __init__(self, keys: str):
+        import scratchhome
+        found = scratchhome.keys(keys)
+        self.url, self.key, self.model = found["LLM_BASE_URL"].rstrip("/"), found["LLM_API_KEY"], MODEL
         self.cost = 0.0
         self.calls = 0
 
@@ -211,7 +212,7 @@ def verdict(log: list[dict]) -> bool:
 
 def replay(args) -> int:
     looks = json.loads(Path(args.looks).read_text(encoding="utf-8"))
-    model = Real(Path(args.home)) if args.model == "real" else None
+    model = Real(args.keys) if args.model == "real" else None
     rows = []
     for variant in ("named", "bare"):
         for run in range(args.runs):
@@ -234,7 +235,7 @@ def window(args) -> int:
     from mibo.desk import hands as hands_mod
     from mibo.desk import win32
     home = Path(args.home)
-    model = Real(home) if args.model == "real" else None
+    model = Real(args.keys) if args.model == "real" else None
     worker = ThreadPoolExecutor(1, thread_name_prefix="desk")
     rows = []
     for variant in ("named", "bare"):
@@ -297,6 +298,7 @@ def main() -> int:
     parser.add_argument("--looks", default="")
     parser.add_argument("--home", default="")
     parser.add_argument("--model", default="stub", choices=["stub", "real"])
+    parser.add_argument("--keys", default="")
     parser.add_argument("--eyes", default="none", choices=["none", "look"])
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--out", default="")

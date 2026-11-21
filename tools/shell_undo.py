@@ -134,19 +134,17 @@ def main() -> int:
     parser.add_argument("--ports", nargs=3, type=int, required=True, help="page, server, stand-in model")
     args = parser.parse_args()
     home, work, shots = Path(args.home), Path(args.work), Path(args.shots)
-    home.mkdir(parents=True, exist_ok=True)
     page_port, _, model_port = args.ports
-    from mibo import settingsfile
-    settingsfile.write(home, {
-        "PAGE_PORT": page_port, "UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false", "AGENT_LANG": "zh",
-        "PERSONA_TZ_OFFSET_HOURS": "-8", "PERSONA_NAME": "Mibo", "LLM_BASE_URL": f"http://127.0.0.1:{model_port}/v1",
-        "LLM_MODEL": "stub", "LLM_API_KEY": "stub"})
+    import scratchhome
+    env = {**os.environ, **scratchhome.make(
+        home, key="stub", PAGE_PORT=page_port, AGENT_LANG="zh", PERSONA_TZ_OFFSET_HOURS="-8", PERSONA_NAME="Mibo",
+        LLM_BASE_URL=f"http://127.0.0.1:{model_port}/v1", LLM_MODEL="stub"), "SHELL_OPEN_DRY": "1"}
     (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
     first = fixture(work)
     threading.Thread(target=stand_in, args=(model_port, work), daemon=True).start()
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
-                           env={**os.environ, "AGENT_HOME": str(home), "SHELL_OPEN_DRY": "1"},
+                           env=env,
                            cwd=Path(__file__).resolve().parents[1],
                            stdout=open(home.parent / "app.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
     report: dict = {"start": first}

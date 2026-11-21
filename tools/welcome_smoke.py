@@ -1,4 +1,5 @@
-"""Run the installed welcome page, save a key, chat, and exit, using only localhost."""
+"""Run the installed welcome page, save a key, chat, and exit, using only localhost. The key the page saves is held in
+the app's memory (tools/scratchhome.py's credential store), never in this computer's."""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 import urllib.request
 from http.server import ThreadingHTTPServer
 
+import scratchhome
 from package_smoke import FakeModel, REPLY, _env
 
 
@@ -26,12 +28,13 @@ def main(argv=None) -> int:
     model = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)
     threading.Thread(target=model.serve_forever, daemon=True).start()
     process = None
+    env = {**_env(), **scratchhome.store()}
     try:
         with tempfile.TemporaryDirectory(prefix="mibo-welcome-") as temporary:
             command = [shutil.which(args.mibo) or os.path.abspath(args.mibo), "--home", str(Path(temporary) / "home"),
                        "start", "--no-browser"]
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                       text=True, encoding="utf-8", errors="replace", env=_env())
+                                       text=True, encoding="utf-8", errors="replace", env=env)
             lines = queue.Queue()
             def read():
                 for line in process.stdout:
@@ -82,7 +85,7 @@ def main(argv=None) -> int:
             assert reply["reply"] == REPLY, reply
             # A second launch reuses the existing page rather than a second service.
             second = subprocess.run(command, capture_output=True, text=True, encoding="utf-8",
-                                    errors="replace", env=_env(), timeout=15)
+                                    errors="replace", env=env, timeout=15)
             assert second.returncode == 0 and url in second.stdout
             assert request("/api/exit", {}) == {"ok": True}
             assert process.wait(timeout=20) == 0

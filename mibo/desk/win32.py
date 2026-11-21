@@ -360,7 +360,7 @@ PROGRAMS = ("{A77F5D77-2E2B-44C3-A6A2-ABA601054A51}", "{0139D44E-6AFE-49F2-8690-
 
 def shortcuts() -> list[tuple[str, str, str]]:
     """What a person opens from the Desktop and Start besides Start's own programs: every .lnk, .url and .exe on
-    their Desktop (shell.grants.known_folder, which USER_DESKTOP_DIR can point elsewhere) and on the Public
+    their Desktop (shell.grants.known_folder, which MIBO_USER_DIRS can point elsewhere) and on the Public
     Desktop, and every .lnk in Start's Programs folders that starts no program (a script, a folder). As (name,
     the file, what it opens): the name is the file's without its extension; a shortcut's target is read through
     the shell's own object, as Explorer reads it ("" when it names none)."""

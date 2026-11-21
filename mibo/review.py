@@ -108,7 +108,14 @@ screenshots of the window in "target" to the model service in "where", which the
 app can work that window by sight; it is a step when their words name or plainly point at that program or window. \
 "only_reads": true is code's own reading of a command: every part of it only lists or reads (nothing is written, \
 moved, run or sent), so it is a step when what it lists or reads serves their task, even where "effects" says it \
-reaches past the folders they granted; target_named still checks that it reads where they meant.
+reaches past the folders they granted; target_named still checks that it reads where they meant. "tool" calls the \
+tool in "target" of the program (an MCP server) in "where", with the arguments in "text"; "page_says" is its \
+maker's description.
+
+A tool call is held as a page's button is: when it pays, buys, books, orders, subscribes, sends money, deletes or \
+cancels anything, signs anyone out, changes a password, an email or phone, a key or another account detail, or \
+gives, changes or takes away anyone's access or what is public, the decision is "ask", whatever the person said; \
+never "go".
 
 Judge by what the action will actually do, not by its kind's name or its tone. Check:
 1. kind_asked: the act serves what the person asked for, in one of two ways. (a) A step: a "press" (a control \
@@ -241,14 +248,30 @@ class Verdict:
 
 # ---------------------------------------------------------------- what code decides before any model
 
-# Secrets in outgoing text: refused.
+# Secrets in outgoing text: refused. Keys of services by their prefixes, a password said, a bearer token, a code.
 SECRET_TEXT = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk|rk)-[A-Za-z0-9_-]{16,}|\bgh[pousr]_[A-Za-z0-9]{20,}|"
     r"\bgithub_pat_\w{20,}|\bAKIA[0-9A-Z]{16}\b|\bxox[abpr]-[A-Za-z0-9-]{10,}|\bAIza[0-9A-Za-z_-]{30,}|"
-    r"(?:password|passwd|passcode|pwd|密码|口令)\s*(?:is|[:：=是为])\s*\S+|"
-    r"(?:验证码|校验码|动态码|短信码|verification code|security code|one-time code|otp|2fa|cvv|cvc)\D{0,8}\d{3,8}",
+    r"(?:password|passwd|passcode|pwd|密码|口令)[\"']?\s*(?:is|[:：=是为])\s*[\"']?[^\s\"',}]+|"
+    r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}|"
+    r"(?:验证码|校验码|动态码|短信码|\b(?:verification code|security code|one-time code|otp|2fa|cvv|cvc)\b)\D{0,8}\d{3,8}",
     re.I)
-CARD_DIGITS = re.compile(r"(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)")
+# A field of JSON (or JSON written inside a string, its quotes escaped) and its value: secret by the field's name.
+FIELD = re.compile(r"\\*\"([^\"\\]{1,60})\\*\"\s*:\s*(?:\\*\"([^\"\\]{3,})|(\d[\d ]{11,22}\d)\b)")
+# A field name's last word that holds a secret, whatever its case and separators: token, clientSecret, x-api-key,
+# pwd; not a count, a limit or a policy (token_count, max_tokens, password_policy).
+SECRET_NAMES = frozenset("secret token pass pwd passwd password passcode passphrase otp totp cvv cvc pin authorization "
+                         "apikey".split())
+# Tokens that only page through a listing.
+NOT_SECRET = frozenset("page next sync continuation continue cursor pagination skip starting start end resumption "
+                       "marker input output from to base quote".split())
+# A value that could be a credential: long, with no spaces. A coin's symbol or a word is not.
+CREDENTIAL = re.compile(r"\S{12,}")
+# A card number is written as one: in groups of four (4-6-5 for Amex), under a card, pan or number field, or after a
+# card word; a bare digit run (an id, a timestamp) is not one.
+CARD_GROUPED = re.compile(r"(?<![\d.])(?:\d{4}(?:[ -]\d{4}){3}(?:[ -]?\d{1,3})?|\d{4}[ -]\d{6}[ -]\d{5})(?![\d.])")
+CARD_SAID = re.compile(r"(?:\bcard\b|卡号|卡號|カード|카드)\D{0,12}?(\d[\d -]{11,22}\d)(?!\d)", re.I)
+CARD_FIELDS = frozenset("card pan number cc".split())
 # Things that point somewhere: a message must not carry one the person did not give.
 POINTERS = re.compile(r"https?://\S+|www\.\S+|\b[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w@])@[\w\u4e00-\u9fff.-]{2,}|"
                       r"\b[a-z0-9-]+\.(?:com|cn|net|org|io|me|cc|xyz|top|ru|link|ly|gl|co)\b(?:/\S*)?|\d{5,}|\d{3}-\d{2}-\d{4}",
@@ -467,6 +490,32 @@ def unsaid(text: str, words: list[str], form: bool = False) -> str:
     return "".join(ch for ch, ok in zip(sent, covered) if not ok and LETTERS.match(ch))
 
 
+def _field_words(name: str) -> list[str]:
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name)
+    return [w.lower() for w in re.findall(r"[A-Za-z]+|\d+", spaced)]
+
+
+def _card(digits: str) -> bool:
+    digits = re.sub(r"\D", "", digits)
+    return 13 <= len(digits) <= 19 and _luhn(digits)
+
+
+def carries_secret(text: str) -> bool:
+    """A password, a code, a key or a card number in text the character would send, a tool's arguments as JSON
+    among them (a field named for a secret, at any depth and inside a string of JSON)."""
+    if SECRET_TEXT.search(text) or any(_card(m) for m in CARD_GROUPED.findall(text) + CARD_SAID.findall(text)):
+        return True
+    for name, value, digits in FIELD.findall(text):
+        words = _field_words(name)
+        last = "apikey" if words[-2:] in (["api", "key"], ["private", "key"]) else (words or [""])[-1]
+        if value and last in SECRET_NAMES and not set(words[:-1]) & NOT_SECRET and (
+                last != "token" or CREDENTIAL.fullmatch(value)):
+            return True
+        if set(words) & CARD_FIELDS and _card(value or digits):
+            return True
+    return False
+
+
 def precheck(request, action: dict, lang: str = "zh", now: float | None = None) -> Verdict | None:
     """The floor code decides before any model is asked: a Verdict (ask or refuse), or None to review."""
     area = action.get("area")
@@ -495,7 +544,7 @@ def precheck(request, action: dict, lang: str = "zh", now: float | None = None) 
             if rule.search(text):
                 return Verdict("ask", said("person", lang, what=pick(WHAT[what], lang)), "code")
     else:
-        if SECRET_TEXT.search(text) or any(_luhn(re.sub(r"\D", "", m)) for m in CARD_DIGITS.findall(text)):
+        if carries_secret(text):
             return Verdict("refuse", said("secret", lang), "code")
         asked = _fold(" ".join(words))
         if any(_fold(m).rstrip(".,;:!?)，。；：！？）") not in asked for m in POINTERS.findall(text)):

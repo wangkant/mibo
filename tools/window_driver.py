@@ -14,7 +14,9 @@ Windows only: it needs the WebView2 window `mibo start` opens there.
     raise SystemExit(run(pathlib.Path(r"D:/scratch/home"), steps, out=pathlib.Path(r"D:/scratch/out")))
 
 `home` must be a scratch folder, never a home someone uses: the page starts
-whatever that home has connected. Clicks and keys go through the browser
+whatever that home has connected. It is laid out by tools/scratchhome.py: a key
+saved through the page stays in memory, and the app's file tools see only an
+empty stand-in computer beside the home. Clicks and keys go through the browser
 engine's own input, so hover, focus and pressed states are the real ones. The
 window opens off screen unless `offscreen=False`. Links that would open the
 system browser are recorded in `d.links` instead.
@@ -243,7 +245,10 @@ def run(home: Path, steps, *, out: Path | None = None, offscreen: bool = True, l
     home = Path(home).resolve()
     out = Path(out or home / "walk")
     out.mkdir(parents=True, exist_ok=True)
-    os.environ["AGENT_HOME"] = str(home)
+    if os.environ.get("AGENT_HOME") != str(home):
+        # Laid out here unless the caller already did, with its own stand-in computer and settings.
+        import scratchhome
+        os.environ.update(scratchhome.make(home))
     os.environ.pop("AGENT_LANG", None)
     if lang:
         os.environ["AGENT_LANG"] = lang

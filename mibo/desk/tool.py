@@ -5,7 +5,9 @@ The model says the task and the program; the loop (operate.py) does the steps, e
 the app's plain words.
 
 A window is the third way of doing something, after answering and after a command; the tool's description
-says so. What one way refused or the person declined is not tried another way in the same turn.
+says so. What one way refused is not tried another way in the same turn; a no on a card holds for its own task
+only: the same task in the same program is not asked again that turn, and every other step goes on with its own
+cards.
 
 The model names the program as the person did, or names none for the window in front of them; which program
 that is on this computer is the app's to find (names.py), and a name it cannot place comes back with the
@@ -63,7 +65,10 @@ _SAID = {
     "refused": "refused: the app never does this, whatever they allowed. Tell them in a sentence that you never "
                "operate it and why (the reason below), that it is theirs to do, and do not try it another way: no "
                "command, no other program",
-    "declined": "they said no on the card, so nothing was done or changed",
+    "unanswered": "nobody answered the card, so that step was not done and nothing more is started this turn. Tell "
+                  "them in a sentence what is waiting for their answer",
+    "declined": "they said no on a card, so that step was not done (the steps below are what was done before it). Do "
+                "not try this same task again this turn; other parts of their request go on as usual",
     "asked": "it needs something from them",
     "paused": "they used the computer themselves and did not press 继续 on the strip, so it stopped there; they can "
               "say 继续 to go on",
@@ -108,11 +113,15 @@ async def use(agent, args: dict, lookups) -> str:
     also = tuple(" ".join(str(a).split())[:80] for a in (also if isinstance(also, list) else [also]) if str(a).strip())[:2]
     if not task:
         return "(say the task in their words)"
-    # What a window, a command or the browser was refused or they declined this turn is not tried another way.
-    held = getattr(lookups, "desk_held", "") or getattr(lookups, "shell_held", "") or (
-        "they declined on a card" if getattr(lookups, "errand_held", "") == "declined" else "")
+    # What a window or a command was refused, or the person stopped or took over, this turn is not tried another way.
+    held = getattr(lookups, "desk_held", "") or getattr(lookups, "shell_held", "")
     if held:
         return f"(no new task in a program this turn: {held}. Tell them how far it got.)"
+    # A no on a card holds for that task in that program only.
+    step = (SEVERAL.split(program)[0].strip().lower(), task)
+    if step in lookups.__dict__.setdefault("desk_said_no", set()):
+        return ("(not started: they already said no on a card to this same task in this program this turn, so it was "
+                "not asked again. Do not ask for it again this turn; other parts of their request go on as usual.)")
     home = today.runtime_of(agent).parent
     lang = _lang()
     remote = operate.Remote(home, lookups.conversation, lang)
@@ -147,11 +156,17 @@ async def use(agent, args: dict, lookups) -> str:
         # No such program was placed: the app's own words, with the programs open now, for one more try.
         logger.info("[Agent] use_program -> no program %r", program)
         return f"(no task was started. {outcome['result']})"
-    if status in ("stopped", "paused", "declined", "handover", "refused"):
+    if status in ("stopped", "paused", "handover", "refused"):
         lookups.desk_held = _SAID[status]
-    if status in ("declined", "refused"):
+    if status == "refused":
         # No going round it with a command in the same turn (shell/tool.py reads this).
-        lookups.shell_held = "they said no on a card" if status == "declined" else "the app never does this"
+        lookups.shell_held = "the app never does this"
+    elif status == "declined" and any(operate.UNANSWERED in line for line in outcome.get("steps") or []):
+        # Nobody was there to answer: nothing more is started or changed this turn, as with a command's card.
+        status = "unanswered"
+        lookups.desk_held = lookups.shell_held = "a card is still waiting for their answer"
+    elif status == "declined":
+        lookups.desk_said_no.add(step)
     logger.info("[Agent] use_program -> %s after %d model calls", status, outcome.get("calls", 0))
     why = (outcome.get("why") or {}).get(lang, "")
     out = "\n".join(outcome.get("said") or []) or why or ""

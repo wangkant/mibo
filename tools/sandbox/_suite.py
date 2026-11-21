@@ -134,15 +134,16 @@ def stand_in_model(handler=FakeModel, port: int = 0) -> str:
 
 
 def scratch_home(model_url: str, lang: str = "zh", **settings) -> Path:
-    """A new home outside the out folder (its settings are never uploaded), with the model and no network extras."""
+    """A new home outside the out folder (its settings are never uploaded), with the model and no network extras,
+    laid out by tools/scratchhome.py: the key and the rest in this process's environment, which the app and the
+    scripts this suite starts read."""
+    import scratchhome
     home = Path(tempfile.mkdtemp(prefix="mibo-sandbox-", dir=os.environ.get("RUNNER_TEMP") or None)).resolve()
     # The character sleeps at night by its own clock, and a sleeping pet takes a click as a pat: its clock is set
     # to the early afternoon whatever the hour on the runner.
-    values = {"LLM_BASE_URL": model_url, "LLM_MODEL": "fake-model", "LLM_API_KEY": "fake-local-key",
-              "AGENT_LANG": lang, "UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false",
+    values = {"LLM_BASE_URL": model_url, "LLM_MODEL": "fake-model", "AGENT_LANG": lang,
               "PERSONA_TZ_OFFSET_HOURS": str(14 - time.gmtime().tm_hour), **settings}
-    from mibo import settingsfile
-    settingsfile.write(home, values)
+    os.environ.update(scratchhome.make(home, key=values.pop("LLM_API_KEY", "fake-local-key"), **values))
     return home
 
 

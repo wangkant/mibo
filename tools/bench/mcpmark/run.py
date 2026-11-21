@@ -24,8 +24,9 @@ below-normal priority, one task at a time. Every card is answered as the person 
 connector's start, its tools, turning an ability on, and folders and commands inside the task's folder; no to
 anything reaching outside that folder, a program's window or the browser, which a folder task does not need. With
 --sample, a part of the suite stratified by category is run (see `draw`). Model calls go through tools/everyday.py's metering pass-through, which refuses calls
-past --budget dollars; no task starts with less than a task's worth left. The key is read from --keys and written
-only into each scratch home's .env, never printed. Per task, <work>/<task>/ keeps the reply, the steps, the MCP
+past --budget dollars; no task starts with less than a task's worth left. The key is read from --keys (LLM_API_KEY
+and LLM_BASE_URL lines), never printed, and reaches each scratch home's app only through its environment
+(tools/scratchhome.py); the person's computer is an empty folder beside each home. Per task, <work>/<task>/ keeps the reply, the steps, the MCP
 log, the model calls and verify's output; the summary goes to --out.
 """
 from __future__ import annotations
@@ -53,6 +54,7 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 
+import scratchhome  # noqa: E402
 from everyday import Meter  # noqa: E402
 
 from tests.harness.turn import CARD_ROUTES, _press  # noqa: E402
@@ -68,7 +70,7 @@ MODEL = "deepseek/deepseek-v4.1-flash"
 # when an answer carries no cost of its own.
 PRICE = (0.0498, 0.000996, 0.1992)
 # Ports of this bench (59710-59719): the pass-through, the page, the character service, the stand-in model.
-METER_PORT, PAGE_PORT, SERVICE_PORT, STUB_PORT = 59711, 59712, 59713, 59714
+METER_PORT, PAGE_PORT, STUB_PORT = 59711, 59712, 59714
 # A task does not start with less than this left of the budget, dollars.
 TASK_RESERVE = 0.03
 # How each kind of card is answered by the person who asked for a folder task.
@@ -188,29 +190,28 @@ def node_ready(work: Path) -> Path:
     return shared
 
 
-def make_home(home: Path, shared: Path, model_url: str, model: str, key: str) -> None:
+def make_home(home: Path, shared: Path, model_url: str, model: str, key: str) -> dict:
+    """A fresh scratch home, and the environment its app runs with."""
     from mibo import setup_wizard
-    shutil.rmtree(home, ignore_errors=True)
-    home.mkdir(parents=True)
-    setup_wizard.write_env(home / ".env", {
-        "LLM_BASE_URL": model_url, "LLM_API_KEY": key, "LLM_MODEL": model, "PAGE_PORT": str(PAGE_PORT),
-        "SERVER_PORT": str(SERVICE_PORT), "UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false",
-        "AGENT_LANG": "zh", "PERSONA_TZ_OFFSET_HOURS": "-8", "PERSONA_NAME": "Mibo"})
+    scratchhome.clear(home)
+    env = scratchhome.make(home, key=key, LLM_BASE_URL=model_url, LLM_MODEL=model, PAGE_PORT=PAGE_PORT,
+                           AGENT_LANG="zh", PERSONA_TZ_OFFSET_HOURS="-8", PERSONA_NAME="Mibo")
     setup_wizard.write_persona(home, setup_wizard.CHARACTERS[0].key, name="Mibo", lang="zh")
     junction(home / "runtime" / "bin" / "node", shared / "runtime" / "bin" / "node")
     junction(home / "runtime" / "cache" / "npm", shared / "runtime" / "cache" / "npm")
+    return env
 
 
 class App:
     """`mibo start --no-browser` on one home, in a process of its own; its page API as the page calls it."""
 
-    def __init__(self, home: Path, log: Path):
+    def __init__(self, home: Path, log: Path, env: dict):
         self.home = home
         (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
         code = f"import sys; from mibo import welcome; sys.exit(welcome.main(['--no-browser', '--port', '{PAGE_PORT}']))"
         self.out = log.open("w", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "-c", code], cwd=REPO, stdout=self.out, stderr=subprocess.STDOUT,
-                                     env={**os.environ, "AGENT_HOME": str(home), "PYTHONIOENCODING": "utf-8"},
+                                     env={**os.environ, **env, "PYTHONIOENCODING": "utf-8"},
                                      creationflags=BELOW_NORMAL | NO_WINDOW if WIN else 0)
         info = home / "runtime" / "desktop" / "welcome.json"
         for _ in range(240):
@@ -305,10 +306,10 @@ def one(task: dict, data: Path, work: Path, shared: Path, model_url: str, model:
     place.mkdir(parents=True)
     folder = fresh_copy(data, task["category"], place / "files")
     home = place / "home"
-    make_home(home, shared, model_url, model, key)
+    env = make_home(home, shared, model_url, model, key)
     rows_before = len(meter.rows) if meter else 0
     began = time.time()
-    app = App(home, place / "app.log")
+    app = App(home, place / "app.log", env)
     try:
         app.api("/api/look/toured", {})
         # The connector, added as Settings' Connectors adds a pasted snippet.
@@ -345,7 +346,7 @@ def one(task: dict, data: Path, work: Path, shared: Path, model_url: str, model:
     (place / "result.json").write_text(json.dumps({**record, "cards_shown": result["cards"], "mcp_log": log,
                                                    "messages": entries, "model_rows": rows}, ensure_ascii=False,
                                                   indent=1), encoding="utf-8")
-    shutil.rmtree(home, ignore_errors=True)
+    scratchhome.clear(home)
     return record
 
 
@@ -478,15 +479,6 @@ def check(checkout: Path, data: Path, work: Path) -> int:
 
 # ---------------------------------------------------------------- run
 
-def read_keys(path: Path) -> dict:
-    out = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        name, _, value = line.partition("=")
-        if value:
-            out[name.strip()] = value.strip().strip('"')
-    return out
-
-
 def git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True).stdout.strip()
 
@@ -528,7 +520,7 @@ def run(args) -> int:
     if args.sample:
         every, drawn = sample(every, args.sample, args.seed)
     wanted = [t for t in every if not args.only or t["id"] in args.only.split(",")]
-    keys = read_keys(args.keys)
+    keys = scratchhome.keys(args.keys)
     work = args.work
     work.mkdir(parents=True, exist_ok=True)
     meter = Meter(keys["LLM_BASE_URL"], work / "model.jsonl", args.budget, PRICE)

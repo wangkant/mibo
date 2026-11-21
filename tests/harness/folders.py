@@ -1,13 +1,13 @@
 """A person's profile under tmp: Desktop, Documents, Downloads, Pictures, Music and Videos with the files a real
 one holds (CJK names, a large binary, a git folder) and the keys a command must never show (.env, id_rsa, a
-.pem). USERPROFILE and HOME point at it, and the app's own stand-in switches (USER_DESKTOP_DIR, MIBO_USER_DIRS)
-at its Desktop and Documents."""
+.pem). USERPROFILE and HOME point at it, and the app's own stand-in switch (MIBO_USER_DIRS) at its known
+folders."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from mibo.panels import desk
+from mibo.shell import grants
 
 FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 # Where a key lies, relative to the profile: each is one a command or a listing must hide.
@@ -41,5 +41,4 @@ class Profile:
             path.write_bytes(body) if isinstance(body, bytes) else path.write_text(body, encoding="utf-8")
         for name in ("USERPROFILE", "HOME"):
             monkeypatch.setenv(name, str(root))
-        monkeypatch.setenv("USER_DESKTOP_DIR", str(root / "Desktop"))
-        monkeypatch.setenv(desk.DIRS_ENV, os.pathsep.join([str(root / "Desktop"), str(root / "Documents")]))
+        monkeypatch.setenv(grants.DIRS_ENV, os.pathsep.join(str(root / name.title()) for name in grants.DIRS))

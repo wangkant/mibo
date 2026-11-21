@@ -22,6 +22,7 @@ from typing import Callable, Optional
 from ..cardwait import WAIT_S
 from ..web.pageops import clip, quote
 from . import gate, grants as g, names, uia, win32
+from .operate import UNANSWERED
 from .strip import Strip
 
 # The ways to press a control, and the state "check" and "uncheck" bring a tick box to.
@@ -626,7 +627,7 @@ class Hands:
             answer = self.ask(card)
         if answer is None:
             return {"status": "declined", "kind": kind,
-                    "line": f"[declined] nobody answered the card for {kind} ({clip(name, 40)}); nothing was done"}
+                    "line": f"[declined] {UNANSWERED} for {kind} ({clip(name, 40)}); nothing was done"}
         if not answer.get("yes"):
             return {"status": "declined", "kind": kind,
                     "line": f"[declined] the person said no to {kind} ({clip(name, 40)}); nothing was done"}

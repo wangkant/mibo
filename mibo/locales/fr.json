@@ -2145,6 +2145,7 @@
     "toolMeta": "Serveur MCP {server}",
     "changed": "Cet outil a changé depuis votre dernière autorisation ; il demande donc à nouveau.",
     "destructive": "Son éditeur indique qu'il peut supprimer ou écraser des données.",
+    "hard": "Cette action paie, supprime ou modifie la sécurité ou l'accès d'un compte : elle est demandée à chaque fois.",
     "noArgs": "Aucun argument",
     "raw": "Arguments bruts (JSON)",
     "once": "Autoriser cette fois",

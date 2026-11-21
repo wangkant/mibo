@@ -21,17 +21,22 @@ opening anything. Signing out ends the grant at the server first.
 
 The reply model reaches the tools through the character service, which asks
 here (/api/mcp/offer, /find, /call: panels/tools.py). A local server that was
-never allowed starts inside the call that needs it, on its card. A tool its
-provider marks read-only (and not destructive) runs with no reviewer and no
-card; a tool marked destructive asks on the card every time; any other goes to
-the reviewer on the person's own words, and to the card when it does not pass,
-unless the person set it to always (that exact description) or allowed it for
-this conversation. Never, for a tool or for a server's tools that write, stops
-it. A card is raised only while the person's own chat turn is under way, waits
-for them there (cardwait.py), and only a press on the app's own page answers it.
-What a server asks of the person during a call (elicitation) is such a card too:
-a form they fill in, sent to the server and never to the model, or a page they
-choose to open in their browser.
+never allowed starts inside the call that needs it, on its card. A call that
+pays or orders, changes a payment, deletes, or changes an account's security
+or access (mcp_tools.hard, from the tool's name, parameters, description and
+the arguments, whatever its hints say) asks on the card every time, in every
+mode, with no reviewer and no always-allow; so does a tool marked destructive.
+A tool its provider marks read-only whose name reads by its own words
+(mcp_tools.group_of) runs with no reviewer and no card; any other goes to the
+reviewer on the person's own words, and to the card when it
+does not pass, unless the person set it to always (that exact description) or
+allowed it for this conversation. Arguments holding a password, a code, a key
+or a card number are never sent. Never, for a tool or for a server's tools that
+write, stops it. A card is raised only while the person's own chat turn is under
+way, waits for them there (cardwait.py), and only a press on the app's own page
+answers it. What a server asks of the person during a call (elicitation) is such
+a card too: a form they fill in, sent to the server and never to the model, or a
+page they choose to open in their browser.
 """
 from __future__ import annotations
 
@@ -413,7 +418,7 @@ class Hub:
         for runner in self.runners.values():
             if runner.state == "connected" and runner.tools:
                 lines.append({"name": runner.name, "about": runner.about or _sample(runner.tools),
-                              "tools": len(runner.tools)})
+                              "tools": len(runner.tools), "tool_names": [t["name"] for t in runner.tools]})
             elif runner.state in ("waiting", "declined", "starting") and not runner.spec.get("disabled"):
                 lines.append({"name": runner.name, "about": "", "tools": 0, "state": runner.state})
         return {"names": [r.name for r in self.runners.values() if not r.spec.get("disabled")], "servers": lines}
@@ -497,13 +502,22 @@ class Hub:
                 return {"status": "bad_arguments", "problem": problem,
                         "parameters": mt.offer_schema(tool["inputSchema"]) or {"type": "object", "properties": {}}}
             mode, changed = self.grants.mode(server, tool)
-            how = mode
             if mode == mt.NEVER:
                 self._log(server, tool_name, arguments, "never")
                 return {"status": "never"}
-            passed = None
-            if mode == mt.AUTO and mt.group_of(tool) == "read":
-                # Marked read-only by the provider of a server the person added and allowed: it runs.
+            from .review import carries_secret
+            if carries_secret(json.dumps(arguments, ensure_ascii=False)):
+                # A password, code, key or card number is never typed by the character, whatever the tool.
+                self._log(server, tool_name, arguments, "secret")
+                return {"status": "secret"}
+            # Paying, deleting, an account's security or access: decided here before any reviewer, by what the
+            # call does; it asks every time, in every mode.
+            floor = mt.hard(tool, arguments)
+            how, passed = mode, None
+            if floor or mt.cut(arguments):
+                how = mt.AUTO
+            elif mode == mt.AUTO and mt.group_of(tool) == "read":
+                # Marked read-only by its provider, and a read by its name's own words: it runs.
                 how = "read_only"
             elif mode == mt.AUTO and (server, tool_name, tool["fp"]) in self.session.get(conversation, set()):
                 how = "this_chat"
@@ -514,8 +528,8 @@ class Hub:
                     self._log(server, tool_name, arguments, "refused", "review", passed.reason)
                     return {"status": "refused", "reason": passed.reason}
                 how = "review" if passed.decision == "go" else how
-            if mode == mt.AUTO and how == mt.AUTO:
-                card = self._tool_card(runner, tool, arguments, changed)
+            if how == mt.AUTO:
+                card = self._tool_card(runner, tool, arguments, changed, floor)
                 if passed is not None:
                     # Why the reviewer did not pass it, in one line (toolcard.js draws it).
                     card["review"] = passed.line(str(self.workspace.config().get("AGENT_LANG") or "zh"))
@@ -616,14 +630,14 @@ class Hub:
         self.grants.log({"server": name, "outcome": "start_" + answer, "args": mt.command_line(runner.spec)})
         runner.wake.set()
 
-    def _tool_card(self, runner: Runner, tool: dict, arguments: dict, changed: bool) -> dict:
+    def _tool_card(self, runner: Runner, tool: dict, arguments: dict, changed: bool, floor: str = "") -> dict:
         raw = json.dumps(arguments, ensure_ascii=False, indent=2)
         destructive = tool["hints"].get("destructiveHint") is True
         return {"type": "mcp_tool", "server": runner.name, "tool": tool["name"], "title": tool["title"],
                 "args": mt.plain_arguments(arguments), "raw": raw if len(raw) <= 4000 else raw[:4000] + "\n…",
-                "destructive": destructive, "changed": changed,
-                # A tool marked destructive asks each time.
-                "choices": ["once"] if destructive else ["once", "chat", "always"]}
+                "destructive": destructive and not floor, "hard": floor, "changed": changed,
+                # A tool marked destructive, and a call that pays, deletes or changes an account, ask each time.
+                "choices": ["once"] if destructive or floor else ["once", "chat", "always"]}
 
     async def _elicit(self, runner: Runner, request: dict) -> dict:
         """A server asks the person for something during a call of their turn: a form shown on the card for them to
@@ -675,7 +689,8 @@ class Hub:
                 mode, changed = self.grants.mode(name, tool)
                 tools.append({"name": tool["name"], "title": tool["title"],
                               "description": tool["description"][:200], "mode": mode, "changed": changed,
-                              "destructive": tool["hints"].get("destructiveHint") is True, "group": mt.group_of(tool)})
+                              "destructive": mt.asks_each_time(tool), "hard": tool.get("hard", ""),
+                              "group": mt.group_of(tool)})
             # The runtime Mibo can fetch for a program that is missing: "node", "uv" or "".
             need = runtimes.needed(spec.get("command", "")) if runner.error == "not_found" else ""
             if need and not runtimes.offer(need):
@@ -723,7 +738,7 @@ def _shown(tool: dict) -> dict:
     return {"tool": tool["name"], "title": tool["title"],
             "description": tool["description"][:mt.OFFER_DESCRIPTION_CHARS],
             "parameters": mt.offer_schema(tool["inputSchema"]) or {"type": "object", "properties": {}},
-            "readonly": tool["hints"].get("readOnlyHint") is True}
+            "readonly": mt.group_of(tool) == "read"}
 
 
 def _masked(url: str) -> str:

@@ -55,7 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     home.mkdir(parents=True, exist_ok=True)
     for name in [k for k in os.environ if k.startswith(_SCRUBBED_PREFIXES)]:
         del os.environ[name]
-    os.environ["AGENT_HOME"] = str(home)
+    import scratchhome
+    # The key the page saves stays in memory; the app's file tools see only a stand-in computer beside the home.
+    os.environ.update(scratchhome.make(home))
     os.environ["AGENT_LANG"] = "en"
 
     model = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)

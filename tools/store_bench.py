@@ -23,12 +23,9 @@ SECRET = "zebrafinch"  # the words a forget must leave nowhere
 
 def _home(folder: Path) -> Path:
     home = folder / "home"
-    home.mkdir(parents=True, exist_ok=True)
-    from mibo import settingsfile
-    settingsfile.write(home, {"LLM_API_KEY": "bench", "LLM_MODEL": "stub", "LLM_BASE_URL": "http://127.0.0.1:9/v1",
-                              "PERSONA_NAME": "Mibo", "AGENT_LANG": "en", "ROAM_ENABLED": "false",
-                              "UPDATE_CHECK_ENABLED": "false"})
-    os.environ["AGENT_HOME"] = str(home)
+    import scratchhome
+    os.environ.update(scratchhome.make(home, key="bench", LLM_MODEL="stub", LLM_BASE_URL="http://127.0.0.1:9/v1",
+                                       PERSONA_NAME="Mibo", AGENT_LANG="en"))
     return home
 
 

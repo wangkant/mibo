@@ -534,8 +534,8 @@ class Sight:
                                         "nothing was done")
                 self.lease = self.surface.place()
         if do == "type":
-            from ..review import CARD_DIGITS, SECRET_TEXT, _luhn
-            if SECRET_TEXT.search(a["text"]) or any(_luhn(re.sub(r"\D", "", m)) for m in CARD_DIGITS.findall(a["text"])):
+            from ..review import carries_secret
+            if carries_secret(a["text"]):
                 return "refused", ("[refused] the text looks like a password, code, key or card number; the person "
                                    "types it themselves")
             # Typing into the window is free; what an Enter sends goes to the reviewer with it.

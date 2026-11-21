@@ -1,19 +1,20 @@
 """The operating benchmark: each task of tools/opsite/tasks.py sent through the chat, as a person would type it,
-in the real app window, with the home's own model. The character works the page open in the app's browser; the
+in the real app window, with a real model. The character works the page open in the app's browser; the
 cards it raises are answered as the task says (yes, or no for the checkout); the site decides whether it was done,
 and how each act ended is read from the chat's own record of the reply (GET /api/chat/history). With the chat
 beside the page and the page in its context the message is done in the page directly (tools/opcolumn.py makes
 sure of that); away from the page the reply model chooses.
 
-    python tools/opbench.py <scratch home> --out <folder> [--runs 3] [--tasks T01,T02] [--site-port 59630]
-                            [--pictures]
+    python tools/opbench.py <scratch home> --keys <file> --out <folder> [--runs 3] [--tasks T01,T02]
+                            [--model deepseek/deepseek-v4.1-flash] [--site-port 59630] [--pictures]
 
 The home must be a scratch folder (as tools/window_driver.py says): what the site taught it is forgotten before
-each task, so every run starts as a stranger to the site. Model calls go through a small pass-through on this
+each task, so every run starts as a stranger to the site. <file> gives LLM_API_KEY and LLM_BASE_URL, read and never
+printed; the key reaches the app only through its environment (tools/scratchhome.py). Model calls go through a small pass-through on this
 computer that counts them; it keeps request bodies and answers in <out>/model.jsonl, never headers or the key.
 The table lands in <out>/table.md and <out>/results.json: per task and run, success, model calls, input tokens,
 seconds, cards shown and, when it failed, the kind of failure. The site, the counter and the window's stand-in
-model take the site port and the two after it. `--pictures` says the home's model takes pictures; without it
+model take the site port and the two after it. `--pictures` says the model takes pictures; without it
 the drawn page (T25) passes only when nothing is sent."""
 from __future__ import annotations
 
@@ -31,8 +32,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE / "opsite"))
 import tasks as bench  # noqa: E402
+from everyday import relay_get  # noqa: E402
 
 # How long one task may take, and the password the person types in R3 (a test value, never a real one).
 TASK_S = 420
@@ -90,6 +93,9 @@ class Counter:
                 self.end_headers()
                 self.wfile.write(data)
 
+            def do_GET(self):
+                relay_get(self, counter.upstream)
+
         server = ThreadingHTTPServer(("127.0.0.1", port), Pass)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         return server.server_address[1]
@@ -106,29 +112,25 @@ def _get(url: str, data: dict | None = None, timeout: float = 30) -> dict:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("home")
+    parser.add_argument("--keys", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--tasks", default="")
     parser.add_argument("--site-port", type=int, default=59630)
-    parser.add_argument("--model", default="", help="another model for these runs (LLM_MODEL)")
+    parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     parser.add_argument("--pictures", action="store_true", help="the model takes pictures")
     args = parser.parse_args(argv)
     home, out = Path(args.home).resolve(), Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     wanted = [t for t in bench.TASKS if not args.tasks or t["id"] in args.tasks.split(",")]
 
-    from mibo import settingsfile
-    # The agent takes its model from the home's settings: for the run it points at the counter, and is put back after.
-    upstream = settingsfile.values(home, keys=False).get("LLM_BASE_URL") or ""
-    env_file = settingsfile.path(home)
-    kept = env_file.read_text(encoding="utf-8")
-    if upstream.startswith(f"http://127.0.0.1:{args.site_port + 1}/"):
-        # A run killed before it put the settings back: the counter would call itself.
-        raise SystemExit("the home's LLM_BASE_URL still points at the counter of a run that was stopped; put it back")
-    counter = Counter(upstream, out / "model.jsonl")
-    through = {"LLM_BASE_URL": f"http://127.0.0.1:{counter.serve(args.site_port + 1)}/v1",
-               **({"LLM_MODEL": args.model} if args.model else {})}
-    settingsfile.write(home, through)
+    import os
+
+    import scratchhome
+    model = scratchhome.keys(args.keys)
+    counter = Counter(model["LLM_BASE_URL"], out / "model.jsonl")
+    os.environ.update(scratchhome.make(home, key=model["LLM_API_KEY"], LLM_MODEL=args.model,
+                                       LLM_BASE_URL=f"http://127.0.0.1:{counter.serve(args.site_port + 1)}/v1"))
     site = f"http://127.0.0.1:{args.site_port}"
     server = subprocess.Popen([sys.executable, str(HERE / "opsite" / "serve.py"), str(args.site_port),
                                str(out / "site.log")])
@@ -143,7 +145,6 @@ def main(argv: list[str]) -> int:
                                                          args.pictures), out=out, lang="zh")
     finally:
         server.terminate()
-        env_file.write_text(kept, encoding="utf-8")
     _table(results, out)
     return failed
 

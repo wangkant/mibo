@@ -25,6 +25,7 @@ or an install is asked each time, as OpenCode's and Codex's approvals.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import subprocess
@@ -51,6 +52,8 @@ FIND_MOST = 20000
 READ_KEPT_S = 5.0
 # How a step that asked went ahead after a press on its card (without one: "auto_edit", "rule", "this_chat", "").
 PRESSED = ("once", "chat", "always")
+# In a turn's declined steps: a no the person gave on a card of another program this turn.
+ELSEWHERE = ("elsewhere",)
 # The reasons a command asks that the reviewer may pass in automatic review.
 REVIEWED = ("program", "outside", "move_out")
 
@@ -96,6 +99,10 @@ class Shell:
         self.kept_read: tuple | None = None
         # What 本次对话内允许 covers, per conversation: scope keys (_scope); gone when the app ends.
         self.session: dict[str, set[str]] = {}
+        # What they said no to on a card, per turn: the same step (a write or an edit with the same text) or folder
+        # asked for again in that turn is refused with no second card; every other step of the turn goes on, and
+        # none passes without a card but by what the person allowed themselves.
+        self.said_no: dict[str, set[tuple]] = {}
 
     def turn_on(self, conversation: str) -> bool:
         return self.cards.turn_on(conversation)
@@ -251,7 +258,7 @@ class Shell:
         return None
 
     async def judged(self, command: str, conversation: str, folder: str, card: dict | None = None,
-                     job: dict | None = None) -> tuple:
+                     job: dict | None = None, turn: str = "") -> tuple:
         """Reads and judges `command` in `folder`, asks for a folder and for the press a card needs: (outcome,
         context), the outcome None when it may run now. A file tool's `job` is judged by its own acts (files.acts),
         `command` being its call; `card` gives its own title and lines."""
@@ -263,6 +270,9 @@ class Shell:
         def read_now() -> reading.Reading:
             return reading.Reading(command, cwd, files.acts(job, cwd), []) if job else reading.read(command, cwd)
 
+        no = self.said_no.setdefault(turn, set())
+        while len(self.said_no) > 16:
+            self.said_no.pop(next(iter(self.said_no)))
         asked_for: set[str] = set()
         for _ in range(4):
             read_, write = None, False
@@ -286,8 +296,12 @@ class Shell:
             if norm(folder_to_grant) in asked_for:
                 # Granted read only a moment ago, and this step changes something there.
                 return {"status": "read_only", "folder": folder_to_grant}, {}
+            if ("folder", norm(folder_to_grant)) in no:
+                return {"status": "folder_declined", "folder": folder_to_grant, "again": True}, {}
             answer = await self.ask(self.folder_card(folder_to_grant, write, False), conversation)
             if not answer:
+                if answer is False:
+                    no.add(("folder", norm(folder_to_grant)))
                 self.log(command, cwd, read_, None, "folder_declined" if answer is False else "folder_unanswered")
                 return {"status": "folder_declined" if answer is False else "unanswered", "folder": folder_to_grant}, {}
             why = self.grants.add(folder_to_grant, read_only=answer == "read")
@@ -321,10 +335,19 @@ class Shell:
             return {"status": "read_mode", "shown": READ_MODE}, context
         if self.grants.root_of(norm(cwd)):
             self.last = cwd
+        # The step as a no holds it: a write or an edit by what it would write too.
+        step = ("step", command, cwd, hashlib.sha256(job["bytes"]).hexdigest()[:16] if job and "bytes" in job else "")
+        if verdict.action == "ask" and step in no:
+            # Before any reviewer or mode passes it: what they declined does not run later in the turn.
+            return {"status": "declined", "again": True, "said": asked_said,
+                    "asked": {lang: [asked_said[lang]] for lang in ("zh", "en")}}, context
         scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" else None
         context["how"] = self._passed(scope, mode, conversation)
+        if no and context["how"] == "auto_edit":
+            # After a no in this turn, only what the person allowed themselves (始终允许, 本次对话内允许) skips a card.
+            context["how"] = ""
         passed = None
-        if verdict.action == "ask" and not context["how"] and mode == "auto" and all(
+        if verdict.action == "ask" and not context["how"] and mode == "auto" and not no and all(
                 _reviewed(a) or _fetch(a) for a in verdict.reasons):
             # A program run, a step outside the granted folders, a page opened for them or a request that only
             # fetches: the reviewer first, on the person's own words of this turn. A delete, sending or uploading,
@@ -376,12 +399,14 @@ class Shell:
                 asked["skill"] = skill
                 for lang in ("zh", "en"):
                     asked[lang]["lines"].insert(0, FROM_SKILL[lang].format(name=skill))
+            lines = {lang: asked[lang]["lines"] for lang in ("zh", "en")}
             yes = await self.ask(asked, conversation)
             if yes not in (True, "chat", "always"):
+                if yes is False:
+                    no.add(step)
                 status = {False: "declined", None: "unanswered", "other": "other_way"}[yes]
                 self.log(command, cwd, read_, verdict, status, said=asked_said, review=context.get("review"))
-                return {"status": status, "said": asked_said,
-                        "asked": {lang: asked[lang]["lines"] for lang in ("zh", "en")}}, context
+                return {"status": status, "said": asked_said, "asked": lines}, context
             # What the card showed must still be what runs.
             again = await asyncio.to_thread(lambda: reading.judge(read_now(), self.grants))
             if again.action != "ask" or (
@@ -402,12 +427,15 @@ class Shell:
             context["how"] = "once" if yes is True else yes
         return None, context
 
-    async def do(self, command: str, conversation: str, folder: str, limit_s: float, turn: str) -> dict:
+    async def do(self, command: str, conversation: str, folder: str, limit_s: float, turn: str,
+                 said_no: bool = False) -> dict:
         not_now = self.ready(conversation)
         if not_now:
             return not_now
+        if said_no:
+            self.said_no.setdefault(turn, set()).add(ELSEWHERE)
         async with self.busy:
-            outcome, context = await self.judged(command, conversation, folder)
+            outcome, context = await self.judged(command, conversation, folder, turn=turn)
             if outcome:
                 return outcome
             # The files its reading names are kept first; what Remove-Item moved to the bin is listed as it runs.
@@ -468,12 +496,15 @@ class Shell:
             found = [p for p in found if os.path.basename(os.path.dirname(p)).lower() in words[:-1]]
         return found[0] if len(found) == 1 else ""
 
-    async def file(self, op: str, args: dict, conversation: str, folder: str, turn: str) -> dict:
+    async def file(self, op: str, args: dict, conversation: str, folder: str, turn: str,
+                   said_no: bool = False) -> dict:
         """One file tool: made ready and checked here, judged by its paths (files.acts: the same folder card, card
         and refusal as a command doing it), then done in Python (files.py)."""
         not_now = self.ready(conversation)
         if not_now:
             return not_now
+        if said_no:
+            self.said_no.setdefault(turn, set()).add(ELSEWHERE)
         async with self.busy:
             base, ask_first = self.cwd_for(folder)
             if ask_first or (not base and folder and os.path.isdir(folder)):
@@ -489,7 +520,8 @@ class Shell:
             if job.get("answer"):
                 return {"status": "done", "out": job["answer"], "said": {}, "cwd": base}
             command = files.call(job)
-            outcome, context = await self.judged(command, conversation, folder, card=job.get("card"), job=job)
+            outcome, context = await self.judged(command, conversation, folder, card=job.get("card"), job=job,
+                                                 turn=turn)
             if outcome:
                 return outcome
             kept = self.checkpoints.turn(turn)
@@ -763,7 +795,7 @@ def mount(app, workspace, body) -> None:
         limit = payload.get("limit")
         limit_s = float(limit) if isinstance(limit, (int, float)) and not isinstance(limit, bool) else running.TIME_LIMIT_S
         return await shell().do(command.strip(), conversation, str(payload.get("folder") or ""),
-                                max(5.0, min(limit_s, running.TIME_MAX_S)), turn)
+                                max(5.0, min(limit_s, running.TIME_MAX_S)), turn, payload.get("said_no") is True)
 
     @app.post("/api/shell/file")
     async def shell_file(request: Request):
@@ -773,7 +805,8 @@ def mount(app, workspace, body) -> None:
         op, args, conversation, turn = payload.get("op"), payload.get("args"), payload.get("conversation"), payload.get("turn")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(conversation, str) or                 not isinstance(turn, str) or not TURN.fullmatch(turn):
             return _error("generic")
-        return await shell().file(op, args, conversation, str(payload.get("folder") or ""), turn)
+        return await shell().file(op, args, conversation, str(payload.get("folder") or ""), turn,
+                                  payload.get("said_no") is True)
 
     @app.get("/api/shell/changes")
     async def shell_changes(turn: str = ""):

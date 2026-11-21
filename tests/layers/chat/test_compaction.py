@@ -279,10 +279,11 @@ def test_a_forget_from_settings_while_a_reply_is_written_is_not_undone(app, turn
         forget=app.post("/api/person/forget_chats", {"id": item}).status_code), daemon=True)
     forgot.start()
     _until(lambda: agent.person_store.get(item) is None, "the forget did not run")
-    forgot.join(30)
-    assert "芒果" not in json.dumps(agent.dm_history.get(user_id), ensure_ascii=False)
+    _until(lambda: "芒果" not in json.dumps(agent.dm_history.get(user_id), ensure_ascii=False),
+           "the forget left the chat's turns as they were")
     gate.set()
     asked.join(30)
+    forgot.join(30)
     assert answers == {"turn": 200, "forget": 200}
     kept = json.dumps(agent.dm_history.get(user_id), ensure_ascii=False)
     assert "芒果" not in kept and "周末去哪儿玩" in kept and "去公园吧" in kept

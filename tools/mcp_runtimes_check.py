@@ -64,22 +64,21 @@ def main() -> int:
     home = Path(a.home).resolve()
     user = home / "user"
     user.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from mibo import settingsfile
-    if not settingsfile.path(home).exists():
-        settingsfile.write(home, {"UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false", "AGENT_LANG": "zh",
-                                  "PERSONA_NAME": "Mibo", "PAGE_PORT": a.port})
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root))
+    import scratchhome
+    made = scratchhome.make(home, AGENT_LANG="zh", PERSONA_NAME="Mibo", PAGE_PORT=a.port)
     if os.name == "nt":
         system = os.environ["SYSTEMROOT"]
         path = os.pathsep.join([system + r"\System32", system, system + r"\System32\Wbem"])
     else:
         path = "/usr/bin:/bin"
-    env = {**os.environ, "AGENT_HOME": str(home), "USERPROFILE": str(user), "HOME": str(user),
+    env = {**os.environ, **made, "USERPROFILE": str(user), "HOME": str(user),
            "APPDATA": str(user / "AppData" / "Roaming"), "LOCALAPPDATA": str(user / "AppData" / "Local"),
            "PATH": path}
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser', '--port', '{a.port}']))"],
-                           env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                           env=env, cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     report: dict = {}
     try:
         link = home / "runtime" / "desktop" / "welcome.json"

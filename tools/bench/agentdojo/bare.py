@@ -1,7 +1,7 @@
 """The same model without the app, for comparison: AgentDojo's own pipeline (its system message, OpenAILLM, its
 tools loop, no defence) on the same cases run.py runs, so the difference between the two rows is what the app adds.
 
-    <agentdojo python> -I tools/bench/agentdojo/bare.py --env <a home's .env holding the key> --out <folder>
+    <agentdojo python> -I tools/bench/agentdojo/bare.py --env <a file with an LLM_API_KEY line> --out <folder>
         [--suites banking] [--budget 0.05] [--model deepseek/deepseek-v4.1-flash]
         [--upstream https://openrouter.ai/api/v1] [--attack both] [--sample 7:4] [--port 59724]
 

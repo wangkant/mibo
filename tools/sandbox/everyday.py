@@ -6,7 +6,8 @@ the cheapest, behind everyday.py's own meter, which refuses every call past the 
 
 It runs only on Windows (the bench needs the app window and its browser) and only with SANDBOX_MODEL_KEY set, which
 happens in a sandbox on a person's own computer alone: no model key is kept on GitHub, so on a hosted runner this
-suite reports itself as not run. The cap is SANDBOX_BUDGET dollars (0.30 when unset). The key goes into a scratch home outside <out> and is never printed. Each request's verdict is the
+suite reports itself as not run. The cap is SANDBOX_BUDGET dollars (0.30 when unset). The key reaches everyday.py and
+the app only through their environment (tools/scratchhome.py) and is never printed. Each request's verdict is the
 bench's own checker on what really happened; a failed request is the model's or the app's, read its row.
 """
 from __future__ import annotations
@@ -17,7 +18,7 @@ import os
 import sys
 import tempfile
 
-from _suite import TOOLS, Suite, run_tool, scratch_home, scrub_env
+from _suite import TOOLS, Suite, run_tool, scrub_env
 
 MODEL = "claude-haiku-5-5"
 # Dollars per million tokens, input and output (Anthropic's price for prompts up to 100K tokens).
@@ -45,14 +46,16 @@ def main() -> int:
         return suite.finish()
     scrub_env()
     budget = os.environ.get("SANDBOX_BUDGET") or "0.30"
-    home = scratch_home("https://api.anthropic.com/v1", lang="zh", LLM_MODEL=MODEL, LLM_API_KEY=key,
-                        PERSONA_NAME="Mibo")
+    # everyday.py prepare lays out the home with the places folder as its computer; run reads the model from here.
+    home = tempfile.mkdtemp(prefix="mibo-sandbox-", dir=os.environ.get("RUNNER_TEMP") or None)
+    os.environ.update({"LLM_API_KEY": key, "LLM_BASE_URL": "https://api.anthropic.com/v1"})
     places = tempfile.mkdtemp(prefix="mibo-places-", dir=os.environ.get("RUNNER_TEMP") or None)
     wanted = window_requests()
     suite.log("requests:", ", ".join(r["id"] for r in wanted), f"model {MODEL}, cap ${budget}")
     run_tool(suite, "prepare", ["tools/everyday.py", "prepare", str(home), "--places", places], "prepare")
     bench_out = suite.out / "bench"
-    run_tool(suite, "bench", ["tools/everyday.py", "run", str(home), "--places", places, "--out", str(bench_out),
+    run_tool(suite, "bench", ["tools/everyday.py", "run", str(home), "--places", places, "--model", MODEL,
+                              "--out", str(bench_out),
                               "--only", ",".join(r["id"] for r in wanted), "--runs", "1", "--budget", budget,
                               "--price-in", PRICE[0], "--price-out", PRICE[1]], "run", timeout=2700)
     results = json.loads((bench_out / "results.json").read_text(encoding="utf-8")) if (bench_out / "results.json").is_file() else []

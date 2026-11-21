@@ -1,11 +1,13 @@
 """The finds-in-chat bench: the recommending turns of the tool-layer audit (the author's 新番 sentence and
 layer-audit.json's other eleven) after the chat battery's vent turns (c02, c05), sent in one chat of the real app on a
-seeded library with the home's own model, each checked on what really happened.
+seeded library with a real model, each checked on what really happened.
 
-    python tools/recsbench.py run <scratch home> --out <folder> [--tree <checkout>] [--budget 0.08]
-                              [--port 59951] [--price-in 0.0507] [--price-out 0.2028]
+    python tools/recsbench.py run <scratch home> --keys <file> --out <folder> [--tree <checkout>] [--budget 0.08]
+                              [--model deepseek/deepseek-v4.1-flash] [--port 59951] [--page-port 59950]
+                              [--price-in 0.0507] [--price-out 0.2028]
 
-`run` writes into the home (a scratch folder with its .env and model set, nothing else in it) a library of eleven
+<file> gives LLM_API_KEY and LLM_BASE_URL, read and never printed; the key reaches the app only through its
+environment. `run` lays out the scratch home (tools/scratchhome.py) and writes into it a library of eleven
 finds of the last day (bilibili videos of 国创 and a documentary, a news video, articles on keyboards, coffee,
 Lisp, games and an AI company's listing; none on new anime, baking, space or history) and a page it read to answer
 a question, and shows two of them in the main chat as the share step does (a news video on APEC, a New York Times
@@ -163,26 +165,22 @@ def run(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(tree))
-    from dotenv import dotenv_values
-
     import everyday
-    values = dotenv_values(home / ".env")
-    upstream, key, model = values["LLM_BASE_URL"], values["LLM_API_KEY"], values["LLM_MODEL"]
-    meter = everyday.Meter(upstream, out / "model.jsonl", args.budget, (args.price_in, 0.001014, args.price_out))
+    import scratchhome
+    keys = scratchhome.keys(args.keys)
+    key, model = keys["LLM_API_KEY"], args.model
+    meter = everyday.Meter(keys["LLM_BASE_URL"], out / "model.jsonl", args.budget,
+                           (args.price_in, 0.001014, args.price_out))
     meter.serve(args.port)
     meter_url = f"http://127.0.0.1:{args.port}/v1"
+    made = scratchhome.make(home, key=key, LLM_BASE_URL=meter_url, LLM_MODEL=model, AGENT_LANG="zh")
     os.environ["AGENT_HOME"] = str(home)
     seed(home)
     info = home / "runtime" / "desktop" / "welcome.json"
     info.unlink(missing_ok=True)
-    # The app reads its model's address from the home's .env: the pass-through's for the run, put back after.
-    env_file = home / ".env"
-    kept = env_file.read_text(encoding="utf-8")
-    env_file.write_text("\n".join([line for line in kept.splitlines() if not line.startswith("LLM_BASE_URL=")]
-                                  + [f"LLM_BASE_URL={meter_url}"]) + "\n", encoding="utf-8")
-    env = {**os.environ, "AGENT_HOME": str(home)}
+    env = {**os.environ, **made, "PYTHONPATH": os.pathsep.join([str(tree), made["PYTHONPATH"]])}
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
-                            "sys.exit(welcome.main(['--no-browser', '--port', sys.argv[1]]))", values["PAGE_PORT"]],
+                            "sys.exit(welcome.main(['--no-browser', '--port', sys.argv[1]]))", str(args.page_port)],
                            cwd=tree, env=env, creationflags=BELOW_NORMAL if os.name == "nt" else 0,
                            stdout=(out / "app.log").open("w"), stderr=subprocess.STDOUT)
     rows = []
@@ -222,7 +220,6 @@ def run(args) -> int:
             app.wait(60)
         except subprocess.TimeoutExpired:
             app.kill()
-        env_file.write_text(kept, encoding="utf-8")
     for row in rows:
         if row["card"]:
             row["on_subject"] = judge(meter_url, key, model,
@@ -309,10 +306,13 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     go = sub.add_parser("run")
     go.add_argument("home")
+    go.add_argument("--keys", required=True)
+    go.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     go.add_argument("--out", required=True)
     go.add_argument("--tree", default=str(HERE.parent))
     go.add_argument("--budget", type=float, default=0.08)
     go.add_argument("--port", type=int, default=59951)
+    go.add_argument("--page-port", type=int, default=59950)
     go.add_argument("--price-in", type=float, default=0.0507)
     go.add_argument("--price-out", type=float, default=0.2028)
     args = parser.parse_args(argv)

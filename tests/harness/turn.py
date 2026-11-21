@@ -6,7 +6,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
-# The card routes the page polls (petline.js), and how each takes a press of yes, no or always.
+# The card routes the page polls (petline.js), and how each takes a press of yes, no, always (or chat, 本次对话内允许).
 CARD_ROUTES = {
     "shell": "/api/shell/card",
     "desk": "/api/programs/card",
@@ -23,8 +23,8 @@ def _press(kind: str, ident: str, answer: str) -> dict:
         return {"id": ident, "answer": {"yes": "once", "always": "always"}.get(answer, "no")}
     if kind == "desk" and answer == "always":
         return {"id": ident, "answer": "always"}
-    if kind == "shell" and answer == "always":
-        return {"id": ident, "yes": True, "scope": "always"}
+    if kind == "shell" and answer in ("always", "chat"):
+        return {"id": ident, "yes": True, "scope": answer}
     if kind == "operate":
         return {"id": ident, "yes": yes, "never": answer == "never"}
     return {"id": ident, "yes": yes}

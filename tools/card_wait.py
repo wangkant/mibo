@@ -194,14 +194,12 @@ def main() -> int:
     home = Path(args.home)
     work = home.parent / "work"
     work.mkdir(parents=True, exist_ok=True)
-    home.mkdir(parents=True, exist_ok=True)
     page_port, _, model_port = args.ports
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from mibo import settingsfile
-    settingsfile.write(home, {
-        "PAGE_PORT": page_port, "UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false", "AGENT_LANG": "zh",
-        "PERSONA_TZ_OFFSET_HOURS": "-8", "PERSONA_NAME": "Mibo", "LLM_BASE_URL": f"http://127.0.0.1:{model_port}/v1",
-        "LLM_MODEL": "stub", "LLM_API_KEY": "stub"})
+    import scratchhome
+    env = {**os.environ, **scratchhome.make(
+        home, key="stub", PAGE_PORT=page_port, AGENT_LANG="zh", PERSONA_TZ_OFFSET_HOURS="-8", PERSONA_NAME="Mibo",
+        LLM_BASE_URL=f"http://127.0.0.1:{model_port}/v1", LLM_MODEL="stub")}
     (home.parent / "echo_server.py").write_text(ECHO, encoding="utf-8")
     (home / "mcp.json").write_text(json.dumps({"mcpServers": {"echo": {
         "command": sys.executable, "args": [str(home.parent / "echo_server.py")]}}}), encoding="utf-8")
@@ -210,7 +208,7 @@ def main() -> int:
     threading.Thread(target=stand_in, args=(model_port, work), daemon=True).start()
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
-                           env={**os.environ, "AGENT_HOME": str(home)}, cwd=Path(__file__).resolve().parents[1],
+                           env=env, cwd=Path(__file__).resolve().parents[1],
                            stdout=open(home.parent / "app.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
     try:
         for _ in range(240):

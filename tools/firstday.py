@@ -1,10 +1,11 @@
 """A new person's first minutes on a fresh home, timed with the real network and model: the first run's
 topics, its round of sample finds, and the first cards after it.
 
-    python tools/firstday.py --home <fresh home> --port <page port> --topics 美食,历史,天文
-                             [--after 60] [--cards 10] [--out first.json]
+    python tools/firstday.py --home <fresh home> --keys <file> --port <page port> --topics 美食,历史,天文
+                             [--model deepseek/deepseek-v4.1-flash] [--after 60] [--cards 10] [--out first.json]
 
-The home holds only its settings (a model, AGENT_LANG and PAGE_PORT in a free range). The app
+The home is a fresh scratch one (tools/scratchhome.py) holding only its settings; <file> gives LLM_API_KEY and
+LLM_BASE_URL, read and never printed, and the key reaches the app only through its environment. The app
 starts headless (welcome.main --no-browser); --after seconds later (the time a person spends on the
 language, character and model steps) the topics are saved as the first run saves them, the round of
 sample finds is asked for (GET /api/feed/first) and answered by a stand-in person who wants what is on a
@@ -49,6 +50,8 @@ class Page:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--home", type=Path, required=True)
+    parser.add_argument("--keys", required=True)
+    parser.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
     parser.add_argument("--port", required=True)
     parser.add_argument("--topics", required=True)
     parser.add_argument("--after", type=float, default=60)
@@ -64,7 +67,12 @@ def main() -> None:
         return bool(matcher.search(" ".join((row.get("title") or "", row.get("text") or "",
                                               row.get("site") or "")).casefold()))
 
-    env = dict(os.environ, AGENT_HOME=str(home), PYTHONIOENCODING="utf-8")
+    sys.path.insert(0, str(ROOT / "tools"))
+    import scratchhome
+    keys = scratchhome.keys(args.keys)
+    env = {**os.environ, **scratchhome.make(home, key=keys["LLM_API_KEY"], LLM_BASE_URL=keys["LLM_BASE_URL"],
+                                            LLM_MODEL=args.model, AGENT_LANG="zh", PAGE_PORT=args.port),
+           "PYTHONIOENCODING": "utf-8"}
     log = open(home / "firstday.app.log", "w", encoding="utf-8")
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{args.port}']))"],

@@ -24,7 +24,11 @@
       "tests/floors/secrets/test_key_files.py::test_a_plain_command_never_prints_a_key_files_name",
       "tests/floors/secrets/test_key_files.py::test_a_key_files_name_in_what_a_command_prints_is_hidden",
       "tests/parts/endpoints/test_endpoints.py::test_a_separate_embeddings_address_is_never_sent_the_main_key",
-      "tests/floors/boundary/test_safe_fetch.py::test_a_fetched_address_is_logged_as_its_host_only"
+      "tests/floors/boundary/test_safe_fetch.py::test_a_fetched_address_is_logged_as_its_host_only",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_arguments_holding_a_password_or_a_key_are_never_sent_to_a_server",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_the_reviewers_floor_refuses_a_secret_inside_json_tool_arguments",
+      "tests/floors/secrets/test_tool_arguments.py::test_a_secret_in_a_tools_arguments_is_caught_by_any_spelling_at_any_depth",
+      "tests/floors/secrets/test_tool_arguments.py::test_counts_ids_timestamps_and_numbers_are_not_secrets"
     ],
     "asked": [
       "tests/floors/asked/test_paying_deleting_account_and_access.py::test_every_paying_deleting_account_and_access_control_asks_on_a_card",
@@ -34,6 +38,13 @@
       "tests/floors/asked/test_paying_deleting_account_and_access.py::test_in_another_program_paying_deleting_settings_and_opening_ask_and_editing_stays_free",
       "tests/floors/asked/test_commands_and_tools_ask.py::test_a_delete_an_install_or_a_push_asks_every_time_and_on_no_nothing_happens",
       "tests/floors/asked/test_commands_and_tools_ask.py::test_an_mcp_tool_marked_destructive_asks_every_time_and_on_no_the_server_gets_no_call",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_what_an_mcp_call_does_decides_its_floor_whatever_its_hints_say",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_paying_and_account_calls_ask_every_time_with_no_reviewer_even_when_set_to_always",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_a_call_whose_arguments_delete_asks_even_from_a_tool_marked_read_only",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_a_tool_runs_with_no_reviewer_only_when_its_hint_and_its_name_both_say_it_reads",
+      "tests/floors/asked/test_mcp_calls_by_what_they_do.py::test_reads_run_free_and_a_search_that_mentions_deleting_raises_no_card",
+      "tests/layers/commands/test_a_no_on_a_card.py::test_a_declined_write_is_never_done_later_in_the_turn_and_other_text_asks_on_its_own_card",
+      "tests/layers/programs/test_a_no_on_a_program_card.py::test_a_no_on_a_program_card_holds_that_task_alone",
       "tests/floors/asked/test_sensitive_windows_ask.py::test_a_sensitive_windows_picture_asks_every_time_with_no_always",
       "tests/floors/asked/test_answered_on_the_card.py::test_a_floor_card_left_waiting_is_never_answered_by_words_in_the_chat"
     ],

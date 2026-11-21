@@ -154,6 +154,8 @@
       // Why the automatic review did not pass it, in one line (mcp_hub.py).
       if (card.review) node.append(el("p", "op-card-why", card.review));
       if (card.changed) node.append(el("p", "op-card-never", t.changed));
+      // A call that pays, deletes or changes an account's security or access asks every time (mcp_tools.hard).
+      if (card.hard) node.append(el("p", "op-card-never", t.hard));
       if (card.destructive) node.append(el("p", "op-card-never", t.destructive));
       for (const [name, value] of card.args) fact(name, value, "op-card-text");
       if (!card.args.length) node.append(el("p", "op-card-meta", t.noArgs));
