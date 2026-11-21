@@ -204,7 +204,8 @@
 
   function go(index) {
     step = Math.max(0, Math.min(ABOUT, index));
-    finding = nextButton.hidden = false;
+    // The wait for the finds holds Next back; a step shown again, the wait skipped too, lets it go.
+    finding = nextButton.hidden = nextButton.disabled = false;
     looking = null;
     words();
     [...bar.children].forEach((dot, i) => {

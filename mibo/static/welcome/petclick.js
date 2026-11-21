@@ -31,8 +31,10 @@
     clickTimer = setTimeout(async () => {
       if (pose !== "standing" || dragging || carry) return;
       hideQuick();
-      if (!outAtPress && card.open && card.kind !== "said") await card.close("seen");
-      window.pywebview.api.chat(outAtPress ? "away" : "show");
+      // Taken as done now, not when petchat.py says so: a click before then puts it away again.
+      out = !outAtPress;
+      if (out && card.open && card.kind !== "said") await card.close("seen");
+      window.pywebview.api.chat(out ? "show" : "away");
     }, CLICK_MS);
   };
   window.petDoubleClick = () => {

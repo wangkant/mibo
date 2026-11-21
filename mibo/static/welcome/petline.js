@@ -41,6 +41,8 @@
   let on = false;
   let shown = false;
   let words = "";
+  // The step the line shows, as [tool, what].
+  let drawn = "";
   let timer = 0;
   // Where the window takes the pointer for it, told again only when it changed.
   let told = "";
@@ -83,15 +85,24 @@
     const doing = value?.doing || null;
     const asked = Boolean(doing && CARDS[doing.tool] && (await waiting(doing.tool)));
     if (!on) return;
+    const was = line.classList.contains("asked");
     // Tucked at a side, it leans out the moment a card waits on the person (petedge.js).
-    if (asked && !line.classList.contains("asked") && "edge" in pet.dataset) petLook();
+    if (asked && !was && "edge" in pet.dataset) petLook();
     line.classList.toggle("asked", asked);
+    // Drawn again only when the step changed: a press that spans a redraw is lost, its node gone.
     if (asked) {
-      open.querySelector(".act-live-icon")?.remove();
-      open.querySelector(".doing").replaceChildren(uxEl("span", "act-live-head", W.asked));
+      if (!was) {
+        open.querySelector(".act-live-icon")?.remove();
+        open.querySelector(".doing").replaceChildren(uxEl("span", "act-live-head", W.asked));
+        drawn = "";
+      }
       words = W.asked;
     } else if (doing && !QUIET.has(doing.tool)) {
-      words = paActivity.live(open, doing) || "";
+      const key = JSON.stringify([doing.tool, doing.what]);
+      if (key !== drawn) {
+        drawn = key;
+        words = paActivity.live(open, doing) || "";
+      }
     } else if (words === W.asked) {
       words = "";
     }
@@ -109,7 +120,7 @@
   function end() {
     on = false;
     clearTimeout(timer);
-    words = "";
+    words = drawn = "";
     delete open.dataset.stepped;
     show(false);
   }
