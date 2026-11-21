@@ -44,6 +44,15 @@ Code taken from other projects, under the licences they were released with:
   pwsh-local and its way of running each command in a fresh `-NoProfile`
   PowerShell with capped output and the whole process tree ended on stop:
   MIT License, Copyright (c) 2026 DeepSeek.
+- `.github/workflows/xplat.yml` and `tools/xplat/wsl_run.sh` start the
+  virtual screen, the session bus and the AT-SPI daemons as xa11y's
+  setup-a11y action does (`action.yml`, `apt-packages.txt`), and headless
+  sway as xa11y's `scripts/run_wayland_portal.sh` does: MIT License,
+  Copyright (c) 2026 xa11y.
+- `tools/xplat/grant_tcc.sh` is xa11y's `scripts/grant_macos_tcc.sh` with a
+  list of services: MIT License, Copyright (c) 2025 Stephen Crowe. The screen,
+  D-Bus and AT-SPI start in `.github/workflows/xplat-cua.yml` follows the
+  xa11y/setup-a11y action: MIT License, Copyright (c) 2026 xa11y.
 
 The MIT License, for the parts above that carry it:
 

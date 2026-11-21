@@ -70,7 +70,7 @@ Paths are under `mibo/` unless noted.
 | Packaging | `packaging/windows/` (repository root) |
 | Scripts | `tools/` (repository root): measurements and checks, not shipped |
 
-To add a setting, add it to `AgentSettings` in `settings.py`, read it with the `config_env` helpers and document it in `.env.example`. `tests/test_http.py` fails when a setting the code reads is missing there.
+To add a setting, add it to `AgentSettings` in `settings.py`, read it with the `config_env` helpers and document it in `.env.example`. `tests/parts/settings/test_settings_template.py` fails when a setting the code reads is missing there.
 
 ## Languages
 

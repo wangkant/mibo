@@ -27,9 +27,9 @@ def ld(value: dict) -> str:
 
 
 class Recorder:
-    """A server on another loopback address that only notes who reached it."""
+    """A loopback server under another name that only notes who reached it (macOS has no 127.0.0.2)."""
 
-    def __init__(self, host: str = "127.0.0.2") -> None:
+    def __init__(self, host: str = "localhost") -> None:
         self.hits: list[str] = []
         hits = self.hits
 
@@ -44,7 +44,7 @@ class Recorder:
                 self.end_headers()
                 self.wfile.write(b"<title>secret</title><p>internal</p>")
 
-        self.server = ThreadingHTTPServer((host, 0), Handler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://{host}:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 

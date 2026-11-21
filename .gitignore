@@ -62,3 +62,6 @@ teacher_stats.json
 
 # Single-instance guard written at the deployment root
 .mibo.instance.lock
+
+# The Electron shell's own packages, installed by npm ci in mibo/electron
+mibo/electron/node_modules/

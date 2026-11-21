@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>短片播放</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>短片</b><a href="#">播放</a></header>
+<main><div class="card"><h2>测试短片</h2>
+<video id="clip" src="/e/files/clip.mp4" muted autoplay loop playsinline width="320" height="180"></video>
+<p>状态：<span id="state">loading</span></p>
+<p>格式：<span id="formats"></span></p>
+</div></main>
+<script>
+// A two-second H.264 (constrained baseline) and AAC clip: the page says "playing" once frames move, "error" when the
+// browser cannot decode it, and which of the two formats the browser says it can play.
+const clip = document.getElementById("clip");
+const state = document.getElementById("state");
+document.getElementById("formats").textContent = JSON.stringify({
+  h264: clip.canPlayType('video/mp4; codecs="avc1.42E01E"'), aac: clip.canPlayType('audio/mp4; codecs="mp4a.40.2"')});
+clip.addEventListener("timeupdate", () => { if (clip.currentTime > 0.2) state.textContent = "playing"; });
+clip.addEventListener("error", () => { state.textContent = "error " + (clip.error ? clip.error.code : ""); });
+</script>
+</body></html>

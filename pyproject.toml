@@ -63,6 +63,9 @@ dependencies = [
     "python-dateutil>=2.9,<3",
     "tzlocal>=5.3,<6",
     "tzdata>=2025.2",
+    # Reads a bash command before it runs (shell/bashread.py): tree-sitter and its bash grammar.
+    "tree-sitter>=0.25,<0.26",
+    "tree-sitter-bash>=0.25,<0.26",
     # Opens the local page in a window of its own. Windows has WebView2 for it;
     # elsewhere it needs a system toolkit, so it is the `app` extra there.
     "pywebview>=6,<7; sys_platform == 'win32'",
