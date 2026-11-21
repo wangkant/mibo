@@ -26,6 +26,13 @@ Code taken from other projects, under the licences they were released with:
   (mozilla/readability), unchanged: Apache License, Version 2.0 (see LICENSE),
   Copyright (c) 2010 Arc90 Inc, Copyright (c) 2010-2026 Mozilla and
   Contributors.
+- `mibo/static/welcome/markdown-it.umd.min.js` is the browser build of
+  markdown-it 15.0.3 (markdown-it/markdown-it), unchanged, sha256
+  391f2aa638e75e6c7859d0a5c5650ef0956722a45998f17e05b83bc655778e1e: MIT
+  License, Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin. It bundles
+  linkify-it, mdurl, uc.micro and punycode.js (MIT) and entities (BSD
+  2-Clause, Copyright (c) Felix Boehm); every one of these notices is in
+  `mibo/static/welcome/markdown-it.LICENSE.txt`.
 - `mibo/web/pageops.py` is ported from browser-use's
   `browser_use/ax.py`: MIT License, Copyright (c) 2024 Gregor Zunic.
 - Some guidance sentences in `mibo/web/operate.py` are copied from
@@ -59,6 +66,9 @@ Code taken from other projects, under the licences they were released with:
   list of services: MIT License, Copyright (c) 2025 Stephen Crowe. The screen,
   D-Bus and AT-SPI start in `.github/workflows/xplat-cua.yml` follows the
   xa11y/setup-a11y action: MIT License, Copyright (c) 2026 xa11y.
+- `mibo/modelcatalog.json` is a trimmed snapshot of the models.dev catalogue
+  (anomalyco/models.dev, `https://models.dev/api.json`; its date and sha256 are in
+  the file): MIT License, Copyright (c) 2025 models.dev.
 
 The MIT License, for the parts above that carry it:
 
@@ -82,3 +92,15 @@ SOFTWARE.
 - `mibo/static/welcome/providermarks.js` holds the model services' marks from
   `@lobehub/icons-static-svg` 1.104.0 (lobehub/lobe-icons): MIT License. Each mark is the
   trademark of its owner and is shown only to name that service.
+
+Libraries Mibo installs keep their own licences, which pip installs beside them.
+The feeds in `mibo/sources/` are read by feedparser (kurtmckee/feedparser): BSD
+2-Clause License, Copyright (C) 2010-2025 Kurt McKee, Copyright (C) 2002-2008
+Mark Pilgrim. It brings feedparser-sgmllib: Python Software Foundation License.
+A fetched page's main text is taken by trafilatura (adbar/trafilatura, by Adrien
+Barbaresi): Apache License, Version 2.0. It brings courlan and htmldate (Apache
+License, Version 2.0), jusText (BSD 2-Clause), dateparser (BSD 3-Clause),
+charset-normalizer, pytz and urllib3 (MIT) and regex (Apache License, Version 2.0
+and CNRI-Python). The page's charset is read by w3lib (scrapy/w3lib): BSD 3-Clause
+License, Copyright (c) w3lib and Scrapy developers. lxml's HTML cleaner comes as
+lxml_html_clean: BSD 3-Clause License.

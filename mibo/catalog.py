@@ -1,15 +1,22 @@
-"""The tools the reply model is offered, the same in every round and turn: a fixed list of tool modules, each with
-its definitions and the one runner its calls go to."""
+"""The tools the reply model is offered: a fixed list of tool modules, each with its definitions and the one runner
+its calls go to. Which go up front is decided by share, after Claude Code's tool search (ENABLE_TOOL_SEARCH=auto):
+each module in catalog order goes up front while the definitions stay within a tenth of the window; every tool of
+the others, and every tool of the person's MCP servers, is named in find_tools and called through use_tool
+(mcp_offer.py). The list is the same in every round and turn for one window and tool set."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from . import mcp_offer, pastchats, schedule_tool, search
+from . import context, mcp_offer, pastchats, schedule_tool, search, surface
 from .desk import tool as desk_tool
 from .shell import tool as shell_tool
 from .skills import tool as skill_tool
 from .web import connect
+
+# The share of the window the up-front definitions may take (Claude Code's tool search threshold).
+SHARE = 0.10
 
 
 @dataclass(frozen=True)
@@ -24,7 +31,7 @@ class Module:
     unswitched: frozenset = frozenset()
 
     def owns(self, name: str) -> bool:
-        if self.definitions is mcp_offer.functions:
+        if self.definitions is _loader:
             return mcp_offer.owns(name)
         if self.definitions is _schedule_tools:
             return schedule_tool.owns(name)
@@ -35,8 +42,17 @@ def _schedule_tools() -> list:
     return schedule_tool.TOOLS
 
 
+def _loader() -> list:
+    # find_tools and use_tool are made per turn by `offered`.
+    return []
+
+
 async def _web(agent, called: dict, args: dict, lookups) -> str:
     return await agent._web_tool(called["name"], args, lookups)
+
+
+async def _place(agent, called: dict, args: dict, lookups) -> str:
+    return await surface.run(agent, called, args, lookups)
 
 
 async def _shell(agent, called: dict, args: dict, lookups) -> str:
@@ -65,12 +81,16 @@ async def _mcp(agent, called: dict, args: dict, lookups) -> str:
 
 MODULES = (
     Module("web", lambda: search.TOOLS + [connect.TOOL], _web),
+    # open and look: pages, windows, files and folders by one name (surface.py). Opening what the person named
+    # is free; reading another program's window asks for the programs switch inside the call.
+    Module("place", lambda: surface.TOOLS, _place),
     Module("computer", lambda: shell_tool.TOOLS, _shell, "computer", frozenset({shell_tool.PLAN_TOOL["function"]["name"]})),
     Module("program", lambda: desk_tool.OFFERED, _desk, "programs"),
     Module("skill", lambda: [skill_tool.TOOL], _skill),
     Module("chats", lambda: [pastchats.TOOL], _chats),
     Module("schedule", _schedule_tools, _schedule),
-    Module("mcp", mcp_offer.functions, _mcp),
+    # find_tools and use_tool: the deferred app tools and the MCP servers' tools.
+    Module("mcp", _loader, _mcp),
 )
 
 # The calls that only read: run side by side within a round. Every other call waits its turn, in the model's order.
@@ -78,12 +98,41 @@ READS = frozenset({"web_search", "read_page", "read_list", "look", "read_file", 
                    "pages_they_read", pastchats.NAME})
 
 
-def offered() -> list:
-    """Every module's definitions in order, use_skill naming the installed skills that are on (skills/tool.py) and
-    a scheduled run keeping to what it may use (schedule_tool.py). A switch that is off, a choice under "+" or the
-    words of a message change none of it."""
+@dataclass(frozen=True)
+class Offer:
+    # Sent with every request of the turn.
+    tools: list
+    # The parameters of every tool the turn may call by name: those sent and the deferred app tools.
+    schemas: dict
+    # The app tools reached through find_tools and use_tool.
+    deferred: list
+
+
+def definitions() -> list:
+    """Every app module's definitions in order, use_skill naming the installed skills that are on (skills/tool.py)
+    and a scheduled run keeping to what it may use (schedule_tool.py). A switch that is off, a choice under "+" or
+    the words of a message change none of it."""
     tools = [t for module in MODULES[:-1] for t in module.definitions()]
-    return schedule_tool.offered(skill_tool.offered(tools) + mcp_offer.functions())
+    return schedule_tool.offered(skill_tool.offered(tools))
+
+
+def offered(budget: context.Budget) -> Offer:
+    """The turn's tools for a window of budget.window tokens: each app module in catalog order up front while the
+    definitions so far stay within SHARE of the window, the others deferred behind find_tools and use_tool with the
+    MCP servers' tools. A scheduled run keeps its few tools up front and offers no server's."""
+    tools = definitions()
+    run = schedule_tool.run_of() is not None
+    room, used, up, deferred = SHARE * budget.window, 0.0, [], []
+    for module in MODULES[:-1]:
+        mine = [t for t in tools if module.owns(t["function"]["name"])]
+        size = context.text_tokens(json.dumps(mine, ensure_ascii=False)) if mine else 0.0
+        if run or used + size <= room:
+            up, used = up + mine, used + size
+        else:
+            deferred += mine
+    loader = [] if run else mcp_offer.functions(deferred, mcp_offer.servers())
+    return Offer(up + loader, {t["function"]["name"]: t["function"].get("parameters") or {} for t in tools + loader},
+                 deferred)
 
 
 def module_of(name: str) -> Module | None:

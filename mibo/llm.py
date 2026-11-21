@@ -5,29 +5,23 @@ import asyncio
 import contextvars
 import json
 import logging
-import random
 import re
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import httpx
+import openai
 
-from . import abilities, schedule_tool, spend
+from . import abilities, context, modelcatalog, schedule_tool, spend, transport
 from .endpoints import (PROBLEMS, adapt_rejected_payload, chat_completions_url, endpoint_for,
                         model_problem, without_pictures)
 from .usage import USAGE_FILE, UsageBook
 
 logger = logging.getLogger("agent")
 
-# The reply's room in tokens: an eighth of the context window the host states (abilities.py), within these.
-ANSWER_TOKENS = (8192, 32768)
-
-
-def answer_tokens(record: dict | None) -> int:
-    low, high = ANSWER_TOKENS
-    return max(low, min(high, int((record or {}).get("context") or 0) // 8))
+# max_tokens for `_call_llm` that means the answer's room in the model's budget (context.budget), thinking included.
+FROM_BUDGET = 0
 
 # What the calls in this task are for, as counted in the usage tally
 # (usage.PURPOSES); a context, so no fake `_call_llm` needs a new argument.
@@ -44,22 +38,12 @@ def purpose(label: str):
         _call_purpose.reset(token)
 
 
-# Hosts known to take or refuse DeepSeek's `thinking` switch; any other is
-# asked by its first thinking-off call and the answer remembered.
-# Kimi K3 refuses it where K2 took it, and Claude 5 models differ, so
-# Moonshot and Anthropic are asked.
-_THINKING_HOSTS = ("deepseek.com", "bigmodel.cn", "z.ai", "volces.com",
-                   "bytepluses.com")
-# Hosts whose switch is Qwen's `enable_thinking` (DashScope, SiliconFlow,
-# Qianfan, Tencent TokenHub): they are sent that instead.
+# Whether a model reasons and how far it can be lowered is the catalogue's (modelcatalog.py) or learned; the
+# spelling of the switch is not in the catalogue. These hosts spell it as Qwen's `enable_thinking` (DashScope,
+# SiliconFlow, Qianfan, Tencent TokenHub): a host that ignores DeepSeek's `thinking` looks to the check as if it
+# took it, so this spelling cannot be learned from an answer.
 _ENABLE_THINKING_HOSTS = ("aliyuncs.com", "siliconflow.cn", "siliconflow.com",
                           "baidubce.com", "tencentmaas.com", "tencentcloudmaas.com")
-_NO_THINKING_HOSTS = ("openai.com", "groq.com", "googleapis.com",
-                      "openrouter.ai", "mistral.ai", "x.ai") + _ENABLE_THINKING_HOSTS
-# Hosts where reasoning is lowered with `reasoning_effort`, and the lowest
-# value each documents for all its models (OpenAI's older lines refuse "none"
-# and are moved to "low"). Gemini 3 and 4 and Grok cannot switch it off.
-_EFFORT_HOSTS = (("openai.com", "none"), ("googleapis.com", "low"), ("x.ai", "low"))
 
 # Words in an error that put the account, not the request, at fault.
 _BILLING_WORDS = ("payment required", "insufficient", "balance", "quota",
@@ -75,31 +59,22 @@ def _on_host(host: str, domains: tuple) -> bool:
     return any(host == d or host.endswith("." + d) for d in domains)
 
 
-def thinking_off(payload: dict, url: str, takes_thinking, *,
-                 k2_temperature: bool = False) -> dict:
+def thinking_off(payload: dict, url: str, takes_thinking, lowest: str = "") -> dict:
     """Ask the model behind `url` to skip hidden reasoning, in the spellings
     that endpoint accepts. `takes_thinking` is what is known of it and
     DeepSeek's `thinking` switch; None sends the switch to find out, so only
-    a caller that survives its refusal (`_post_chat`) passes None.
-    `k2_temperature` also moves a K2 model to the one temperature it answers
-    at with thinking off; a caller that chose its temperature leaves it out."""
-    host = _host(url)
-    model = str(payload.get("model") or "").lower()
-    if _on_host(host, _ENABLE_THINKING_HOSTS):
+    a caller that survives its refusal (`_post_chat`) passes None. `lowest` is
+    the effort that lowers a model with no switch (modelcatalog.lowest_effort)."""
+    router = "openrouter.ai" in (url or "")
+    if _on_host(_host(url), _ENABLE_THINKING_HOSTS):
         payload["enable_thinking"] = False
-    elif takes_thinking is not False:
+    elif takes_thinking is not False and not router:
         payload["thinking"] = {"type": "disabled"}
-        if k2_temperature and "k2" in model:
-            payload["temperature"] = 0.6
-    effort = next((low for domain, low in _EFFORT_HOSTS if _on_host(host, (domain,))), "")
-    # Kimi K3 always reasons, at "max" unless told; K2 took `thinking` and refuses an effort.
-    if not effort and takes_thinking is False and _on_host(host, ("moonshot.cn", "moonshot.ai")) and "k2" not in model:
-        effort = "low"
-    if effort:
-        payload["reasoning_effort"] = effort
-    if "openrouter.ai" in (url or ""):
-        # The exclude/max_tokens form is 400-rejected by some upstreams.
+    if router:
+        # OpenRouter's own switch for every model; the exclude/max_tokens form is 400-rejected by some upstreams.
         payload["reasoning"] = {"enabled": False}
+    elif lowest:
+        payload["reasoning_effort"] = lowest
     return payload
 
 
@@ -118,68 +93,31 @@ def answer_text(message: dict) -> str:
     return _THINK_RE.sub("", str(content)).strip()
 
 
-def known_to_take_thinking(url: str, model: str) -> bool:
-    """For a caller that cannot learn from a refusal (the doctor's probes): is
-    `thinking` known to be taken here? By a listed host, and by a K2 model
-    wherever it is served."""
-    host = _host(url)
-    if _on_host(host, _NO_THINKING_HOSTS):
-        return False
-    return _on_host(host, _THINKING_HOSTS) or "k2" in (model or "").lower()
-
-
-def _status_of(e: BaseException):
-    """The HTTP status an exception carries, structured or in its message."""
-    status = getattr(e, "status_code", None)
-    if status is None:
-        status = getattr(getattr(e, "response", None), "status_code", None)
-    try:
-        status = int(status) if status is not None else None
-    except (TypeError, ValueError):
-        status = None
-    if status is None:
-        # \b keeps '401' from matching inside '4012345'.
-        m = re.search(r"\b([45]\d\d)\b", str(e))
-        if m:
-            status = int(m.group(1))
-    return status
-
-
-def _response_text(e: BaseException) -> str:
-    """The start of an HTTP error's body: httpx's message omits it, and the
-    body is where a provider says the quota is gone."""
-    try:
-        return str(getattr(getattr(e, "response", None), "text", "") or "")[:500]
-    except Exception:
-        return ""
-
-
-def _error_text(e: BaseException, status) -> str:
-    """The error's message, lowercased, with its body only on a status about
-    the account: a 5xx body describes an outage and a 400 body may echo the
-    request."""
-    text = str(e).lower()
-    if status in (None, 401, 402, 403, 429):
-        text += " " + _response_text(e).lower()
-    elif status in (400, 404, 422):
-        # Only the provider's own message, where Gemini says the key is wrong
-        # and Claude or DashScope that the balance is gone.
-        text += " " + _provider_message(e).lower()
-    return text
-
-
 def _provider_message(e: BaseException) -> str:
-    """The `error` object's message, code and type from a JSON error body."""
-    try:
-        body = json.loads(_response_text(e) or "{}")
-    except ValueError:
+    """The provider's own message, code and type from an error body (the SDK's `body`: the `error` object, or
+    the whole body where a host sends no such object, as SiliconFlow does)."""
+    body = getattr(e, "body", None)
+    if isinstance(body, str):
+        # `{"error": "..."}` is the provider's message; a plain-text body may echo the request.
+        return body[:300] if e.response.text.lstrip().startswith("{") else ""
+    if not isinstance(body, dict):
         return ""
-    error = body.get("error") if isinstance(body, dict) else None
-    if isinstance(error, str):
-        return error[:300]
-    if not isinstance(error, dict):
-        return ""
-    return " ".join(str(error.get(k) or "") for k in ("message", "code", "type"))[:300]
+    return " ".join(str(body.get(k) or "") for k in ("message", "code", "type"))[:300]
+
+
+def _error_text(e: BaseException) -> str:
+    """The error's words, lowercased: the whole body only on a status about the account, the provider's message
+    on a refused request (where Gemini says the key is wrong and Claude or DashScope that the balance is gone),
+    and nothing of a 5xx body, which describes an outage."""
+    if not isinstance(e, openai.APIStatusError):
+        return str(e).lower()
+    status = e.status_code
+    words = ""
+    if status in (401, 402, 403, 429):
+        words = e.response.text[:500]
+    elif status in (400, 404, 422):
+        words = _provider_message(e)
+    return f"http {status} {words}".lower()
 
 
 class ProviderError(Exception):
@@ -198,49 +136,15 @@ class ProviderError(Exception):
         super().__init__(f"provider error {code}: {message}" if code is not None
                          else f"provider error: {message}")
 
-# Long keep-alive: turns are further apart than httpx's 5s expiry. The other
-# two are httpx's defaults, spelled out because `Limits` resets omitted ones.
-_HTTP_LIMITS = httpx.Limits(max_connections=100, max_keepalive_connections=20,
-                            keepalive_expiry=300.0)
-
-class _PooledHTTP:
-    """``async with`` handle over a shared httpx client; exiting does not close it."""
-
-    __slots__ = ("_client",)
-
-    def __init__(self, client):
-        self._client = client
-
-    async def __aenter__(self):
-        return self._client
-
-    async def __aexit__(self, *exc):
-        return False  # shared client — never closed here
-
 
 class ModelCalls:
-    def _http(self, **kwargs) -> "_PooledHTTP":
-        """Pooled httpx client, used like an ``AsyncClient`` context; identical
-        kwargs share one process-lived keep-alive pool."""
-        kwargs.setdefault("limits", _HTTP_LIMITS)
+    # The context window the person set (CONTEXT_WINDOW); 0 when they did not.
+    context_window = 0
 
-        def _norm(v):
-            if isinstance(v, dict):
-                return tuple(sorted(v.items()))
-            # httpx.Limits / Timeout define __eq__ without __hash__, so they
-            # cannot key the pool dict as themselves.
-            try:
-                hash(v)
-            except TypeError:
-                return repr(v)
-            return v
-
-        key = tuple(sorted((k, _norm(v)) for k, v in kwargs.items()))
-        client = self._http_pool.get(key)
-        if client is None or client.is_closed:
-            client = httpx.AsyncClient(**kwargs)
-            self._http_pool[key] = client
-        return _PooledHTTP(client)
+    def _retries(self, model: str) -> int:
+        """How many times the SDK asks `model` again after a 429, a 5xx or a dropped connection: none where a
+        distinct fallback model takes the failure at once (`_recovered`), else the person's LLM_MAX_RETRIES."""
+        return 0 if self.llm_fallback_model and model != self.llm_fallback_model else self.api_max_retries
 
     def _endpoint_for(self, model: str) -> tuple[str, str]:
         """(chat-completions URL, API key) for one model name; the fallback may
@@ -264,26 +168,26 @@ class ModelCalls:
 
     def _thinking_verdict(self, url: str, model: str):
         """Whether `model` at `url` takes DeepSeek's `thinking` switch: True,
-        False, or None when unknown (others 400 it rather than ignore it)."""
+        False, or None when unknown (others 400 it rather than ignore it). What
+        the endpoint answered wins; then the catalogue: a switch for a model with
+        one, none for a model that does not reason or is lowered by effort."""
         verdict = self._api_quirks.get(("thinking", url, model))
         if verdict is not None:
             return verdict
-        host = _host(url)
-        if _on_host(host, _THINKING_HOSTS):
-            return True
+        line = modelcatalog.entry(url, model)
+        if line is not None:
+            return modelcatalog.toggles(line)
         if (self.llm_fallback_thinking
-                and host == _host(self.llm_fallback_base_url or self.base_url)):
+                and _host(url) == _host(self.llm_fallback_base_url or self.base_url)):
             return True
-        if _on_host(host, _NO_THINKING_HOSTS):
-            return False
         return None
 
-    def _thinking_off(self, payload: dict, url: str, *,
-                      k2_temperature: bool = False) -> dict:
+    def _thinking_off(self, payload: dict, url: str) -> dict:
         """`thinking_off` with what this endpoint has shown so far; an unknown
         one is sent `thinking`, and `_post_chat` remembers its answer."""
-        return thinking_off(payload, url, self._thinking_verdict(
-            url, str(payload.get("model") or "")), k2_temperature=k2_temperature)
+        model = str(payload.get("model") or "")
+        return thinking_off(payload, url, self._thinking_verdict(url, model),
+                            modelcatalog.lowest_effort(modelcatalog.entry(url, model)))
 
     def _apply_quirks(self, url: str, payload: dict) -> None:
         """Spell `payload` the way `url` has shown it accepts."""
@@ -295,7 +199,7 @@ class ModelCalls:
             payload.pop("thinking", None)
         if ("max_tokens", url, model) in quirks and "max_tokens" in payload:
             payload["max_completion_tokens"] = payload.pop("max_tokens")
-        if ("temperature", url, model) in quirks:
+        if ("temperature", url, model) in quirks or modelcatalog.fixed_temperature(url, model):
             payload.pop("temperature", None)
         if ("reasoning", url, model) in quirks and payload.get("reasoning") == {"enabled": False}:
             payload["reasoning"] = {"effort": "minimal"}
@@ -316,6 +220,17 @@ class ModelCalls:
         if _call_purpose.get() != "reply":
             return None
         return abilities.reply_effort(abilities.runtime_of(self), url, model)
+
+    def _setting(self, model: str) -> int:
+        """The person's CONTEXT_WINDOW as `model`'s window: every model's but a fallback served apart
+        (endpoints.endpoint_for)."""
+        return 0 if model == self.llm_fallback_model and model != self.model else self.context_window
+
+    def _budget(self, url: str, model: str, effort=None, fixed: int = 0) -> context.Budget:
+        """The request budget of `model` at `url` (context.py), replies thinking at `effort`'s level, with `fixed`
+        tokens of system prompt and tool definitions."""
+        window, _ = context.known_window(self, url, model, self._setting(model))
+        return context.budget(window, effort[0] if effort else "", fixed)
 
     def _shows_pictures(self) -> bool:
         """Whether a turn's pictures go to the reply model itself: not while a
@@ -338,58 +253,55 @@ class ModelCalls:
                     _host(url) or url, field, model, instead)
 
     async def _post_chat(self, url: str, key: str, payload: dict, *,
-                         timeout: float):
-        """POST one chat completion and return the response, unraised. A 400
-        refusing a field (`thinking`, `max_tokens`, `temperature`, or
-        `reasoning` off) is retried without it, and the endpoint's answer
-        remembered."""
+                         timeout: float, retries: int = 0) -> dict:
+        """One chat completion through the SDK: the answer's body as a dict, or the SDK's APIStatusError. A 400
+        refusing a field (`thinking`, `max_tokens`, `temperature`, or `reasoning` off) is resent without it, and
+        the endpoint's answer remembered; `retries` is the SDK's own (transport.client)."""
         self._apply_quirks(url, payload)
         model = str(payload.get("model") or "")
         asking = ("thinking" in payload
                   and self._thinking_verdict(url, model) is None)
-        headers = {"Authorization": f"Bearer {key}",
-                   "Content-Type": "application/json"}
-        status = 200
         refused: list[str] = []
         # OpenRouter answers 404 ("no endpoints found that support image input") for pictures to a model without eyes.
         pictured = any(isinstance(m.get("content"), list) for m in payload.get("messages") or [])
-        async with self._http(timeout=timeout) as client:
-            for _ in range(4):
-                resp = await client.post(url, json=dict(payload), headers=headers)
-                status = getattr(resp, "status_code", 200)
+        completions = transport.client(url, key, retries).chat.completions
+        for tries_left in range(3, -1, -1):
+            try:
+                body = (await completions.create(**transport.args(payload), timeout=timeout)).to_dict()
+                break
+            except openai.APIStatusError as e:
                 # It answers 404 the same way when no host of the model takes JSON mode.
-                if status not in (400, 422) and not (status == 404 and (pictured or "response_format" in payload)):
-                    break
-                field = adapt_rejected_payload(
-                    payload, str(getattr(resp, "text", "") or ""))
+                if e.status_code not in (400, 422) and not (
+                        e.status_code == 404 and (pictured or "response_format" in payload)):
+                    raise
+                field = adapt_rejected_payload(payload, e.response.text)
                 if not field and asking and "thinking" in payload:
                     # An endpoint being asked may refuse it in words of its own.
                     payload.pop("thinking")
                     field = "thinking"
-                if not field:
-                    break
+                if not field or not tries_left:
+                    raise
                 refused.append(field)
-        if isinstance(status, int) and 200 <= status < 300:
-            self._count_usage(model, resp)
-            for field in refused:
-                self._remember_refusal(url, model, field)
-            if asking and "thinking" in payload:
-                self._api_quirks[("thinking", url, model)] = True
-            # Working again, so a later failure is worth a line again.
-            reported = self._fatal_reported_hosts()
-            for item in [k for k in reported if k[0] == _host(url)]:
-                reported.discard(item)
-            if model == getattr(self, "model", None):
-                self.__dict__["model_unreachable"] = False
-        return resp
+        self._count_usage(model, body)
+        for field in refused:
+            self._remember_refusal(url, model, field)
+        if asking and "thinking" in payload:
+            self._api_quirks[("thinking", url, model)] = True
+        # Working again, so a later failure is worth a line again.
+        reported = self._fatal_reported_hosts()
+        for item in [k for k in reported if k[0] == _host(url)]:
+            reported.discard(item)
+        if model == getattr(self, "model", None):
+            self.__dict__["model_unreachable"] = False
+        return body
 
     async def _tool_round(self, system: str, messages: list[dict], model: str,
                           tools: list[dict], *, timeout: float, choice: str = "auto") -> dict | None:
         """One reply-model call that may call `tools`, with no response_format
         (with it, models stop calling tools), thinking at the person's effort
         where the model was measured to think (abilities.reply_effort), and room
-        for the answer from the context window its host states: the answer's
-        message. A call that fails is retried and moved to the fallback model
+        for the answer from the model's budget (context.budget): the answer's
+        message. A reply's reported prompt tokens feed the count (context.measured). A call that fails is retried and moved to the fallback model
         as every model call is (`_recovered`), and raises when that fails too.
         None when the endpoint takes no tool calls (`_refuses_tools`) or model
         spending is paused.
@@ -400,50 +312,61 @@ class ModelCalls:
             return None
         began = time.monotonic()
 
-        def refused(resp) -> bool:
-            return getattr(resp, "status_code", 200) in (400, 404, 422)
-
-        async def ask(mdl: str, more: int = 1) -> dict | None:
+        async def ask(mdl: str, room: int = 0) -> dict | None:
             url, key = self._endpoint_for(mdl)
             if ("tools", url, mdl) in self._api_quirks:
                 return None
-            room = more * answer_tokens(abilities.record(abilities.runtime_of(self), url, mdl))
-            payload = {"model": mdl, "max_tokens": room, "tools": tools,
+            effort = self._reply_effort(url, mdl)
+            payload = {"model": mdl, "max_tokens": room or self._budget(url, mdl, effort).answer, "tools": tools,
                        "tool_choice": "auto" if ("tool_choice", url, mdl) in self._api_quirks else choice,
                        "messages": ([{"role": "system", "content": system}] if system else []) + list(messages)}
-            effort = self._reply_effort(url, mdl)
             if effort:
-                payload["max_tokens"] += abilities.thinking_on(payload, url, *effort)
+                abilities.thinking_on(payload, url, *effort)
             else:
                 self._thinking_off(payload, url)
-            resp = await self._post_chat(url, key, payload, timeout=timeout)
-            if refused(resp) and choice == "none":
+
+            async def post() -> tuple[dict | None, openai.APIStatusError | None]:
+                # The body, or the refusal of this request (400, 404, 422) to look at.
+                try:
+                    return await self._post_chat(url, key, payload, timeout=timeout, retries=self._retries(mdl)), None
+                except openai.APIStatusError as e:
+                    if e.status_code not in (400, 404, 422):
+                        raise
+                    return None, e
+
+            body, refusal = await post()
+            if refusal and choice == "none":
                 # The last call of a turn: the same request without tools.
                 payload.pop("tools")
                 payload.pop("tool_choice")
-                resp = await self._post_chat(url, key, payload, timeout=timeout)
-            elif refused(resp) and payload["tool_choice"] != "auto":
+                body, refusal = await post()
+            elif refusal and payload["tool_choice"] != "auto":
                 # Asked again with "auto", the round's own note saying it in words; taken that way, it is
                 # the required call this endpoint refuses.
                 payload["tool_choice"] = "auto"
-                resp = await self._post_chat(url, key, payload, timeout=timeout)
-                if getattr(resp, "status_code", 200) == 200:
+                body, refusal = await post()
+                if body is not None:
                     self._remember_refusal(url, mdl, "tool_choice")
-            if (refused(resp) and re.search(r"tool|function", str(getattr(resp, "text", "") or "")[:300], re.IGNORECASE)
-                    and await self._refuses_tools(url, key, mdl, timeout)):
-                self._remember_refusal(url, mdl, "tools")
-                return None
-            resp.raise_for_status()
-            body = resp.json()
-            if not isinstance(body, dict) or body.get("error") or not body.get("choices"):
-                raise ProviderError(body if isinstance(body, dict) else {})
+            if refusal:
+                if (re.search(r"tool|function", refusal.response.text[:300], re.IGNORECASE)
+                        and await self._refuses_tools(url, key, mdl, timeout)):
+                    self._remember_refusal(url, mdl, "tools")
+                    return None
+                raise refusal
+            if body.get("error") or not body.get("choices"):
+                raise ProviderError(body)
+            if _call_purpose.get() == "reply":
+                context.measured(self, url, mdl, payload, body.get("usage"))
             return body
 
         body, used = await self._recovered(ask, model)
         if body is not None and body["choices"][0].get("finish_reason") == "length":
-            # Cut off at the token cap: asked once more with four times the room.
+            # Cut off at the token cap: asked once more with four times the room, within what the window leaves.
+            url = self._endpoint_for(used)[0]
+            plan = self._budget(url, used, self._reply_effort(url, used))
+            room = plan.retry(int((body.get("usage") or {}).get("prompt_tokens") or 0))
             try:
-                body = await ask(used, 4) or body
+                body = (await ask(used, room) if room > plan.answer else None) or body
             except Exception as e:
                 logger.warning("[Agent] tool round not asked again with more room (model=%s): %s",
                                used, type(e).__name__)
@@ -462,21 +385,18 @@ class ModelCalls:
         (a malformed tool message), which says nothing of the endpoint."""
         payload = {"model": model, "max_tokens": 16, "tools": [abilities._TOOL],
                    "messages": [{"role": "user", "content": "hi"}]}
-        resp = await self._post_chat(url, key, payload, timeout=timeout)
-        return (getattr(resp, "status_code", 200) in (400, 404, 422)
-                and bool(re.search(r"tool|function", str(getattr(resp, "text", "") or "")[:300], re.IGNORECASE)))
+        try:
+            await self._post_chat(url, key, payload, timeout=timeout)
+        except openai.APIStatusError as e:
+            return (e.status_code in (400, 404, 422)
+                    and bool(re.search(r"tool|function", e.response.text[:300], re.IGNORECASE)))
+        return False
 
-    def _count_usage(self, model: str, resp) -> None:
+    def _count_usage(self, model: str, body: dict) -> None:
         """Add one answered request to the per-model tally the page shows; a
         tally that cannot be kept never costs the call."""
         memory_file = getattr(self, "memory_file", None)
         if not memory_file:
-            return
-        try:
-            body = resp.json()
-        except Exception:
-            return
-        if not isinstance(body, dict):
             return
         book = self.__dict__.get("_usage_book")
         if book is None:
@@ -512,8 +432,8 @@ class ModelCalls:
         problem, naming the settings that fix it."""
         url, _key = self._endpoint_for(model)
         host = _host(url) or url
-        status = _status_of(e)
-        text = _error_text(e, status)
+        status = getattr(e, "status_code", None)
+        text = _error_text(e)
         billing = status == 402 or any(w in text for w in _BILLING_WORDS)
         kind = "billing" if billing else "auth"
         reported = self._fatal_reported_hosts()
@@ -541,16 +461,15 @@ class ModelCalls:
         """Pick a recovery strategy for one failed call.
 
         Returns:
-          rate_limit    — throttle/overload: switch to fallback model now + set cooldown
-          transient     — network/timeout/5xx: jittered backoff, retry same model
+          rate_limit    — throttle/overload: cooldown, and the fallback model now
+          transient     — network/timeout/5xx (the SDK has retried it): the fallback model now
           fatal_auth    — auth/billing: neither retry nor model swap helps; re-raise
-          fatal_request — 4xx request-level: don't retry, but a fallback model may work
-        Unknown errors are treated as transient (retryable).
+          fatal_request — 4xx request-level: no retry, but a fallback model may work
+        Unknown errors are treated as transient.
         """
-        # A structured status first, so a number inside a request id or a
-        # token count is not read as one.
-        status = _status_of(e)
-        msg = _error_text(e, status)
+        # The status the SDK's error or ProviderError carries; a connection error has none.
+        status = getattr(e, "status_code", None)
+        msg = _error_text(e)
         # Before the 429 check: OpenAI, Kimi and Zhipu answer an exhausted
         # quota with a 429; a wrong Gemini key is a 400.
         if status == 402 or model_problem(status, msg) in ("no_balance", "key") or any(k in msg for k in (
@@ -570,10 +489,10 @@ class ModelCalls:
         return "transient"
 
     async def _recovered(self, call, model: str):
-        """Await `call(model)` with the recovery every model call gets: transient
-        errors back off and retry; throttling arms a cooldown and switches to the
-        fallback at once; anything else but auth gets one last try on the
-        fallback. Returns (what the call returned, the model that answered)."""
+        """Await `call(model)` with the recovery every model call gets on top of the SDK's own retries
+        (`_retries`): throttling or an outage arms a cooldown and moves to a distinct fallback at once; a refused
+        request gets one last try there; a key or account problem is said once and raised. Returns (what the call
+        returned, the model that answered)."""
         cur_model = model
         # A model that was throttled or unreachable is skipped by every
         # caller while it cools down: a DM would otherwise sit through the
@@ -582,7 +501,6 @@ class ModelCalls:
         if (self.llm_fallback_model and cur_model != self.llm_fallback_model
                 and self._unreachable_until.get(cur_model, 0.0) > time.time()):
             skipped, cur_model = cur_model, self.llm_fallback_model
-        attempt = 0
         while True:
             try:
                 return (await call(cur_model)), cur_model
@@ -594,74 +512,33 @@ class ModelCalls:
                         else self.llm_fallback_duration_s)
                 # The fallback it started on failed too: the model that was
                 # cooling down gets its one try after all.
-                if skipped and kind != "fatal_auth" and (
-                        kind == "fatal_request" or attempt >= self.api_max_retries):
-                    cur_model, skipped, attempt = skipped, "", self.api_max_retries
-                    last_try = True
+                if skipped and kind != "fatal_auth":
+                    cur_model, skipped, last_try = skipped, "", True
                     self._unreachable_until.pop(cur_model, None)
                     continue
-                # Throttled: cool down whichever model failed (the short,
-                # metering window) and switch to a distinct fallback now.
-                if kind == "rate_limit" and self.llm_fallback_model:
-                    self._fallback_until[cur_model] = max(
-                        self._fallback_until.get(cur_model, 0.0),
-                        time.time() + self.llm_rate_limit_cooldown_s)
-                    if cur_model != self.llm_fallback_model and not last_try:
-                        logger.warning(
-                            "[Agent] throttled (model=%s); cooldown %ds, switching to fallback=%s: %s",
-                            cur_model, self.llm_rate_limit_cooldown_s, self.llm_fallback_model, e)
-                        cur_model = self.llm_fallback_model
-                        attempt = 0  # give the fallback model its own retry budget
-                        continue
-                # A hang or a dropped connection: a retry on the same model
-                # would spend the turn's budget before the backup is asked.
-                if (kind == "transient" and isinstance(e, httpx.TransportError)
-                        and self.llm_fallback_model
+                # Anything but the key or the account: the fallback next, which the SDK retries as it needs.
+                if (kind != "fatal_auth" and self.llm_fallback_model
                         and cur_model != self.llm_fallback_model and not last_try):
-                    self._fallback_until[cur_model] = max(
-                        self._fallback_until.get(cur_model, 0.0),
-                        time.time() + self.llm_fallback_duration_s)
-                    logger.warning(
-                        "[Agent] model=%s did not answer (%s); switching to fallback=%s",
-                        cur_model, type(e).__name__, self.llm_fallback_model)
+                    logger.warning("[Agent] model=%s failed (%s); asking fallback=%s: %s",
+                                   cur_model, kind, self.llm_fallback_model, e)
                     cur_model = self.llm_fallback_model
-                    attempt = 0
                     continue
-                # Transient: exponential backoff + jitter, retry same model.
-                if (kind in ("transient", "rate_limit")
-                        and attempt < self.api_max_retries):
-                    delay = (1.5 * (2 ** attempt)) * (0.7 + random.random() * 0.6)
-                    attempt += 1
-                    logger.warning(
-                        "[Agent] API %s error (attempt %d/%d, model=%s), retrying in %.1fs: %s",
-                        kind, attempt, self.api_max_retries, cur_model, delay, e)
-                    await asyncio.sleep(delay)
-                    continue
-                # Exhausted or request-level: one last try on the fallback,
-                # which can't fix auth or billing.
-                if kind != "fatal_auth" and self.llm_fallback_model:
-                    self._fallback_until[cur_model] = max(
-                        self._fallback_until.get(cur_model, 0.0),
-                        time.time() + self.llm_fallback_duration_s)
-                    if cur_model != self.llm_fallback_model and not last_try:
-                        logger.warning(
-                            "[Agent] model=%s failed (%s); last attempt on fallback=%s: %s",
-                            cur_model, kind, self.llm_fallback_model, e)
-                        cur_model = self.llm_fallback_model
-                        attempt = 0  # give the fallback model its own retry budget
-                        continue
                 if kind == "fatal_auth":
                     self._report_fatal(e, cur_model)
                 if kind == "transient" and cur_model == self.model:
                     self.__dict__["model_unreachable"] = True
-                # A 429's body says which limit it was; httpx's message does not.
+                # A 429's body says which limit it was; the SDK's message gives only its `message`.
                 logger.warning("[Agent] LLM call failed (model=%s, %s): %s %s",
                                cur_model, kind, e,
-                               _response_text(e)[:300] if kind == "rate_limit" else "")
-                problem = model_problem(_status_of(e), _error_text(e, _status_of(e)))
+                               e.response.text[:300] if isinstance(e, openai.APIStatusError)
+                               and kind == "rate_limit" else "")
+                problem = model_problem(getattr(e, "status_code", None), _error_text(e))
                 if problem:
                     # For the page to name in the chat (abilities.problem_since).
                     abilities.note_problem(self, problem, self._endpoint_for(cur_model)[0])
+                if problem == "context":
+                    # The window the error states is the model's from now on.
+                    context.overflowed(self, self._endpoint_for(cur_model)[0], cur_model, _provider_message(e))
                 if problem in ("not_found", "context", "refused"):
                     logger.warning("[Agent] %s", PROBLEMS[problem][0])
                 raise
@@ -676,35 +553,41 @@ class ModelCalls:
         temperature: float | None = None,
         json_object: bool = False,
     ) -> str:
-        """OpenAI-compatible chat completion with jittered retry and
+        """OpenAI-compatible chat completion with the SDK's retries and
         error-driven fallback. `json_object` sets response_format, for the
-        inner calls that answer in JSON."""
+        inner calls that answer in JSON. `max_tokens` FROM_BUDGET: the
+        answer's room in the model's budget, thinking included."""
         if not (self.base_url and self.api_key):
             logger.warning("[Agent] missing base_url/api_key; cannot call LLM")
             return ""
         if spend.paused_for(self, _call_purpose.get()):
             return ""
         began = time.monotonic()
+        sent = {"room": max_tokens}
 
-        async def _do_call(mtok: int, mdl: str, force_disable_thinking: bool = False):
-            # Per call: `mdl` changes across the rungs, and the endpoint with it.
+        async def _do_call(mtok: int, mdl: str, force_disable_thinking: bool = False, total: int = 0):
+            # Per call: `mdl` changes across the rungs, and the endpoint with it. `total`: max_tokens as it is.
             _url, _key = self._endpoint_for(mdl)
-            payload = {"model": mdl, "max_tokens": mtok, "messages": _oai_messages}
+            effort = None if force_disable_thinking else self._reply_effort(_url, mdl)
+            payload = {"model": mdl, "max_tokens": total or mtok or self._budget(_url, mdl, effort).answer,
+                       "messages": _oai_messages}
             if temperature is not None:
                 payload["temperature"] = temperature
             if json_object:
                 payload["response_format"] = {"type": "json_object"}
-            effort = None if force_disable_thinking else self._reply_effort(_url, mdl)
             if effort:
-                payload["max_tokens"] = mtok + abilities.thinking_on(payload, _url, *effort)
+                thought = abilities.thinking_on(payload, _url, *effort)
+                if mtok and not total:
+                    payload["max_tokens"] = mtok + thought
             elif disable_thinking or force_disable_thinking:
                 self._thinking_off(payload, _url)
-            resp = await self._post_chat(_url, _key, payload,
-                                         timeout=self.llm_timeout_s)
-            resp.raise_for_status()
-            body = resp.json()
-            if isinstance(body, dict) and (body.get("error") or not body.get("choices")):
+            sent["room"] = payload["max_tokens"]
+            body = await self._post_chat(_url, _key, payload, timeout=self.llm_timeout_s,
+                                         retries=self._retries(mdl))
+            if body.get("error") or not body.get("choices"):
                 raise ProviderError(body)
+            if _call_purpose.get() == "reply":
+                context.measured(self, _url, mdl, payload, body.get("usage"))
             return body
 
         # OpenAI endpoint uses a single system message; provider auto prefix-caches.
@@ -766,23 +649,27 @@ class ModelCalls:
             # Thinking may have used the whole budget: with it off the answer fits.
             logger.warning(
                 "[Agent] empty reply, finish_reason=length (model=%s, max_tokens=%d); "
-                "retrying once with thinking disabled", used_model, max_tokens)
+                "retrying once with thinking disabled", used_model, sent["room"])
             again = await _once_more("retry with thinking disabled", max_tokens,
                                      force_disable_thinking=True)
             if again is not None:
                 text, finish = again
         if _budget_starved(text, finish):
             # A reasoning model can spend the whole budget thinking: retry once
-            # with a bigger one, then say plainly what happened.
-            retry_tokens = max_tokens * 4
+            # with four times the room, within what the window leaves, then say
+            # plainly what happened.
+            used_url = self._endpoint_for(used_model)[0]
+            retry_tokens = min(4 * sent["room"], self._budget(used_url, used_model).window
+                               - int((data.get("usage") or {}).get("prompt_tokens") or 0))
             logger.warning(
                 "[Agent] empty reply, finish_reason=length (model=%s, "
                 "max_tokens=%d) — retrying once at %d. If this repeats, the "
                 "model is likely a reasoning model whose thinking tokens "
                 "exhaust the budget before the answer; pick a non-reasoning "
                 "model or raise the cap.",
-                used_model, max_tokens, retry_tokens)
-            again = await _once_more("retry at a larger budget", retry_tokens)
+                used_model, sent["room"], retry_tokens)
+            again = (await _once_more("retry at a larger budget", max_tokens, total=retry_tokens)
+                     if retry_tokens > sent["room"] else None)
             if again is not None:
                 text, finish = again
             if not text:
@@ -852,9 +739,8 @@ class ModelCalls:
                 payload["thinking"] = {"type": "disabled"}
             try:
                 with purpose("check"):
-                    r = await self._post_chat(url, key, payload, timeout=15)
-                r.raise_for_status()
-                actual = r.json().get("model", "?")
+                    body = await self._post_chat(url, key, payload, timeout=15)
+                actual = body.get("model", "?")
                 logger.info("[Agent] %s model probe OK: configured=%s actual=%s",
                             label, model, actual)
             except Exception as e:

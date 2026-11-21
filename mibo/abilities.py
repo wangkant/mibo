@@ -7,9 +7,13 @@ A model that takes pictures also points at one drawn picture (see/profile.py's
 self-test), kept as `pointing`: how it works a window only a picture can work.
 The answers and the refusals those calls taught (llm's quirks) are kept in
 <runtime>/model-abilities.json, keyed by the chat URL and the model, so the
-service process and the page read the same answers after a restart.
+service process and the page read the same answers after a restart. Ordinary calls add what they measure to the
+record (note_learned): the ratio of reported to estimated tokens and the window an overflow error stated (context.py).
+A model the public catalogue lists (modelcatalog.py) works from the catalogue's line until its check has run, and
+the check's answers win where they differ.
 
-    record(runtime, url, model)       the measured abilities, or None before a check
+    record(runtime, url, model)       the abilities: measured over the catalogue's, or None for neither
+    measured(runtime, url, model)     the check's own record, or None before a check
     can(runtime, url, model, name)    "yes", "no", "unstable", or "" when not measured;
                                       name is one of NAMES (tools, pictures, json, thinking)
     efforts(rec)                      the thinking levels the composer offers ([] for none)
@@ -34,6 +38,7 @@ import time
 import zlib
 from pathlib import Path
 
+from . import modelcatalog
 from .endpoints import chat_completions_url
 from .storage import FileLock, atomic_write_text
 
@@ -111,11 +116,22 @@ def runtime_of(caller) -> Path | None:
 
 # ------------------------------------------------------------------ reading --
 
-def record(runtime, url: str, model: str) -> dict | None:
+def measured(runtime, url: str, model: str) -> dict | None:
     if runtime is None:
         return None
     rec = (_read(runtime).get("models") or {}).get(key_of(url, model))
     return rec if isinstance(rec, dict) else None
+
+
+def record(runtime, url: str, model: str) -> dict | None:
+    rec = measured(runtime, url, model)
+    seed = modelcatalog.abilities(url, model)
+    if seed is None:
+        return rec
+    if rec is None:
+        return {**seed, "url": url, "model": model}
+    # What the check found wins; an answer it could not get ("") keeps the catalogue's.
+    return {**seed, **{k: v for k, v in rec.items() if v != ""}}
 
 
 def can(runtime, url: str, model: str, name: str) -> str:
@@ -195,7 +211,7 @@ def seed(caller, quirks: dict) -> None:
 def note_quirk(caller, url: str, model: str, field: str, value) -> None:
     """Keep a refusal learned during ordinary calls with the model's record."""
     runtime = runtime_of(caller)
-    if runtime is None or caller.__dict__.get("_abilities_fresh") or not record(runtime, url, model):
+    if runtime is None or caller.__dict__.get("_abilities_fresh") or not measured(runtime, url, model):
         return
 
     def edit(data):
@@ -206,6 +222,23 @@ def note_quirk(caller, url: str, model: str, field: str, value) -> None:
         _change(runtime, edit)
     except OSError as e:
         logger.debug("[Agent] refusal not kept: %s", e)
+
+
+def note_learned(caller, url: str, model: str, **found) -> None:
+    """Keep what ordinary calls measured (context.py: `token_ratio`, `context_error`) with the model's record;
+    a check measures the ratio afresh and keeps the window an overflow stated."""
+    runtime = runtime_of(caller)
+    if runtime is None or caller.__dict__.get("_abilities_fresh") or not measured(runtime, url, model):
+        return
+
+    def edit(data):
+        rec = (data.get("models") or {}).get(key_of(url, model))
+        if isinstance(rec, dict):
+            rec.update(found)
+    try:
+        _change(runtime, edit)
+    except OSError as e:
+        logger.debug("[Agent] measure not kept: %s", e)
 
 
 def note_problem(caller, kind: str, url: str) -> None:
@@ -299,32 +332,27 @@ def _answer(body: dict) -> str:
 
 async def _post(caller, url: str, key: str, payload: dict) -> dict | None:
     """One call through the app's path; the body of a 200, else None."""
-    import httpx
+    import openai
     try:
-        resp = await caller._post_chat(url, key, payload, timeout=45)
-    except httpx.HTTPError as e:
+        body = await caller._post_chat(url, key, payload, timeout=45)
+    except openai.APIStatusError as e:
+        caller.__dict__.setdefault("_check_status", e.status_code)
+        caller.__dict__.setdefault("_check_text", e.response.text[:400])
+        return None
+    except openai.APIError as e:
         logger.info("[Agent] ability check call failed: %s", type(e).__name__)
         return None
-    if getattr(resp, "status_code", 0) != 200:
-        caller.__dict__.setdefault("_check_status", resp.status_code)
-        caller.__dict__.setdefault("_check_text", str(getattr(resp, "text", "") or "")[:400])
-        return None
-    try:
-        body = resp.json()
-    except ValueError:
-        return None
-    return body if isinstance(body, dict) and body.get("choices") else None
+    return body if body.get("choices") else None
 
 
 def _params_for(caller, url: str, model: str) -> tuple[str, ...]:
     """The spellings of thinking on to try, the host's own first."""
     from . import llm
-    host = llm._host(url)
-    if llm._on_host(host, llm._ENABLE_THINKING_HOSTS):
+    if llm._on_host(llm._host(url), llm._ENABLE_THINKING_HOSTS):
         return ("enable_thinking",)
     if "openrouter.ai" in url:
         return ("reasoning",)
-    if llm._on_host(host, llm._THINKING_HOSTS) or caller._thinking_verdict(url, model):
+    if caller._thinking_verdict(url, model):
         return ("thinking", "reasoning_effort")
     return ("reasoning_effort", "thinking")
 
@@ -335,15 +363,14 @@ _CONTEXT_FIELDS = ("context_length", "max_model_len", "context_window", "max_con
 
 async def _context(url: str, key: str, model: str) -> int:
     """The model's context window in tokens as the host's own model list states it; 0 when it does not."""
-    import httpx
+    import openai
+
+    from . import transport
     try:
-        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
-            resp = await client.get(url.rsplit("/chat/completions", 1)[0] + "/models",
-                                    headers={"Authorization": f"Bearer {key}"} if key else {})
-        rows = resp.json().get("data") if resp.status_code == 200 else []
-    except (httpx.HTTPError, ValueError, AttributeError):
+        rows = [r.to_dict() for r in (await transport.client(url, key).models.list(timeout=20)).data]
+    except openai.APIError:
         return 0
-    row = next((r for r in rows or [] if isinstance(r, dict) and r.get("id") == model), {})
+    row = next((r for r in rows if r.get("id") == model), {})
     found = [row.get(k) for k in _CONTEXT_FIELDS] + [(row.get("top_provider") or {}).get("context_length")]
     return next((int(v) for v in found if isinstance(v, int) and v > 0), 0)
 
@@ -445,8 +472,9 @@ async def _measure(caller, url: str, key: str, model: str) -> dict:
                 break
     out["thinking_detail"] = {"reasons": reasons, "off": quiet is not False, "param": param}
     out["thinking"] = "yes" if reasons else ("no" if quiet is not None else "")
-    # How much the reply's tool rounds may hold (search.py budgets them from it).
-    out["context"] = await _context(url, key, model)
+    # The window as the host lists it, one source of the budget's (context.window); the catalogue's stands for it.
+    if not modelcatalog.entry(url, model):
+        out["context"] = await _context(url, key, model)
     return out
 
 
@@ -458,9 +486,8 @@ async def check(home: Path, values: dict) -> dict:
     from .usage import UsageBook
 
     class Checker(drafting._Client):
-        def _count_usage(self, model: str, resp) -> None:
+        def _count_usage(self, model: str, body: dict) -> None:
             try:
-                body = resp.json()
                 book = UsageBook(self._usage_path)
                 book.add(model, body.get("usage") if isinstance(body, dict) else None, time.time(), "check")
                 book.flush(time.time())
@@ -477,13 +504,14 @@ async def check(home: Path, values: dict) -> dict:
     url = chat_completions_url(caller.base_url)
     model = caller.model
     add_recent(runtime, caller.base_url, model)
-    try:
-        with purpose("check"):
-            found = await _measure(caller, url, caller.api_key, model)
-    finally:
-        await caller.close()
+    with purpose("check"):
+        found = await _measure(caller, url, caller.api_key, model)
     learned = [[f, v] for (f, u, m), v in caller._api_quirks.items() if u == url and m == model]
     rec = {"url": url, "model": model, "at": time.time(), **found, "quirks": learned}
+    # The window a server refused at stays, whatever the catalogue or the host's list says.
+    stated = (measured(runtime, url, model) or {}).get("context_error")
+    if stated:
+        rec["context_error"] = stated
     if not any(found.get(n) for n in NAMES):
         # Nothing answered: kept as unmeasured, with why, so the page can say so and offer the check again.
         from .endpoints import model_problem

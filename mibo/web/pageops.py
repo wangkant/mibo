@@ -73,6 +73,9 @@ SURROGATE = re.compile("[\ud800-\udfff]")
 # window has room (web/operate.budget), as browser-use gives tens of thousands.
 STATE_MAX = 6000
 STATE_MOST = 20_000
+# A line with an id on it, and how many lines a look's find returns (read_page's find: up to 20).
+ID_LINE = re.compile(r"\*?\[\d+\]")
+FIND_MAX = 20
 SECRET_MASK = "•••"
 # A field's own words that make it secret, whatever its type says: card and one-time-code words as Chromium's
 # autofill heuristics name them (card #, ccnum, csc, a 6-digit code, 2FA, PIN), and their Chinese.
@@ -332,7 +335,8 @@ SCREEN_JS = r"""() => {
 # The words of the whole document as plain lines, past what the window shows (browser-use's extract reads the page
 # as markdown the same way): headings as `## `, list items as `- `, a table row by row with its cells between `|`
 # and its header row marked, through open shadow roots and frames of the page's own site; what fields hold is left
-# out. With `this` an element, only what is in it.
+# out, and so are the site's navigation and footer (nav, footer and their ARIA roles), as Readability and
+# trafilatura drop them. With `this` an element, only what is in it.
 TEXT_JS = r"""function(most) {
   const root = this && this.nodeType === 1 ? this : document.body;
   const out = [];
@@ -347,6 +351,7 @@ TEXT_JS = r"""function(most) {
     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'INPUT', 'TEXTAREA', 'SELECT', 'svg'].includes(tag)) return;
     if (tag === 'SLOT') { const given = n.assignedNodes({flatten: true}); for (const c of given.length ? given : n.childNodes) walk(c); return; }
     if (!n.checkVisibility({checkVisibilityCSS: true})) return;
+    if (n !== root && (tag === 'NAV' || tag === 'FOOTER' || /^(navigation|contentinfo)$/.test(n.getAttribute('role') || ''))) return;
     if (tag === 'IFRAME') {
       try { const d = n.contentDocument; if (d && d.body) { end(); walk(d.body); end(); } } catch (_) {}
       return;
@@ -377,14 +382,32 @@ TEXT_JS = r"""function(most) {
 }"""
 
 # A scroller (`this`, or the page when it is none) moved: "down" on most of a screen, "end" to its end, a number to
-# that place, "where" nowhere; how far down it is, how tall, and whether it moved.
+# that place, "where" nowhere; how far down it is, how tall, how much of it is below what it shows, and whether it
+# moved.
 SCROLL_JS = r"""function(to) {
   const e = this && this.nodeType === 1 ? this : (document.scrollingElement || document.documentElement);
   const was = e.scrollTop;
   if (to === 'down') e.scrollTop = was + Math.max(80, e.clientHeight * 0.85);
   else if (to === 'end') e.scrollTop = e.scrollHeight;
   else if (to !== 'where') e.scrollTop = to;
-  return {top: e.scrollTop, height: e.scrollHeight, moved: e.scrollTop !== was};
+  return {top: e.scrollTop, height: e.scrollHeight, below: e.scrollHeight - e.scrollTop - e.clientHeight,
+          moved: e.scrollTop !== was};
+}"""
+
+# A box that scrolls by itself (`this`): how much of it is below what it shows, how tall it is, and how far down its
+# words reach (the lowest bottom of any text drawn in it, in its own height). A list that draws only the rows in
+# view has words in a small part of its height.
+DRAWN_JS = r"""function() {
+  const top = this.getBoundingClientRect().top - this.scrollTop, walk = document.createTreeWalker(this, 4);
+  const r = document.createRange();
+  let words = 0;
+  for (let n = walk.nextNode(), k = 0; n && k < 5000; n = walk.nextNode(), k++) {
+    if (!n.data.trim()) continue;
+    r.selectNodeContents(n);
+    const b = r.getBoundingClientRect();
+    if (b.height) words = Math.max(words, b.bottom - top);
+  }
+  return {below: this.scrollHeight - this.scrollTop - this.clientHeight, height: this.scrollHeight, words};
 }"""
 
 # The caret at the end of a field or an editable box, for typing that adds to what it holds.
@@ -781,6 +804,45 @@ def merge(merged: list[str], last: list[str], now: list[str]) -> list[str]:
     return merged + now[end.b + end.size:]
 
 
+def view_of(lines: list[str], spans: dict, *, ref: int | None = None, interactive: bool = False, find: str = "",
+            start: int = 0, most: int = STATE_MAX) -> tuple[str, str]:
+    """A part of a print's uncut lines, a page's or a window's (desk/uia.py prints windows in the same grammar), as
+    the snapshot tools give one: `ref` the lines of one id and under it (`spans`), `interactive` only the lines of
+    ids, `find` the id lines holding these words (FIND_MAX, as read_page's find), `start` the lines from that one
+    (1 for the first). (the lines, what was left out)."""
+    numbered = list(enumerate(lines, 1))
+    if ref is not None:
+        if ref not in spans:
+            return "", f"no ref {ref} in the last look; look again for the refs now"
+        a, b = spans[ref]
+        numbered = numbered[a:b]
+    if interactive:
+        numbered = [(n, x) for n, x in numbered if ID_LINE.match(x)]
+    if find:
+        want = [w for w in fold(find).split() if w]
+        # Words are looked for in what a line says, not in its ref.
+        hits = [(n, x) for n, x in numbered if want and all(w in fold(ID_LINE.sub("", x, 1)) for w in want)]
+        ids = [(n, x) for n, x in hits if ID_LINE.match(x)]
+        numbered = (ids or hits)[:FIND_MAX]
+        more = len(ids or hits) - len(numbered)
+        if not numbered:
+            return "", f"no line holds “{clip(find, 60)}”"
+    numbered = [(n, x) for n, x in numbered if n >= start]
+    shown, size = [], 0
+    for n, x in numbered:
+        size += len(x) + 1
+        if size > most:
+            break
+        shown.append((n, x))
+    left = []
+    if find and more > 0:
+        left.append(f"{more} more lines hold these words (report_limit)")
+    if len(shown) < len(numbered):
+        left.append(f"lines {numbered[len(shown)][0]}-{numbered[-1][0]} are not shown (report_limit): look "
+                    f"from {numbered[len(shown)][0]} goes on")
+    return well_formed("\n".join(x for _, x in shown)), "; ".join(left)
+
+
 class Lines(list):
     """The state's lines, each with where it stands down the page (`at`, from the last node the walk passed that
     has a place: `y`), so a page too long for one look shows what is on the screen."""
@@ -821,6 +883,12 @@ class Page:
         self.near: dict[int, str] = {}
         self.before: tuple[dict, dict] = ({}, {})
         self.lines: list[str] = []
+        # Where in those lines each id's own line and the lines under it are ([start, end), for a look at one
+        # part), and the stretches the print left out ([start, end)).
+        self.spans: dict[int, tuple[int, int]] = {}
+        self.cut: list[tuple[int, int]] = []
+        # Prints made of this page so far: a look's snapshot number.
+        self.looks = 0
         # The whole value of each field whose line shows only its start (for `grep`).
         self.values: dict[int, str] = {}
         # The app's own script world in the page, for the ring: (document, context id); the last document a
@@ -908,57 +976,115 @@ class Page:
         """The boxes of the last look that scroll by themselves, in the page itself."""
         return [i for i, (role, _) in self.last.items() if role == "scrollable" and i < FRAME_IDS]
 
-    async def whole(self) -> str:
-        """The whole page's words (TEXT_JS), as far down as it goes: the page is taken to its end (again while a
-        feed loads more there), and a box that scrolls by itself the same way; one that no longer holds what it
-        showed at its top (a list that draws only the rows in view) is read step by step from the top, what each
-        step shows merged in order. Each is put back where it was. At most WHOLE_STEPS steps a scroller and
-        TEXT_MOST characters."""
-        async def capture(box: int | None) -> list[str]:
-            got = await (self._evaluate(f"function(){{return ({TEXT_JS}).call(null, {TEXT_MOST})}}")
-                         if box is None else self.on_node(box, TEXT_JS, TEXT_MOST))
-            return [x for x in str(got or "").split("\n") if x]
+    async def _text(self, box: int | None = None) -> str:
+        """TEXT_JS over the document, or over a box that scrolls by itself."""
+        got = await (self._evaluate(f"function(){{return ({TEXT_JS}).call(null, {TEXT_MOST})}}")
+                     if box is None else self.on_node(box, TEXT_JS, TEXT_MOST))
+        return str(got or "")
 
-        async def through(box: int | None) -> list[str]:
-            began = (await self._scroller(box, "where"))["top"]
-            first = await capture(box)
-            for _ in range(WHOLE_STEPS):
-                height = (await self._scroller(box, "end"))["height"]
-                waited = time.monotonic()
-                while (time.monotonic() - waited < MORE_S
-                       and (await self._scroller(box, "where"))["height"] == height):
-                    await asyncio.sleep(0.3)
-                if (await self._scroller(box, "where"))["height"] == height:
-                    break
-                await self.settle(cap_ms=1500)
-            lines = await capture(box)
-            kept = set(lines)
-            if sum(1 for x in first if x in kept) < 0.8 * len(first):
-                await self._scroller(box, 0)
-                await self.settle(cap_ms=1500)
-                lines, last = [], []
-                for _ in range(WHOLE_STEPS):
-                    now_lines = await capture(box)
-                    lines, last = merge(lines, last, now_lines), now_lines
-                    if not (await self._scroller(box, "down"))["moved"]:
-                        break
-                    await self.settle(cap_ms=1500)
-                else:
-                    lines.append("... it goes on past what was read")
-            await self._scroller(box, began)
-            return lines
-
-        parts = ["\n".join(await through(None))]
+    async def document(self) -> tuple[str, bool]:
+        """What the document holds now (TEXT_JS), past what the window shows and with nothing scrolled, as the
+        leaders read a page; and whether the page or a box goes on below what it shows. A box whose words fill
+        less than half its height draws only the rows in view: its rows are not in the document until scrolled to,
+        so it is read through now, as `whole` reads it, and is not counted as going on."""
+        parts, goes_on = [await self._text()], False
         for box in self._boxes():
             try:
-                rows = await through(box)
+                drawn = await self.on_node(box, DRAWN_JS)
+                if drawn["below"] > 40 and drawn["words"] < drawn["height"] / 2:
+                    parts.append(self._all_of(box, await self._through(box)))
+                else:
+                    goes_on = goes_on or drawn["below"] > 40
+            except Exception:
+                # A box gone since the look.
+                continue
+        goes_on = goes_on or (await self._scroller(None, "where"))["below"] > 40
+        return well_formed("\n".join(parts))[:TEXT_MOST], goes_on
+
+    async def step(self, at: dict) -> tuple[str, bool]:
+        """One step on, for a question what was read does not answer: the page taken to its end, where a feed loads
+        more, and waited on up to MORE_S for it; each box that scrolls by itself one screen down from where the
+        last step left it (`at`, by box, kept between steps). The document's words then, with what each box showed
+        there, and whether any of them goes on still. Each is put back where it was."""
+        began = (await self._scroller(None, "where"))["top"]
+        height = (await self._scroller(None, "end"))["height"]
+        waited = time.monotonic()
+        while time.monotonic() - waited < MORE_S and (await self._scroller(None, "where"))["height"] == height:
+            await asyncio.sleep(0.3)
+        await self.settle(cap_ms=1500)
+        now = await self._scroller(None, "where")
+        goes_on = now["height"] > height or now["below"] > 40
+        parts = [await self._text()]
+        for box in self._boxes():
+            try:
+                was = (await self._scroller(box, "where"))["top"]
+                await self._scroller(box, at.get(box, was))
+                moved = await self._scroller(box, "down")
+                at[box] = moved["top"]
+                await self.settle(cap_ms=1500)
+                parts.append(await self._text(box))
+                goes_on = goes_on or moved["below"] > 40
+                await self._scroller(box, was)
+            except Exception:
+                # A box gone since the look.
+                continue
+        await self._scroller(None, began)
+        return well_formed("\n".join(parts))[:TEXT_MOST], goes_on
+
+    async def whole(self) -> str:
+        """The whole page's words (TEXT_JS), as far down as it goes, for a question about a whole list (its
+        largest, a count): the page and each box that scrolls by itself read through (`_through`). At most
+        TEXT_MOST characters."""
+        parts = ["\n".join(await self._through(None))]
+        for box in self._boxes():
+            try:
+                parts.append(self._all_of(box, await self._through(box)))
             except Exception:
                 # Gone since the look.
                 continue
-            name = self.last[box][1]
-            parts.append(f"--- the box{' ' + quote(clip(name, 40)) if name else ''} that scrolls by itself, "
-                         f"all of it:\n" + "\n".join(rows))
         return well_formed("\n".join(parts))[:TEXT_MOST]
+
+    async def _through(self, box: int | None) -> list[str]:
+        """The lines of a scroller (a box, or the page with None) as far down as it goes: taken to its end (again
+        while a feed loads more there); one that no longer holds what it showed at its top (a list that draws only
+        the rows in view) is read step by step from the top, what each step shows merged in order. Put back where
+        it was. At most WHOLE_STEPS steps."""
+        async def capture() -> list[str]:
+            return [x for x in (await self._text(box)).split("\n") if x]
+
+        began = (await self._scroller(box, "where"))["top"]
+        first = await capture()
+        for _ in range(WHOLE_STEPS):
+            height = (await self._scroller(box, "end"))["height"]
+            waited = time.monotonic()
+            while (time.monotonic() - waited < MORE_S
+                   and (await self._scroller(box, "where"))["height"] == height):
+                await asyncio.sleep(0.3)
+            if (await self._scroller(box, "where"))["height"] == height:
+                break
+            await self.settle(cap_ms=1500)
+        lines = await capture()
+        kept = set(lines)
+        if sum(1 for x in first if x in kept) < 0.8 * len(first):
+            await self._scroller(box, 0)
+            await self.settle(cap_ms=1500)
+            lines, last = [], []
+            for _ in range(WHOLE_STEPS):
+                now_lines = await capture()
+                lines, last = merge(lines, last, now_lines), now_lines
+                if not (await self._scroller(box, "down"))["moved"]:
+                    break
+                await self.settle(cap_ms=1500)
+            else:
+                lines.append("... it goes on past what was read")
+        await self._scroller(box, began)
+        return lines
+
+    def _all_of(self, box: int, rows: list[str]) -> str:
+        """A box's rows read through, under a line that names the box."""
+        name = self.last[box][1]
+        return (f"--- the box{' ' + quote(clip(name, 40)) if name else ''} that scrolls by itself, all of it:\n"
+                + "\n".join(rows))
 
     async def seek(self, words: str) -> int | None:
         """Something showing these words that is not drawn yet (a row far down a list that draws only the rows in
@@ -1197,6 +1323,8 @@ class Page:
         previous = self.last
         self.before = (self.last, self.near)
         self.last, self.secrets, self.interactive, self.near, self.values = {}, set(), 0, {}, {}
+        self.spans, self.cut = {}, []
+        self.looks += 1
         lines = Lines()
         text: list[str] = []
         tops = docs[0]["layout"]["y"]
@@ -1251,6 +1379,17 @@ class Page:
                 return found
 
             def walk(n: dict | None, inside: str) -> None:
+                # Each id's lines, from its own line to the last line under it.
+                start = len(lines)
+                walk_one(n, inside)
+                local = (n or {}).get("backendDOMNodeId")
+                ident = base + local if local else local
+                if ident in self.last and ident not in self.spans:
+                    own = re.compile(rf"\*?\[{ident}\]")
+                    at = next((i for i in range(start, len(lines)) if own.match(lines[i])), start)
+                    self.spans[ident] = (at, len(lines))
+
+            def walk_one(n: dict | None, inside: str) -> None:
                 if not n:
                     return
                 role = val(n.get("role"))
@@ -1399,6 +1538,7 @@ class Page:
             flush()
             if frame["url"] and len(lines) > start:
                 lines.insert(start, f"--- frame {frame['url']} ---")
+                self.spans = {k: (a + (a >= start), b + (b > start)) for k, (a, b) in self.spans.items()}
 
         emit(docs[0])
         header = f"[state] {probe.get('title', '')} | {probe.get('url', '')}"
@@ -1441,6 +1581,7 @@ class Page:
             if stop == end:
                 start = end - fit(lines[head:end][::-1], room)
                 start = start if start > head else head
+            self.cut = [(a, b) for a, b in ((head, start), (stop, end)) if b > a]
             body = [*lines[:head],
                     *([f"... {start - head} lines above cut here: scroll up to see them, or find or read them"]
                       if start > head else []),
