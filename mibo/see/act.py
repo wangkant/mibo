@@ -201,10 +201,6 @@ class PaneSurface:
             await self.tab.cdp("Input.dispatchKeyEvent", {"type": "char", **base, "text": text, "unmodifiedText": text})
         await self.tab.cdp("Input.dispatchKeyEvent", {"type": "keyUp", **base})
 
-    async def show(self, x: float, y: float) -> None:
-        """The pane's own ring where the next input lands, for the person watching."""
-        await self.page.ring({"x": x - 14, "y": y - 14, "w": 28, "h": 28})
-
 
 # --- a window
 
@@ -391,9 +387,6 @@ class WindowSurface:
         from ..desk import uia, win32
         vks = uia.parse_key(keys)
         await asyncio.to_thread(self._run, lambda: win32.chord(vks))
-
-    async def show(self, x: float, y: float) -> None:
-        return None
 
 
 async def _answer(fn: Callable, *args: Any) -> Any:
@@ -598,8 +591,6 @@ class Sight:
         do = a["do"]
         where = f" at {round(at[0])},{round(at[1])} of the picture" if at else ""
         on = f" on {hit['what']}" if hit else ""
-        if real:
-            await self.surface.show(*real)
         if do in ("click", "double_click"):
             await self.surface.click(*real, count=2 if do == "double_click" else 1)
         elif do == "drag":

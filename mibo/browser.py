@@ -64,6 +64,8 @@ IDLE_S = 60
 TICK_MS = 20000
 # Shorter than this is a glance, not a reading.
 READ_MIN_S = 2
+# The share of its screen's width the window grows to by itself when a page comes to the front.
+ROOM_SHARE = 0.75
 # The page's own canvas (app.css), shown before the site draws: light, dark.
 CANVAS = ("#fcfcfd", "#202022")
 # The browser's own language, fixed when it first starts (see language()).
@@ -653,7 +655,9 @@ class Pane:
             return
         area = Screen.FromControl(form).WorkingArea
         kept = self._kept["size"] or [(form.Width - form.ClientSize.Width + wide * scale) / unit, 0]
-        size = Size(min(max(form.Width, round(kept[0] * unit)), area.Width),
+        # By itself it takes at most ROOM_SHARE of the screen's width; a size the person gave it may be the whole of it.
+        most = area.Width if self._kept["size"] else max(form.Width, round(area.Width * ROOM_SHARE))
+        size = Size(min(max(form.Width, round(kept[0] * unit)), most),
                     min(max(form.Height, round(kept[1] * unit)), area.Height))
         # It grows to the right and down; a window that stood on its screen is moved back only as far as keeps it there.
         left = min(form.Left, max(area.Left, area.Right - size.Width)) if form.Right <= area.Right else form.Left

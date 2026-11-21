@@ -31,7 +31,7 @@ do: the site it began on, the sites the person named and those a link it
 followed led to. Going anywhere else, by an address the model wrote or by the
 page's own script, waits for a card (leave); an address that carries words read
 in the run to another site is refused outright. Each step is shown before it happens, in the pane's bar
-in the person's words and as a ring where it lands. A model that takes
+in the person's words. A model that takes
 pictures gets the page as a picture when it asks, and by itself when the page
 is drawn rather than written (a canvas): the plain picture with each control
 of the lines boxed under its id, and it points at what has none. A model that
@@ -234,7 +234,11 @@ WALL_JS = r"""() => {
   const frames = [...document.querySelectorAll('iframe')].filter((f) => shown(f) && f.offsetWidth > 60 &&
     /captcha|challenge|turnstile|geetest|verify|hcaptcha|recaptcha\/api2\/anchor/i.test(f.src || ''));
   if (frames.length) return {kind: 'verification', evidence: (frames[0].src || '').slice(0, 80)};
-  const top = (document.title + ' ' + (document.body ? document.body.innerText.slice(0, 600) : '')).replace(/\s+/g, ' ');
+  const body = (document.body ? document.body.innerText : '').replace(/\s+/g, ' ');
+  // A short page that only says to sign in first, whatever its title calls itself: a sign-in, with no check to pass.
+  if (body.length < 1500 && /请先?登录|登录后(重试|继续|查看|访问)|(log|sign) ?in to (continue|view|see|access)|(must|need to) (be )?(log|sign)(ged|ed)? ?in/i.test(body))
+    return {kind: 'sign_in', evidence: 'sign-in notice'};
+  const top = document.title + ' ' + body.slice(0, 600);
   if (/just a moment|verify you are human|are you a robot|人机验证|安全验证|滑动验证|环境异常|ロボットではありません|자동입력 방지|проверка.{0,20}робот/i.test(top))
     return {kind: 'verification', evidence: top.slice(0, 80)};
   for (const form of document.querySelectorAll('form')) {
@@ -1136,7 +1140,7 @@ class Hands:
                 if ident is None:
                     return {"status": "failed", "line": f"[failed] [{action['id']}] is not on the page now; look again"}
                 said = self._said(action, self.page.last.get(ident, ("", ""))[1])
-                await self._show(ident, said)
+                self.tell(said)
                 before = await self._seen(ident)
                 line = await self.page.hover(ident)
                 # A menu opened by a style alone changes nothing the page counts: what came up says it opened.
@@ -1202,16 +1206,6 @@ class Hands:
         if ident in self.page.last and await self.page.alive(ident):
             return ident
         return await self.page.again(ident) or await self.page.relocate(ident)
-
-    async def _show(self, ident: Optional[int], said: str, point: Optional[tuple[float, float]] = None) -> None:
-        """The step in the bar and a ring where it lands, a moment before it happens."""
-        self.tell(said)
-        try:
-            rect = await self.page.box(ident) if ident is not None else {
-                "x": point[0] - 14, "y": point[1] - 14, "w": 28, "h": 28}
-        except Exception:
-            return
-        await self.page.ring(rect)
 
     async def _seen(self, ident: Optional[int]) -> dict:
         """What a control says of itself and the words the page shows, read before an action and after it."""
@@ -1332,7 +1326,7 @@ class Hands:
         async def press(again: bool = False) -> str:
             target = await self._fresh(ident) or ident
             if not again:
-                await self._show(target, said)
+                self.tell(said)
                 seen.update(await self._seen(target), target=target)
             if not how and (target != ident or not await self.page.alive(target)):
                 # The page keeps drawing this control anew: found and pressed in one step, never by a point
@@ -1348,7 +1342,7 @@ class Hands:
                 try:
                     await self.page._point(ident)
                 except RuntimeError as error:
-                    await self._show(ident, said)
+                    self.tell(said)
                     return {"status": "failed", "said": said,
                             "line": f"[failed] click {self.page.describe(ident)}: {clip(str(error), 160)}; look again"}
             result = await self._outside(kind, why, ident, shown, facts, url, element, press, step)
@@ -1360,7 +1354,7 @@ class Hands:
             self._follow_until = time.monotonic() + FOLLOW_S
         away = await self.page.on_node(ident, BLANK_JS) if facts.get("link") and not how else None
         if away:
-            await self._show(ident, said)
+            self.tell(said)
             line = f"{await self.page.goto(away)} (the link opens a new tab; opened here instead)"
         elif how == "right":
             line = await self._watched(press, shown or element, facts)
@@ -1434,7 +1428,7 @@ class Hands:
         said = self._said({"do": "click"}, element if ident is None or not facts.get("text") else facts["text"])
 
         async def press() -> str:
-            await self._show(None, said, (x, y))
+            self.tell(said)
             return await self.page.click_point(x, y)
         if kind and kind != "watch" and ident:
             return {**await self._outside(kind, why, ident, facts.get("text") or facts.get("label") or "", facts, url,
@@ -1469,7 +1463,7 @@ class Hands:
             ends.append((fresh, name or str(element or "")))
         (start, start_name), (end, end_name) = ends
         said = self._said({"do": "drag", "target": end_name}, start_name)
-        await self._show(start, said)
+        self.tell(said)
         before = await self._seen(None)
         line = await self._watched(lambda: self.page.drag(start, end), said, await self.page.facts(start))
         return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
@@ -1497,7 +1491,7 @@ class Hands:
         other = self._other(ident, element, role, name, facts)
         if other:
             return {"status": "failed", "line": other}
-        await self._show(ident, said)
+        self.tell(said)
         if text.strip() and not facts.get("search"):
             # What a request may not carry out of the page without the person's press; what the field held, to
             # put back if the run ends with it never let out.
@@ -1549,12 +1543,12 @@ class Hands:
             kind, why = gate.classify(mode, name, role, facts, url)
             if kind and kind != "watch":
                 async def press() -> str:
-                    await self._show(ident, said)
+                    self.tell(said)
                     return await self.page.press(key)
                 return {**await self._outside(kind, why, ident, f"{key} in {name or role}", facts, url, "", press,
                                               None), "said": said}
         if ident is not None:
-            await self._show(ident, said)
+            self.tell(said)
         else:
             self.tell(said)
         before = await self._seen(None)

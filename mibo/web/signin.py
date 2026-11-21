@@ -103,7 +103,9 @@ CHECK_JS = r"""(hint = {}) => {
   const codesAll = [...document.querySelectorAll('input')].filter(codeOf);
   const codes = codesAll.filter((i) => !inLayer(i));
   let kind = '', evidence = '';
-  if (frames.length || VERIFY.test(title) || (VERIFY.test(body.slice(0, 1500)) && body.length < 3000)) {
+  // A short page that only says to sign in first ("请登录后重试"), whatever its title calls itself.
+  const notice = body.length < 1500 && /请先?登录|登录后(重试|继续|查看|访问)|(log|sign) ?in to (continue|view|see|access)|(must|need to) (be )?(log|sign)(ged|ed)? ?in/i.test(body);
+  if (frames.length || (!notice && (VERIFY.test(title) || (VERIFY.test(body.slice(0, 1500)) && body.length < 3000)))) {
     kind = 'verification'; evidence = frames.length ? frames[0].src.slice(0, 80) : (title.match(VERIFY) || body.match(VERIFY))[0];
   } else if (pws.length) { kind = 'sign_in'; evidence = 'password field'; }
   else if (codes.length) { kind = 'sign_in'; evidence = 'code field'; }
@@ -111,9 +113,7 @@ CHECK_JS = r"""(hint = {}) => {
   // A sign-in flow's own short page with no field to see (a QR code to scan, a phone button).
   else if (body.length < 4000 && SIGNIN.test(title + ' ' + body) && (/^(login|signin|passport|sso|auth|accounts?|id|idp)\./i.test(location.hostname)
     || /\/(log-?in|sign-?in|sso|passport)(\/|$|\.)/i.test(location.pathname))) { kind = 'sign_in'; evidence = 'sign-in page'; }
-  // A short page that only says to sign in first ("请登录后重试").
-  else if (body.length < 1500 && /请先?登录|登录后(重试|继续|查看|访问)|(log|sign) ?in to (continue|view|see|access)|(must|need to) (be )?(log|sign)(ged|ed)? ?in/i.test(body)) {
-    kind = 'sign_in'; evidence = 'sign-in notice'; }
+  else if (notice) { kind = 'sign_in'; evidence = 'sign-in notice'; }
   const form = Boolean(kind === 'sign_in' || kind === 'sign_in_overlay' || pwsAll.length || codesAll.length ||
     (layer && (QR.test(textOf(layer)) || layer.querySelector('canvas,img[src*="qr" i],img[alt*="qr" i],[class*="qrcode" i]'))));
   // The top of the page: a short "登录" offered there, or an account's avatar or menu.

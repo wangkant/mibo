@@ -49,7 +49,7 @@
   // The chat beside the page, CSS px (browse.css); what a site laid out for a desktop wants, which the window
   // grows to give it (browser.py); and the least a page keeps beside the chat before the chat lies over it instead.
   const BESIDE = parseFloat(getComputedStyle(document.body).getPropertyValue("--pa-beside"));
-  const PAGE_WIDE = 1280;
+  const PAGE_WIDE = 1024;
   const PAGE_LEAST = 720;
   // The ends after which the page is the person's until they say to go on (browser.THEIRS).
   const THEIRS = ["handover", "asked", "paused", "cap"];

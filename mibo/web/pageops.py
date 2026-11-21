@@ -22,7 +22,7 @@ drag and drop caught as Playwright's crDragDrop does, waiting until words show o
 words it shows; scrolling goes inside a box and on until some words show; the
 settle wait holds while the page says it is busy; a control drawn again since
 the look is found again by its role, name and the text before it; and a ring
-shows for a moment where the next click or key lands.
+stays round the control a card asks about.
 
 A frame from another site runs in a process of its own, which the page's
 session does not reach: as Playwright and Stagehand do, each is read in its own
@@ -94,8 +94,6 @@ KEY_NAMES = {**{k.lower(): k for k in KEYS}, "space": " ", "esc": "Escape", "del
 MODIFIERS = {"alt": ("Alt", 1), "control": ("Control", 2), "ctrl": ("Control", 2), "meta": ("Meta", 4),
              "cmd": ("Meta", 4), "command": ("Meta", 4), "shift": ("Shift", 8)}
 SIGNS = {"/": 191, ".": 190, ",": 188, "-": 189, "=": 187, ";": 186, "'": 222, "[": 219, "]": 221}
-# How long the ring shows before the action.
-RING_S = 0.45
 # The ids in a frame from another site: the frame's number in the page times this, plus the id in its own process.
 FRAME_IDS = 10_000_000
 # Frames the person fills in themselves, beside browsed.secret's sign-in and payment addresses: card fields of the
@@ -364,20 +362,9 @@ BOX_JS = r"""function() {
   return {x, y, w: r.width, h: r.height};
 }"""
 
-# The ring, drawn in a world of the app's own (the page's scripts cannot reach its script) and gone by itself.
-RING_JS = r"""(r) => {
-  for (const old of document.querySelectorAll('[data-pa-ring]')) old.remove();
-  const d = document.createElement('div');
-  d.dataset.paRing = '';
-  d.style.cssText = `position:fixed;left:${r.x - 5}px;top:${r.y - 5}px;width:${r.w + 10}px;height:${r.h + 10}px;` +
-    'box-sizing:border-box;border:3px solid #1f1f22;border-radius:10px;box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(31,31,34,.25);' +
-    'pointer-events:none;z-index:2147483647;transition:opacity .25s;';
-  document.documentElement.appendChild(d);
-  setTimeout(() => { d.style.opacity = '0'; }, 1300);
-  setTimeout(() => d.remove(), 1600);
-}"""
-# The ring held round a control while a card waits on it: it follows the control as the page scrolls or lays
-# itself out again, until the next ring or UNRING_JS takes it away.
+# The ring held round a control while a card waits on it, drawn in a world of the app's own (the page's scripts
+# cannot reach its script): it follows the control as the page scrolls or lays itself out again, until the next
+# ring or UNRING_JS takes it away.
 HOLD_JS = r"""function() {
   const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement, doc = e.ownerDocument;
   for (const old of doc.querySelectorAll('[data-pa-ring]')) old.remove();
@@ -1379,18 +1366,6 @@ class Page:
             world = await self.cdp("Page.createIsolatedWorld", frameId=frame, worldName="mibo-ring")
             self._world = (probe.get("doc"), world["executionContextId"])
         return self._world[1]
-
-    async def ring(self, rect: dict) -> None:
-        """A ring for a moment around where the next click or key lands, drawn by the app in a world of its own
-        (the page's scripts cannot reach it), so a person watching sees it coming and can stop it in time."""
-        try:
-            await self.cdp("Runtime.evaluate", expression=f"({RING_JS})({json.dumps(rect)})",
-                           contextId=await self._ring_world())
-        except Exception:
-            # The ring is for the person watching; a page that will not take it is still worked.
-            self._world = None
-            return
-        await asyncio.sleep(RING_S)
 
     async def hold_ring(self, ident: int | None) -> None:
         """A ring that stays round `ident` while a card waits on it, in the app's own world; None takes it away.
