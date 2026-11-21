@@ -7,7 +7,7 @@ rewrote themselves.
 Nothing is overwritten: a new value in a slot leaves the old fact as past with
 its `until` day, and day words are written as dates when a fact is kept
 ("今天下午拔了智齿" said on 27 Nov is "11-27下午拔了智齿"). The background fold
-(consolidate.py) is the one writer of facts and plans; a reply's `mem` only
+(consolidate.py) is the one writer of facts and plans; a sent reply only
 marks the plans it asked about (`apply_turn`). No model call and no
 Agent import."""
 from __future__ import annotations
@@ -29,8 +29,7 @@ FILE = "person.json"
 FORMAT = 1
 #: What a fact can be about.
 KINDS = ("who", "like", "dislike", "form", "life", "people", "health", "manner", "other")
-#: A reply's `mem` names the plans it asked about, at most OPS_MAX; every fact about them is the fold's,
-#: which files it better than a reply model writing in passing. Also the most facts one 记住 keeps.
+#: The most facts one 记住 keeps; every other fact about them is the fold's.
 OPS_MAX = 3
 TEXT_MAX = 60
 SLOT_MAX = 40
@@ -271,13 +270,6 @@ def _lapses(f: dict, tz) -> float:
         d = date.fromisoformat(f["day"]) + timedelta(days=DAY_FACT_DAYS + 1)
         return datetime(d.year, d.month, d.day, tzinfo=tz).timestamp()
     return _num(f.get("at")) + LIFE_DAYS * 86400 if f.get("kind") == "life" else 0.0
-
-
-def read_ops(value) -> list[dict]:
-    """The reply's `mem` as operations: its "asked" objects, at most OPS_MAX; anything else (a fact, a
-    plain note, a card) is not the person store's."""
-    items = value if isinstance(value, list) else []
-    return [item for item in items if isinstance(item, dict) and str(item.get("op") or "").lower() == "asked"][:OPS_MAX]
 
 
 class Person:
@@ -620,16 +612,10 @@ def chatlog_refs() -> int:
 
 # ---- the turn's operations -----------------------------------------------------
 
-def apply_turn(store: Person, ops: list[dict], reply: str, at: float, tz: Optional[tzinfo]) -> list[dict]:
-    """The open plans a sent reply asked about: those its asked operations name, and those due by today
-    that the reply shares two words with, op or not. What the person says of themselves is the fold's.
-    Never saves."""
+def apply_turn(store: Person, reply: str, at: float, tz: Optional[tzinfo]) -> list[dict]:
+    """The open plans a sent reply asked about: those due by today that the reply shares two words with.
+    What the person says of themselves is the fold's. Never saves."""
     asked = []
-    for op in ops:
-        row = store.get(str(op.get("plan") or ""))
-        if row is not None and row.get("status") == "open":
-            store.mark_asked(row, at)
-            asked.append(row)
     today = _day(at, tz).isoformat()
     said = _tokens(reply)
     for plan in store.plans("open"):
@@ -702,9 +688,13 @@ _SECRET_WORD = (r"密码|密碼|口令|验证码|驗證碼|校验码|校驗碼|�
                 r"|mot de passe|code de (?:vérification|sécurité|confirmation)|passwort|kennwort"
                 r"|bestätigungscode|verifizierungscode|sicherheitscode|senha|código de (?:verificação|confirmação)"
                 r"|пароль|код подтверждения|код из смс")
+# A key's word, and a value shaped like a key after it: 16 or more letters, digits, - and _, a letter and a digit
+# among them. Talk about keys ("my API key is not working", "API key 还剩 5000") has none.
+_KEY_WORD = r"\bapi[ _-]?keys?\b|密钥|秘钥|私钥"
+_KEY = r"(?<![A-Za-z0-9_-])(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{16,}"
 # The word with its value after it ("密码是…", "password: …", "验证码 482913"); the word alone ("我总忘记密码") is none.
 _SECRET = re.compile(rf"(?:{_SECRET_WORD})\s*(?:是|为|為|は|는|은|:|：|=|\bis\b|\bist\b|\bes\b|\best\b|\bé\b|—)\s*\S"
-                     rf"|(?:{_SECRET_WORD})\D{{0,6}}\d{{4,}}", re.IGNORECASE)
+                     rf"|(?:{_SECRET_WORD})\D{{0,6}}\d{{4,}}|(?:{_KEY_WORD})\D{{0,12}}?{_KEY}", re.IGNORECASE)
 _ID18 = re.compile(r"(?<![0-9A-Za-z])\d{17}[0-9Xx](?![0-9A-Za-z])")
 _CARD = re.compile(r"(?<![\d-])\d(?:[ -]?\d){12,18}(?![\d-])")
 _ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
@@ -732,8 +722,8 @@ def secret(text: str) -> bool:
 
 # The value after a password's or a code's word, as `_SECRET` finds it; a question ("密码是什么") has none.
 _SECRET_VALUE = re.compile(rf"((?:{_SECRET_WORD})\s*(?:是|为|為|は|는|은|:|：|=|\bis\b|\bist\b|\bes\b|\best\b|\bé\b|—)\s*)"
-                           rf"(?!什么|甚么|多少|啥|哪)([^\s，,。;；!！?？、]+)|((?:{_SECRET_WORD})\D{{0,6}}?)(\d{{4,}})",
-                           re.IGNORECASE)
+                           rf"(?!什么|甚么|多少|啥|哪)([^\s，,。;；!！?？、]+)|((?:{_SECRET_WORD})\D{{0,6}}?)(\d{{4,}})"
+                           rf"|((?:{_KEY_WORD})\D{{0,12}}?)({_KEY})", re.IGNORECASE)
 # A card number as cards print it: 13 to 19 digits in a row, in groups of four, or Amex's 4-6-5. No card network
 # issues numbers starting 19 or 20, which is how dates and times begin ("2026-11-18 141500").
 _CARD_SHOWN = re.compile(r"(?<![\d-])(?!19|20)(?:\d{13,19}|\d{4}(?:[ -]\d{4}){2,3}(?:[ -]\d{1,3})?"
@@ -755,8 +745,8 @@ def _masked(text: str, found: dict[str, str]) -> str:
         return digits(m) if right else m.group()
 
     def value(m: re.Match) -> str:
-        raw = m.group(2) or m.group(4)
-        return m.group() if raw == "****" else (m.group(1) or m.group(3)) + hidden(raw, "****")
+        raw = m.group(2) or m.group(4) or m.group(6)
+        return m.group() if raw == "****" else (m.group(1) or m.group(3) or m.group(5)) + hidden(raw, "****")
 
     text = _ID18.sub(checked, text)
     text = _CARD_SHOWN.sub(lambda m: digits(m) if _luhn(re.sub(r"\D", "", m.group())) else m.group(), text)
@@ -1088,8 +1078,7 @@ def recall_block(store: Person, focus: str, now: float, tz, lang: str, budget: i
         "were never told it: say so plainly, and never make up a name, a place, a day or something that "
         "happened to them. Use at most one of these in a reply unless "
         "they ask, never list them, and never announce that you remember.\n"
-        "A plan whose day is past and not asked about may be asked about once; when your reply asks, "
-        "put {\"op\": \"asked\", \"plan\": \"<its id in brackets>\"} in mem.\n"
+        "A plan whose day is past and not asked about may be asked about once.\n"
         + ("\n" + body if body else "Nothing yet.") +
         "\n</about_them>"
     ), placed

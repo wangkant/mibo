@@ -938,6 +938,8 @@
       ]
     ],
     "linksOnlyWindow": "El navegador propio de la aplicación solo está disponible en la ventana de la aplicación para Windows; en los demás casos los enlaces se abren en el navegador del sistema.",
+    "sideFoldTitle": "Plegar la barra lateral al abrir una página",
+    "sideFoldText": "Mientras se muestra una página web en la ventana, la barra lateral completa se pliega a su tira de iconos y vuelve al cerrar la página.",
     "bgTitle": "Seguir ejecutándose al cerrar la ventana",
     "bgText": "La ventana pasa al área de notificación, abajo a la derecha, y el personaje sigue respondiendo. Abra o cierre Mibo desde su icono allí.",
     "bgOnlyWindow": "Disponible en la ventana de la aplicación para Windows.",
@@ -2051,26 +2053,6 @@
     "failed": "No se pudo completar. Vuelva a intentarlo más tarde.",
     "unavailable": "No se pudieron mostrar los sitios. Vuelva a intentarlo más tarde.",
     "others_one": "Otro {count} sitio guarda cookies aquí; al cerrar todas las sesiones también se eliminan."
-  },
-  "skilloffer": {
-    "waiting": "Esperando su respuesta",
-    "ask": "¿Desea instalar la habilidad «{title}»?",
-    "meta": "{about} · {publisher}",
-    "scripts": "Contiene scripts",
-    "yes": "Instalar",
-    "no": "No instalar",
-    "installing": "Instalando",
-    "done": "Se instaló «{title}»; continúa con su solicitud.",
-    "declined": "No se instaló; continúa con su solicitud.",
-    "failed": "No se instaló: {why} Continúa con su solicitud.",
-    "gone": "Esta tarjeta ya no está vigente. No se hizo nada.",
-    "errors": {
-      "market_fetch_failed": "No se pudo descargar desde su origen.",
-      "market_hash_mismatch": "Lo recibido no coincide con la versión registrada en el catálogo.",
-      "market_high_risk": "La comprobación de seguridad encontró contenido de alto riesgo.",
-      "skill_exists": "Ya existe una habilidad con ese nombre.",
-      "other": "No se pudo instalar."
-    }
   },
   "toolcard": {
     "waiting": "Esperando su respuesta",

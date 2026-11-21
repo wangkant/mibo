@@ -949,6 +949,8 @@
       ]
     ],
     "linksOnlyWindow": "内置浏览器仅在 Windows 的应用窗口中可用，其他情况下使用系统浏览器。",
+    "sideFoldTitle": "打开网页时收起侧边栏",
+    "sideFoldText": "网页显示在窗口中时，完整的侧边栏会自动收为图标栏；网页关闭后恢复原状。",
     "bgTitle": "关闭窗口后继续运行",
     "bgText": "窗口收至屏幕右下角的通知区域，角色继续回复。可从该图标重新打开或退出。",
     "bgOnlyWindow": "仅在 Windows 的应用窗口中可用。",
@@ -2053,26 +2055,6 @@
     "noWindow": "登录和退出需要在 Mibo 的窗口中操作。",
     "failed": "操作失败，请稍后重试。",
     "unavailable": "无法读取网站列表，请稍后重试。"
-  },
-  "skilloffer": {
-    "waiting": "等待确认",
-    "ask": "安装技能“{title}”？",
-    "meta": "{about} · {publisher}",
-    "scripts": "含脚本",
-    "yes": "安装",
-    "no": "不安装",
-    "installing": "正在安装",
-    "done": "已安装技能“{title}”，继续处理当前请求。",
-    "declined": "未安装，继续处理当前请求。",
-    "failed": "未能安装：{why}继续处理当前请求。",
-    "gone": "此卡片已失效，未进行任何操作。",
-    "errors": {
-      "market_fetch_failed": "无法从来源下载。",
-      "market_hash_mismatch": "下载的内容与目录记录的版本不一致。",
-      "market_high_risk": "安全检查发现高风险内容。",
-      "skill_exists": "已有同名的技能。",
-      "other": "安装未成功。"
-    }
   },
   "toolcard": {
     "waiting": "等待确认",
