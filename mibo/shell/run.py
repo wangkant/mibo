@@ -121,7 +121,11 @@ def environment() -> dict:
     path = [os.path.join(root, "System32"), root, os.path.join(root, r"System32\Wbem"),
             os.path.join(root, r"System32\WindowsPowerShell\v1.0"), os.path.join(root, r"System32\OpenSSH")]
     apps = os.path.join(env.get("LOCALAPPDATA", ""), r"Microsoft\WindowsApps")
-    env["PATH"] = ";".join(path + ([apps] if env.get("LOCALAPPDATA") else []))
+    # The person's own program folders (git, ffmpeg, 7-Zip), as their terminal finds them; not this app's Python.
+    own = os.path.normcase(os.path.realpath(sys.prefix))
+    theirs = [p for p in os.environ.get("PATH", "").split(os.pathsep) if os.path.isabs(p) and os.path.isdir(p)
+              and not os.path.normcase(os.path.realpath(p)).startswith(own)]
+    env["PATH"] = ";".join(dict.fromkeys(path + ([apps] if env.get("LOCALAPPDATA") else []) + theirs))
     env["NO_COLOR"] = "1"
     return env
 

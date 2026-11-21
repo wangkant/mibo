@@ -135,6 +135,8 @@ _STATUS = {
     "bad_folder": "Not done: that folder cannot be granted (a system folder, a whole drive or the user folder, or "
                   "one that does not exist). Ask them which folder they mean.",
     "folder_declined": "Not done: they said no to letting you use that folder. Do not ask again this turn.",
+    "read_mode": "Not done: they set commands and files to read only in Settings, so nothing is made, moved, changed "
+                 "or run. Tell them in one sentence; they can change the mode there.",
     "read_only": "Not done: they allowed that folder for reading only, so nothing in it may be made, moved or changed. "
                  "Tell them; they can allow sorting in it when you ask again, or in Settings.",
     "other_way": "Not run: the app could not tell what this command does, and they asked you to do it another way. "
@@ -274,6 +276,8 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
         shown = ("；" if lang == "zh" else "; ").join((outcome.get("asked") or {}).get(lang) or []) or reason
     elif status == "other_way":
         shown = ("；" if lang == "zh" else "; ").join((outcome.get("asked") or {}).get(lang) or [])
+    elif status == "read_mode":
+        shown = outcome["shown"][lang]
     elif status == "use_granted":
         inside = "; ".join(outcome.get("folders") or [])
         reason = (f"Not done: {outcome.get('folder')} is not one of their folders, but it holds the ones they granted: "

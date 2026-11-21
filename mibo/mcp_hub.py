@@ -21,9 +21,12 @@ opening anything. Signing out ends the grant at the server first.
 
 The reply model reaches the tools through the character service, which asks
 here (/api/mcp/offer, /find, /call: panels/tools.py). Every call is the
-person's to allow: a tool asks on the card each time unless the person set it
-to always (for that exact tool description) or never, or chose that tools the
-server marks read-only may run without a card. A card is raised only while the
+person's to allow: a tool asks on the card each time unless the person set it,
+or its group (the tools the server marks read-only, or those that write and
+delete), to always (for a tool, that exact description) or never, or allowed it
+for this conversation. Whether read-only tools ask is chosen once, on the
+server's first card, as the provider's own mark; a tool marked destructive asks
+every time. A card is raised only while the
 person's own chat turn is under way, waits for them there (cardwait.py), and
 only a press on the app's own page answers it. What a server asks of the person during
 a call (elicitation) is such a card too: a form they fill in, sent to the server
@@ -141,6 +144,10 @@ class Hub:
         #: For a card that is a server's form: the schema it was drawn from, and what the person filled in.
         self.card_schema: dict = {}
         self.filled: dict = {}
+        #: The tick on a server's first card, 只读工具无需每次确认, as the person left it when they pressed.
+        self.read_default = True
+        #: What 本次对话内允许 covers, per conversation: (server, tool, its fingerprint); gone when the app ends.
+        self.session: dict[str, set[tuple]] = {}
         self.busy = asyncio.Lock()
         self._stamp = None
         self._running = False
@@ -518,18 +525,22 @@ class Hub:
             if mode == mt.NEVER:
                 self._log(server, tool_name, arguments, "never")
                 return {"status": "never"}
-            if mode == mt.ASK and self.grants.readonly(server) and tool["hints"].get("readOnlyHint") is True \
-                    and tool["hints"].get("destructiveHint") is not True:
-                how = "readonly"
+            if mode == mt.ASK and (server, tool_name, tool["fp"]) in self.session.get(conversation, set()):
+                how = "this_chat"
             elif mode == mt.ASK:
-                answer = await self.ask(self._tool_card(runner, tool, arguments, changed), conversation)
+                card = self._tool_card(runner, tool, arguments, changed)
+                answer = await self.ask(card, conversation)
                 if answer in (None, "no"):
                     status = "declined" if answer == "no" else "unanswered"
                     self._log(server, tool_name, arguments, status)
                     return {"status": status}
                 how = answer
+                if card["read_default"]:
+                    self.grants.set_group(server, "read", mt.ALWAYS if self.read_default else mt.ASK, runner.tools)
                 if answer == "always":
                     self.grants.set_mode(server, tool, mt.ALWAYS)
+                elif answer == "chat":
+                    self.session.setdefault(conversation, set()).add((server, tool_name, tool["fp"]))
                 # The tool must still be the one the card showed.
                 now = next((t for t in runner.tools if t["name"] == tool_name), None)
                 if now is None or now["fp"] != tool["fp"] or runner.state != "connected":
@@ -563,9 +574,10 @@ class Hub:
         what = dict(zip(("zh", "en"), (text.format(**names) for text in CARD_WHAT[card["type"]])))
         return await self.cards.ask(card, conversation, what)
 
-    def press(self, ident: str, answer: str, values=None) -> str:
+    def press(self, ident: str, answer: str, values=None, read_default=None) -> str:
         """The person's press on the card: "ok", "gone" for a card no longer up, or where a form's values do not
-        fit what the server asked for."""
+        fit what the server asked for. A wider answer than the card offers counts as this once; `read_default` is
+        the tick on a server's first card."""
         card = self.cards.card
         if not self.cards.up(ident):
             return "gone"
@@ -573,18 +585,25 @@ class Hub:
             self.filled, problem = mt.ask_content(card["fields"], self.card_schema, values)
             if problem:
                 return problem
+        if answer in ("chat", "always") and answer not in card.get("choices", ()):
+            answer = "once"
+        self.read_default = read_default is not False
         self.cards.press(ident, answer)
         return "ok"
 
     def _start_card(self, runner: Runner) -> dict:
         return {"type": "mcp_start", "server": runner.name, "command": mt.command_line(runner.spec),
                 "cwd": runner.spec.get("cwd") or str(mt.server_folder(self.home, runner.name)),
-                "env": sorted(runner.spec.get("env") or {})}
+                "env": sorted(runner.spec.get("env") or {}), "choices": ["once", "always"],
+                "read_default": not self.grants.chosen(runner.name)}
 
     async def _ask_start(self, runner: Runner, conversation: str) -> bool:
-        answer = await self.ask(self._start_card(runner), conversation)
+        card = self._start_card(runner)
+        answer = await self.ask(card, conversation)
         if answer is None:
             return False
+        if card["read_default"] and answer != "no":
+            self.grants.set_group(runner.name, "read", mt.ALWAYS if self.read_default else mt.ASK, runner.tools)
         self.answer_start(runner.name, answer)
         return answer != "no"
 
@@ -602,10 +621,14 @@ class Hub:
 
     def _tool_card(self, runner: Runner, tool: dict, arguments: dict, changed: bool) -> dict:
         raw = json.dumps(arguments, ensure_ascii=False, indent=2)
+        destructive = tool["hints"].get("destructiveHint") is True
         return {"type": "mcp_tool", "server": runner.name, "tool": tool["name"], "title": tool["title"],
                 "args": mt.plain_arguments(arguments), "raw": raw if len(raw) <= 4000 else raw[:4000] + "\n…",
-                "readonly": tool["hints"].get("readOnlyHint") is True,
-                "destructive": tool["hints"].get("destructiveHint") is True, "changed": changed}
+                "readonly": tool["hints"].get("readOnlyHint") is True, "destructive": destructive, "changed": changed,
+                # A tool marked destructive asks each time. The tick for read-only tools rides on the server's first
+                # card when it was never chosen, as a remote server has no start card.
+                "choices": ["once"] if destructive else ["once", "chat", "always"],
+                "read_default": not self.grants.chosen(runner.name)}
 
     async def _elicit(self, runner: Runner, request: dict) -> dict:
         """A server asks the person for something during a call of their turn: a form shown on the card for them to
@@ -645,7 +668,6 @@ class Hub:
     def view(self) -> dict:
         from .shell.run import elevated
         servers = []
-        grants = self.grants.read()
         for name, runner in list(self.runners.items()):
             spec = runner.spec
             missing = set(mt.expand(spec, self._held(spec))[1])
@@ -659,7 +681,7 @@ class Hub:
                 tools.append({"name": tool["name"], "title": tool["title"],
                               "description": tool["description"][:200], "mode": mode, "changed": changed,
                               "readonly": tool["hints"].get("readOnlyHint") is True,
-                              "destructive": tool["hints"].get("destructiveHint") is True})
+                              "destructive": tool["hints"].get("destructiveHint") is True, "group": mt.group_of(tool)})
             # The runtime Mibo can fetch for a program that is missing: "node", "uv" or "".
             need = runtimes.needed(spec.get("command", "")) if runner.error == "not_found" else ""
             if need and not runtimes.offer(need):
@@ -672,7 +694,7 @@ class Hub:
                 "state": runner.state, "error": runner.error, "detail": runner.detail,
                 "retry_in": max(0, round(runner.retry_at - time.time())) if runner.retry_at else 0,
                 "tools": tools, "cut": runner.cut,
-                "readonly_light": grants["readonly"].get(name) is True,
+                "groups": {group: self.grants.group(name, group) for group in ("read", "write")},
                 "always_start": self.grants.started(name, spec) if runner.local else False,
                 "folder": str(mt.server_folder(self.home, name)),
                 "signed_in": not runner.local and KeptTokens(self.home, name).signed_in(),

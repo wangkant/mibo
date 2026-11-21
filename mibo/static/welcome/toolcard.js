@@ -157,13 +157,23 @@
       fold.append(el("summary", "", t.raw), el("pre", "", card.raw));
       node.append(fold);
     }
+    // A server's first card: whether its read-only tools ask, chosen once, as the provider marks them.
+    let readDefault = null;
+    if (card.read_default) {
+      const row = el("label", "op-card-field op-card-field-check");
+      readDefault = el("input", "pa-check");
+      readDefault.type = "checkbox";
+      readDefault.checked = true;
+      row.append(readDefault, el("span", "", t.readDefault));
+      node.append(row, el("p", "op-card-meta", t.readDefaultNote));
+    }
     const answer = async (value) => {
       const filled = values && value === "once" ? values() : undefined;
       if (filled === null) return;
-      for (const b of node.querySelectorAll("button")) b.disabled = true;
+      for (const b of node.querySelectorAll("button, input")) b.disabled = true;
       node.classList.add("answered");
       const kind = start ? "start" : link ? "link" : asked ? "ask" : "tool";
-      const told = el("p", "op-card-told", t[kind + { once: "Once", always: "Always", no: "No" }[value]]);
+      const told = el("p", "op-card-told", t[kind + { once: "Once", chat: "Chat", always: "Always", no: "No" }[value]]);
       node.querySelector(".op-card-told")?.remove();
       node.append(told);
       try {
@@ -173,14 +183,15 @@
           headers: { "Content-Type": "application/json",
             "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
             "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
-          body: JSON.stringify({ id: card.id, answer: value, values: filled }),
+          body: JSON.stringify({ id: card.id, answer: value, values: filled,
+            ...(readDefault ? { read_default: readDefault.checked } : {}) }),
         });
         const said = await response.json().catch(() => ({}));
         if (said.problem) {
           // The server's form wants something else: the card stays up to be corrected.
           told.textContent = t.fix;
           node.classList.remove("answered");
-          for (const b of node.querySelectorAll("button")) b.disabled = false;
+          for (const b of node.querySelectorAll("button, input")) b.disabled = false;
         } else if (!said.ok) told.textContent = t.gone;
       } catch {
         told.textContent = t.gone;
@@ -197,8 +208,10 @@
       add("pa-btn-primary", link ? t.open : t.submit, "once");
       add("pa-btn-ghost", t.decline, "no");
     } else {
+      // What the app offers on this card: a tool marked destructive asks each time.
       add("pa-btn-primary", t.once, "once");
-      add("pa-btn-secondary", start ? t.always : t.alwaysTool, "always");
+      if (card.choices.includes("chat")) add("pa-btn-secondary", t.chat, "chat");
+      if (card.choices.includes("always")) add("pa-btn-secondary", start ? t.always : t.alwaysTool, "always");
       add("pa-btn-ghost", t.no, "no");
     }
     node.append(buttons);

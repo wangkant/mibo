@@ -1694,12 +1694,14 @@ window.paChat = (() => {
         fold.append(el("summary", "", say("shellCommand")), el("pre", "", card.command));
         node.append(fold);
       }
-      // `how`: {read: true} grants a folder read only, {other: true} asks the character for another way.
+      // `how`: {read: true} grants a folder read only, {other: true} asks the character for another way,
+      // {scope: "chat" | "always"} allows it for this conversation or always for this program in this folder.
       const answer = async (yes, how = {}) => {
         for (const b of node.querySelectorAll("button")) b.disabled = true;
         node.classList.add("answered");
         const told = el("p", "op-card-told", own ? (yes ? said.on : said.off)
           : say(how.read ? "folderReadAllowed" : how.other ? "shellOtherAsked"
+            : how.scope === "chat" ? "shellChatAllowed" : how.scope === "always" ? "shellAlwaysAllowed"
             : folder ? (yes ? "folderAllowed" : "folderDenied") : (yes ? "shellAllowed" : "shellDenied")));
         node.append(told);
         try {
@@ -1727,6 +1729,11 @@ window.paChat = (() => {
           button("pa-btn pa-btn-secondary pa-btn-sm", say("shellYes"), () => answer(true)));
       } else {
         buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", own ? said.yes : say(folder ? "folderYes" : "shellYes"), () => answer(true)));
+        // What the app lets a wider yes cover (shell/panel.py _scope): this conversation, or this program here.
+        if (card.choices?.includes("chat"))
+          buttons.append(button("pa-btn pa-btn-secondary pa-btn-sm", say("shellChat"), () => answer(true, { scope: "chat" })));
+        if (card.choices?.includes("always"))
+          buttons.append(button("pa-btn pa-btn-secondary pa-btn-sm", say("shellAlways"), () => answer(true, { scope: "always" })));
       }
       buttons.append(button("pa-btn pa-btn-ghost pa-btn-sm", own ? said.no : say(folder ? "folderNo" : "shellNo"), () => answer(false)));
       node.append(buttons);

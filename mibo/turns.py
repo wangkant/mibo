@@ -35,7 +35,7 @@ class Turn:
     def __init__(self, choices=(), run: Optional[dict] = None) -> None:
         self.said: list[dict] = []
         self.choices = frozenset(c for c in choices if c in TURN_CHOICES)
-        # A scheduled task's run ({"id", "kind", "acts"}, schedule_tool.py); None for a turn of the person's.
+        # A scheduled task's run ({"id", "kind", "acts", "words"}, schedule_tool.py); None for a turn of the person's.
         self.run = run
         # The reply's reasoning where the model returned it (abilities.note_reasoning).
         self.thinking: Optional[dict] = None

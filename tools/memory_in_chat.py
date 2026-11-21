@@ -9,7 +9,7 @@ two plain lines there and waits up to 7 minutes for the background fold, then co
 It asks for a 无痕对话 (POST /api/chats {private: true}), talks there with a word found nowhere else, says a 记住
 there, and then reads every file of the home for that word: the chat record, recent.json, person.json and
 profile.json among them. With the stand-in's request log it also counts the private chat's prompts that carried
-<about_them> or <past_chats>. Pictures of the chat at 400, 900 and 1440 pixels go to the out folder, with one JSON
+the block <about_them> or <past_chats>. Pictures of the chat at 400, 900 and 1440 pixels go to the out folder, with one JSON
 object of the numbers, which it also prints.
 """
 import json
@@ -89,7 +89,8 @@ if requests_log and requests_log.is_file():
     rows = [json.loads(line) for line in requests_log.read_text(encoding="utf-8").splitlines() if line.strip()]
     mine = [r for r in rows if not r["fold"] and WORD in r["text"]]
     result["private_prompts"] = len(mine)
-    result["private_prompts_with_memory"] = sum(1 for r in mine if r["about_them"] or r["past_chats"])
+    result["private_prompts_with_memory"] = sum(1 for r in mine if "<about_them>\nWhat you know" in r["text"]
+                                                 or "<past_chats>" in r["text"])
 
 try:
     from playwright.sync_api import sync_playwright
@@ -109,9 +110,9 @@ if sync_playwright:
                 page.screenshot(path=str(out / f"{name}-{width}.png"))
                 if width == 900:
                     result[f"dom_{name}"] = page.evaluate(
-                        "({fold: document.querySelectorAll('#chat-view .act-mem').length,"
-                        " saved: document.querySelectorAll('#chat-view .act-saved').length,"
-                        " mark: document.querySelectorAll('#chat-view .chat-private').length})")
+                        "(() => { const shown = (s) => [...document.querySelectorAll(`#chat-view ${s}`)]"
+                        ".filter((n) => n.offsetParent !== null).length;"
+                        " return {fold: shown('.act-mem'), saved: shown('.act-saved'), mark: shown('.chat-private')}; })()")
             page.close()
         browser.close()
 (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")

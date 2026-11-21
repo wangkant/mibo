@@ -6,7 +6,7 @@ hub (mcp_hub.py) on a small stand-in server whose tools carry the provider's rea
 
 Each errand is run under each way of answering the card that the tree offers: `once` (本次允许, every card), `chat`
 (本次对话内允许 where the card offers it, else once), `always` (始终允许 where offered, else once), and, for commands,
-`auto` (the commands mode 自动编辑, cards answered once). A push and an install are answered no. One line per run with
+`auto` (the commands mode 自动编辑, cards answered once) and `auto+always` (that mode, 始终允许 where offered). A push and an install are answered no. One line per run with
 the cards per conversation and what each step came to; <out>/askcount.json keeps them. --tree measures another copy
 of the code (a snapshot from before a change).
 """
@@ -133,7 +133,7 @@ async def shell_run(out: Path, policy: str) -> dict:
     shell = panel.Shell(app, workspace)
     shell.grants.set_on(True)
     shell.grants.add(str(proj))
-    if policy == "auto":
+    if policy.startswith("auto"):
         from mibo.acting import Modes
         Modes(shell.desktop).set("commands", "auto")
 
@@ -146,7 +146,7 @@ async def shell_run(out: Path, policy: str) -> dict:
     result = {"conversations": []}
     for n, conversation in enumerate(("c1", "c2")):
         log, steps, state = [], [], {"refuse": False}
-        task = asyncio.ensure_future(presser(shell.cards, press, log, "once" if policy == "auto" else policy, state))
+        task = asyncio.ensure_future(presser(shell.cards, press, log, policy.partition("+")[2] or ("once" if policy == "auto" else policy), state))
         try:
             async with Turn(workspace, shell.desktop, conversation):
                 for i, step in enumerate(SHELL_STEPS):
@@ -160,7 +160,8 @@ async def shell_run(out: Path, policy: str) -> dict:
                         done = await shell.file(step[0], dict(step[1]), conversation, str(proj), turn)
                         what = f"{step[0]}_file"
                     steps.append({"step": what, "status": done.get("status"), "code": done.get("code"),
-                                  "cards": len(log) - before, "out": str(done.get("out") or "")[:80]})
+                                  "cards": len(log) - before, "out": str(done.get("out") or "")[:80],
+                                  "err": str(done.get("err") or "")[:80]})
         finally:
             task.cancel()
         result["conversations"].append({"cards": len(log), "steps": steps, "pressed": log})
@@ -183,6 +184,8 @@ async def mcp_run(out: Path, policy: str) -> dict:
     hub = mcp_hub.Hub(workspace)
     hub.reconcile()
     desktop = mcp_tools.desktop_dir(home)
+    while hub.runners["notes"].state not in ("waiting", "connected", "failed"):
+        await asyncio.sleep(0.05)
 
     def press(card: dict, answer: str) -> None:
         if card["type"] == "mcp_start" and answer == "chat":
@@ -223,19 +226,21 @@ def main() -> int:
     print("tree:", Path(mibo.__file__).parent)
     runs = {}
     only = args.only.split(",")
-    for policy in ("once", "chat", "always", "auto"):
+    for policy in ("once", "chat", "always", "auto", "auto+always"):
         if "shell" in only:
             got = asyncio.run(shell_run(out, policy))
             runs[f"shell/{policy}"] = got
             per = [c["cards"] for c in got["conversations"]]
+            # A command PowerShell could not find prints its error with exit code 0: shown as "!".
             ran = [f"{s['step'].split(' ')[0] if s['step'].startswith('git') else s['step']}:{s['status']}"
-                   + (f"({s['code']})" if s.get("code") not in (None, 0) else "") for s in got["conversations"][0]["steps"]]
-            print(f"shell {policy:6} cards c1={per[0]} c2={per[1]} total={sum(per)} | {' '.join(ran)}")
-        if "mcp" in only and policy != "auto":
+                   + (f"({s['code']})" if s.get("code") not in (None, 0) else "") + ("!" if s.get("err") else "")
+                   for s in got["conversations"][0]["steps"]]
+            print(f"shell {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} | {' '.join(ran)}")
+        if "mcp" in only and not policy.startswith("auto"):
             got = asyncio.run(mcp_run(out, policy))
             runs[f"mcp/{policy}"] = got
             per = [c["cards"] for c in got["conversations"]]
-            print(f"mcp   {policy:6} cards c1={per[0]} c2={per[1]} total={sum(per)} | "
+            print(f"mcp   {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} | "
                   + " ".join(f"{s['step']}:{s['status']}/{s['how']}" for s in got["conversations"][1]["steps"]))
     (out / "askcount.json").write_text(json.dumps(runs, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0

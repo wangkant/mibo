@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import traceback
+from datetime import datetime
 
 from fastapi import Request
 
@@ -275,6 +276,10 @@ class Board:
         if task is not None:
             store.tasks.remove(task)
         if was is not None:
+            # Its next time from now: a time that went by while it was deleted or changed is not run late.
+            now = life.clock()
+            was["next"] = sd.next_after(was["rule"], now, self.zone(now)[1])
+            was["active"] = was["active"] and was["next"] is not None
             store.tasks.append(was)
         self._save()
 
@@ -488,7 +493,7 @@ class Board:
         """The run's message to the character: what they set up, when it was due, and what a run may do."""
         head = f"[Scheduled task \"{task['title']}\" they set up earlier, due {sd.when_text(due, tz, 'en')}"
         if late:
-            head += "; the app was closed then, so this comes late" + (
+            head += "; it could not run then (the app closed, the computer asleep or another task running), so this comes late" + (
                 f" and {missed} earlier times were missed" if missed else "")
         rules = ("Nobody is watching this run: look things up and read only. Whatever would send, post, buy, delete, "
                  "write or run something goes to propose_action, and is never said to be done.")
@@ -504,8 +509,11 @@ class Board:
         return f"{head}]\n{body}\n{rules}"
 
     def _mark(self, task: dict, due: float, late: bool, missed: int, **extra) -> dict:
-        return {"id": task["id"], "title": task["title"], "kind": task["kind"], "due": int(due),
-                **({"late": True} if late else {}), **({"missed": missed} if missed else {}), **extra}
+        # A late one says when it was due in their zone, which may not be the computer's: its UTC offset then, in minutes.
+        offset = datetime.fromtimestamp(due, self.zone(due)[1]).utcoffset().total_seconds()
+        late = {"late": True, "offset": round(offset / 60)} if late else {}
+        return {"id": task["id"], "title": task["title"], "kind": task["kind"], "due": int(due), **late,
+                **({"missed": missed} if missed else {}), **extra}
 
     async def _say(self, entries: list[dict], words: str, held: bool = False) -> None:
         """Into the main chat, under the chat's turn lock (`held` when the caller has it); the pet and a
@@ -533,7 +541,8 @@ class Board:
         its model use."""
         items = await asyncio.wait_for(self.ws.character.reply(
             self.ws._main.conversation, [{"type": "text", "text": text}],
-            run={"id": task["id"], "kind": task["kind"], "acts": task.get("acts") or []}), RUN_S)
+            run={"id": task["id"], "kind": task["kind"], "acts": task.get("acts") or [],
+                 "words": f"{task['request']} {task['condition']}"}), RUN_S)
         spent = next((i.get("spent") for i in items if i.get("type") == "spent"), None) or {}
         if any(i.get("reason") == "excuse" for i in items):
             raise RuntimeError("the model did not answer")

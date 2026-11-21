@@ -230,6 +230,37 @@ class Grants:
             data = self._read()
             for key in ("folders", "read_only"):
                 data[key] = [p for p in data.get(key) or [] if isinstance(p, str) and norm(p) != norm(folder)]
+            data["rules"] = [r for r in self._rules(data) if norm(r["folder"]) != norm(folder)]
+            self._write(data)
+
+    @staticmethod
+    def _rules(data: dict) -> list[dict]:
+        return [r for r in data.get("rules") or [] if isinstance(r, dict) and isinstance(r.get("program"), str)
+                and isinstance(r.get("folder"), str)]
+
+    def rules(self) -> list[dict]:
+        """The person's always-allow rules, a program in a granted folder each ({program, shown, folder, at}), the
+        ones whose folder is still granted."""
+        roots = {norm(p) for p in self.folders()}
+        return [r for r in self._rules(self._read()) if norm(r["folder"]) in roots]
+
+    def allowed(self, program: str, root: str) -> bool:
+        """`program` (a `norm`ed file) is always allowed in the `norm`ed granted folder `root`."""
+        return any(r["program"] == program and norm(r["folder"]) == root for r in self.rules())
+
+    def allow(self, program: str, shown: str, root: str) -> None:
+        """Keeps 对此程序在此文件夹始终允许 as a rule, which Settings lists and can take back."""
+        with self.lock:
+            data = self._read()
+            data["rules"] = [r for r in self._rules(data) if not (r["program"] == program and norm(r["folder"]) == root)]
+            data["rules"].append({"program": program, "shown": shown, "folder": self.folder_of(root), "at": time.time()})
+            self._write(data)
+
+    def forget(self, program: str, folder: str) -> None:
+        with self.lock:
+            data = self._read()
+            data["rules"] = [r for r in self._rules(data)
+                             if not (r["program"] == program and norm(r["folder"]) == norm(folder))]
             self._write(data)
 
     def log(self, entry: dict) -> None:

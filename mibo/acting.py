@@ -1,13 +1,16 @@
-"""How much the character may do by itself when it acts for the person: one mode for pages in the app's browser
-and one for other programs' windows, each chosen by the person in one place (the pane's chat box, Settings ›
-programs) and read again at every action, so a change made while a task runs holds from its next step.
+"""How much the character may do by itself when it acts for the person: one mode for pages in the app's browser,
+one for other programs' windows and one for commands and files, each chosen by the person in one place (the
+pane's chat box, Settings › programs, Settings › files and commands) and read again at every action, so a change
+made while a task runs holds from its next step.
 
     off    it does not act there at all
     read   it looks, reads, scrolls and moves between pages; nothing it does sends, saves or changes anything
-           (in a program: it only looks)
+           (in a program: it only looks; by command: it only reads files in the granted folders)
     ask    each action with an effect outside waits for the person's press on a card (the default)
     auto   the reviewer (review.py) looks first at sends, comments, likes, posts, submissions and presses that code
-           could not sort; only those it finds plainly asked for go ahead without a card, the rest still ask
+           could not sort; only those it finds plainly asked for go ahead without a card, the rest still ask.
+           For commands it is auto-edit, decided in code with no reviewer: changing files inside a granted folder
+           does not ask, as each turn's checkpoint (shell/checkpoint.py) can put them back
 
 What no mode loosens, decided here in code: paying or buying, deleting, an account's security or access (`HARD`)
 ask every time, with no always-allow and no reviewer; a password, payment detail or code is never typed or read
@@ -27,7 +30,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-AREAS = ("browser", "programs")
+AREAS = ("browser", "programs", "commands")
 MODES = ("off", "read", "ask", "auto")
 DEFAULT = "ask"
 FILE = "acting.json"
@@ -60,8 +63,8 @@ def decide(mode: str, kind: str, site: str = "", area: str = "browser") -> str:
 
 
 class Modes:
-    """The person's mode per area, in the desktop folder. Programs' off is the switch in desk.json (desk/grants.py),
-    so the two can never disagree; the level beside it is kept here."""
+    """The person's mode per area, in the desktop folder. The off of programs and of commands is their own switch
+    (desk.json, shell.json), so the two can never disagree; the level beside it is kept here."""
 
     def __init__(self, desktop: Path):
         self.desktop = Path(desktop)
@@ -75,27 +78,34 @@ class Modes:
             return {}
         return data if isinstance(data, dict) else {}
 
-    def mode(self, area: str) -> str:
+    def _switch(self, area: str):
+        """The area's own on/off switch, or None (the browser has none)."""
         if area == "programs":
             from .desk.grants import Grants
-            if not Grants(self.desktop).on():
-                return "off"
+            return Grants(self.desktop)
+        if area == "commands":
+            from .shell.grants import Grants as ShellGrants
+            return ShellGrants(self.desktop, self.desktop.parents[1])
+        return None
+
+    def mode(self, area: str) -> str:
+        switch = self._switch(area)
+        if switch is not None and not switch.on():
+            return "off"
         kept = self._read().get(area)
-        return kept if kept in MODES and not (area == "programs" and kept == "off") else DEFAULT
+        return kept if kept in MODES and not (switch is not None and kept == "off") else DEFAULT
 
     def all(self) -> dict:
         return {area: self.mode(area) for area in AREAS}
 
     def set(self, area: str, mode: str) -> dict:
         from .storage import atomic_write_text
-        if area == "programs":
-            from .desk.grants import Grants
-            grants = Grants(self.desktop)
-            if grants.on() != (mode != "off"):
-                grants.set_on(mode != "off")
+        switch = self._switch(area)
+        if switch is not None and switch.on() != (mode != "off"):
+            switch.set_on(mode != "off")
         with self.lock:
             data = self._read()
-            if area == "programs" and mode == "off":
+            if switch is not None and mode == "off":
                 data.pop(area, None)
             else:
                 data[area] = mode

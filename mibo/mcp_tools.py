@@ -459,8 +459,16 @@ def clean_tools(raw: list) -> list[dict]:
 
 # --------------------------------------------------------------- grants --
 
+def group_of(tool: dict) -> str:
+    """"read" for a tool its provider marks read-only and not destructive, else "write" (writes or deletes)."""
+    hints = tool["hints"]
+    return "read" if hints.get("readOnlyHint") is True and hints.get("destructiveHint") is not True else "write"
+
+
 class Grants:
-    """The person's choices, in the desktop folder: per tool, local programs allowed to start, read-only."""
+    """The person's choices, in the desktop folder: per tool, per group of a server's tools (read-only, write and
+    delete; Claude's connectors set a group at once the same way), and local programs allowed to start. A tool's
+    own choice comes before its group's. A tool its provider marks destructive is never always allowed."""
 
     def __init__(self, home: Path):
         self.path = desktop_dir(home) / GRANTS_FILE
@@ -468,7 +476,7 @@ class Grants:
 
     def read(self) -> dict:
         data = _read(self.path)
-        for key in ("tools", "start", "readonly"):
+        for key in ("tools", "start", "groups"):
             if not isinstance(data.get(key), dict):
                 data[key] = {}
         return data
@@ -482,12 +490,15 @@ class Grants:
 
     def mode(self, server: str, tool: dict) -> tuple[str, bool]:
         """(ask, always or never, and whether an "always" was given to a tool that has changed since)."""
-        row = self.read()["tools"].get(f"{server}/{tool['name']}")
-        if not isinstance(row, dict) or row.get("mode") not in (ALWAYS, NEVER):
-            return ASK, False
-        if row["mode"] == ALWAYS and row.get("fp") != tool["fp"]:
-            return ASK, True
-        return row["mode"], False
+        data = self.read()
+        row = data["tools"].get(f"{server}/{tool['name']}")
+        destructive = tool["hints"].get("destructiveHint") is True
+        if isinstance(row, dict) and row.get("mode") in (ALWAYS, NEVER):
+            if row["mode"] == ALWAYS and (row.get("fp") != tool["fp"] or destructive):
+                return ASK, row.get("fp") != tool["fp"]
+            return row["mode"], False
+        group = self.group(server, group_of(tool))
+        return (ASK if group == ALWAYS and destructive else group), False
 
     def set_mode(self, server: str, tool: dict, mode: str) -> None:
         def change(data: dict) -> None:
@@ -498,6 +509,23 @@ class Grants:
                 data["tools"][key] = {"mode": mode, "fp": tool["fp"], "at": time.time()}
         self._change(change)
 
+    def group(self, server: str, group: str) -> str:
+        kept = (self.read()["groups"].get(server) or {}).get(group)
+        return kept if kept in MODES and not (group == "write" and kept == ALWAYS) else ASK
+
+    def chosen(self, server: str) -> bool:
+        """The person has chosen, once, whether this server's read-only tools ask."""
+        return "read" in (self.read()["groups"].get(server) or {})
+
+    def set_group(self, server: str, group: str, mode: str, tools: list[dict]) -> None:
+        """One mode for the whole group, set at once: the group's tools' own choices give way to it."""
+        def change(data: dict) -> None:
+            data["groups"].setdefault(server, {})[group] = mode
+            for tool in tools:
+                if group_of(tool) == group:
+                    data["tools"].pop(f"{server}/{tool['name']}", None)
+        self._change(change)
+
     def started(self, server: str, spec: dict) -> bool:
         return self.read()["start"].get(server) == start_key(spec)
 
@@ -506,21 +534,10 @@ class Grants:
             data["start"][server] = start_key(spec)
         self._change(change)
 
-    def readonly(self, server: str) -> bool:
-        return self.read()["readonly"].get(server) is True
-
-    def set_readonly(self, server: str, on: bool) -> None:
-        def change(data: dict) -> None:
-            if on:
-                data["readonly"][server] = True
-            else:
-                data["readonly"].pop(server, None)
-        self._change(change)
-
     def forget(self, server: str) -> None:
         def change(data: dict) -> None:
             data["start"].pop(server, None)
-            data["readonly"].pop(server, None)
+            data["groups"].pop(server, None)
             for key in [k for k in data["tools"] if k.startswith(server + "/")]:
                 data["tools"].pop(key)
         self._change(change)

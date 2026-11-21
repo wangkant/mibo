@@ -103,8 +103,10 @@
       readonlyHint: "提供方标注为只读",
       destructiveHint: "提供方标注为可能删除或覆盖数据",
       changed: "已更改，需要重新确认",
-      readonlyName: "只读工具无需确认",
-      readonlyText: "提供方标注为只读、且未标注会删除数据的工具，调用前不再询问。此标注由提供方填写，Mibo 无法核实。",
+      groupRead: (n) => `只读工具（${n}）`,
+      groupReadText: "提供方标注为只读、且未标注会删除数据的工具。此标注由提供方填写，Mibo 无法核实。",
+      groupWrite: (n) => `写入与删除工具（${n}）`,
+      groupWriteText: "其余工具，可能新建、修改或删除数据。提供方标注为可能删除数据的工具每次都需要确认。",
       logFold: (n) => (n ? `调用记录（${n}）` : "调用记录"),
       logNone: "暂无记录。",
       logClear: "清空记录",
@@ -113,7 +115,7 @@
       outcome: { done: "已完成", error: "工具返回错误", failed: "失败", declined: "已拒绝", unanswered: "未确认",
         never: "已禁止", changed: "工具已更改，未调用", start_once: "允许启动（本次）", start_always: "允许启动（始终）",
         start_no: "拒绝启动" },
-      how: { always: "始终允许", once: "本次允许", readonly: "只读免确认" },
+      how: { always: "始终允许", once: "本次允许", chat: "本次对话内允许", this_chat: "本次对话内已允许" },
       importOpen: "从其他应用导入",
       importTitle: "其他应用中的连接器",
       importHelp: "以下连接器来自本机 Claude、Cursor、VS Code 和 Cherry Studio 的配置。导入时复制一份到 Mibo，原配置保持不变；其中的值保存在系统凭据存储中。",
@@ -287,8 +289,10 @@
       readonlyHint: "Its maker marks it read-only",
       destructiveHint: "Its maker marks it as able to delete or overwrite data",
       changed: "Changed: asks again",
-      readonlyName: "Read-only tools without asking",
-      readonlyText: "Tools their maker marks read-only, and not as deleting data, run without a card. The maker writes that mark; Mibo cannot check it.",
+      groupRead: (n) => `Read-only tools (${n})`,
+      groupReadText: "Tools their maker marks read-only, and not as deleting data. The maker writes that mark; Mibo cannot check it.",
+      groupWrite: (n) => `Tools that write or delete (${n})`,
+      groupWriteText: "The other tools, which may make, change or delete data. Tools their maker marks as deleting data ask every time.",
       logFold: (n) => (n ? `Call record (${n})` : "Call record"),
       logNone: "Nothing recorded yet.",
       logClear: "Clear the record",
@@ -297,7 +301,8 @@
       outcome: { done: "Done", error: "The tool reported an error", failed: "Failed", declined: "Declined", unanswered: "Not answered",
         never: "Blocked", changed: "The tool changed; not called", start_once: "Start allowed (this time)",
         start_always: "Start allowed (always)", start_no: "Start declined" },
-      how: { always: "always allowed", once: "allowed this time", readonly: "read-only, no card" },
+      how: { always: "always allowed", once: "allowed this time", chat: "allowed for this conversation",
+        this_chat: "already allowed for this conversation" },
       importOpen: "Import from other apps",
       importTitle: "Connectors in other apps",
       importHelp: "These connectors are in the configurations of Claude, Cursor, VS Code and Cherry Studio on this computer. Importing copies them into Mibo and leaves the originals as they are; their values go to the system's credential store.",
@@ -676,24 +681,35 @@
         }
         box.append(fold.node);
       }
-      // Its tools, each asking, always allowed or never.
+      // Its tools in two groups, read-only and write or delete (Claude's connectors), each group set at once, and
+      // each tool asking, always allowed or never; what writes is never always allowed as a group, nor a tool
+      // marked destructive.
       if (row.tools.length) {
         const fold = kit.fold(kit.fill(t.tools, { n: row.tools.length }));
-        for (const tool of row.tools) {
-          const marks = [tool.readonly ? t.readonlyHint : "", tool.destructive ? t.destructiveHint : "",
-            tool.changed ? t.changed : ""].filter(Boolean).join(zh ? "；" : "; ");
-          const pickMode = kit.choices(t.modeLabel(tool.name), Object.entries(t.mode), (mode) =>
-            change({ tool: { server: row.name, tool: tool.name, mode } }, line));
-          pickMode.set(tool.mode);
-          const r = kit.optionRow(tool.title && tool.title !== tool.name ? `${tool.title} · ${tool.name}` : tool.name, tool.description);
-          if (marks) r.words.append(el("p", "setup-help", marks));
-          r.words.append(pickMode.group);
-          fold.body.append(r.row);
+        for (const group of ["read", "write"]) {
+          const tools = row.tools.filter((tool) => tool.group === group);
+          if (!tools.length) continue;
+          const name = group === "read" ? t.groupRead(tools.length) : t.groupWrite(tools.length);
+          const entries = Object.entries(t.mode).filter(([mode]) => group === "read" || mode !== "always");
+          const pickGroup = kit.choices(t.modeLabel(name), entries, (mode) =>
+            change({ group: { server: row.name, group, mode } }, line));
+          pickGroup.set(row.groups[group]);
+          const head = kit.optionRow(name, group === "read" ? t.groupReadText : t.groupWriteText);
+          head.words.append(pickGroup.group);
+          fold.body.append(head.row);
+          for (const tool of tools) {
+            const marks = [tool.readonly ? t.readonlyHint : "", tool.destructive ? t.destructiveHint : "",
+              tool.changed ? t.changed : ""].filter(Boolean).join(zh ? "；" : "; ");
+            const pickMode = kit.choices(t.modeLabel(tool.name),
+              Object.entries(t.mode).filter(([mode]) => !tool.destructive || mode !== "always"), (mode) =>
+                change({ tool: { server: row.name, tool: tool.name, mode } }, line));
+            pickMode.set(tool.mode);
+            const r = kit.optionRow(tool.title && tool.title !== tool.name ? `${tool.title} · ${tool.name}` : tool.name, tool.description);
+            if (marks) r.words.append(el("p", "setup-help", marks));
+            r.words.append(pickMode.group);
+            fold.body.append(r.row);
+          }
         }
-        const light = kit.switchRow(`mcp-readonly-${row.name}`, t.readonlyName, t.readonlyText,
-          (b) => change({ server: row.name, readonly: b.checked }, line));
-        light.box.checked = row.readonly_light;
-        fold.body.append(light.row);
         box.append(fold.node);
       }
       box.append(line);

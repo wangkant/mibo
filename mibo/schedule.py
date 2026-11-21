@@ -404,7 +404,8 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
         days = _zh_days(hit.group(1))
         # No day named ("每周", "每个星期二和第四周…"): a guess, which a rule from the model replaces.
         return {"repeat": "weekly", "days": days or [today.weekday()], "time": clock, "guess": not days}
-    hit = re.search(rf"\b(?:every|on)\s+({_EN_DAY}(?:\s*(?:,|and|&)\s*{_EN_DAY})*)", low)
+    # "every Monday" and "on Mondays" repeat; "on Monday" is once, read below.
+    hit = re.search(rf"\b(?:every\s+|on\s+(?=\w+days\b))({_EN_DAY}(?:\s*(?:,|and|&)\s*{_EN_DAY})*)", low)
     if hit:
         days = sorted({_EN_DAYS.index(d[:3]) for d in re.findall(_EN_DAY, hit.group(1))})
         return {"repeat": "weekly", "days": days, "time": clock}
@@ -444,6 +445,10 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
         due = timewords.resolve_future(text, now, tz)
         if due and due.kind == "exact":
             day = date.fromisoformat(due.due)
+            if day == today.date() + timedelta(days=7) and hm and (hm[0] >= 24 or today.replace(
+                    hour=hm[0], minute=hm[1]) > today) and not re.search(r"下|next", due.words, re.I):
+                # A bare weekday that is today ("周五下午三点" said on Friday morning): today, while the time is ahead.
+                day = today.date()
         day = day or _leap_day(text, today)
     if day is None and hm is None:
         return None

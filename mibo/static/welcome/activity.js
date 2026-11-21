@@ -361,8 +361,8 @@ window.paActivity = (() => {
 
   // ---- Memory where it acts (person.py): what a reply drew on, and what the background memory kept.
   const MEMORY = '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.3A3 3 0 0 0 9 17.5a2.5 2.5 0 0 0 3 2V5.5a2.5 2.5 0 0 0-3-1zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.3 3 3 0 0 1-4.5 4.7 2.5 2.5 0 0 1-3 2"/>';
-  const toMemory = (opts) => {
-    const go = el("button", "act-mem-manage", paI18n.words("activity").memManage);
+  const toMemory = (opts, label = paI18n.words("activity").memManage) => {
+    const go = el("button", "act-mem-manage", label);
     go.type = "button";
     go.addEventListener("click", () => opts.go?.("setup/memory"));
     return go;
@@ -433,7 +433,7 @@ window.paActivity = (() => {
       list.append(row);
     }
     const foot = el("div", "act-mem-foot");
-    foot.append(toMemory(opts));
+    foot.append(toMemory(opts, paI18n.words("chat").manageMemory));
     node.append(head, list, foot);
     node.addEventListener("toggle", () => opts.grew?.());
     return node;
@@ -444,8 +444,10 @@ window.paActivity = (() => {
     const w = paI18n.words("activity");
     const node = el("p", "act-saved");
     const words = (item.saved || []).map((row) => row.text).join(w.memSep);
-    node.append(svg(MEMORY, "i act-mem-icon"), el("span", "act-saved-text", fill(w.memSaved, { what: words })),
-      el("span", "act-saved-dot", "·"), toMemory(opts));
+    // The words, the dot and 管理 run on as one line of text, so a narrow chat wraps them as a sentence.
+    const text = el("span", "act-saved-text", fill(w.memSaved, { what: words }));
+    text.append(el("span", "act-saved-dot", " · "), toMemory(opts));
+    node.append(svg(MEMORY, "i act-mem-icon"), text);
     return node;
   }
 

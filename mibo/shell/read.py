@@ -184,6 +184,9 @@ NVIDIA_READ = ("-q", "--query", "-l", "--list", "--format", "-i", "--id", "-d", 
 INTERPRETERS = ("python", "python3", "py", "pythonw", "node", "deno", "bun", "ruby", "perl", "php", "java", "javaw")
 EXE_OPEN = {"notepad", "mspaint", "calc", "explorer", "write", "charmap"}
 EXE_NET = {"ping", "tracert", "pathping", "nslookup", "curl", "wget", "ftp", "tftp", "nc", "ncat", "git"}
+# git's subcommands that reach another computer; the rest work in the folder.
+GIT_NET = {"clone", "fetch", "pull", "push", "ls-remote", "remote", "submodule", "send-email", "request-pull", "svn",
+           "p4", "daemon", "http-backend", "instaweb", "credential"}
 EXE_INSTALL = {"winget", "choco", "scoop", "msiexec", "pip", "pip3", "npm", "pnpm", "yarn", "gem", "cargo", "conda",
                "dotnet", "appinstaller"}
 EXE_STOP = {"taskkill", "tskill"}
@@ -300,6 +303,8 @@ class Act:
     dest_unresolved: bool = False
     # The places a listing before named, with `raw`, which stand for its items in the plain words.
     listed: list[str] = field(default_factory=list)
+    # A program run by its own file (paths[0]): its arguments as written, for the person's always-allow rules.
+    args: list[str] | None = None
 
 
 @dataclass
@@ -1268,6 +1273,12 @@ class Sorter:
         if base in EXE_STOP:
             self.add("program", "stop", f"ends a running program ({' '.join(args or [])[:60]})", name=f"{base} {' '.join(args or [])}"[:120])
             return
+        if base == "git" and args is not None and not (set(words) & GIT_NET) and not any(
+                "://" in a or a.startswith("--remote") for a in words):
+            # Local git work (status, log, add, commit, diff) is a program run in its folder, not the network.
+            self.add("program", "program", f"runs git {' '.join(args)[:80]}", name=f"{path or name} {' '.join(args)}"[:160],
+                     paths=[path] if path else [], args=args)
+            return
         if base in EXE_NET:
             host = next((a for a in (args or []) if not a.startswith("-") and not a.startswith("/")), "")
             host = (urlsplit(host).hostname or host).lower()
@@ -1326,7 +1337,7 @@ class Sorter:
             self.add("read", "open", f"opens {base}", name=base, paths=files)
             return
         self.add("program", "program", f"runs the program {path or name}", name=f"{path or name} {' '.join(args or [])}"[:160],
-                 paths=[path] if path else [])
+                 paths=[path] if path else [], args=args)
 
     def opened(self, target: str, base: str) -> bool:
         """A program given an address or a file it would run (explorer x.bat, explorer https://...): sorted as
@@ -1621,6 +1632,9 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
     for act in reading.acts:
         for path in act.paths + ([act.dest] if act.dest else []):
             why = places.blocked(norm(path), act.write or path == act.dest)
+            # A program's own file (user installs live in AppData) is run, not read: only the app's own refuse.
+            if why and why != "app" and act.args is not None and path == act.paths[0]:
+                continue
             if why:
                 whose = "this app's own files" if why == "app" else "protected"
                 refused.append(Act("secrets" if why in ("app", "secrets") else "system", why,
@@ -1644,7 +1658,9 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
              for a in reading.acts if a.unresolved and (a.kind == "read" or (
                  a.kind in ("change", "overwrite") and not (a.what == "rename" and a.dest_unresolved)))]
     verdict = Verdict("run", [])
-    every = [(act, p) for act in reading.acts for p in act.paths + ([act.dest] if act.dest else [])]
+    # A program's own file is outside the granted folders by nature; running it is asked as a program.
+    every = [(act, p) for act in reading.acts for p in act.paths + ([act.dest] if act.dest else [])
+             if not (act.args is not None and p == act.paths[0])]
     for act, path in every:
         write = act.write or path == act.dest
         if any(under(norm(path), r) for r in (writable if write else roots)):

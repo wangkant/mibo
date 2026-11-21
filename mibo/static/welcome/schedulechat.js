@@ -45,11 +45,13 @@ window.paScheduleChat = (() => {
     }
     return kept;
   }
-  function when(seconds) {
-    const at = new Date(seconds * 1000);
+  // A time in the person's zone, `offset` minutes from UTC, which may not be the computer's.
+  function when(seconds, offset) {
+    const at = new Date((seconds + offset * 60) * 1000);
     const pad = (n) => String(n).padStart(2, "0");
-    const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
-    return `${at.toLocaleDateString(paI18n.lang === "en" ? "en-GB" : paI18n.locale, { day: "numeric", month: "short" })} ${time}`;
+    const time = `${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
+    return `${at.toLocaleDateString(paI18n.lang === "en" ? "en-GB" : paI18n.locale,
+      { day: "numeric", month: "short", timeZone: "UTC" })} ${time}`;
   }
 
   // Over a run's message: the clock, the task's name and kind, and when it came late.
@@ -59,7 +61,7 @@ window.paScheduleChat = (() => {
     node.append(clock("i task-mark-icon"), el("span", "task-mark-title", task.title),
       el("span", "task-mark-kind", task.failed ? t.failed : task.notice ? t.notice : t.kinds[task.kind] || ""));
     if (task.late) {
-      const late = el("p", "task-mark-late", fill(t.late, { due: when(task.due) })
+      const late = el("p", "task-mark-late", fill(t.late, { due: when(task.due, task.offset) })
         + (task.missed ? fill(t.missed, { n: task.missed }) : ""));
       const wrap = el("div", "task-mark-wrap");
       wrap.append(node, late);

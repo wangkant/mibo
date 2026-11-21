@@ -20,8 +20,10 @@ from .turns import current_turn, turn_choices
 
 NAMES = ("schedule_create", "schedule_list", "schedule_edit")
 PROPOSE = "propose_action"
-# What a run may always use: reading only.
-UNATTENDED = ("web_search", "read_page", "read_with_their_session", "read_file", "list_files", "search_files")
+# What a run may always use: reading only, and no_action, so a model not measured calling tools by itself must call
+# one first, as in the person's chat (search.py): what it would do then goes to propose_action, not into words.
+UNATTENDED = ("web_search", "read_page", "read_with_their_session", "read_file", "list_files", "search_files",
+              "no_action")
 # The tools each allowed act kind adds to a run.
 ACT_TOOLS = {"browser": ("use_browser",)}
 
@@ -102,7 +104,8 @@ _LISTING = re.compile(r"(?:哪些|什么|几个|列出|看).{0,6}(?:定时任务
 
 
 def run_of() -> dict | None:
-    """The task this turn runs ({"id", "kind", "acts"}), or None for a turn of the person's."""
+    """The task this turn runs ({"id", "kind", "acts", "words"}: its request and condition), or None for a turn of
+    the person's."""
     turn = current_turn.get()
     return turn.run if turn is not None else None
 

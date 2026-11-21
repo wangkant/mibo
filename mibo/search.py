@@ -605,7 +605,7 @@ class WebSearch:
         narrow = names & set().union(*(_CHOSEN[c] for c in turn_choices() if c in _CHOSEN))
         if not narrow and "use_browser" in names and await self._page_asked(said):
             narrow = {"use_browser"}
-        # A scheduled run has no no_action and decides for itself, as does a model that calls tools by itself.
+        # A model that calls tools by itself decides for itself.
         force = _NO_ACTION in names or bool(narrow)
         # A task on this computer takes a mature agent's rounds and time once it begins (shell/tool.py).
         while rounds < shell_tool.rounds(lookups, budget["rounds"]):

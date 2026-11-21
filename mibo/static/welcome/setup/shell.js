@@ -1,7 +1,8 @@
 "use strict";
 // Settings › Files and commands: whether the character may do things on this computer by command (/api/shell
-// {on}), the folders it may use (/api/shell {add} / {remove}), what is never run, and the record of every
-// command (/api/shell/log). Everything about a command is decided by the app (mibo/shell), not the model.
+// {on}) and how much by itself ({mode}), the folders it may use (/api/shell {add} / {remove}), the programs always
+// allowed in a folder ({forget}), what is never run, and the record of every command (/api/shell/log). Everything
+// about a command is decided by the app (mibo/shell, mibo/acting.py), not the model.
 (() => {
 
   window.paSetup.part("shell", (kit) => {
@@ -21,7 +22,14 @@
     const onError = kit.errorLine();
     sw.about.after(elevated, onError);
     sw.box.disabled = true;
-    main.append(sw.row);
+    // How much it does by itself ({mode}, acting.py): read only, ask, or auto-edit (changes in the granted folders
+    // without a card, each turn's checkpoint able to put them back).
+    const modeSelect = el("select", "setup-input setup-select setup-input-sm");
+    for (const value of ["read", "ask", "auto"]) modeSelect.append(new Option(t.modes[value], value));
+    modeSelect.disabled = true;
+    modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
+    const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
+    main.append(sw.row, modeRow.row);
 
     // ---- The folders.
     const folders = kit.card(t.foldersTitle);
@@ -40,6 +48,11 @@
     const folderError = kit.errorLine();
     folders.append(foldersText, list, addRow, folderError);
 
+    // ---- The programs always allowed in a folder, from the card's 对此程序在此文件夹始终允许 ({forget} takes one back).
+    const rules = kit.card(t.rulesTitle);
+    const rulesList = el("div", "setup-shell-folders");
+    rules.append(el("p", "setup-help", t.rulesText), rulesList);
+
     // ---- Never run, and the record.
     const never = kit.fold(t.neverFold);
     const record = kit.fold(paI18n.t("setup_shell.logFold", { count: 0 }));
@@ -50,13 +63,25 @@
     record.node.addEventListener("toggle", () => {
       if (record.node.open) loadLog();
     });
-    node.append(main, folders, never.node, record.node);
+    node.append(main, folders, rules, never.node, record.node);
 
     function render() {
       sw.box.checked = view.on;
       sw.box.disabled = false;
+      modeSelect.value = view.mode === "off" ? "ask" : view.mode;
+      modeSelect.disabled = !view.on;
       elevated.hidden = !view.elevated;
       folders.hidden = never.node.hidden = record.node.hidden = false;
+      rules.hidden = !view.rules.length;
+      rulesList.replaceChildren(...view.rules.map((rule) => {
+        const chip = el("span", "setup-word");
+        chip.title = rule.program;
+        const where = zh ? rule.zh : rule.en;
+        chip.append(el("span", "", `${rule.shown}  ·  ${where}`));
+        chip.append(kit.iconButton("setup-word-off", "cross", paI18n.t("setup_shell.ruleRemove", { name: rule.shown, folder: where }),
+          () => change({ forget: { program: rule.program, folder: rule.folder } })));
+        return chip;
+      }));
       if (!view.folders.length) list.replaceChildren(el("p", "setup-help", t.foldersNone));
       else {
         list.replaceChildren(...view.folders.map((row) => {
@@ -130,7 +155,8 @@
         logList.replaceChildren(...rows.map((row) => {
           const item = el("div", "setup-shell-entry");
           const said = (row.said && (zh ? row.said.zh : row.said.en)) || row.granted || row.command || "";
-          const outcome = (t.outcomes[row.outcome] || row.outcome || "") + (row.outcome === "ran" ? paI18n.t("setup_shell.code", { count: row.code }) : "");
+          const outcome = (t.outcomes[row.outcome] || row.outcome || "") + (row.outcome === "ran" ? paI18n.t("setup_shell.code", { count: row.code }) : "")
+            + (t.hows[row.how] ? ` · ${t.hows[row.how]}` : "");
           item.append(el("p", "setup-option-name", said), el("p", "setup-help", `${when(row.at)} · ${outcome}`));
           if (row.command) {
             const more = kit.fold(t.command);
@@ -156,7 +182,7 @@
       }
     }
 
-    folders.hidden = never.node.hidden = record.node.hidden = true;
+    folders.hidden = rules.hidden = never.node.hidden = record.node.hidden = true;
 
     function show() {
       load();

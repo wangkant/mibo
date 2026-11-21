@@ -599,7 +599,7 @@ button.act-chg-name:hover {
   color: var(--pa-faint);
 }
 .act-saved .act-mem-manage {
-  flex: none;
+  white-space: nowrap;
 }
 /* A line with no reply above it to sit under stands on the text's edge, as a remark does. */
 .chat-messages > .act-saved {
