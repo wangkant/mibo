@@ -47,7 +47,11 @@ def chosen(workspace, values: dict) -> str:
     if card.is_file():
         origin = sw.shipped_persona(card.read_text(encoding="utf-8"))
         return origin[0] if origin and origin[0] in BUILT_IN else CUSTOM
-    return CUSTOM if values.get("PERSONA_NAME", "").strip() else BUILT_IN[0]
+    name = values.get("PERSONA_NAME", "").strip()
+    if not name:
+        return BUILT_IN[0]
+    # A name a shipped character goes by is that character; any other name is the person's own.
+    return next((key for key in BUILT_IN if name == sw.character_for(key).name_in(_lang(values))), CUSTOM)
 
 
 def _theirs(own: dict, lang: str) -> bool:

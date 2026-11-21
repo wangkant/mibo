@@ -2225,7 +2225,7 @@
       }
     },
     "characters": {
-      "Mibo": "Mibo le robot : petit, curieux et chaleureux, prend les mots un peu au pied de la lettre",
+      "mibo": "Mibo le robot : petit, curieux et chaleureux, prend les mots un peu au pied de la lettre",
       "chatgpt": "GPT-chan, la fille-dragon : fière, cultivée, friande de trésors",
       "deepseek": "DeepSeek-chan, la fille-baleine : habile, un peu paresseuse, comblée par un bol de riz blanc",
       "claude": "Claude-chan, la demoiselle : distinguée, douce et franche, élevée selon des règles familiales strictes",

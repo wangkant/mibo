@@ -2225,7 +2225,7 @@
       }
     },
     "characters": {
-      "Mibo": "Mibo, el robot: pequeño, curioso y cálido, se toma las palabras un poco al pie de la letra",
+      "mibo": "Mibo, el robot: pequeño, curioso y cálido, se toma las palabras un poco al pie de la letra",
       "chatgpt": "La chica dragón de GPT: orgullosa, culta, aficionada a los tesoros",
       "deepseek": "La chica ballena de DeepSeek: lista, algo perezosa, feliz con un plato de arroz blanco",
       "claude": "La dama Claude: distinguida, amable y franca, criada bajo estrictas normas familiares",

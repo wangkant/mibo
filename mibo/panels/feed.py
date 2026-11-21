@@ -469,18 +469,25 @@ def shown(library: Library, events: list, kept: bool = False, limit: int = LIMIT
 
 def first_round(library: Library, events: list, now: float, topics: list[str]) -> list[dict]:
     """The first run's sample finds: the ranking's best unseen that are `presentable`, FIRST_PER_SOURCE from
-    one source and FIRST_MAX in all at most, those the character has read first, never two in a row from one
-    source or on one topic where there is a choice, and text and video in turn where both are left."""
-    rows, per = [], Counter()
+    one site and FIRST_MAX in all at most, those the character has read first, never two in a row from one
+    source or on one topic where there is a choice, and text and video in turn where both are left. A site
+    counts as one however many of its lists brought things (a video site has a list for each kind of video);
+    only when too few sites have something presentable yet does one give more."""
+    rows, more, per = [], [], Counter()
     for shaped, item in ranked(library, events, now, topics, seed=int(now * 1000)):
         if shaped["seen"] or len(rows) >= 3 * FIRST_MAX:
             break
-        origin = item.source or "site:" + shaped["site"]
-        if presentable(shaped) and per[origin] < FIRST_PER_SOURCE:
-            per[origin] += 1
+        if not presentable(shaped):
+            continue
+        site = shaped["site"] or item.source
+        if per[site] < FIRST_PER_SOURCE:
+            per[site] += 1
             rows.append((shaped, item))
+        else:
+            more.append((shaped, item))
     rows.sort(key=lambda row: not row[1].judged)
-    return [shaped for shaped, _ in Veins(topics).varied(rows, mix=True)[:FIRST_MAX]]
+    shown = Veins(topics).varied(rows, mix=True)[:FIRST_MAX]
+    return [shaped for shaped, _ in shown + more[:FIRST_MAX - len(shown)]]
 
 
 # What the pet's card was handed, by id, so a find it opens in the chat keeps the character's line and slot.

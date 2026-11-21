@@ -2225,7 +2225,7 @@
       }
     },
     "characters": {
-      "Mibo": "Mibo, der Roboter: klein, neugierig und herzlich, nimmt Worte ein wenig zu wörtlich",
+      "mibo": "Mibo, der Roboter: klein, neugierig und herzlich, nimmt Worte ein wenig zu wörtlich",
       "chatgpt": "GPT-chan, das Drachenmädchen: stolz, belesen, liebt Schätze",
       "deepseek": "DeepSeek-chan, das Walmädchen: klug, etwas träge, mit einer Schale Reis zufrieden",
       "claude": "Claude-chan, die junge Dame: wohlerzogen, sanft und aufrichtig, mit strengen Hausregeln aufgewachsen",
