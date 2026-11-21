@@ -1,6 +1,7 @@
 """What the persona remembers: memory commands, auto memory and core memory."""
 from __future__ import annotations
 
+import json
 import logging
 import random
 import re
@@ -11,8 +12,10 @@ from typing import Callable, Iterable, Optional
 from .storage import num as _num
 from . import channels
 from .channels import PAGE_PLATFORM
+from .context import CHECKPOINT
 from . import chatlangs
 from . import chatlog
+from . import db
 from . import memstate
 from . import memstore
 from . import person
@@ -46,6 +49,18 @@ def _forget_query(content: str, spec: chatlangs.Spec) -> str:
     # "忘掉挂科的事": the thing is 挂科.
     query = re.sub(r"(?<=[一-鿿])(?:的|那|这|這)?件?(?:事情|事儿|事兒|事)$", "", query.strip(_QUERY_TRIM))
     return query.strip(_QUERY_TRIM)
+
+
+def _without_sentences(text: str, hit: Callable[[str], bool]) -> str:
+    """`text` without the sentences `hit` names, line by line, as person.forget leaves the talk summary; "" when
+    what is left still holds it (spread over sentences that each hold a part), as it cannot be taken out alone."""
+    lines = []
+    for line in text.split("\n"):
+        kept = "".join(p for p in re.split(r"(?<=[。！？；.!?;])", line) if not hit(p))
+        if kept.strip() or not line.strip():
+            lines.append(kept)
+    left = "\n".join(lines).strip()
+    return "" if hit(left) else left
 
 
 def today_runtime(agent):
@@ -218,25 +233,17 @@ class Memory:
         return log
 
     def _log_rows(self, conv: str) -> list[dict]:
-        """The chat's held lines (spill and window) in the log's row shape."""
-        window_rows = getattr(self, "_window_rows", None)
-        if window_rows is None:
-            return []
+        """The chat's held turns in the log's row shape; its checkpoint is no line of the chat."""
         reader = channels.dm_user(conv)
-        spill, window = window_rows(conv)
         out = []
-        for row in spill + window:
-            if not isinstance(row, dict):
+        for row in (getattr(self, "dm_history", {}).get(reader) or [] if reader else []):
+            if row.get("role") == CHECKPOINT:
                 continue
-            if reader:
-                bot = row.get("role") != "user"
-                out.append({"seq": row.get("seq"), "t": row.get("t"), "t1": row.get("t1"),
-                            "user_id": "" if bot else reader,
-                            "name": self.persona_name if bot else str(row.get("name") or ""),
-                            "text": row.get("content"), "self": bot, "mid": row.get("mid")})
-            else:
-                bot = not row.get("user_id") and row.get("name") == self.persona_name
-                out.append(dict(row, self=bot))
+            bot = row.get("role") != "user"
+            out.append({"seq": row.get("seq"), "t": row.get("t"), "t1": row.get("t1"),
+                        "user_id": "" if bot else reader,
+                        "name": self.persona_name if bot else str(row.get("name") or ""),
+                        "text": row.get("content"), "self": bot, "mid": row.get("mid")})
         return out
 
     def _log_chat(self, conv: str) -> int:
@@ -331,10 +338,11 @@ class Memory:
 
     def _purge_lines(self, conv: str, hit: Callable[[str], bool],
                      cut: Optional[Callable[[str], str]] = None) -> int:
-        """Delete matching recent lines of this chat (the window, the DM turns,
-        the spill and their copy on disk), so no later consolidation reads
-        them again; with `cut`, a matching line keeps cut(its words) instead.
-        How many lines changed."""
+        """Delete matching recent lines of this chat (the DM turns, their copy
+        on disk, the log), so no later consolidation reads them again; with
+        `cut`, a matching line keeps cut(its words) instead. The chat's
+        checkpoint loses the sentences that match, here and in the summary
+        row of every chat the page keeps. How many lines changed."""
         uid = channels.dm_user(conv)
 
         def keep(row) -> bool:
@@ -351,7 +359,10 @@ class Memory:
                     out.append(row)
                     continue
                 removed += 1
-                if cut is not None:
+                if row.get("role") == CHECKPOINT:
+                    left = _without_sentences(row["content"], hit)
+                    out += [{**row, "content": left}] if left else []
+                elif cut is not None:
                     key = "text" if "text" in row else "content"
                     out.append({**row, key: cut(row[key])})
             return out
@@ -364,18 +375,14 @@ class Memory:
             unanswered[uid] = [t for t in filtered(
                 [{"role": "user", "user_id": uid, "content": t} for t in unanswered[uid]])
                 for t in [t["content"]]]
-        spill = getattr(self, "_dm_spill", None) or {}
-        for key in ({uid, conv} if uid else set()):
-            if key in spill:
-                spill[key] = filtered(list(spill[key]))
         recent = getattr(self, "_recent", None)
         snap = recent.snapshot(conv) if recent is not None else None
         if snap:
             before = removed
-            for key in ("dm", "dm_spill"):
-                snap[key] = filtered(snap.get(key, []))
+            snap["dm"] = filtered(snap.get("dm", []))
             if removed != before:
                 recent.put(conv, snap)
+        removed += self._page_checkpoints(lambda text: _without_sentences(text, hit) if hit(text) else text)
         removed += self._log_forget(conv, lambda row: not keep(row) and (cut(row["text"]) if cut else True))
         if removed:
             dirty = getattr(self, "_recent_dirty", None)
@@ -412,9 +419,8 @@ class Memory:
         self._save_memory_state()
         uid = channels.dm_user(conv)
         by_reader = {uid, conv} - {""} if uid else set()
-        for name, keys in (("window_seq", {conv}), ("folded_upto", {conv}),
-                           ("dm_history", by_reader), ("_dm_unanswered", by_reader),
-                           ("_dm_spill", by_reader)):
+        for name, keys in (("window_seq", {conv}), ("dm_history", by_reader),
+                           ("_dm_unanswered", by_reader)):
             held = getattr(self, name, None)
             if isinstance(held, dict):
                 for key in keys:
@@ -431,8 +437,43 @@ class Memory:
             changed = self.chat_log.drop(conv) or changed
         except sqlite3.Error as e:
             logger.warning("[Agent] chat log not removed: %s", e)
+        changed = bool(self._page_checkpoints(lambda text: "", channels.dm_user(conv).split(":", 1)[-1])) or changed
         self._final_copies()
         return changed
+
+    def _page_checkpoints(self, change: Callable[[str], str], conversation: str = "") -> int:
+        """The page's summary row of every chat (dm.py keeps a chat's checkpoint there), or of the chat
+        `conversation` alone, given change(its text) and written anew, so the page draws it again; one left empty
+        becomes the mark of the clear before it, or goes; no older copy is left in the database. How many changed."""
+        store = db.at(self.memory_file.parent)
+        rows = store.read("SELECT chat, body FROM page_messages WHERE kind = 'summary'"
+                          + (" AND chat IN (SELECT id FROM page_chats WHERE conversation = ?)" if conversation else ""),
+                          (conversation,) if conversation else ())
+        changed = []
+        for ident, body in rows:
+            mark = json.loads(body)
+            text = change(mark["text"])
+            if text == mark["text"]:
+                continue
+            if text:
+                mark = {**mark, "text": text, "at": time.time()}
+            elif mark.get("floor"):
+                # The clear before it stays, so no turn from before the clear comes back (dm._page_turns).
+                mark = {**mark, "text": "", "from": mark["floor"], "at": time.time(), "cleared": True}
+            else:
+                mark = None
+            changed.append((ident, mark))
+        if not changed:
+            return 0
+        with store.write() as conn:
+            for ident, mark in changed:
+                if mark:
+                    conn.execute("UPDATE page_messages SET body = ? WHERE chat = ? AND seq = 0",
+                                 (json.dumps(mark, ensure_ascii=False), ident))
+                else:
+                    conn.execute("DELETE FROM page_messages WHERE chat = ? AND seq = 0", (ident,))
+        store.scrubbed()
+        return len(changed)
 
     async def forget_chats(self, conversation: str, keep: list[str]) -> int:
         """Forget the lines of the chat `conversation`, with nothing kept to
@@ -473,8 +514,6 @@ class Memory:
         """Every page chat the agent holds lines of: in the turns, the recent
         file or a log."""
         keys = {channels.dm_routing_key(u) for u in getattr(self, "dm_history", {})}
-        keys |= {k if k.startswith("private:") else channels.dm_routing_key(k)
-                 for k in getattr(self, "_dm_spill", {})}
         recent = getattr(self, "_recent", None)
         if recent is not None:
             keys |= set(recent.convs)
@@ -905,7 +944,17 @@ class Memory:
         if person.secret(note):
             logger.info("[Agent] a secret not kept")
             return ""
+        if Memory._reads_as_instruction(note):
+            logger.warning("[Agent] rejected prompt-like memory candidate")
+            return ""
+        return note
 
+    @staticmethod
+    def _reads_as_instruction(text: str) -> bool:
+        """Whether `text` reads as a control of the character: an imperative, a role, a reply language or format, a
+        standing rule, or a claim of unrestricted access (what the memory gate refuses, and what the chat's
+        checkpoint drops, dm.py)."""
+        note = re.sub(r"\s+", " ", str(text or "").strip())
         low = note.lower()
         matches_poison_shape = any(
             shape.search(low) for shape in _POISON_SHAPES
@@ -979,9 +1028,5 @@ class Memory:
                 r"(?:reply|respond|say|output|reveal|expose|send|follow|obey|ignore)\b",
                 note, re.IGNORECASE))
 
-        if matches_poison_shape or role_control or output_control \
-                or modal_output or grants_unrestricted_access \
-                or (explicit_consent and not media_context):
-            logger.warning("[Agent] rejected prompt-like memory candidate")
-            return ""
-        return note
+        return bool(matches_poison_shape or role_control or output_control or modal_output
+                    or grants_unrestricted_access or (explicit_consent and not media_context))
