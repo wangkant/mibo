@@ -15,7 +15,8 @@ Mozilla's Readability, vendored as listed below.
 The official players it lets a card embed (`mibo/players.py`) are
 each platform's own and load from that platform under its own terms.
 
-Versions 1.4.0 and earlier were released under the MIT License, and versions
+Before it was named Mibo and numbered from 0.1.0, this code was published under
+another name as versions up to 1.5.0: 1.4.0 and earlier under the MIT License,
 1.4.1 to 1.5.0 under the PolyForm Noncommercial License 1.0.0. Copies of those
 versions stay under the licence they were released with.
 

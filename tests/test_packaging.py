@@ -22,9 +22,10 @@ def test_one_version_for_the_package_and_the_metadata() -> None:
     assert declared == mibo.__version__, (declared, mibo.__version__)
 
 
-def test_the_classifiers_match_a_stable_release() -> None:
+def test_the_classifiers_match_the_release() -> None:
     text = _pyproject()
-    assert "Development Status :: 5 - Production/Stable" in text
+    # 0.x: not yet released, and said so.
+    assert "Development Status :: 3 - Alpha" in text
     for minor in range(10, 15):
         assert f"Programming Language :: Python :: 3.{minor}" in text
     assert 'requires-python = ">=3.10"' in text

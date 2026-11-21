@@ -56,6 +56,6 @@ body:
     attributes:
       label: Version
       description: Settings › About, or `mibo --version`.
-      placeholder: "1.5.0"
+      placeholder: "0.1.0"
     validations:
       required: true

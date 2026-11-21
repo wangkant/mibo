@@ -28,4 +28,4 @@ Read-only seed datasets ship with the package (paths.seed_file); everything
 the agent keeps at runtime goes to <home>/runtime/ (paths.ROOT is the home).
 """
 
-__version__ = "1.5.0"
+__version__ = "0.1.0"
