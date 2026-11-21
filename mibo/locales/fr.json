@@ -108,7 +108,7 @@
     "memManage": "Gérer",
     "memForgotten": "Oublié",
     "memGone": "Ce souvenir n'existe plus.",
-    "memSep": " ; "
+    "memSep": "; "
   },
   "app": {
     "someone": "Votre personnage",
