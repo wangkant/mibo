@@ -250,9 +250,11 @@ def parse(answer: str, rows: list, lang: str, found: Optional[dict] = None) -> O
 WHY = {
     "en": {"picked": "Because you picked {name}", "said": "Because you mentioned {name}",
            "subject": "You often open {name}", "often": "You often open {name}",
-           "opened": "You opened {name} before", "new": "New find"},
+           "opened": "You opened {name} before", "about": "Topic: {name}", "new": "New find",
+           "from": "From {name}"},
     "zh": {"picked": "你选择的主题：{name}", "said": "你提到过：{name}", "subject": "你常看：{name}",
-           "often": "你常打开：{name}", "opened": "你打开过：{name}", "new": "新发现"},
+           "often": "你常打开：{name}", "opened": "你打开过：{name}", "about": "主题：{name}", "new": "新发现",
+           "from": "来源：{name}"},
 }
 # A thing's words carry a subject when they name it OWN times (a word in the title counts twice) and twice
 # as often as any other. The word lists' plain reading (subjects.of) is wrong for about a quarter of the
@@ -296,9 +298,10 @@ class Why:
 
     def of(self, shaped: dict, item: Item) -> dict:
         """{"why", "topic"} for the card. "why": {"text", "key", "lean"}, the chip and the feature a tap on
-        it leans (with the lean it has now), or None. It is the ranking's reason (`reason_term`) only where
-        true: a topic or a subject must be the one the thing's own words carry, a habit must be in the
-        events; failing that the source when they opened things from it, or that the find is new.
+        it leans (with the lean it has now): every card has one. It is the ranking's reason (`reason_term`)
+        only where true: a topic or a subject must be the one the thing's own words carry, a habit must be in
+        the events; failing that the source when they opened things from it, then the subject its own words
+        carry, that the find is new, and last where it is from.
         "topic": {"name", "key"}, what "less of this topic" would turn down, or None: the ticked topic or
         the like the ranking files the thing under (a no to it leans that very feature, so it names what
         would be turned down even where the thing is filed wrongly), else the subject its words carry."""
@@ -334,12 +337,14 @@ class Why:
             chip = "subject", subjects.name(own, self.lang), shaped["reason_term"]
         elif family and opened:
             chip = "often" if opened >= OFTEN else "opened", site, "origin:" + origin
+        elif own:
+            chip = "about", subjects.name(own, self.lang), "subj:" + own
         elif self.now - item.seen_at < NEW_S:
             chip = "new", "", ""
         else:
-            chip = None
-        return {"why": chip and {"text": self.words[chip[0]].format(name=chip[1]), "key": chip[2],
-                                 "lean": self.leans.get(chip[2])},
+            chip = "from", site, "origin:" + origin
+        return {"why": {"text": self.words[chip[0]].format(name=chip[1]), "key": chip[2],
+                        "lean": self.leans.get(chip[2])},
                 "topic": topic and {"key": topic[0], "name": topic[1]}}
 
 

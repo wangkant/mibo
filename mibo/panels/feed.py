@@ -638,7 +638,7 @@ class Feed:
     def page(self, limit: int, before: str, kept: bool) -> dict:
         """One page of `shown` (`kept`: of the liked) for the app's 推荐记录, each thing as the main chat draws
         it, at the time it was shown or liked: with the chip and the topic it had in the chat or on the pet's
-        card, else with the topic a no from the list would turn down, and its place for the list's reactions."""
+        card, else with those it would have now, and its place for the list's reactions."""
         from .. import recommend
         runtime, events = self.ws._runtime(), self._events()
         got = shown(self.ws._library(), events, kept, limit, before)
@@ -652,8 +652,9 @@ class Feed:
             if card is None:
                 continue
             had = chat.get(item.id) or on_card.get(item.id) or {}
-            topic = had.get("topic") or why.of(shape(item, {}), item)["topic"]
-            chip = had.get("why")
+            now = why.of(shape(item, {}), item)
+            topic = had.get("topic") or now["topic"]
+            chip = had.get("why") or now["why"]
             if chip and chip.get("key"):
                 chip = {**chip, "lean": leans.get(chip["key"])}
             card.update(why=chip, topic=topic, rank=rank, slot=had.get("slot", ""), surface="list",
