@@ -74,9 +74,12 @@ SURROGATE = re.compile("[\ud800-\udfff]")
 STATE_MAX = 6000
 STATE_MOST = 20_000
 SECRET_MASK = "•••"
-# A field's own words that make it secret, whatever its type says.
-SECRET_LABEL = re.compile(r"password|passcode|passwd|card\s*number|card\s*no|cvv|cvc|security\s*code|one[-\s]?time|"
-                          r"\botp\b|verification\s*code|密码|口令|验证码|校验码|动态码|卡号|银行卡|信用卡|安全码|支付密码",
+# A field's own words that make it secret, whatever its type says: card and one-time-code words as Chromium's
+# autofill heuristics name them (card #, ccnum, csc, a 6-digit code, 2FA, PIN), and their Chinese.
+SECRET_LABEL = re.compile(r"password|passcode|passwd|\b(?:card|cc|acct)[\s._-]?(?:number|num|no\b|#)|cvv|cvc|cvn|csc|"
+                          r"security\s*code|one[-\s]?time|\botp\b|\botc\b|totp|\b2fa\b|two[-\s]?factor|\bpin\b|"
+                          r"verification\s*code|sms\s*code|\benter\s+(?:the\s+)?code\b|\d[-\s]?digit\s+code|"
+                          r"密码|口令|验证码|校验码|动态码|卡号|银行卡|信用卡|安全码|支付密码",
                           re.I)
 SECRET_AUTOCOMPLETE = re.compile(r"^(?:cc-.*|one-time-code|current-password|new-password)$", re.I)
 SECRET_SELECTOR = ("input[type=password],input[autocomplete^=cc-],input[autocomplete=one-time-code],"

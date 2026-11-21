@@ -98,8 +98,8 @@ CHECK_JS = r"""(hint = {}) => {
   const pws = pwsAll.filter((p) => !inLayer(p));
   // A one-time code asked for on its own page: still the sign-in, and always the person's.
   const codeOf = (i) => shown(i) && (body.length < 4000 || inLayer(i)) &&
-    (i.autocomplete === 'one-time-code' || /otp|one.?time|verif.*code|sms.?code|验证码|驗證碼|校验码|動態|认证码|確認コード|인증/i.test(
-      [i.name, i.id, i.placeholder, i.getAttribute('aria-label')].join(' ')));
+    (i.autocomplete === 'one-time-code' || /otp|\botc\b|totp|\b2fa\b|two.?factor|one.?time|verif.*code|sms.?code|enter (the )?code|\d.?digit code|\bpin\b|验证码|驗證碼|校验码|動態|认证码|確認コード|인증/i.test(
+      [i.name, i.id, i.placeholder, i.getAttribute('aria-label'), i.labels && i.labels[0] && i.labels[0].innerText].join(' ')));
   const codesAll = [...document.querySelectorAll('input')].filter(codeOf);
   const codes = codesAll.filter((i) => !inLayer(i));
   let kind = '', evidence = '';

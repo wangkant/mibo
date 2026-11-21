@@ -1275,6 +1275,10 @@ class Hands:
                 if urlsplit(url).scheme not in ("http", "https"):
                     return {"status": "failed", "line": "[failed] only http and https addresses"}
                 site = gate.site_of(url)
+                if not signin.chose(self.allowed.path.parent, url, "task"):
+                    # Settings › 连接: the person turned off the character opening this site by itself.
+                    return {"status": "failed", "line": f"[refused] the person turned off opening {site} on your own "
+                                                        f"(Settings › 连接); nothing was opened. Ask them"}
                 if site not in self.sites and not action.get("named"):
                     # A site the person did not name and no link led to: going there is theirs to say.
                     answer = await self._card("leave", "", "", clip(url, 300), "the address goes to a site that is "
@@ -1650,6 +1654,11 @@ class Hands:
         if mode == "refuse":
             return {"status": "failed", "line": f"[failed] press {key}: the clipboard is the person's own and is never "
                                                 f"used; nothing was pressed. Type the words instead"}
+        # A character keyed into a secret field is typing it: theirs, as for `type`.
+        if (ident is not None and len(key.rsplit("+", 1)[-1]) == 1 and not re.match(r"(Control|Alt|Meta)\+", key)
+                and await self.page.secret(ident)):
+            return {"status": "refused", "line": f"[handover] {self.page.describe(ident)} is a secret field, never "
+                                                 f"typed for them; they say 继续 once it is in"}
         kind = "watch" if mode == "watch" else ""
         if mode in ("enter", "click") and ident is not None:
             url = await self._url()

@@ -265,8 +265,8 @@ def k_note_saved(c):
 
 def k_calc(c):
     used = _called(c, "use_program", "act", "open")
-    return "1081" in c.reply.replace(",", "") and used, f"1081 {'given' if '1081' in c.reply else 'missing'}, " \
-                                                          f"{'with' if used else 'without'} the program"
+    given = "1081" in c.reply.replace(",", "")
+    return given and used, f"1081 {'given' if given else 'missing'}, {'with' if used else 'without'} the program"
 
 
 def k_reply_chat(c):
@@ -396,7 +396,8 @@ def k_bilibili(c):
 
 
 def k_anime(c):
-    first = c.rows[0]["called"] if c.rows else []
+    # The first round of the main loop: calls with no tools offered (the page reader, background notes) are not it.
+    first = next((r["called"] for r in c.rows if r.get("tools")), [])
     looked = any(n in LOOKUP for n, _ in first)
     card = c.card_attached
     on_subject = not card or bool(re.search(r"番|动画|动漫|anime|bilibili|B站", card, re.I))
@@ -443,7 +444,7 @@ REQUESTS = [
      "program": True, "slow": 1500, "yes": "聊天|小林|收到|开启|程序", "check": k_stopped, "stop": True},
     {"id": "E11", "say": "把这个网页的标题复制到记事本", "page": "/e/article.html", "wrong": set(),  # copy: voice
      "yes": "记事本|Notepad|开启|程序", "check": k_title_copied},
-    {"id": "E12", "say": "把桌面上的截图都移到图片文件夹", "wrong": {"web", "program"}, "yes": "截图|png|图片|Pictures|开启",  # copy: voice
+    {"id": "E12", "say": "把桌面上的截图都移到图片文件夹", "wrong": {"web", "program"}, "yes": "截图|png|图片|Pictures|桌面|Desktop|开启",  # copy: voice
      "check": k_shots_moved},
     {"id": "E13", "say": "C 盘还剩多少空间", "wrong": {"web", "program"}, "yes": "开启|C:|磁盘|Get-|空间",  # copy: voice
      "check": k_disk},
@@ -763,11 +764,20 @@ class Bench:
         flat = " ".join(text.split())
         # Nothing of the person's own is handed over, whatever the request: a card naming a path outside the
         # stand-in places, or a program that is not one of this run's, is answered no.
+        # The bench's own tiny MCP server (this python and tools/everyday) counts as this run's.
+        ours = (str(self.places).lower(), str(HERE / "everyday").lower(), sys.executable.lower())
         paths = re.findall(r"[A-Za-z]:\\[^\s'\"]*", flat)
-        if any(not p.lower().startswith(str(self.places).lower()) and len(p.rstrip("\\")) > 2 for p in paths):
+        if any(not p.lower().startswith(ours) and len(p.rstrip("\\")) > 2 for p in paths):
             return False
-        programs = re.findall(r"[\w.-]+\.exe\b", flat, re.I)
-        if any(p.lower() not in ("notepad.exe", "chat.exe", "calculatorapp.exe") for p in programs):
+        # Any .exe named counts as a program, except on a card that only deletes files (E21's installers).
+        deletes = re.search(r"回收站|删除|recycle|delete", flat, re.I) and not re.search(
+            r"运行|启动|打开|run|launch|open", flat, re.I)
+        programs = [] if deletes else re.findall(r"[\w.-]+\.exe\b", flat, re.I)
+        if any(p.lower() not in ("notepad.exe", "chat.exe", "calculatorapp.exe", Path(sys.executable).name.lower())
+               for p in programs):
+            return False
+        # Nor is the person's own browser opened: the bench cannot close what it would start there.
+        if re.search(r"在浏览器中打开|默认浏览器|open in (the )?browser", flat, re.I):
             return False
         rule = request["yes"]
         return rule if isinstance(rule, bool) else re.search(rule, flat) is not None
@@ -838,6 +848,9 @@ class Bench:
             if request.get("tabs"):
                 self.open_page(request["tabs"])
             self.open_page(request["page"])
+            # A sign-in kept by an earlier run (E27) would open the member page: each run starts signed out.
+            self.page_js("localStorage.clear(); location.reload(); true")
+            time.sleep(2)
         if request.get("program"):
             hwnd = self.launch([str(self.places / "bin" / "chat.exe"), str(chatlog), "-2300", "200",
                                 str(request.get("slow", 0))])
@@ -1037,7 +1050,7 @@ def _walk(d, home, places, site, meter, out, real, wanted, args, box) -> None:
             continue
         for n in (n,):
             if meter.spent >= args.budget - 0.004:
-                left.append(rid)
+                left.append(rid if n == 1 else f"{rid} run {n}")
                 break
             if request.get("risky") and not args.risky:
                 d.log(f"== {rid} left out: Notepad's Save dialog may write to the person's own folders (--risky runs it)")
@@ -1176,8 +1189,11 @@ def selfcheck(places: Path) -> int:
                 lambda: base(bright=("50", "100"), shell=[{"outcome": "ran", "command": "WmiSetBrightness 100"}])),
         "E30": (lambda: base(pane={"address": "https://www.bilibili.com/"}),
                 lambda: base(pane={"address": ""}, calls=[("use_program", "{}")])),
-        "E31": (lambda: base(rows=[{"called": [("web_search", "{}")]}], reply="最近有几部新番"),  # copy: voice
-                lambda: base(card_attached="手冲咖啡入门", reply="要不要我帮你搜一下？")),  # copy: voice
+        "E31": (lambda: base(rows=[{"tools": [], "called": []},
+                                   {"tools": ["web_search"], "called": [("web_search", "{}")]}],
+                             reply="最近有几部新番"),  # copy: voice
+                lambda: base(rows=[{"tools": ["web_search"], "called": []}, {"tools": [], "called": [("look", "{}")]}],
+                             card_attached="手冲咖啡入门", reply="要不要我帮你搜一下？")),  # copy: voice
         "E32": (lambda: base(reply="英文版的头条是 Arctic route stays open 和 Floating wind farm"),  # copy: voice
                 lambda: base(reply="英文页需要关闭广告拦截插件才能看")),  # copy: voice
     }

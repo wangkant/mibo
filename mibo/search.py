@@ -811,7 +811,8 @@ class WebSearch:
         last = (vars(self).get("_errand") or {}) if go_on else {}
         task, before = last.get("task") or " ".join(re.sub(r"[\x00-\x1f]", " ", task).split()), last.get("steps", [])
         where = start or (await asyncio.to_thread(remote._post, "where", 10)).get("url") or ""
-        if where and not signin.chose(home / "runtime" / "desktop", where, "here"):
+        # A start address is the character opening the site itself (任务中读取); else the page they have open.
+        if where and not signin.chose(home / "runtime" / "desktop", where, "task" if start else "here"):
             return {"status": "off", "result": "", "steps": []}
         lookups.doing("operate", task[:80])
 
