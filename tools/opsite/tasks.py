@@ -89,8 +89,30 @@ TASKS = [
      "ask": "在这个论坛搜 露营，打开新手露营装备清单那个帖子，回复：谢谢分享，很实用", "cards": 1},
     {"id": "M06", "kind": "three pages: shop, item with options, the bag's total", "start": "/t/m06-store.html",
      "ask": "在这个店把灰色 L 码的加绒连帽卫衣加入购物袋，然后打开购物袋告诉我合计多少钱", "cards": 0},
+    # The whole page: answers that lie far past what the window shows.
+    {"id": "W1", "kind": "a table of 300 rows, the most-read row far below the fold", "start": "/t/t34-table.html",
+     "ask": "在这个内容分析表格里，哪篇文章的阅读量最高？告诉我标题和阅读数", "cards": 0},
+    {"id": "W2", "kind": "a virtual list of 400 rows drawn only in view", "start": "/t/t35-vlist.html",
+     "ask": "我的回答里哪一篇阅读量最高？告诉我标题和阅读数", "cards": 0},
+    {"id": "W3", "kind": "a page of 60000 characters, the answer at 70 percent", "start": "/t/t36-report.html",
+     "ask": "这份报告里说东城分馆是哪一年开始全天二十四小时自助借还的？", "cards": 0},
+    {"id": "W4", "kind": "a tab bar whose first tab is already chosen", "start": "/t/t37-tabs.html",
+     "ask": "看看我哪篇内容的阅读量最高，告诉我标题和阅读数", "cards": 0},
 ]
-BY_ID = {t["id"]: t for t in TASKS}
+# Long pages on real sites a visitor reads signed out (tools/oploop.py only): the answer is in the reply.
+REAL = [
+    {"id": "L1", "kind": "real: a table of 240 rows, the row at 78 percent",
+     "start": "https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population",
+     "ask": "In the table on this page, what population figure is given for Iceland?", "reply_has": ["397", "710"]},
+    {"id": "L2", "kind": "real: a long article, the fact past the middle",
+     "start": "https://en.wikipedia.org/wiki/History_of_the_bicycle",
+     "ask": "According to this page, on what date did Isaac R Johnson lodge his patent for a folding bicycle?",
+     "reply_has": ["1899"]},
+    {"id": "L3", "kind": "real: a list of releases in a box that scrolls by itself",
+     "start": "https://www.python.org/downloads/",
+     "ask": "In this page's list of releases, on what date was Python 3.4.9 released?", "reply_has": ["2018"]},
+]
+BY_ID = {t["id"]: t for t in TASKS + REAL}
 
 
 def _bodies(state: dict, path: str) -> list[dict]:
@@ -227,11 +249,27 @@ def t14_amount(round_: int) -> str:
     return f"{268.5 + 7 * (round_ % 9):.1f}"
 
 
+# What the W tasks read changes each reset too: the title stays, the count (or the year) moves.
+W_TITLE = {"W1": "如何在三个月内读完一百本书", "W2": "养猫之前需要想清楚哪些事", "W4": "我在小城开了一家旧书店"}
+W_BASE = {"W1": 9100, "W2": 8800, "W4": 7700}
+
+
+def w_answer(task: str, round_: int) -> list[str]:
+    if task == "W3":
+        return [str(2011 + round_ % 9)]
+    return [W_TITLE[task], str(W_BASE[task] + 37 * (round_ % 9))]
+
+
+CHECKS.update({w: (lambda s: (not _others(s), f"POSTs {_others(s)}")) for w in ("W1", "W2", "W3", "W4")})
+
+
 def check(task: str, state: dict) -> dict:
     if task not in CHECKS:
         return {"ok": False, "why": "no such task", "reply_has": []}
     ok, why = CHECKS[task](state)
-    reply = [t14_amount(state.get("round", 0))] if task == "T14" else REPLY.get(task, [])
+    round_ = state.get("round", 0)
+    reply = ([t14_amount(round_)] if task == "T14" else w_answer(task, round_) if task.startswith("W")
+             else REPLY.get(task, []))
     # When each effect arrived, for the bench to see it came after a yes on a card.
     effects = [p["at"] for p in state["posts"] if p["path"] not in FREE_PATHS]
     return {"ok": bool(ok), "why": str(why)[:400], "reply_has": reply, "effects": effects}

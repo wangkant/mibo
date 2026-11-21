@@ -472,18 +472,12 @@ class DirectMessages:
             messages = _with_found(messages, _done_so_far(lookups))
         elif lookups is not None:
             from .skills import offer as skill_offer
-            from .skills import tool as skill_tool
-            run = run_of()
-            if run is None:
+            if run_of() is None:
                 # A market skill the message plainly fits, offered on a card first (skills/offer.py); a scheduled
                 # run has nobody to answer a card.
                 await skill_offer.offer(self, self._last_user_text(history), lookups)
-            # The skills that fit the message, or a run's request: listed for use_skill, or put in the prompt
-            # (skills/tool.py).
-            system = skill_tool.before(self, system, run["words"] if run else self._last_user_text(history), lookups)
             answer, found = await self._reply_with_tools(system, messages, self.llm_dm_model, lookups,
                                                          said=self._last_user_text(history))
-            system = skill_tool.after(self, system, lookups)
             if found:
                 messages = _with_found(messages, found)
             # Asked without response_format: the object once more in JSON mode, else

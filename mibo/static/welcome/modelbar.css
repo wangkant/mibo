@@ -48,15 +48,6 @@
   width: 14px;
   height: 14px;
 }
-.mb-once {
-  margin-left: 2px;
-  padding: 0 5px;
-  border-radius: var(--pa-r-pill);
-  background: var(--pa-sunken);
-  color: var(--pa-muted);
-  font-size: 11px;
-  line-height: 16px;
-}
 .mb-pill > .i {
   flex: none;
   width: 14px;
@@ -167,29 +158,6 @@
   font-size: var(--pa-fs-xs);
   line-height: 16px;
 }
-.side-menu-item.mb-once-row {
-  min-height: 30px;
-}
-.mb-box {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid var(--pa-line-strong);
-  border-radius: 4px;
-}
-.mb-box.on {
-  border-color: var(--pa-ink);
-  background: var(--pa-ink);
-}
-.side-menu-item .mb-box.on svg {
-  width: 11px;
-  height: 11px;
-  color: var(--pa-surface);
-  stroke-width: 3;
-}
-
 /* The model list: a search box when long. */
 .mb-search {
   display: flex;

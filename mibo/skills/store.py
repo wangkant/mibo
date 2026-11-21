@@ -19,6 +19,7 @@ import stat
 import threading
 import time
 import zipfile
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -39,6 +40,8 @@ MAX_MEMBERS = 2000
 MAX_UNPACKED = 64 * 1024 * 1024
 MAX_MEMBER = 16 * 1024 * 1024
 MAX_DEPTH = 8
+# What reading a damaged or crafted archive's member raises.
+_BROKEN = (zipfile.BadZipFile, NotImplementedError, EOFError, zlib.error)
 RECORDS = "skills.json"
 # The card line for a command that runs a file in a skill's folder (shell/panel.py).
 FROM_SKILL = {"zh": "此命令来自技能「{name}」", "en": "This command comes from the skill “{name}”"}
@@ -63,6 +66,8 @@ class Skill:
     added: float = 0.0
     # Words the ranking reads besides the name and description: the built-in ones' own, or made when added.
     words: str = ""
+    # Phrases any one of which asks for the skill by itself ("哪个更", "worth it"), comma-separated.
+    asks: str = ""
     title_zh: str = ""
     description_zh: str = ""
     digest: str = ""
@@ -223,6 +228,7 @@ def all_skills(home: Path) -> list[Skill]:
             if builtin or made.get("digest") != skill.digest:
                 made = {}
             skill.words = " ".join(filter(None, (skill.meta.get("mibo-words", ""), str(made.get("words") or ""))))
+            skill.asks = skill.meta.get("mibo-asks", "")
             skill.title_zh = skill.meta.get("mibo-title-zh", "") or str(made.get("title_zh") or "")
             skill.description_zh = skill.meta.get("mibo-description-zh", "") or str(made.get("description_zh") or "")
             found.append(skill)
@@ -322,6 +328,8 @@ def install_zip(home: Path, data: bytes, origin: str, source: str, within: str =
             meta, _ = _front(archive.read(files[root / SKILL_FILE][0]).decode("utf-8", "replace"))
         except ValueError:
             meta = {}
+        except _BROKEN:
+            raise ValueError("skill_bad_archive") from None
         name = meta.get("name") if isinstance(meta.get("name"), str) and NAME.match(meta["name"].strip()) else ""
         folder = name.strip() if name else re.sub(r"[^a-z0-9-]+", "-", (root.name or "skill").lower()).strip("-")
         folder = folder[:MAX_NAME] or "skill"
@@ -332,22 +340,29 @@ def install_zip(home: Path, data: bytes, origin: str, source: str, within: str =
         if there.exists() and not (row and row.get("source") == source and row.get("within", "") == str(root)):
             raise ValueError("skill_exists")
         plans.append((root, folder))
+    # Every skill is unpacked before any is put in place; a member that does not unpack as its directory says (a
+    # wrong checksum, a size it lied about, entries sharing one member's bytes) stops the add with nothing kept.
+    incoming = {folder: target_root / f".incoming-{folder}-{os.getpid()}" for _, folder in plans}
+    try:
+        for root, folder in plans:
+            shutil.rmtree(incoming[folder], ignore_errors=True)
+            incoming[folder].mkdir()
+            for path, info, _ in taken:
+                if not _under(path, root):
+                    continue
+                dest = incoming[folder].joinpath(*path.relative_to(root).parts)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(info) as src, open(dest, "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 16)
+    except _BROKEN:
+        for place in incoming.values():
+            shutil.rmtree(place, ignore_errors=True)
+        raise ValueError("skill_bad_archive") from None
     for root, folder in plans:
-        incoming = target_root / f".incoming-{folder}-{os.getpid()}"
-        shutil.rmtree(incoming, ignore_errors=True)
-        incoming.mkdir()
-        for path, info, _ in taken:
-            if not _under(path, root):
-                continue
-            rel = path.relative_to(root)
-            dest = incoming.joinpath(*rel.parts)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(info) as src, open(dest, "wb") as out:
-                shutil.copyfileobj(src, out, 1 << 16)
         there = target_root / folder
         if there.exists():
             shutil.rmtree(there)
-        incoming.rename(there)
+        incoming[folder].rename(there)
         sources[folder] = {"origin": origin, "source": source, "within": str(root), "ref": ref,
                            "sha256": hashlib.sha256(data).hexdigest(), "at": time.time(),
                            **({"market": market} if market else {})}

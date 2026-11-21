@@ -4,9 +4,10 @@ The catalog is one JSON file (data/market/skills.json, shipped as a snapshot and
 CATALOG_URL through the guarded fetch). It is data from the network: an entry that does not hold the fixed shape,
 or points anywhere but a public https git host, is dropped, and nothing in it is read as an instruction.
 
-Installing an entry fetches its repository's archive at the entry's commit from its own host, takes the skill's
-folder out of it, checks the folder's hash against the entry, scans what arrived, and writes it through the store's
-add path with the entry recorded, so an update can be told. Nothing in it is run. An entry whose licence does not
+Installing an entry fetches the skill's files at the entry's commit one by one, from its own host or, where that does
+not answer, a public mirror of it (reach.py), checks each against the sha256 the entry lists for it (the list makes
+up the entry's folder hash), scans what arrived, and writes it through the store's add path with the entry recorded,
+so an update can be told. Nothing in it is run. An entry whose licence does not
 allow it, or whose scan finds a high risk, is never installed from here; a repository with no stated licence is
 installed only when the person agreed to that on the page.
 """
@@ -21,9 +22,12 @@ import re
 import time
 import zipfile
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from functools import cache
+from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 from . import pick, store
+from .. import reach
 from ..storage import atomic_write_text
 
 logger = logging.getLogger("mibo.skills")
@@ -31,27 +35,26 @@ logger = logging.getLogger("mibo.skills")
 # Where the app refreshes the catalog from: the present repository, which is to be renamed.
 CATALOG_URL = "https://raw.githubusercontent.com/wangkant/mibo/main/data/market/skills.json"
 REFRESH_S = 24 * 3600
-MAX_CATALOG = 8 * 1024 * 1024
-MAX_ARCHIVE = 64 * 1024 * 1024
+MAX_CATALOG = 16 * 1024 * 1024
 MAX_PREVIEW = 512 * 1024
-CATEGORIES = ("documents", "writing", "research", "data", "design", "development", "productivity", "media",
-              "learning", "life", "tools")
+# The catalog's shape: 2 lists each entry's files with their sha256.
+VERSION = 2
 RISKS = ("none", "low", "high")
 # Licences that allow use and redistribution (share-alike ones included), as tools/skillmarket/build.py reads them.
 OPEN = frozenset({"MIT", "MIT-0", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense",
                   "CC0-1.0", "CC-BY-4.0", "BSL-1.0", "Zlib", "CC-BY-SA-4.0", "GPL-2.0", "GPL-3.0", "AGPL-3.0",
                   "LGPL-2.1", "LGPL-3.0", "MPL-2.0"})
 FITS = ("ready", "partial", "no")
-# Public git hosts an entry may point at, with the archive of a repository at a commit and a file's raw text.
+# Public git hosts an entry may point at, with where a file at a commit can be read: the host's own raw address
+# first, then for GitHub the public mirrors that serve the same bytes (jsDelivr's two networks, ghfast.top).
 HOSTS = {
-    "github.com": (lambda repo, sha: f"https://codeload.github.com/{repo}/zip/{sha}",
-                   lambda repo, sha, path: f"https://raw.githubusercontent.com/{repo}/{sha}/{path}"),
-    "gitlab.com": (lambda repo, sha: f"https://gitlab.com/{repo}/-/archive/{sha}/{repo.rsplit('/', 1)[1]}-{sha}.zip",
-                   lambda repo, sha, path: f"https://gitlab.com/{repo}/-/raw/{sha}/{path}"),
-    "codeberg.org": (lambda repo, sha: f"https://codeberg.org/{repo}/archive/{sha}.zip",
-                     lambda repo, sha, path: f"https://codeberg.org/{repo}/raw/commit/{sha}/{path}"),
-    "gitee.com": (lambda repo, sha: f"https://gitee.com/{repo}/repository/archive/{sha}.zip",
-                  lambda repo, sha, path: f"https://gitee.com/{repo}/raw/{sha}/{path}"),
+    "github.com": lambda repo, sha, path: [f"https://raw.githubusercontent.com/{repo}/{sha}/{path}",
+                                           f"https://cdn.jsdelivr.net/gh/{repo}@{sha}/{path}",
+                                           f"https://fastly.jsdelivr.net/gh/{repo}@{sha}/{path}",
+                                           f"https://ghfast.top/https://raw.githubusercontent.com/{repo}/{sha}/{path}"],
+    "gitlab.com": lambda repo, sha, path: [f"https://gitlab.com/{repo}/-/raw/{sha}/{path}"],
+    "codeberg.org": lambda repo, sha, path: [f"https://codeberg.org/{repo}/raw/commit/{sha}/{path}"],
+    "gitee.com": lambda repo, sha, path: [f"https://gitee.com/{repo}/raw/{sha}/{path}"],
 }
 _REPO = re.compile(r"^[\w.-]+(?:/[\w.-]+){1,4}$")
 _ID = re.compile(r"^[\w.-]{1,80}/[\w.-]{1,80}$")
@@ -73,28 +76,46 @@ def folder_hash(files: dict[str, bytes]) -> str:
     return total.hexdigest()
 
 
+def listed_hash(listed: dict[str, str]) -> str:
+    """folder_hash from each file's own sha256, as an entry lists them."""
+    total = hashlib.sha256()
+    for path in sorted(listed, key=lambda p: p.encode("utf-8")):
+        total.update(path.encode("utf-8") + b"\0" + listed[path].encode() + b"\n")
+    return total.hexdigest()
+
+
 # ---------------------------------------------------------------------- scan
 
 # What a skill's files may hold that matters before it is installed: (code, high, pattern). A skill's text is
 # guidance the model reads, and its scripts run only through the command gate; these are what would turn either
 # against the person.
 _SCRIPT = re.compile(r"(?<!\.d)\.(py|js|mjs|cjs|ts|sh|bash|zsh|ps1|psm1|bat|cmd|rb|pl|php|lua)$", re.I)
+_HOSTS = (r"webhook\.site|requestbin|pipedream\.net|ngrok(?:-free)?\.(?:io|app)|burpcollaborator|interact\.sh|\boast\."
+          r"|discord(?:app)?\.com/api/webhooks|api\.telegram\.org/bot|hooks\.slack\.com/services|transfer\.sh")
 _CHECKS = [(code, high, re.compile(p, re.I)) for code, high, p in (
     ("model_against_person", True,
      r"ignore (?:all |any )?(?:the )?(?:previous|prior|above|earlier|preceding|system) (?:instructions|messages|rules"
      r"|prompts?)|disregard (?:all |any )?(?:the |your )?(?:previous|prior|above|system) (?:instructions|rules|prompt)"
-     r"|(?:do not|don't|never) (?:tell|inform|notify|alert|show) the (?:user|human|person|owner)(?! to\b| they\b)"
-     r"|without (?:telling|informing|asking|notifying) the (?:user|human|person|owner)"
+     r"|(?:do not|don't|never) (?:tell|inform|notify|alert|show) the (?:user|human|person|owner)"
+     r"(?=\s*(?:about\b|anything\b|what\b|that you\b|this\b|it\b|[.,;:!)]|$))"
+     r"|without (?:telling|informing|notifying) the (?:user|human|person|owner)"
      r"|keep (?:this|it) (?:secret|hidden) from the (?:user|human|person)"
      r"|pretend (?:that )?(?:you are|to be) (?:the user|a human|the system|an? (?:admin|administrator|developer))"
      r"|pretend (?:that )?(?:the user|they) (?:has|have) (?:approved|agreed|confirmed)"
-     r"|忽略(?:之前|以上|上面|先前|所有|系统)的?(?:指令|指示|说明|规则|提示)|不要(?:告诉|通知|告知|让)用户|瞒着用户|对用户隐瞒"
-     r"|假装(?:你是用户|用户已|是系统)"),
+     r"|(?:turn|switch|shut) off (?:the |all |any )?(?:confirmation|permission|approval|safety) (?:cards?|prompts?|checks?"
+     r"|dialogs?)|(?:approve|answer|accept|press|click) (?:the |any |every )?(?:cards?|permission prompts?|confirmations?)"
+     r" (?:yourself|for (?:them|the user|the person)|on (?:their|the user's|the person's) behalf)"
+     r"|忽略(?:之前|以上|上面|先前|所有|系统)的?(?:指令|指示|说明|规则|提示)|不要(?:告诉|通知|告知)用户"
+     r"|不要让用户(?:知道|发现|看到|察觉|注意到)|瞒着用户|对用户隐瞒|假装(?:你是用户|用户已|是系统)"
+     r"|关闭(?:确认|权限|安全)?(?:卡片|提示|确认)|替用户(?:确认|点击|批准|同意)"),
     ("sends_data", True,
-     r"webhook\.site|requestbin|pipedream\.net|ngrok(?:-free)?\.(?:io|app)|burpcollaborator|interact\.sh|\boast\."
-     r"|discord(?:app)?\.com/api/webhooks|api\.telegram\.org/bot|hooks\.slack\.com/services|transfer\.sh"
-     r"|(?:send|upload|post|forward) (?:all |the )?(?:user'?s? )?(?:files|credentials|cookies|tokens|api keys"
-     r"|passwords|browser history|env(?:ironment)? variables|\.env) to "),
+     _HOSTS +
+     r"|(?:send|upload|post|forward) (?:all |the |their |the user'?s? |the person'?s? )?(?:credentials|cookies"
+     r"|tokens|api keys|passwords|browser history|env(?:ironment)? variables|\.env(?: files?)?|ssh keys?|private keys?)"
+     r" to\b|(?:send|upload|post|forward|copy) (?:(?:all|every|the|their|the user'?s?|the person'?s?) ){0,2}"
+     r"(?:files|documents|photos)\b[^.\n]{0,40}?\bto (?:https?://|my server|our server|this (?:url|address|endpoint"
+     r"|server|webhook))|(?:上传|发送|发|传)到\s*https?://"
+     r"|(?:用户|对方|他们)的(?:密码|凭据|密钥|令牌|cookies?|token)[^。\n]{0,12}(?:发送|上传|发)(?:到|给)"),
     ("encoded_run", True,
      r"(?:eval|exec)\s*\(\s*(?:atob|base64\.b64decode|bytes\.fromhex|Buffer\.from|codecs\.decode)"
      r"|FromBase64String[^\n]*(?:iex|Invoke-Expression)|base64 (?:-d|--decode)[^\n|]*\|\s*(?:ba|z)?sh\b"
@@ -104,9 +125,9 @@ _CHECKS = [(code, high, re.compile(p, re.I)) for code, high, p in (
      r"\|\s*(?:iex|Invoke-Expression)\b|Invoke-Expression\s*\(?\s*\(?\s*(?:New-Object|iwr|irm|Invoke-WebRequest)"
      r"|(?:urlopen|requests\.get)\([^\n]*\)[^\n]*\b(?:exec|eval)\("),
     ("credentials", True,
-     r"\.ssh[/\\](?:id_|authorized_keys)|\bid_(?:rsa|ed25519)\b|\.aws[/\\]credentials|(?-i:Login Data|Local State)"
-     r"|cookies\.sqlite|Network\.get(?:All)?Cookies|Storage\.getCookies|User Data[/\\]Default[/\\](?:Network[/\\])?Cookies|browser[_-]?cookie3|pycookiecheat"
-     r"|chrome-cookies-secure|find-generic-password|CredRead|cmdkey /list|wallet\.dat|\.git-credentials"),
+     r"(?-i:Login Data|Local State)|cookies\.sqlite|Network\.get(?:All)?Cookies|Storage\.getCookies"
+     r"|User Data[/\\]Default[/\\](?:Network[/\\])?Cookies|browser[_-]?cookie3|pycookiecheat|chrome-cookies-secure"
+     r"|CredRead|cmdkey /list|wallet\.dat"),
     ("system_settings", True,
      r"\breg(?:\.exe)? add\b|Set-ItemProperty[^\n]*HK(?:LM|CU)|CurrentVersion\\+Run\b|schtasks(?:\.exe)? /create"
      r"|\bcrontab -|launchctl (?:load|bootstrap)|systemctl (?:enable|disable)|Set-MpPreference|netsh (?:advfirewall"
@@ -116,19 +137,67 @@ _CHECKS = [(code, high, re.compile(p, re.I)) for code, high, p in (
      r"\b(?:pip3? install|npm (?:i|install)\b|npx -y\b|pnpm add|yarn add|brew install|apt(?:-get)? install"
      r"|winget install|choco install|cargo install|go install|sudo\b)"),
 )]
+_HOST = re.compile(_HOSTS, re.I)
 # A skill that warns the model about injected text quotes it ("ignore previous instructions"): an example to refuse,
 # not an instruction to the model.
 _QUOTED = re.compile(r"[\"'“‘「『`(]\s*$")
-_WARNS = re.compile(r"inject|not instructions|as data|flag it|malicious|disguis|steer you|not (?:system )?directives"
-                    r"|伪装|注入|不是指令|视为数据|一律", re.I)
+_WARNS = re.compile(r"inject|(?:not|never) instructions|as data|flag it|malicious|disguis|steer you|directive|inert"
+                    r"|target the model|伪装|注入|不是指令|视为数据|一律", re.I)
+# Prose that forbids or faults what it names ("Never send credentials to an arbitrary URL", "Do not email them
+# without telling the owner"), or a counter-example under a "✗ Bad" heading, says the opposite of the match.
+_NEGATED = re.compile(r"(?<!-)\b(?:never|not|no|\w+n't|cannot|avoid|only|instead of|rather than|causes?|refuse)\b"
+                      r"(?!\s+(?:hesitate|forget|fail|wait|need to ask))|不要|不得|禁止|切勿|绝不|不会", re.I)
+_BAD = re.compile(r"✗|❌|\bBad\b|\bDon't:|错误示例|反例")
+_GOOD = re.compile(r"✓|✅|\bGood\b|正确示例")
+# A secret's path counts where the same sentence or line reads, copies or sends it, not where it is only named
+# (a prerequisite, a list of files to leave out).
+_SECRET_PATHS = re.compile(r"\.ssh[/\\](?:id_|authorized_keys)|\bid_(?:rsa|ed25519)\b|\.aws[/\\]credentials"
+                           r"|find-generic-password|\.git-credentials", re.I)
+_TAKES = re.compile(r"\b(?:read|reads|open|cat|type|copy|copies|cp|upload|send|load|readFileSync|readFile|Get-Content"
+                    r"|copyFile|copyfile|copy2)\b|读取|复制|上传|发送", re.I)
+# What prose may name as a vendor's own install steps: a shell installer fetched over https, a service enabled.
+# The command still runs only through its card, so there it counts as installing software; fetched over plain
+# http or from a bare address, it stays a download run.
+_UNSAFE_FETCH = re.compile(r"http://|\b\d{1,3}(?:\.\d{1,3}){3}\b")
+_PROSE_INSTALL = ("download_run", "system_settings")
 
 
-def _found(code: str, pattern: re.Pattern, text: str) -> bool:
+def _sentence(text: str, start: int, end: int) -> tuple[str, str]:
+    """The sentence or line around a match: (the part before it, all of it)."""
+    begin = max(text.rfind(c, 0, start) for c in ".!?。！？\n|") + 1
+    stops = [i for i in (text.find(c, end) for c in ".!?。！？\n") if i >= 0]
+    return text[begin:start], text[begin:min(stops) if stops else len(text)]
+
+
+def _found(code: str, pattern: re.Pattern, text: str, prose: bool, installs: set) -> bool:
+    """Whether `text` holds what `pattern` looks for, read as the code's rules say; a vendor's install step in prose
+    is put in `installs` instead."""
     for m in pattern.finditer(text):
+        if prose and code in ("model_against_person", "sends_data", "download_run"):
+            before = text[max(0, m.start() - 400):m.start()]
+            bad = _BAD.search(before)
+            if _NEGATED.search(_sentence(text, m.start(), m.end())[0]) or (bad and not _GOOD.search(before[bad.end():])):
+                continue
         if code == "model_against_person" and _QUOTED.search(text[max(0, m.start() - 3):m.start()]) \
                 and _WARNS.search(text[max(0, m.start() - 300):m.end() + 300]):
             continue
+        # An exfiltration host named in a readme (an ngrok tunnel for local testing, a webhook example) is
+        # documentation; in a script it is where data would go.
+        if prose and code == "sends_data" and _HOST.fullmatch(m.group(0)):
+            continue
+        if prose and code in _PROSE_INSTALL and (code == "system_settings" or not _UNSAFE_FETCH.search(m.group(0))):
+            installs.add(code)
+            continue
         return True
+    return False
+
+
+def _takes_secret(text: str) -> bool:
+    for m in _SECRET_PATHS.finditer(text):
+        around = _sentence(text, m.start(), m.end())[1]
+        if not around.lstrip().startswith(("#", "//", "*", "-- ")) and not _NEGATED.search(around) \
+                and _TAKES.search(around):
+            return True
     return False
 
 
@@ -151,9 +220,15 @@ def scan(files: dict[str, bytes]) -> dict:
         text = raw.decode("utf-8", "replace")
         # Pictures inlined as data: addresses are not hidden code.
         plain = _DATA_URI.sub("", text)
+        prose, installs = path not in scripts, set()
         for code, _, pattern in _CHECKS:
-            if code not in notes and _found(code, pattern, plain if code == "encoded_blob" else text):
+            if code not in notes and _found(code, pattern, plain if code == "encoded_blob" else text, prose, installs):
                 notes[code] = path
+        if "credentials" not in notes and _takes_secret(text):
+            notes["credentials"] = path
+        # A vendor's install steps in prose are noted as installing software.
+        if installs and not {"installs_packages", *_PROSE_INSTALL} & notes.keys():
+            notes["installs_packages"] = path
         if path in scripts and "network" not in notes and _NETWORK.search(text):
             notes["network"] = path
     high = {code for code, is_high, _ in _CHECKS if is_high}
@@ -191,6 +266,7 @@ def entry(raw) -> dict | None:
     found = raw.get("scan") if isinstance(raw.get("scan"), dict) else {}
     needs = raw.get("needs") if isinstance(raw.get("needs"), dict) else {}
     popular = raw.get("popularity") if isinstance(raw.get("popularity"), dict) else {}
+    listed = raw.get("files") if isinstance(raw.get("files"), dict) else {}
     ident, name = str(raw.get("id") or ""), str(raw.get("name") or "")
     repo, path, sha = str(source.get("repo") or ""), str(source.get("path") or "").strip("/"), str(
         source.get("commit") or "")
@@ -203,8 +279,14 @@ def entry(raw) -> dict | None:
             or not (link == f"{host}/{repo.lower()}" or link.startswith(f"{host}/{repo.lower()}/"))
             or (path and (not _PATH.match(path) or ".." in path.split("/"))) or not _SHA.match(sha)
             or not _HASH.match(str(raw.get("hash") or "")) or found.get("risk") not in RISKS
-            or raw.get("fit") not in FITS):
+            or raw.get("fit") not in FITS or not 0 < len(listed) <= store.MAX_MEMBERS
+            or not all(isinstance(v, str) and _HASH.match(v) and store._member_path(zipfile.ZipInfo(k))[1]
+                       for k, v in listed.items())
+            or listed_hash(listed) != raw["hash"]):
         return None
+    places = layout()
+    category = raw.get("category") if raw.get("category") in places else ""
+    sub = raw.get("sub") if raw.get("sub") in places.get(category, ()) else ""
     spdx = _text(licence.get("spdx", ""), 60) or "NONE"
     count = lambda v: v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
     return {
@@ -213,7 +295,7 @@ def entry(raw) -> dict | None:
         "source": {"host": host, "repo": repo, "path": path, "commit": sha, "url": _https(url, host)},
         "licence": {"spdx": spdx, "url": _https(licence.get("url")),
                     "installable": licence.get("installable") is True, "note": _text(licence.get("note", ""), 300)},
-        "category": raw.get("category") if raw.get("category") in CATEGORIES else "tools",
+        "category": category, "sub": sub,
         "tags": [_text(t, 30) for t in (raw.get("tags") if isinstance(raw.get("tags"), list) else [])[:12]
                  if _text(t, 30)],
         "needs": {"scripts": needs.get("scripts") is True,
@@ -224,7 +306,7 @@ def entry(raw) -> dict | None:
         "fit": raw["fit"], "fit_note": _text(raw.get("fit_note", ""), 300),
         "popularity": {"stars": count(popular.get("stars")), "installs": count(popular.get("installs")),
                        "as_of": _text(popular.get("as_of", ""), 30)},
-        "hash": raw["hash"],
+        "hash": raw["hash"], "files": dict(listed),
         "scan": {"risk": found["risk"], "notes": [_text(n, 300) for n in (found.get("notes") or [])[:12]
                                                   if _text(n, 300)] if isinstance(found.get("notes"), list) else []},
         "updated": _text(raw.get("updated", ""), 30),
@@ -232,7 +314,7 @@ def entry(raw) -> dict | None:
 
 
 def _catalog(data) -> dict | None:
-    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("skills"), list):
+    if not isinstance(data, dict) or data.get("version") != VERSION or not isinstance(data.get("skills"), list):
         return None
     entries, seen = [], set()
     for raw in data["skills"][:5000]:
@@ -243,7 +325,7 @@ def _catalog(data) -> dict | None:
     sources = [{"id": _text(s.get("id", ""), 80), "name": _text(s.get("name", ""), 80), "url": _https(s.get("url")),
                 "note": _text(s.get("note", ""), 300)}
                for s in (data.get("sources") if isinstance(data.get("sources"), list) else []) if isinstance(s, dict)]
-    return {"version": 1, "built_at": _text(data.get("built_at", ""), 40), "sources": sources[:200],
+    return {"version": VERSION, "built_at": _text(data.get("built_at", ""), 40), "sources": sources[:200],
             "skills": entries}
 
 
@@ -282,7 +364,7 @@ def catalog(home: Path) -> tuple[dict, str]:
         return live, "live"
     if shipped:
         return shipped, "snapshot"
-    return {"version": 1, "built_at": "", "sources": [], "skills": []}, "none"
+    return {"version": VERSION, "built_at": "", "sources": [], "skills": []}, "none"
 
 
 def _refresh_state(home: Path) -> dict:
@@ -301,8 +383,11 @@ async def refresh(home: Path, force: bool = False) -> bool:
         return False
     place = _cache_path(home)
     place.parent.mkdir(parents=True, exist_ok=True)
-    result = await safe_fetch_url(CATALOG_URL, timeout=30, max_wire_bytes=MAX_CATALOG, max_decoded_bytes=MAX_CATALOG,
-                                  headers=_UA, max_redirects=3)
+    # The catalog carries the hashes everything else is checked against, so it comes from its own host only.
+    result = None
+    if await reach.answers(reach.runtime_of(home), urlsplit(CATALOG_URL).hostname):
+        result = await safe_fetch_url(CATALOG_URL, timeout=30, max_wire_bytes=MAX_CATALOG,
+                                      max_decoded_bytes=MAX_CATALOG, headers=_UA, max_redirects=3)
     ok = False
     if result is not None:
         try:
@@ -352,20 +437,22 @@ def view(home: Path) -> dict:
     skills = []
     for one in data["skills"]:
         mine = have.get(one["id"])
-        skills.append({**one, "installed": bool(mine), "folder": mine["folder"] if mine else "",
+        skills.append({**{k: v for k, v in one.items() if k != "files"}, "installed": bool(mine), "folder": mine["folder"] if mine else "",
                        "installed_commit": mine["commit"] if mine else "",
                        "update": bool(mine) and (mine["commit"], mine["hash"]) != (one["source"]["commit"], one["hash"]),
                        "name_taken": not mine and one["name"] in names,
                        # Why it may not be installed from here ("" when it may, after a word on a missing licence).
                        "blocked": can_install(one, True)})
     return {"built_at": data["built_at"], "from": came, "refresh_failed": state.get("ok") is False,
-            "sources": data["sources"], "categories": categories(), "skills": skills}
+            "sources": data["sources"], "categories": layout(), "skills": skills}
 
 
-def categories() -> dict:
-    """The fixed categories' names in Chinese and English, kept beside the catalog."""
+@cache
+def layout() -> dict[str, list[str]]:
+    """The market's categories in the page's order, each with its places inside (data/market/categories.json);
+    skills and connectors share them, and the locales name them."""
     from ..home import resource
-    return json.loads(resource("data", "market", "categories.json").read_text(encoding="utf-8"))
+    return json.loads(resource("data", "market", "categories.json").read_text(encoding="utf-8"))["categories"]
 
 
 # ------------------------------------------------------------------- fetching
@@ -374,28 +461,6 @@ async def _get(url: str, limit: int, timeout: float = 60):
     from ..ingestion import safe_fetch_url
     return await safe_fetch_url(url, timeout=timeout, max_wire_bytes=limit, max_decoded_bytes=limit, headers=_UA,
                                 max_redirects=5)
-
-
-def folder_files(data: bytes, path: str) -> dict[str, bytes]:
-    """The files of one folder of a host's repository archive, by their paths inside that folder."""
-    archive = zipfile.ZipFile(io.BytesIO(data))
-    top = store.archive_top(data)
-    inside = PurePosixPath(top, path) if path else PurePosixPath(top)
-    files: dict[str, bytes] = {}
-    size = 0
-    for info in archive.infolist():
-        member, plain = store._member_path(info)
-        if info.is_dir() or not store._under(member, inside) or member == inside:
-            continue
-        if not plain:
-            raise ValueError("skill_bad_archive")
-        size += info.file_size
-        if len(files) >= store.MAX_MEMBERS or size > store.MAX_UNPACKED or info.file_size > store.MAX_MEMBER:
-            raise ValueError("skill_too_large")
-        files[member.relative_to(inside).as_posix()] = archive.read(info)
-    if store.SKILL_FILE not in files:
-        raise ValueError("skill_none_found")
-    return files
 
 
 def zip_of(name: str, files: dict[str, bytes]) -> bytes:
@@ -407,65 +472,38 @@ def zip_of(name: str, files: dict[str, bytes]) -> bytes:
     return out.getvalue()
 
 
-async def _github_files(src: dict) -> dict[str, bytes] | None:
-    """A GitHub folder at a commit file by file: its tree in one call of GitHub's API, then each file's raw bytes.
-    A skill is small and its repository often is not (one holds 170 skills in a 250 MB archive). None when the API
-    does not answer (its hourly limit, the network) or the tree is cut short; ValueError for what cannot be a
-    skill's files."""
-    from urllib.parse import quote
-    where = f"{src['commit']}:{src['path']}" if src["path"] else src["commit"]
-    result = await _get(f"https://api.github.com/repos/{src['repo']}/git/trees/{quote(where)}?recursive=1",
-                        4 * 1024 * 1024, 30)
-    if result is None:
-        return None
-    try:
-        tree = json.loads(result.content)
-        rows = [(str(r["type"]), str(r["mode"]), str(r["path"]), int(r.get("size") or 0)) for r in tree["tree"]]
-    except (ValueError, LookupError, TypeError):
-        return None
-    if tree.get("truncated"):
-        return None
-    files: dict[str, bytes] = {}
-    size = 0
-    for kind, mode, rel, length in rows:
-        if kind == "tree":
-            continue
-        # The archive's rules for what may be written here: plain files only, no links or nested repositories.
-        if kind != "blob" or mode not in ("100644", "100755") or not store._member_path(zipfile.ZipInfo(rel))[1]:
-            raise ValueError("skill_bad_archive")
-        size += length
-        if len(files) >= store.MAX_MEMBERS or size > store.MAX_UNPACKED or length > store.MAX_MEMBER:
-            raise ValueError("skill_too_large")
-        path = f"{src['path']}/{rel}" if src["path"] else rel
-        got = await _get(HOSTS["github.com"][1](src["repo"], src["commit"], quote(path)), store.MAX_MEMBER, 60)
+def _sources(src: dict, path: str) -> list[str]:
+    return HOSTS[src["host"]](src["repo"], src["commit"], quote(f"{src['path']}/{path}" if src["path"] else path))
+
+
+async def _checked(home: Path, src: dict, path: str, sha: str, limit: int, timeout: float) -> bytes:
+    """One file of the entry's folder from the first host that answers and serves the bytes its sha256 names;
+    ValueError when none does."""
+    wrong = False
+    for url in await reach.order(reach.runtime_of(home), _sources(src, path)):
+        got = await _get(url, limit, timeout)
         if got is None:
-            raise ValueError("market_fetch_failed")
-        files[rel] = got.content
-    return files
+            continue
+        if hashlib.sha256(got.content).hexdigest() == sha:
+            return got.content
+        wrong = True
+    raise ValueError("market_hash_mismatch" if wrong else "market_fetch_failed")
 
 
-async def fetch(one: dict) -> dict[str, bytes]:
-    """The entry's folder at its commit, from its own host; ValueError when it cannot be fetched or does not match
-    the entry's hash. On GitHub file by file, else (and when GitHub's API does not answer) the repository's
-    archive."""
-    src = one["source"]
-    files = await _github_files(src) if src["host"] == "github.com" else None
-    if files is not None and folder_hash(files) != one["hash"]:
-        # The entry was read from an archive, which leaves out what a repository marks export-ignore.
-        files = None
-    if files is None:
-        result = await _get(HOSTS[src["host"]][0](src["repo"], src["commit"]), MAX_ARCHIVE, 120)
-        if result is None or not result.content.startswith(b"PK"):
-            raise ValueError("market_fetch_failed")
-        try:
-            files = await asyncio.to_thread(folder_files, result.content, src["path"])
-        except zipfile.BadZipFile:
-            raise ValueError("skill_bad_archive") from None
+async def fetch(home: Path, one: dict) -> dict[str, bytes]:
+    """The entry's folder at its commit, file by file, each checked against the entry; ValueError when one cannot be
+    fetched or does not match."""
+    src, gate = one["source"], asyncio.Semaphore(4)
+
+    async def take(path: str, sha: str) -> tuple[str, bytes]:
+        async with gate:
+            return path, await _checked(home, src, path, sha, store.MAX_MEMBER, 60)
+
+    files = dict(await asyncio.gather(*(take(p, h) for p, h in one["files"].items())))
     if store.SKILL_FILE not in files:
         raise ValueError("skill_none_found")
-    if folder_hash(files) != one["hash"]:
-        logger.warning("[Skills] %s does not match its catalog hash", one["id"])
-        raise ValueError("market_hash_mismatch")
+    if sum(map(len, files.values())) > store.MAX_UNPACKED:
+        raise ValueError("skill_too_large")
     return files
 
 
@@ -480,7 +518,7 @@ async def install(home: Path, ident: str, unlicensed_ok: bool = False) -> str:
     if why:
         raise ValueError(why)
     async with _lock:
-        files = await fetch(one)
+        files = await fetch(home, one)
         # What arrived is scanned again; the entry's own result is not trusted for this.
         if scan(files)["risk"] == "high":
             raise ValueError("market_high_risk")
@@ -509,25 +547,24 @@ _seen: dict[str, tuple[float, object]] = {}
 SEEN_S = 6 * 3600
 
 
-async def preview(one: dict) -> str | None:
+async def preview(home: Path, one: dict) -> str | None:
     key = f"preview:{one['id']}:{one['source']['commit']}"
     if key in _seen:
         return _seen[key][1]
-    src = one["source"]
-    path = f"{src['path']}/{store.SKILL_FILE}" if src["path"] else store.SKILL_FILE
-    result = await _get(HOSTS[src["host"]][1](src["repo"], src["commit"], path), MAX_PREVIEW, 30)
-    if result is None:
+    try:
+        got = await _checked(home, one["source"], store.SKILL_FILE, one["files"][store.SKILL_FILE], MAX_PREVIEW, 30)
+    except ValueError:
         return None
-    text = result.content.decode("utf-8", "replace")
+    text = got.decode("utf-8", "replace")
     _seen[key] = (time.time(), text)
     return text
 
 
-async def changed(one: dict) -> bool | None:
+async def changed(home: Path, one: dict) -> bool | None:
     """Whether the folder changed upstream after the reviewed commit; None when it cannot be told (another host,
-    the network, GitHub's hourly limit)."""
+    the network, GitHub's hourly limit). Only GitHub's own API tells, so a network without it gets None at once."""
     src = one["source"]
-    if src["host"] != "github.com":
+    if src["host"] != "github.com" or not await reach.answers(reach.runtime_of(home), "api.github.com"):
         return None
     key = f"changed:{one['id']}:{src['commit']}"
     hit = _seen.get(key)
@@ -560,6 +597,9 @@ async def mark(home: Path, owner: str) -> bytes | None:
         return place.read_bytes()
     except OSError:
         pass
+    # The page keeps a plain icon until a picture arrives, so a network without GitHub only keeps the icon.
+    if not await reach.answers(reach.runtime_of(home), "github.com"):
+        return None
     result = await _get(f"https://github.com/{owner}.png?size=96", 512 * 1024, 20)
     if result is None or not result.content.startswith((b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF")):
         return None
@@ -579,6 +619,7 @@ class _Listed:
     title_zh: str
     description_zh: str
     entry: dict = field(repr=False, default_factory=dict)
+    asks: str = ""
 
 
 # An offer needs a far clearer fit than a skill the person installed: it interrupts the reply.
@@ -605,11 +646,8 @@ def offer_for(home: Path, said: str) -> dict | None:
                         if can_install(e, False) == "" and e["fit"] == "ready"]
     have = store.usable(home)
     taken = set(installed(home)) | {s.name for s in store.all_skills(home)}
-    ranked = pick.score([*have, *_listed[key]], said)
-    if not ranked or not isinstance(ranked[0][1], _Listed):
-        return None
-    (top, best), second = ranked[0], (ranked[1][0] if len(ranked) > 1 else 0.0)
-    if top < OFFER_SCORE or second * OFFER_LEAD > top or best.entry["id"] in taken or best.name in taken:
+    best = pick.clear(pick.score([*have, *_listed[key]], said), OFFER_SCORE, OFFER_LEAD)
+    if not isinstance(best, _Listed) or best.entry["id"] in taken or best.name in taken:
         return None
     return best.entry
 

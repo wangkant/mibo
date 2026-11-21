@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>城市图书馆年度报告</title>
+<style>
+body { margin: 0; font: 15px/1.8 system-ui, "Microsoft YaHei", sans-serif; background: #fff; color: #222; }
+article { max-width: 760px; margin: 24px auto; padding: 0 20px; }
+</style></head>
+<body><article id="doc"><h1>城市图书馆年度报告</h1></article>
+<script src="/t/kit.js"></script>
+<script>
+// About 60000 characters in twelve chapters; one sentence at about 70 percent holds the answer, and its year
+// changes with each reset of the site (tasks.w_year).
+const BRANCH = ["西城", "南湖", "北山", "滨江", "高新", "老城", "河西", "新港"];
+const DO = ["延长了周末开放时间", "增加了儿童阅览座位", "更新了期刊阅览区", "举办了社区读书会", "开设了老年人电脑课",
+  "调整了借阅册数上限", "完成了书架改造", "引入了电子书借阅"];
+const WHY = ["读者的反馈集中在座位不足", "附近新建了两所学校", "周边居民的年龄结构发生了变化", "上一年的借阅量增长明显",
+  "原有设备已使用多年", "读者希望在下班后也能借书"];
+const doc = document.getElementById("doc");
+fetch("/api/state").then((r) => r.json()).then(({ round }) => {
+  const year = 2011 + ((round || 0) % 9);
+  let n = 0;
+  for (let ch = 1; ch <= 12; ch++) {
+    const h = document.createElement("h2");
+    h.textContent = `第${ch}章 ${["总体情况", "馆藏建设", "读者服务", "分馆运营", "数字资源", "少儿阅读", "社区活动", "人员与培训", "设施设备", "经费使用", "合作项目", "来年计划"][ch - 1]}`;
+    doc.append(h);
+    for (let p = 0; p < 20; p++) {
+      const para = document.createElement("p");
+      let text = "";
+      for (let s = 0; s < 5; s++, n++) {
+        text += `${BRANCH[n % 8]}分馆在第${1 + (n % 4)}季度${DO[(n * 3) % 8]}，因为${WHY[(n * 5) % 6]}，这一调整共涉及${100 + (n * 37) % 900}名读者。`;
+      }
+      if (ch === 9 && p === 8) text += `东城分馆早在${year}年就率先实现了全天二十四小时自助借还，是全市第一家这样做的分馆。`;
+      para.textContent = text;
+      doc.append(para);
+    }
+  }
+});
+</script></body></html>

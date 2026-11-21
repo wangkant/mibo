@@ -156,6 +156,7 @@
     "system": "Abrir no navegador do sistema",
     "close": "Fechar",
     "private": "Nova guia privada: as páginas abertas nela não são guardadas",
+    "privateTab": "Nova guia privada",
     "newTab": "Nova guia",
     "closeTab": "Fechar guia",
     "tabs": "Guias",
@@ -262,8 +263,6 @@
           "sign_in": "Aguardando o login",
           "verification": "Aguardando uma verificação"
         },
-        "sign_in": "{site} precisa que você entre. Entre na página; isto continua sozinho depois que você entrar.",
-        "verification": "{site} precisa de uma verificação sua. Conclua-a na página; isto continua sozinho depois.",
         "autoTitle": "Entrar em {site} automaticamente?",
         "autoMeta": "O navegador preencheu sua senha salva. Apenas o botão de login do site é pressionado; a senha nunca é lida.",
         "once": "Permitir uma vez",
@@ -299,7 +298,6 @@
       "title": "Como age nas páginas",
       "off": "Desativado",
       "read": "Somente leitura",
-      "ask": "Perguntar sempre",
       "auto": "Revisão automática"
     },
     "prompt": {
@@ -570,8 +568,6 @@
       "standard": "Raciocina um pouco antes de responder",
       "deep": "Pensa a fundo, demora mais"
     },
-    "once": "Somente para a próxima mensagem",
-    "onceTag": "uma vez",
     "model": "Modelo",
     "more": "Mais modelos",
     "manage": "Gerenciar modelos…",
@@ -635,7 +631,6 @@
     "names": {
       "tools": "Chamadas de ferramentas",
       "pictures": "Imagens",
-      "json": "Saída JSON",
       "thinking": "Raciocínio"
     },
     "states": {
@@ -647,7 +642,6 @@
     "instead": {
       "tools": "O Mibo pesquisa na web por conta própria e entrega os resultados ao modelo; operar o navegador e o computador não está disponível.",
       "pictures": "As imagens não são enviadas ao modelo, apenas suas descrições.",
-      "json": "O formato é pedido no prompt e extraído da resposta.",
       "thinking": "Nenhuma configuração de raciocínio aparece ao lado da caixa de mensagem."
     },
     "unstable": "A verificação deu resultados variados; uma falha é tratada como não compatível.",
@@ -713,7 +707,7 @@
     "connectLater": "Vou ler páginas públicas da web sozinho e enviar trechos ao modelo escolhido. Você pode mudar isso em Configurações › Passeios.",
     "findsSaying": "Já encontrei algumas coisas. Vamos ver quais são para você.",
     "findsLooking": "Estou procurando coisas sobre os assuntos que você escolheu. Só um momento.",
-    "findsWait": "Procurando conteúdos sobre os assuntos escolhidos. Isso leva até 30 segundos.",
+    "findsWait": "Isso leva até 30 segundos.",
     "video": "Vídeo",
     "want": "Quero ver",
     "notWant": "Não é para mim",
@@ -734,7 +728,7 @@
     "toldLater": "Guardado por enquanto; será usado na próxima vez que eu revisar o que sei.",
     "tellAgain": "Editar",
     "heard": "Entendi, obrigado por me contar!",
-    "tellLater": "Depois que um modelo estiver conectado, você pode contar na conversa.",
+    "tellLater": "Depois que um modelo estiver conectado, você pode completar isso na conversa.",
     "it": "o personagem",
     "errors": {
       "profile_invalid": "Escreva entre 1 e 1000 caracteres.",
@@ -1115,7 +1109,6 @@
     "abilities": {
       "tools": "Chamadas de ferramentas",
       "pictures": "Imagens",
-      "json": "Saída JSON",
       "thinking": "Raciocínio"
     },
     "checkingAbilities": "Verificando o que o modelo consegue fazer…",
@@ -1458,10 +1451,9 @@
     "typed": "Texto",
     "logFold_one": "Registro (último {count})",
     "modeName": "Forma de agir",
-    "modeText": "Somente leitura: lê a janela e não faz nada. Perguntar sempre: toda ação com efeito externo espera sua confirmação. Revisão automática: um modelo revisor olha primeiro; envios claramente pedidos seguem, e pagamentos, exclusões e mudanças de conta continuam perguntando.",
+    "modeText": "Somente visualizar: lê a janela e não executa nenhuma ação. Revisão automática: o que apenas lê ou pode ser desfeito é executado; o restante é avaliado primeiro por um modelo revisor, as etapas da tarefa solicitada são executadas e a confirmação só é pedida quando a revisão não aprova. Pagamentos, exclusões e alterações de conta sempre exigem sua confirmação.",
     "modes": {
       "read": "Somente leitura",
-      "ask": "Perguntar sempre",
       "auto": "Revisão automática"
     },
     "tiers": {
@@ -1484,12 +1476,9 @@
     },
     "paceText": "Até {count} por dia, só quando você estiver livre.",
     "quietName": "Horário de silêncio",
-    "quietText": "Nenhuma das {from} às {to}.",
-    "quietOff": "Quando definido, nada é recomendado nesse horário.",
     "quietFrom": "Início",
     "quietTo": "Fim",
-    "tasteTitle": "Seu gosto",
-    "tasteText": "As recomendações seguem os assuntos que você escolheu, como você reage a elas e o que diz gostar na conversa.",
+    "tasteTitle": "Preferências de recomendação",
     "topics": "Assuntos que você segue",
     "topicsNone": "Nenhum assunto escolhido ainda.",
     "lean": {
@@ -1501,10 +1490,10 @@
     "removeTopic": "Deixar de seguir {name}",
     "addTopic": "Adicionar um assunto",
     "add": "Adicionar",
-    "learned": "Aprendido com suas reações",
+    "learned": "Pela sua atividade",
     "takes": "Você costuma abrir",
     "passes": "Você costuma pular",
-    "learnedNone": "Nada ainda. O que for aprendido aparece aqui depois que você abrir ou pular algumas recomendações.",
+    "learnedNone": "Aparece depois que você abrir ou pular algumas recomendações.",
     "learnedOff": "Deixar de considerar {name}",
     "kind": {
       "video": "vídeos",
@@ -1517,8 +1506,8 @@
       "1": "Mais: {name}",
       "-1": "Menos: {name}"
     },
-    "said": "O que você disse na conversa",
-    "saidNone": "Nada ainda. Diga na conversa do que gosta ou o que não quer, e isso aparece aqui.",
+    "said": "Mencionado na conversa",
+    "saidNone": "Aparece quando você disser na conversa do que gosta.",
     "like": "Gosta: {topic}",
     "avoid": "Sem interesse: {topic}",
     "hidden": "Excluído: {name}",
@@ -1531,11 +1520,10 @@
     "formRow": "Formato: {parts}",
     "saidOff": "Excluir {what}",
     "wishes": "Para os próximos dias",
-    "wishText": "Desejos de curto prazo ditos na conversa. Cada um termina depois de três dias e não altera seu gosto duradouro.",
     "wish": "{topic} (até {day})",
-    "reset": "Redefinir o gosto",
-    "resetAsk": "Redefinir seu gosto?",
-    "resetText": "O que foi aprendido com suas reações e com a conversa é apagado. Seus assuntos, a frequência e o horário de silêncio são mantidos. Esta ação não pode ser desfeita.",
+    "reset": "Redefinir preferências",
+    "resetAsk": "Redefinir as preferências de recomendação?",
+    "resetText": "O que foi aprendido com sua atividade, os ajustes que você fez e o que mencionou na conversa são apagados. Seus assuntos, a frequência e o horário de silêncio são mantidos. Esta ação não pode ser desfeita.",
     "resetOk": "Redefinir",
     "week": "Esta semana: {shown} trazidos, {opened} abertos.",
     "weekNone": "Nada trazido esta semana ainda.",
@@ -1546,26 +1534,20 @@
     "listSep": ", "
   },
   "setup_walks": {
-    "hint": "O personagem lê páginas públicas da web por conta própria e envia trechos ao modelo escolhido para selecionar o que vale trazer.",
+    "hint": "O personagem lê páginas públicas da web por conta própria e envia trechos ao modelo escolhido.",
+    "moreTitle": "Mais configurações",
     "onName": "Sair por conta própria",
     "offText": "Desativado. As pesquisas pedidas na conversa também ficam indisponíveis.",
     "walksName": "Passeios por dia",
-    "walksText": "Uma pesquisa pedida na conversa pode usar um passeio a mais por dia.",
-    "atName": "Primeiro passeio do dia",
-    "atOff": "Não definido: os passeios se distribuem ao longo do dia.",
-    "atText": "O primeiro passeio do dia começa às {time} ou depois.",
-    "sitesTitle": "Sites",
-    "sitesText": "Digite um endereço ou domínio, por exemplo example.com.",
-    "avoid": "Nunca visitar",
-    "favour": "Visitar primeiro",
-    "addSite": "Adicionar site",
+    "avoid": "Sites para nunca visitar",
+    "favour": "Sites para visitar primeiro",
+    "addSite": "ex.: example.com",
     "siteOff": "Remover {site}",
     "recordTitle": "Registro de passeios",
     "recordNone": "Ainda não há passeios.",
     "noTopic": "Conteúdo popular",
-    "topic": "Assunto: {topic}",
-    "asked": "Pedido por você: {topic}",
-    "sums": "Fontes {lists} · Lidas {read} · Trazidas {kept}",
+    "asked": "Pedido: {topic}",
+    "sums": "Lidas {read} · Trazidas {kept}",
     "missed": "{site}: {why}",
     "lists": "Onde procurou",
     "read": "Páginas lidas",
@@ -1601,7 +1583,6 @@
       "no_model": "Conecte um modelo para passear."
     },
     "searchTitle": "Pesquisa na web",
-    "searchText": "A pesquisa na web nos passeios e no chat usa por padrão mecanismos sem chave, cujos resultados podem ser instáveis. Informe uma chave de API do Brave Search ou do Tavily para pesquisar com esse serviço. A chave fica no repositório de credenciais do sistema, não em um arquivo de configuração.",
     "searchUsing": "Em uso",
     "searchKeyless": "Pesquisa sem chave",
     "searchApi": "Serviço de pesquisa",
@@ -1713,11 +1694,10 @@
     "foldersText": "Nestas pastas o personagem pode ver, criar, copiar, renomear e mover arquivos; excluir continua perguntando, e alterar um arquivo segue o modo. Na primeira vez que precisar de uma pasta, a conversa também pergunta.",
     "foldersNone": "Nenhuma pasta permitida ainda.",
     "modeName": "Modo de trabalho",
-    "modeText": "Somente visualizar: lê arquivos das pastas permitidas e não altera nem executa nada. Perguntar sempre: alterar arquivos, executar programas e afins aguardam sua confirmação. Edição automática: alterar e criar arquivos em pastas que podem ser organizadas não pergunta, e «Desfazer estas alterações» abaixo da resposta as restaura; excluir, a rede e instalar software continuam perguntando.",
+    "modeText": "Somente visualizar: lê os arquivos das pastas permitidas e não altera nem executa nada. Revisão automática: alterar e criar arquivos nas pastas que pode organizar é feito sem perguntar, e “Desfazer estas alterações” abaixo da resposta as reverte; executar um programa em uma pasta permitida é avaliado primeiro por um modelo revisor e só pede confirmação quando a revisão não aprova. Excluir, usar a rede e instalar software sempre exigem sua confirmação.",
     "modes": {
       "read": "Somente visualizar",
-      "ask": "Perguntar sempre",
-      "auto": "Edição automática"
+      "auto": "Revisão automática"
     },
     "rulesTitle": "Programas sempre permitidos",
     "rulesText": "Estes programas são executados em suas pastas sem perguntar. Enviar pela rede e instalar software nunca entram nesta lista; perguntam sempre.",
@@ -1731,7 +1711,8 @@
       "this_chat": "permitido nesta conversa",
       "always": "sempre permitido",
       "rule": "sempre permitido",
-      "auto_edit": "edição automática"
+      "auto_edit": "edição automática",
+      "review": "aprovado pela revisão"
     },
     "addPlaceholder": "Cole o endereço de uma pasta, como D:\\Fotos",
     "add": "Adicionar",
@@ -1818,6 +1799,54 @@
     "importHave": "Já há uma habilidade com este nome instalada",
     "search": "Pesquisar por nome, uso ou etiqueta",
     "allCategories": "Todas",
+    "categories": {
+      "writing": "Escrita",
+      "documents": "Documentos e slides",
+      "study": "Estudo e pesquisa",
+      "work": "Escritório e equipe",
+      "life": "Dia a dia",
+      "design": "Design",
+      "media": "Imagem, vídeo e áudio",
+      "data": "Dados e finanças",
+      "business": "Negócios e marketing",
+      "web": "Web e automação",
+      "development": "Programação"
+    },
+    "subs": {
+      "compose": "Redação e revisão",
+      "social": "Posts para redes sociais",
+      "fiction": "Ficção e roteiros",
+      "office": "Word, Excel e PDF",
+      "slides": "Apresentações",
+      "cloud": "Documentos on-line",
+      "learning": "Aprender e pensar",
+      "papers": "Artigos e literatura",
+      "science": "Pesquisa científica",
+      "mail": "E-mail e agenda",
+      "plan": "Planos e notas",
+      "team": "Trabalho em equipe",
+      "files": "Arquivos e computador",
+      "ui": "Interfaces e páginas web",
+      "visual": "Design gráfico e marca",
+      "diagrams": "Gráficos e diagramas",
+      "motion": "Animação",
+      "image": "Imagens",
+      "video": "Vídeo",
+      "audio": "Áudio e voz",
+      "analysis": "Análise de dados",
+      "finance": "Finanças",
+      "investing": "Investimentos e trading",
+      "marketing": "Marketing e crescimento",
+      "sales": "Vendas e clientes",
+      "product": "Gestão de produto",
+      "company": "RH, jurídico e operações",
+      "search": "Busca e coleta",
+      "browser": "Automação de navegador",
+      "code": "Código e revisão",
+      "agents": "Agentes e habilidades",
+      "ai": "Modelos e IA",
+      "deploy": "Implantação e operação"
+    },
     "sort": "Ordenar por",
     "sortPopular": "Mais populares",
     "sortRecent": "Atualizadas recentemente",
@@ -2214,11 +2243,11 @@
       },
       "ollama": {
         "name": "Ollama (neste computador)",
-        "note": "Digite o nome de um modelo já baixado. Ferramentas, JSON e imagens dependem desse modelo: um modelo da classe Qwen3 ou Llama 3.1 com 8B ou mais lida com ferramentas e JSON, e um modelo de visão lê imagens. Aumente o comprimento de contexto do servidor para 16k ou mais; o padrão de 4k corta a memória."
+        "note": "Digite o nome de um modelo já baixado. Ferramentas e imagens dependem desse modelo: um modelo da classe Qwen3 ou Llama 3.1 com 8B ou mais lida com ferramentas, e um modelo de visão lê imagens. Aumente o comprimento de contexto do servidor para 16k ou mais; o padrão de 4k corta a memória."
       },
       "lmstudio": {
         "name": "LM Studio (neste computador)",
-        "note": "Digite o nome de um modelo já baixado. Ferramentas, JSON e imagens dependem desse modelo: um modelo da classe Qwen3 ou Llama 3.1 com 8B ou mais lida com ferramentas e JSON, e um modelo de visão lê imagens. Aumente o comprimento de contexto do servidor para 16k ou mais; o padrão de 4k corta a memória."
+        "note": "Digite o nome de um modelo já baixado. Ferramentas e imagens dependem desse modelo: um modelo da classe Qwen3 ou Llama 3.1 com 8B ou mais lida com ferramentas, e um modelo de visão lê imagens. Aumente o comprimento de contexto do servidor para 16k ou mais; o padrão de 4k corta a memória."
       },
       "other": {
         "name": "Outro serviço compatível com OpenAI"

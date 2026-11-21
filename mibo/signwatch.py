@@ -39,6 +39,9 @@ ICONS = "icons"
 SENT_S = 30.0
 # {site: {"at", "jar": {cookie name: digest of its value}}} when its sign-in form was last seen, in memory only.
 WALLS: dict[str, dict] = {}
+# Told of each page looked at, (pane, its address, CHECK_JS's answer): panels/signins.py hears a find that
+# opened to a wall.
+heard: Callable[[object, str, dict], None] | None = None
 
 
 def ready(pane, core, private: bool) -> None:
@@ -165,6 +168,8 @@ def _look(pane, core, at: float, state: dict) -> None:
     sent = (signin.in_flow(url) and bool(asked) and asked != url and not signin.in_flow(asked)
             and signin.key(asked) == signin.key(url) and time.monotonic() - state["asked_at"] < SENT_S)
     observe(pane, url, found, sent)
+    if heard is not None:
+        heard(pane, url, found)
 
 
 def _keep_icon(pane, core) -> None:

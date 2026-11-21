@@ -1,9 +1,11 @@
 """The person's permissions for commands: the switch, the granted folders, the never list, the log.
 
 All of it lives in the desktop folder of the app's home, which no command may
-read or change (`blocked` names the home as the app's own). The switch is off
-until the person turns it on in Settings. Folders are granted from a card in
-the chat or in Settings, and taken back in Settings.
+read or change (`blocked` names the home as the app's own). The switch is on
+unless the person turns it off in Settings. A fresh home may read the person's
+own folders (Desktop, Documents, Downloads, Pictures, Music, Videos); other
+folders are granted from a card in the chat or in Settings, and any is taken
+back in Settings.
 """
 from __future__ import annotations
 
@@ -62,7 +64,10 @@ def under(path: str, root: str) -> bool:
 
 
 def known_folder(guid: str) -> str:
-    """A known folder's real place (Downloads may be moved, Documents may be in OneDrive); "" when none."""
+    """A known folder's real place (Downloads may be moved, Documents may be in OneDrive); "" when none. The
+    Desktop may be given instead in USER_DESKTOP_DIR (the measuring scripts' stand-in Desktop)."""
+    if guid == KNOWN[2][1] and os.environ.get("USER_DESKTOP_DIR"):
+        return os.environ["USER_DESKTOP_DIR"]
     if sys.platform != "win32":
         return ""
     import ctypes
@@ -169,6 +174,10 @@ class Grants:
     def _read(self) -> dict:
         try:
             data = json.loads((self.desktop / SETTINGS_FILE).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            # A fresh home: the person's own folders, to read.
+            mine = [row["path"] for row in known_folders()]
+            return {"folders": mine, "read_only": mine}
         except (OSError, ValueError):
             return {}
         return data if isinstance(data, dict) else {}
@@ -178,7 +187,8 @@ class Grants:
         atomic_write_text(self.desktop / SETTINGS_FILE, json.dumps(data, ensure_ascii=False, indent=1))
 
     def on(self) -> bool:
-        return self._read().get("on") is True
+        """On unless the person turned it off."""
+        return self._read().get("on") is not False
 
     def set_on(self, on: bool) -> None:
         with self.lock:

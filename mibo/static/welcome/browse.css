@@ -1,5 +1,5 @@
-/* The browser inside the app window (browse.js): a bar over the stage, and the space under it where the
-   site's own WebView lies, with the conversation in a column at its right. */
+/* The browser inside the app window (browse.js): one bar in the window's title bar, and the space under it where
+   the site's own WebView lies, with the conversation in a column at its right. */
 body {
   /* How wide the chat is beside the page. */
   --pa-beside: 380px;
@@ -10,27 +10,46 @@ body {
   z-index: 5;
   display: flex;
   flex-direction: column;
+  border-top: 1px solid var(--pa-line);
   background: var(--pa-canvas);
-  /* The bar lays itself out by the pane's own width (narrow rules at the end). */
-  container: browse / inline-size;
 }
 .browse[hidden] {
   display: none;
 }
+/* The bar: in the title bar, as wide as the page up to the figure's corner and the window's buttons, or to the
+   chat beside the page. Its empty parts still move the window. It lays itself out by its own width (the narrow
+   rules at the end). */
 .browse-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 44px;
-  padding: 0 8px;
-  border-top: 1px solid var(--pa-line);
-  border-bottom: 1px solid var(--pa-line);
-  background: var(--pa-chrome);
+  height: 40px;
+  padding: 0 6px;
+  container: browsebar / inline-size;
+}
+.browse-bar[hidden] {
+  display: none;
+}
+body.beside:not(.beside-over) .browse-bar {
+  max-width: calc(100% - var(--pa-beside));
+}
+/* Over a page the title bar holds the bar alone. */
+.titlebar:has(> .browse-bar:not([hidden])) .titlebar-page {
+  display: none;
+}
+body.frameless .browse-bar .browse-tab,
+body.frameless .browse-bar .browse-field,
+body.frameless .browse-run-pill {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 .browse-btn {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   border: 0;
@@ -59,20 +78,20 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-/* The address field: the mark of a site without encryption, the address (shown while it is focused), the site and
-   the page's title over it otherwise, and the zoom a moment at its end. */
+/* The address field, which is the tab in front: the mark of a site without encryption, the address (shown while it
+   is focused), the site and the page's title over it otherwise, and the zoom a moment at its end (the tab's cross
+   comes over that end under the pointer). */
 .browse-field {
   flex: 1;
-  min-width: 56px;
+  min-width: 0;
   height: 30px;
-  margin: 0 6px;
-  padding: 0 4px 0 14px;
+  padding: 0 28px 0 12px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: var(--pa-surface);
+  background: var(--pa-chrome);
   color: var(--pa-text);
   font: var(--pa-fs-sm) / 1 var(--pa-font);
   cursor: text;
@@ -292,59 +311,63 @@ body {
   white-space: nowrap;
 }
 
-/* The tab strip over the bar (browsetabs.js): the tab in front in the bar's own colour, joined to it. */
+/* The tabs, in the bar (browsetabs.js): the tab in front is the address field and takes the room; the others are
+   their site's initial, a cross over a corner under the pointer and a dot on one that plays. */
 .browse-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 36px;
-  padding: 0 8px;
-  border-top: 1px solid var(--pa-line);
-  background: var(--pa-sunken);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.browse-tabs + .browse-bar {
-  border-top: 0;
-}
-.browse-tab {
-  flex: 0 1 200px;
-  min-width: 44px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  border-radius: var(--pa-r-sm) var(--pa-r-sm) 0 0;
-  color: var(--pa-muted);
-}
-.browse-tab:hover {
-  background: var(--pa-hover);
-}
-.browse-tab.active {
-  background: var(--pa-chrome);
-  color: var(--pa-ink);
-}
-.browse-tab-go {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  /* The address's least width and +: the other tabs give way first. */
+  min-width: 146px;
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 4px 0 10px;
+  gap: 2px;
+  margin: 0 4px;
+}
+.browse-tabs-side {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.browse-tabs-side:empty {
+  display: none;
+}
+.browse-tab {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.browse-tab.active {
+  flex: 1 1 0;
+  min-width: 112px;
+}
+.browse-field:hover {
+  background: var(--pa-hover);
+}
+.browse-field:focus-within {
+  background: var(--pa-surface);
+}
+.browse-tab-go {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   border: 0;
-  background: none;
-  color: inherit;
-  font: var(--pa-fs-sm) / 1 var(--pa-font);
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-chrome);
+  color: var(--pa-text);
+  font: 600 var(--pa-fs-xs) / 1 var(--pa-font);
   cursor: pointer;
 }
-.browse-tab-go span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.browse-tab-go:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
 }
 .browse-tab svg {
-  flex: none;
   width: 15px;
   height: 15px;
   fill: none;
@@ -353,29 +376,39 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.browse-tab.private .browse-tab-go svg:first-child {
-  stroke: var(--pa-accent);
+.browse-tab.private .browse-tab-go {
+  color: var(--pa-accent);
 }
-.browse-tab.loading .browse-tab-go svg:first-child {
+.browse-tab.sound .browse-tab-go::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pa-accent);
+}
+.browse-tab.loading .browse-tab-go,
+.browse-tab.active.loading .browse-where-host {
   animation: browse-tab-loading 0.9s ease-in-out infinite alternate;
 }
 @keyframes browse-tab-loading {
   to {
-    opacity: 0.3;
+    opacity: 0.4;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .browse-tab.loading .browse-tab-go svg:first-child {
+  .browse-tab.loading .browse-tab-go,
+  .browse-tab.active.loading .browse-where-host {
     animation: none;
   }
 }
 .browse-tab-x {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-right: 4px;
+  position: absolute;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -387,17 +420,89 @@ body {
   color: var(--pa-ink);
 }
 .browse-tab-x svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
 }
-/* The cross shows on the tab in front and under the pointer only. */
-.browse-tab:not(.active):not(:hover) .browse-tab-x {
+.browse-tab.active .browse-tab-x {
+  right: 4px;
+  width: 22px;
+  height: 22px;
+}
+.browse-tab:not(.active) .browse-tab-x {
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--pa-line-strong);
+  background: var(--pa-surface);
+}
+.browse-tab:not(.active) .browse-tab-x svg {
+  width: 9px;
+  height: 9px;
+}
+/* The crosses show under the pointer only, and not over an address being typed. */
+.browse-tab:not(:hover) .browse-tab-x,
+.browse-tab.active:focus-within .browse-tab-x {
   visibility: hidden;
 }
-.browse-tabs .browse-tab-new {
-  align-self: center;
-  width: 28px;
-  height: 28px;
+
+/* A run under way with the chat out of sight: its state and the step it is on (a press brings the chat), and 停止. */
+.browse-run-pill {
+  flex: none;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding-right: 2px;
+  border-radius: 999px;
+  background: var(--pa-accent-tint);
+}
+.browse-run-pill[hidden] {
+  display: none;
+}
+/* A press on it brings the chat, as the chat's own button would. */
+.browse-run-pill:not([hidden]) ~ .browse-beside {
+  display: none;
+}
+.browse-run-pill.op-theirs {
+  background: var(--pa-amber50);
+}
+.browse-run-open {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border: 0;
+  background: none;
+  color: var(--pa-accent-ink);
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+  cursor: pointer;
+}
+.browse-run-pill.op-theirs .browse-run-open {
+  color: var(--pa-amber700);
+}
+.browse-run-pill .browse-run-mode {
+  flex: none;
+  color: inherit;
+}
+.browse-run-step {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--pa-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-run-pill .browse-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+}
+.browse-run-pill .browse-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* The page. Its frame is its border: the WebView lies inside it, so the border shows only while the character
@@ -439,13 +544,9 @@ body.beside #chat-view {
   width: min(var(--pa-beside), 100%);
   border-left: 1px solid var(--pa-line);
 }
-body.beside:not(.beside-over) .titlebar-page {
-  left: calc(100% - var(--pa-beside));
-}
 /* A window too narrow for both: the chat lies over the page's right side, under the bar (the WebView is cut
    there, browser.py), and the bar's button puts it away. */
 body.beside-over #chat-view {
-  top: calc(var(--pa-bar) + 44px);
   border-left-color: var(--pa-line-strong);
 }
 /* The page in the chat's context: a chip in the chat's box, over the words. */
@@ -602,35 +703,6 @@ body.beside-over #chat-view {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-/* With the chat out of sight, the run in one line under the page: its state, the step it is on, 停止. */
-.browse-strip {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 44px;
-  padding: 0 8px 0 16px;
-  border-top: 1px solid var(--pa-line);
-  background: var(--pa-chrome);
-  color: var(--pa-text);
-  font: var(--pa-fs-sm) / 1.3 var(--pa-font);
-  cursor: pointer;
-}
-.browse-strip[hidden],
-.browse-strip [hidden] {
-  display: none;
-}
-.browse-strip .browse-run-mode {
-  flex: none;
-}
-.browse-strip-step {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--pa-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* The steps: a timeline that grows as it works. */
 .browse-steps {
@@ -800,32 +872,46 @@ body.beside-over #chat-view {
   font: 500 11px / 16px var(--pa-font);
 }
 
-/* ---- A narrow pane: the buttons are icons alone and the field shows the site only, so the address keeps room. */
-@container browse (max-width: 560px) {
-  .browse-bar {
-    gap: 0;
-    padding: 0 4px;
-  }
-  .browse-btn {
-    width: 30px;
-  }
-  .browse-mark span,
-  .browse-where-title {
+/* ---- A narrow bar never wraps; its parts leave in this order so the address keeps room: the run's step (its state
+   stays), then the page's title (the site stays), 最小化 (it is in the ··· menu too), forward while there is
+   nowhere to go and the words of the not-secure mark, then the run's state (its dot and 停止 stay); last the other
+   tabs scroll out of sight under the address's least width (Ctrl+Tab still reaches them). */
+@container browsebar (max-width: 720px) {
+  .browse-run-step {
     display: none;
   }
-  .browse-field {
-    margin: 0 4px;
-    padding-left: 10px;
+}
+@container browsebar (max-width: 560px) {
+  .browse-where-title,
+  .browse-bar .browse-minimize,
+  .browse-forward:disabled,
+  .browse-mark span {
+    display: none;
   }
   .browse-mark {
     margin-right: 6px;
     padding-right: 6px;
   }
 }
-/* Narrower still: forward leaves the bar while there is nowhere to go. */
-@container browse (max-width: 440px) {
-  .browse-forward:disabled {
+@container browsebar (max-width: 440px) {
+  .browse-run-pill .browse-run-mode {
     display: none;
+  }
+  .browse-run-open {
+    padding: 0 4px 0 10px;
+  }
+  .browse-bar .browse-btn {
+    width: 28px;
+  }
+  .browse-tabs {
+    min-width: 130px;
+    margin: 0 2px;
+  }
+  .browse-tab.active {
+    min-width: 96px;
+  }
+  .browse-field {
+    padding-left: 10px;
   }
 }
 

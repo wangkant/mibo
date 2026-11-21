@@ -25,7 +25,7 @@
    "listing": {
     "name": "time",
     "owner": "modelcontextprotocol",
-    "category": "tools",
+    "category": "life",
     "licence": "MIT",
     "title": {
      "zh": "时间",
@@ -40,7 +40,8 @@
      "时区",
      "time",
      "timezone"
-    ]
+    ],
+    "sub": ""
    }
   },
   {
@@ -66,7 +67,7 @@
    "listing": {
     "name": "fetch",
     "owner": "modelcontextprotocol",
-    "category": "research",
+    "category": "web",
     "licence": "MIT",
     "title": {
      "zh": "网页读取",
@@ -82,7 +83,8 @@
      "fetch",
      "web",
      "markdown"
-    ]
+    ],
+    "sub": "search"
    }
   },
   {
@@ -116,7 +118,7 @@
    "listing": {
     "name": "filesystem",
     "owner": "modelcontextprotocol",
-    "category": "documents",
+    "category": "work",
     "licence": "MIT",
     "title": {
      "zh": "文件夹访问",
@@ -138,7 +140,8 @@
       "zh": "允许访问的文件夹（完整路径）",
       "en": "The folder it may use (full path)"
      }
-    }
+    },
+    "sub": "files"
    }
   },
   {
@@ -185,7 +188,8 @@
      "文档",
      "转换",
      "markdown"
-    ]
+    ],
+    "sub": "office"
    }
   },
   {
@@ -228,7 +232,8 @@
      "余票",
      "12306",
      "train"
-    ]
+    ],
+    "sub": ""
    }
   },
   {
@@ -276,7 +281,8 @@
       "zh": "高德开放平台的 Web 服务 Key",
       "en": "Web service key from the AMap open platform"
      }
-    }
+    },
+    "sub": ""
    }
   },
   {
@@ -329,7 +335,8 @@
       "zh": "百度地图开放平台的服务端 AK",
       "en": "Server AK from the Baidu Maps open platform"
      }
-    }
+    },
+    "sub": ""
    }
   },
   {
@@ -341,7 +348,7 @@
    "listing": {
     "name": "modelscope",
     "owner": "modelscope",
-    "category": "tools",
+    "category": "development",
     "sync": "modelscope",
     "get_key": "https://modelscope.cn/my/myaccesstoken",
     "title": {
@@ -363,7 +370,8 @@
       "zh": "魔搭 ModelScope 的访问令牌",
       "en": "ModelScope access token"
      }
-    }
+    },
+    "sub": "agents"
    }
   },
   {
@@ -397,7 +405,7 @@
    "listing": {
     "name": "tavily",
     "owner": "tavily-ai",
-    "category": "research",
+    "category": "web",
     "licence": "MIT",
     "match": [
      "tavily"
@@ -422,7 +430,8 @@
       "zh": "Tavily 的 API 密钥",
       "en": "Tavily API key"
      }
-    }
+    },
+    "sub": "search"
    }
   },
   {
@@ -456,7 +465,7 @@
    "listing": {
     "name": "brave-search",
     "owner": "brave",
-    "category": "research",
+    "category": "web",
     "licence": "MIT",
     "get_key": "https://api-dashboard.search.brave.com/app/keys",
     "title": {
@@ -478,7 +487,8 @@
       "zh": "Brave Search API 的密钥",
       "en": "Brave Search API key"
      }
-    }
+    },
+    "sub": "search"
    }
   },
   {
@@ -512,7 +522,7 @@
    "listing": {
     "name": "firecrawl",
     "owner": "firecrawl",
-    "category": "research",
+    "category": "web",
     "licence": "MIT",
     "match": [
      "firecrawl"
@@ -538,7 +548,8 @@
       "zh": "Firecrawl 的 API 密钥",
       "en": "Firecrawl API key"
      }
-    }
+    },
+    "sub": "search"
    }
   },
   {
@@ -571,7 +582,8 @@
      "文档",
      "repository",
      "docs"
-    ]
+    ],
+    "sub": "code"
    }
   },
   {
@@ -640,7 +652,8 @@
       "zh": "Context7 的 API 密钥（可不填，填写后额度更高）",
       "en": "Context7 API key (optional; it raises the limits)"
      }
-    }
+    },
+    "sub": "code"
    }
   },
   {
@@ -662,7 +675,7 @@
    "listing": {
     "name": "microsoft-learn",
     "owner": "MicrosoftDocs",
-    "category": "learning",
+    "category": "development",
     "licence": "MIT",
     "title": {
      "zh": "Microsoft Learn 文档",
@@ -679,7 +692,8 @@
      "Office",
      "Azure",
      "docs"
-    ]
+    ],
+    "sub": "code"
    }
   },
   {
@@ -718,7 +732,8 @@
      "图表",
      "diagram",
      "flowchart"
-    ]
+    ],
+    "sub": "diagrams"
    }
   },
   {
@@ -736,7 +751,7 @@
    "listing": {
     "name": "notion",
     "owner": "makenotion",
-    "category": "productivity",
+    "category": "work",
     "signin": true,
     "match": [
      "notion"
@@ -755,7 +770,8 @@
      "知识库",
      "notes",
      "wiki"
-    ]
+    ],
+    "sub": "plan"
    }
   },
   {
@@ -773,7 +789,7 @@
    "listing": {
     "name": "linear",
     "owner": "linear",
-    "category": "productivity",
+    "category": "work",
     "signin": true,
     "match": [
      "linear"
@@ -791,7 +807,8 @@
      "项目",
      "issue",
      "project"
-    ]
+    ],
+    "sub": "team"
    }
   },
   {
@@ -813,7 +830,7 @@
    "listing": {
     "name": "atlassian",
     "owner": "atlassian",
-    "category": "productivity",
+    "category": "work",
     "signin": true,
     "match": [
      "atlassian",
@@ -834,7 +851,8 @@
      "任务",
      "文档",
      "Atlassian"
-    ]
+    ],
+    "sub": "team"
    }
   },
   {
@@ -856,7 +874,7 @@
    "listing": {
     "name": "todoist",
     "owner": "Doist",
-    "category": "productivity",
+    "category": "work",
     "signin": true,
     "licence": "MIT",
     "match": [
@@ -876,7 +894,8 @@
      "清单",
      "todo",
      "tasks"
-    ]
+    ],
+    "sub": "plan"
    }
   },
   {
@@ -913,7 +932,8 @@
      "演示",
      "design",
      "poster"
-    ]
+    ],
+    "sub": "visual"
    }
   },
   {
@@ -974,7 +994,8 @@
       "zh": "GitHub 个人访问令牌（Personal access token）",
       "en": "GitHub personal access token"
      }
-    }
+    },
+    "sub": "code"
    }
   }
  ]

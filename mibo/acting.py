@@ -6,20 +6,20 @@ made while a task runs holds from its next step.
     off    it does not act there at all
     read   it looks, reads, scrolls and moves between pages; nothing it does sends, saves or changes anything
            (in a program: it only looks; by command: it only reads files in the granted folders)
-    ask    each action with an effect outside waits for the person's press on a card (the default)
-    auto   the reviewer (review.py) looks first at sends, comments, likes, posts, submissions and presses that code
-           could not sort; only those it finds plainly asked for go ahead without a card, the rest still ask.
-           For commands it is auto-edit, decided in code with no reviewer: changing files inside a granted folder
-           does not ask, as each turn's checkpoint (shell/checkpoint.py) can put them back
+    auto   automatic review, the default: code first lets through what plainly only reads or moves about, or can
+           be undone inside what the person granted (a page's own reads and telemetry, a tab or filter fetching
+           what it shows, a read-only command, a file changed in a granted folder under each turn's checkpoint);
+           the reviewer (review.py) then judges what is left of the reviewable kinds, and a card comes only where
+           it does not pass or code says always ask
 
 What no mode loosens, decided here in code: paying or buying, deleting, an account's security or access (`HARD`)
 ask every time, with no always-allow and no reviewer; a password, payment detail or code is never typed or read
-by the character (the gates); sending and posting skip the card only by the person's always-allow for that site
-(ask) or the reviewer's pass (auto), never on a sensitive site (`sensitive`: banks and payment, health, mail and
-accounts), where every kind asks. The reviewer passes nothing while no request of the person's own is under way.
+by the character (the gates); sending and posting skip the card only by the person's always-allow for that site or
+the reviewer's pass, never on a sensitive site (`sensitive`: banks and payment, health, mail and accounts), where
+every kind asks. The reviewer passes nothing while no request of the person's own is under way.
 
-Claude in Chrome's ask-before-acting / act-without-asking with its plan, Claude Code's permission modes with
-its classifier, Codex's approvals reviewer and Qwen Code's approval modes are what this follows.
+Claude Code's auto mode with its classifier, Claude in Chrome's act-without-asking with its plan, Codex's
+approvals reviewer and Qwen Code's approval modes are what this follows.
 """
 from __future__ import annotations
 
@@ -31,8 +31,8 @@ from datetime import datetime
 from pathlib import Path
 
 AREAS = ("browser", "programs", "commands")
-MODES = ("off", "read", "ask", "auto")
-DEFAULT = "ask"
+MODES = ("off", "read", "auto")
+DEFAULT = "auto"
 FILE = "acting.json"
 # The kinds that ask in every mode, each time.
 HARD = frozenset({"order", "delete", "account", "grant"})
@@ -52,12 +52,12 @@ def sensitive(site: str) -> bool:
 
 
 def decide(mode: str, kind: str, site: str = "", area: str = "browser") -> str:
-    """What an action of an outside `kind` gets in `mode`: "refuse" (read only), "review" (auto, a kind the
-    reviewer may pass, on a site that is not sensitive) or "ask" (a card)."""
+    """What an action of an outside `kind` gets in `mode`: "refuse" (read only), "review" (a kind the reviewer
+    may pass, on a site that is not sensitive) or "ask" (a card)."""
     from .review import REVIEWABLE
     if mode in ("off", "read"):
         return "refuse"
-    if mode == "auto" and kind not in HARD and kind in REVIEWABLE[area] and not sensitive(site):
+    if kind not in HARD and kind in REVIEWABLE[area] and not sensitive(site):
         return "review"
     return "ask"
 

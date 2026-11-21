@@ -1,6 +1,6 @@
 "use strict";
 // Settings › Other programs: whether the character may operate other programs' windows on this computer
-// (/api/programs {on}) and how much it does there by itself ({mode}: read only, ask, auto), the programs granted
+// (/api/programs {on}) and how much it does there by itself ({mode}: read only or automatic review), the programs granted
 // always with each one's tier ({tier}, {revoke}), what is never operated with the person's own words ({block},
 // {unblock}), and the record of what was done in which program (/api/programs/log). Everything about it is
 // decided by the app (mibo/desk, mibo/acting.py), not the model.
@@ -28,7 +28,7 @@
     pic.box.disabled = true;
     // ---- How much it does by itself once on.
     const modeSelect = el("select", "setup-input setup-select setup-input-sm");
-    for (const value of ["read", "ask", "auto"]) modeSelect.append(new Option(t.modes[value], value));
+    for (const value of ["read", "auto"]) modeSelect.append(new Option(t.modes[value], value));
     modeSelect.disabled = true;
     modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
     const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
@@ -72,7 +72,7 @@
       pic.about.hidden = false;
       pic.box.checked = view.pictures.on;
       pic.box.disabled = !view.on;
-      modeSelect.value = view.mode === "off" ? "ask" : view.mode;
+      modeSelect.value = view.mode === "off" ? "auto" : view.mode;
       modeSelect.disabled = !view.on;
       granted.hidden = never.node.hidden = record.node.hidden = false;
       if (!view.grants.length) list.replaceChildren(el("p", "setup-help", t.grantsNone));

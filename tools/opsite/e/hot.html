@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>微博热搜榜</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>微博</b><a href="#">首页</a><a href="#">热搜</a></header>
+<main><div class="card"><h2>微博热搜榜</h2><p class="hint">实时更新</p><div id="list">加载中…</div></div></main>
+<script>
+// The list is drawn by script after the page loads, as the real hot list is; the topics exist only here.
+const TOPICS = ["青柠山隧道今日通车", "苔原猫咖开业首日排长队", "银杏大道提前进入观赏期", "城南夜市新增百家摊位",
+  "第七届萤火读书节开幕", "小满乐队新专辑上线", "江心岛马拉松报名开启", "冬季第一场寒潮将至", "社区食堂推出一元早餐",
+  "旧城墙灯光秀首演"];
+setTimeout(() => {
+  document.getElementById("list").innerHTML = TOPICS.map((t, i) =>
+    `<div class="row"><span class="n">${i + 1}</span><span>${t}</span><span class="hint">${(98 - i * 7)}万</span></div>`).join("");
+}, 400);
+</script>
+</body></html>

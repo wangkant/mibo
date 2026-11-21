@@ -4,12 +4,16 @@ where the task's `deny` matches its button); the site's own verdict (tasks.check
 something off also needs those words in the run's result.
 
     python tools/oploop.py --env <.env with LLM_API_KEY, LLM_BASE_URL> [--model deepseek/deepseek-v4-flash]
-        [--tasks M05,M06] [--runs 1] [--tools yes|no] [--out <folder>] [--port 59665] [--budget 0.03]
+        [--tasks M05,M06] [--runs 1] [--tools yes|no] [--context N] [--cheapest] [--out <folder>] [--port 59665]
+        [--budget 0.03] [--tree <folder holding mibo>]
 
 The run is given the model as the app's check measured it (abilities.py): `--tools` is what that check found
 (yes: it called the check's tool by itself), and the context window is read from the host's own model list, as
-the check reads it, so the run's ceiling, page and answer room are operate.budget's for that model. One line a
-run; <out>/results.jsonl keeps them with each run's steps. The key is never printed or written."""
+the check reads it, so the run's ceiling, page and answer room are operate.budget's for that model; `--context 0`
+runs it as the least able model (a context window the host does not state). A task of tasks.REAL starts on a real
+page a visitor reads signed out: it passes when its words are in the result and no card came. `--tree` runs another
+copy of the code (a snapshot from before a change). One line a run; <out>/results.jsonl keeps them with each run's
+steps. The key is never printed or written."""
 from __future__ import annotations
 
 import argparse
@@ -37,11 +41,13 @@ def load(name: str, path: Path):
 
 async def one(browser, site: str, task: dict, model, able: dict, out: Path, operate, gate, tasks) -> dict:
     from mibo.web.tabs import PlaywrightTab
-    urllib.request.urlopen(urllib.request.Request(site + "/__reset", data=b"{}"), timeout=10).read()
+    real = task["start"].startswith("http")
+    if not real:
+        urllib.request.urlopen(urllib.request.Request(site + "/__reset", data=b"{}"), timeout=10).read()
     context = await browser.new_context(viewport={"width": 1100, "height": 760}, locale="zh-CN")
     page = await context.new_page()
     tab = PlaywrightTab(page)
-    await tab.goto(site + task["start"])
+    await tab.goto(task["start"] if real else site + task["start"])
     cards: list[dict] = []
     calls: list[dict] = []
 
@@ -63,8 +69,11 @@ async def one(browser, site: str, task: dict, model, able: dict, out: Path, oper
         await hands.close()
     seconds = time.monotonic() - began
     await context.close()
-    state = json.loads(urllib.request.urlopen(site + "/api/state", timeout=10).read())
-    verdict = tasks.check(task["id"], state)
+    if real:
+        verdict = {"ok": not cards, "why": f"{len(cards)} cards", "reply_has": task["reply_has"]}
+    else:
+        state = json.loads(urllib.request.urlopen(site + "/api/state", timeout=10).read())
+        verdict = tasks.check(task["id"], state)
     result = str(outcome.get("result") or "")
     read = all(re.sub(r"\s+", "", w) in re.sub(r"\s+", "", result) for w in verdict.get("reply_has", []))
     return {"task": task["id"], "ok": verdict["ok"] and read, "site": verdict["ok"], "read": read,
@@ -81,19 +90,25 @@ async def main(argv: list[str]) -> int:
     parser.add_argument("--tasks", default="M05,M06")
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--tools", choices=("yes", "no"), default="yes")
+    parser.add_argument("--context", type=int, default=-1, help="the context window, tokens (default: the host's)")
+    parser.add_argument("--cheapest", action="store_true", help="route each call to the host's cheapest provider")
+    parser.add_argument("--tree", default=str(HERE.parent))
     parser.add_argument("--out", default="")
     parser.add_argument("--port", type=int, default=59665)
     parser.add_argument("--budget", type=float, default=0.03, help="dollars; no new run past it")
     args = parser.parse_args(argv)
-    sys.path.insert(0, str(HERE.parent))
+    sys.path.insert(0, str(Path(args.tree).resolve()))
     from mibo.web import gate, operate
     run = load("miniwob_run", HERE / "bench" / "miniwob" / "run.py")
     tasks = load("opsite_tasks", HERE / "opsite" / "tasks.py")
     from mibo import abilities
     env = run.read_env(Path(args.env))
     able = {"tools": args.tools,
-            "context": await abilities._context(env["LLM_BASE_URL"].rstrip("/") + "/chat/completions", "", args.model)}
+            "context": args.context if args.context >= 0 else await abilities._context(
+                env["LLM_BASE_URL"].rstrip("/") + "/chat/completions", "", args.model)}
     model = run.Model(env["LLM_BASE_URL"], env["LLM_API_KEY"], args.model, args.budget)
+    if args.cheapest:
+        model.extra = {"provider": {"sort": "price"}}
     # The answer's room as search.py gives it for this model.
     model.answer = operate.budget(able)["answer"]
     out = Path(args.out or tempfile.mkdtemp(prefix="oploop-")).resolve()

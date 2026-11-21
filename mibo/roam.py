@@ -612,16 +612,6 @@ class Roam:
 
     # -- reading one page
 
-    async def read(self, url: str) -> Optional[Item]:
-        """`url` read as a visitor into an Item (not yet in the library), its
-        cover saved; None when it cannot or may not be read."""
-        found = await self._read(url)
-        if found is None:
-            return None
-        if found.picture:
-            found.item.picture = self.library.save_picture(found.item.id, found.picture)
-        return found.item
-
     async def _read(self, url: str, *, background: bool = False, cover: str = "",
                     walls: Optional[list] = None) -> Optional[_Read]:
         """`url` read through web/read.py. A walk's read is a `background` visit (the host's card and

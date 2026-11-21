@@ -155,6 +155,7 @@
     "system": "Open in the system browser",
     "close": "Close",
     "private": "New private tab: pages in it are not kept",
+    "privateTab": "New private tab",
     "newTab": "New tab",
     "closeTab": "Close tab",
     "tabs": "Tabs",
@@ -261,8 +262,6 @@
           "sign_in": "Waiting for sign-in",
           "verification": "Waiting for a check"
         },
-        "sign_in": "{site} needs you to sign in. Sign in on the page; this carries on by itself once you are in.",
-        "verification": "{site} needs a check from you. Complete it on the page; this carries on by itself after it.",
         "autoTitle": "Sign in to {site} automatically?",
         "autoMeta": "The browser filled in your saved password. Only the site's sign-in button is pressed; the password is never read.",
         "once": "Allow once",
@@ -298,7 +297,6 @@
       "title": "How it acts in pages",
       "off": "Off",
       "read": "Read only",
-      "ask": "Ask each time",
       "auto": "Auto review"
     },
     "prompt": {
@@ -571,8 +569,6 @@
       "standard": "Thinks a little before replying",
       "deep": "Thinks it through, takes longer"
     },
-    "once": "For the next message only",
-    "onceTag": "once",
     "model": "Model",
     "more": "More models",
     "manage": "Manage models…",
@@ -636,7 +632,6 @@
     "names": {
       "tools": "Tool calls",
       "pictures": "Pictures",
-      "json": "JSON output",
       "thinking": "Reasoning"
     },
     "states": {
@@ -648,7 +643,6 @@
     "instead": {
       "tools": "Mibo searches the web itself and hands the model the results; operating the browser and the computer is unavailable.",
       "pictures": "Pictures are not sent to the model, only their descriptions.",
-      "json": "The format is asked for in the prompt and read out of the reply.",
       "thinking": "No thinking setting shows beside the message box."
     },
     "unstable": "The check gave mixed results; a failure is handled as unsupported.",
@@ -714,7 +708,7 @@
     "connectLater": "I read public web pages on my own and send excerpts to the model you chose. You can change this in Settings › Going out.",
     "findsSaying": "I've found a few things already. Let's see which ones are for you.",
     "findsLooking": "I'm looking for things on the topics you picked. One moment.",
-    "findsWait": "Finding things on the topics you chose. This takes up to 30 seconds.",
+    "findsWait": "This takes up to 30 seconds.",
     "video": "Video",
     "want": "Want to see",
     "notWant": "Not for me",
@@ -735,7 +729,7 @@
     "toldLater": "Kept for now; it gets used the next time I go over what I know.",
     "tellAgain": "Edit",
     "heard": "Got it, thanks for telling me!",
-    "tellLater": "Once a model is connected, you can tell it in the chat.",
+    "tellLater": "Once a model is connected, you can add this in the chat.",
     "it": "it",
     "errors": {
       "profile_invalid": "Write between 1 and 1000 characters.",
@@ -1116,7 +1110,6 @@
     "abilities": {
       "tools": "Tool calls",
       "pictures": "Pictures",
-      "json": "JSON output",
       "thinking": "Reasoning"
     },
     "checkingAbilities": "Checking what the model can do…",
@@ -1456,10 +1449,9 @@
     },
     "typed": "Text",
     "modeName": "How it acts",
-    "modeText": "Read only: it reads the window and does nothing. Ask each time: anything with an effect outside waits for you. Auto review: a reviewer looks first and plain sends and submissions you asked for go ahead; paying, deleting and account changes still ask you.",
+    "modeText": "Read only: it reads the window and does nothing. Auto review: what only reads or can be undone goes ahead; a reviewer judges the rest, steps of the task you gave go ahead, and you are asked only when it does not pass; paying, deleting and account changes always ask you.",
     "modes": {
       "read": "Read only",
-      "ask": "Ask each time",
       "auto": "Auto review"
     },
     "tiers": {
@@ -1482,12 +1474,9 @@
     },
     "paceText": "Up to {count} a day, only when you are free.",
     "quietName": "Quiet hours",
-    "quietText": "None from {from} to {to}.",
-    "quietOff": "When set, nothing is recommended in these hours.",
     "quietFrom": "Start",
     "quietTo": "End",
-    "tasteTitle": "Your taste",
-    "tasteText": "Recommendations follow the topics you chose, how you react to them, and what you say you like in the chat.",
+    "tasteTitle": "Recommendation preferences",
     "topics": "Topics you follow",
     "topicsNone": "No topics chosen yet.",
     "lean": {
@@ -1499,10 +1488,10 @@
     "removeTopic": "Stop following {name}",
     "addTopic": "Add a topic",
     "add": "Add",
-    "learned": "Learned from your reactions",
+    "learned": "From your activity",
     "takes": "You often open",
     "passes": "You often skip",
-    "learnedNone": "Nothing yet. What it learns appears here once you have opened or skipped a few recommendations.",
+    "learnedNone": "Appears once you open or skip a few recommendations.",
     "learnedOff": "Stop counting {name}",
     "kind": {
       "video": "videos",
@@ -1515,8 +1504,8 @@
       "1": "More: {name}",
       "-1": "Less: {name}"
     },
-    "said": "What you said in the chat",
-    "saidNone": "Nothing yet. Say in the chat what you like or do not want, and it appears here.",
+    "said": "Mentioned in chat",
+    "saidNone": "Appears once you mention in a chat what you like.",
     "like": "Likes: {topic}",
     "avoid": "Not interested: {topic}",
     "hidden": "Not from: {name}",
@@ -1529,11 +1518,10 @@
     "formRow": "Form: {parts}",
     "saidOff": "Delete {what}",
     "wishes": "For the next few days",
-    "wishText": "Short-term wishes said in the chat. Each ends after three days and leaves your lasting taste alone.",
     "wish": "{topic} (until {day})",
-    "reset": "Reset taste",
-    "resetAsk": "Reset your taste?",
-    "resetText": "What it learned from your reactions and from the chat is cleared. Your topics, how often and quiet hours stay. This cannot be undone.",
+    "reset": "Reset preferences",
+    "resetAsk": "Reset recommendation preferences?",
+    "resetText": "Clears what was learned from your activity, the leans you set and what you mentioned in chat. Your topics, how often and quiet hours stay. This cannot be undone.",
     "resetOk": "Reset",
     "week": "This week it brought {shown} and you opened {opened}.",
     "weekNone": "Nothing brought this week yet.",
@@ -1544,26 +1532,20 @@
     "listSep": ", "
   },
   "setup_walks": {
-    "hint": "The character reads public web pages on its own and sends excerpts to your chosen model to pick what is worth bringing back.",
+    "hint": "The character reads public web pages on its own and sends excerpts to your chosen model.",
+    "moreTitle": "More settings",
     "onName": "Go out on its own",
     "offText": "Off. Lookups from the chat are off too.",
     "walksName": "Walks a day",
-    "walksText": "A lookup asked in the chat may take one more a day.",
-    "atName": "First walk of the day",
-    "atOff": "Not set: walks are spread over the day.",
-    "atText": "The day's first walk leaves at {time} or later.",
-    "sitesTitle": "Sites",
-    "sitesText": "Enter an address or a domain, such as example.com.",
-    "avoid": "Never visit",
-    "favour": "Visit first",
-    "addSite": "Add a site",
+    "avoid": "Sites to skip",
+    "favour": "Sites to visit first",
+    "addSite": "e.g. example.com",
     "siteOff": "Remove {site}",
     "recordTitle": "Walk record",
     "recordNone": "No walks yet.",
     "noTopic": "Popular content",
-    "topic": "Topic: {topic}",
-    "asked": "Asked by you: {topic}",
-    "sums": "Sources {lists} · Read {read} · Kept {kept}",
+    "asked": "Asked: {topic}",
+    "sums": "Read {read} · Kept {kept}",
     "missed": "{site}: {why}",
     "lists": "Where it looked",
     "read": "Pages read",
@@ -1599,7 +1581,6 @@
       "no_model": "Connect a model to go out."
     },
     "searchTitle": "Web search",
-    "searchText": "Web search on walks and in the chat uses keyless engines by default, and their results can be unreliable. Enter a Brave Search or Tavily API key to search with that service instead. The key is kept in the system's credential store, not in a settings file.",
     "searchUsing": "In use",
     "searchKeyless": "Keyless search",
     "searchApi": "Search service",
@@ -1710,11 +1691,10 @@
     "foldersText": "In these folders the character may look at files and create, copy, rename and move them; deleting still asks you, and changing a file follows the mode. The first time it needs a folder, the chat asks you too.",
     "foldersNone": "No folders allowed yet.",
     "modeName": "How it works",
-    "modeText": "View only: it reads files in the folders you allow and changes or runs nothing. Ask each time: changing files, running programs and the like wait for you. Auto-edit: changing and creating files in folders you allow it to sort does not ask, and Undo these changes under the reply puts them back; deleting, the network and installing software still ask.",
+    "modeText": "Read only: it reads files in the folders you allow and changes or runs nothing. Auto review: changing and creating files in folders you allow it to sort goes ahead, and Undo these changes under the reply puts them back; a program run in a folder you allow is judged by a reviewer first and asks you only when it does not pass; deleting, the network and installing software always ask.",
     "modes": {
       "read": "View only",
-      "ask": "Ask each time",
-      "auto": "Auto-edit"
+      "auto": "Auto review"
     },
     "rulesTitle": "Programs always allowed",
     "rulesText": "These programs run in their folders without asking. Sending over the network and installing software are never on this list; they ask every time.",
@@ -1728,7 +1708,8 @@
       "this_chat": "allowed for this conversation",
       "always": "always allowed",
       "rule": "always allowed",
-      "auto_edit": "auto-edit"
+      "auto_edit": "auto-edit",
+      "review": "passed by review"
     },
     "addPlaceholder": "Paste a folder's address, such as D:\\Photos",
     "add": "Add",
@@ -1814,6 +1795,54 @@
     "importHave": "A skill of this name is installed",
     "search": "Search names, uses or tags",
     "allCategories": "All",
+    "categories": {
+      "writing": "Writing",
+      "documents": "Documents & slides",
+      "study": "Study & research",
+      "work": "Office & teamwork",
+      "life": "Daily life",
+      "design": "Design",
+      "media": "Images, video & audio",
+      "data": "Data & finance",
+      "business": "Business & marketing",
+      "web": "Web & automation",
+      "development": "Programming"
+    },
+    "subs": {
+      "compose": "Drafting & editing",
+      "social": "Social media posts",
+      "fiction": "Fiction & scripts",
+      "office": "Word, Excel & PDF",
+      "slides": "Presentations",
+      "cloud": "Online docs",
+      "learning": "Learning & thinking",
+      "papers": "Papers & literature",
+      "science": "Scientific research",
+      "mail": "Mail & calendar",
+      "plan": "Plans & notes",
+      "team": "Teamwork",
+      "files": "Files & computer",
+      "ui": "Interfaces & web pages",
+      "visual": "Graphics & branding",
+      "diagrams": "Charts & diagrams",
+      "motion": "Motion",
+      "image": "Images",
+      "video": "Video",
+      "audio": "Audio & voice",
+      "analysis": "Data analysis",
+      "finance": "Finance",
+      "investing": "Investing & trading",
+      "marketing": "Marketing & growth",
+      "sales": "Sales & customers",
+      "product": "Product management",
+      "company": "HR, legal & operations",
+      "search": "Search & scraping",
+      "browser": "Browser automation",
+      "code": "Coding & review",
+      "agents": "Agents & skills",
+      "ai": "Models & AI",
+      "deploy": "Deployment & ops"
+    },
     "sort": "Sort by",
     "sortPopular": "Most popular",
     "sortRecent": "Recently updated",
@@ -2208,11 +2237,11 @@
       },
       "ollama": {
         "name": "Ollama (on this computer)",
-        "note": "Enter the name of a model already downloaded. Tools, JSON and pictures depend on that model: a Qwen3 or Llama 3.1 class model of 8B or more handles tools and JSON, a vision model reads pictures. Raise the server's context length to 16k or more; a 4k default cuts the memory short."
+        "note": "Enter the name of a model already downloaded. Tools and pictures depend on that model: a Qwen3 or Llama 3.1 class model of 8B or more handles tools, a vision model reads pictures. Raise the server's context length to 16k or more; a 4k default cuts the memory short."
       },
       "lmstudio": {
         "name": "LM Studio (on this computer)",
-        "note": "Enter the name of a model already downloaded. Tools, JSON and pictures depend on that model: a Qwen3 or Llama 3.1 class model of 8B or more handles tools and JSON, a vision model reads pictures. Raise the server's context length to 16k or more; a 4k default cuts the memory short."
+        "note": "Enter the name of a model already downloaded. Tools and pictures depend on that model: a Qwen3 or Llama 3.1 class model of 8B or more handles tools, a vision model reads pictures. Raise the server's context length to 16k or more; a 4k default cuts the memory short."
       },
       "other": {
         "name": "Other OpenAI-compatible service"

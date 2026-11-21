@@ -1,5 +1,6 @@
 "use strict";
-// The browser inside the app window: its bar, drawn here over the stage, and the space under it, where
+// The browser inside the app window: its one bar, in the window's title bar over the page (as compact browsers
+// lay it: the tabs, the tab in front being the address, and the buttons), and the space under it, where
 // window.py lays the site's own WebView (browser.py). The site never runs in this page and never sees its token.
 // The conversation stays beside the page: the chat on screen, as it is (chat.js), in a column at the page's
 // right, so the person talks to the character and watches it work in the page. A window too narrow for both
@@ -7,7 +8,8 @@
 // context (the chip in its box) what is sent is done in the page (turns "page" / "page_on").
 // 最小化 or Settings put the page behind a chip: it goes on, with its sound and its history, and the chip
 // brings it back.
-// The bar's ··· menu (zoom, find, print, copy link, the system browser, downloads) is browsemenu.js.
+// The bar's ··· menu (zoom, find, print, copy link, the system browser, a private tab, 最小化, downloads) is
+// browsemenu.js.
 // While the character operates the page for the person (web/operate.py), the chat's box carries the run: each
 // step as it happens, a card when something needs their yes, and how it ended; a border round the page says
 // whose it is.
@@ -249,10 +251,9 @@
     node.title = say(name);
     node.setAttribute("aria-label", say(name));
   }
-  // The private button opens a private tab beside the others (browsetabs.js marks it); while one is in front the
-  // address field is tinted.
+  // The menu's private tab opens beside the others (browsetabs.js marks it); while one is in front the address
+  // field is tinted.
   function drawPrivate(on) {
-    icon(buttons.private, "private");
     pane.classList.toggle("private", on);
   }
   // The site's zoom, shown a moment as it changes, at the field's end (the ··· menu changes it, and fits the site
@@ -261,27 +262,31 @@
   zoomTag.hidden = true;
   field.append(zoomTag);
   let zoomTimer = null;
-  bar.append(button("back"), button("forward"), button("reload"), field, button("mute"),
-    button("private"), button("beside"), button("minimize"), button("close"));
-  // With the chat out of sight, a run under way is said in one line under the page; a press brings the chat.
-  const strip = el("div", "browse-strip");
-  strip.hidden = true;
-  const stripMode = el("span", "browse-run-mode");
-  const stripStep = el("span", "browse-strip-step");
-  const stripStop = el("button", "pa-btn pa-btn-secondary pa-btn-sm");
-  stripStop.type = "button";
-  stripStop.addEventListener("click", (event) => {
-    event.stopPropagation();
-    post("browser/do", { action: "op_stop" });
-  });
-  const stripOpen = el("button", "pa-btn pa-btn-ghost pa-btn-sm");
-  stripOpen.type = "button";
-  strip.append(el("span", "browse-run-dot"), stripMode, stripStep, stripStop, stripOpen);
-  strip.addEventListener("click", () => setBeside(true));
+  // One row: back, forward, reload, the tabs (the one in front is the field), the run, the sound, the chat, ···,
+  // 最小化 and close. It lies in the window's title bar, which shows nothing else over the page.
+  bar.hidden = true;
+  bar.append(button("back"), button("forward"), button("reload"));
+  const drawTabs = window.paBrowseTabs({ pane, bar, field, post });
+  // With the chat out of sight, a run under way is said in the bar: its state and the step it is on (a press
+  // brings the chat), and 停止.
+  const pill = el("div", "browse-run-pill");
+  pill.hidden = true;
+  const pillOpen = el("button", "browse-run-open");
+  pillOpen.type = "button";
+  const pillMode = el("span", "browse-run-mode");
+  const pillStep = el("span", "browse-run-step");
+  pillOpen.append(el("span", "browse-run-dot"), pillMode, pillStep);
+  pillOpen.addEventListener("click", () => setBeside(true));
+  const pillStop = el("button", "browse-btn browse-run-stop");
+  pillStop.type = "button";
+  pillStop.innerHTML = svg("stop");
+  pillStop.addEventListener("click", () => post("browser/do", { action: "op_stop" }));
+  pill.append(pillOpen, pillStop);
+  bar.append(pill, button("mute"), button("beside"), button("minimize"), button("close"));
+  document.getElementById("titlebar").prepend(bar);
   body.append(frame);
-  pane.append(bar, body, strip);
-  const drawTabs = window.paBrowseTabs(pane, bar, post);
-  const drawMenu = window.paBrowseMenu({ pane, bar, stage, post, place, page: () => page, beside: setBeside, chat: () => chatNow() });
+  pane.append(body);
+  const drawMenu = window.paBrowseMenu({ pane, bar, stage, post, place, page: () => page, beside: setBeside, chat: () => chatNow(), hide });
   const drawStrip = window.paBrowseStrip({ pane, area, stage, post, place });
   // The suggestions lie over the page and over a chat laid on it.
   stage.append(pane, suggest);
@@ -308,7 +313,7 @@
   const contextRow = el("div", "browse-context");
   // How much the character may do in the page by itself (acting.py), beside the chip: read again at each step.
   const modeSelect = el("select", "pa-select browse-mode");
-  for (const value of ["off", "read", "ask", "auto"]) modeSelect.append(new Option("", value));
+  for (const value of ["off", "read", "auto"]) modeSelect.append(new Option("", value));
   modeSelect.addEventListener("change", () => post("browser/acting", { area: "browser", mode: modeSelect.value }));
   fetch("/api/browser/acting", { headers: HEADERS, credentials: "same-origin" })
     .then((response) => response.json())
@@ -406,6 +411,7 @@
     cardBox.replaceChildren();
     if (!card) return;
     if (card.kind === "auto_sign_in") return drawAutoCard(card);
+    if (card.kind === "wait") return drawWaitCard(card);
     const words = col().card;
     const node = el("div", "op-card browse-card");
     const where = [card.to ? (card.kind === "send" ? words.to.replace("{to}", card.to) : card.to) : card.kind === "send" ? words.noTo : "", card.site]
@@ -462,6 +468,24 @@
     node.append(head, row);
     cardBox.append(node);
   }
+  // The wait for the person's sign-in or check: what the site asks, in one sentence, the site's own sign-in (where
+  // the page is not one already) and going on without the site. Its words come with it (panels/signins.py).
+  function drawWaitCard(card) {
+    const node = el("div", "op-card browse-card");
+    const row = el("div", "op-card-buttons");
+    const choices = [...(card.to ? [["go", "pa-btn-primary"]] : []), ["skip", card.to ? "pa-btn-secondary" : "pa-btn-primary"]];
+    for (const [action, look] of choices) {
+      const b = el("button", `pa-btn ${look} pa-btn-sm`, card[action === "go" ? "go" : "pass"]);
+      b.type = "button";
+      b.addEventListener("click", () => {
+        if (action === "skip") for (const other of row.querySelectorAll("button")) other.disabled = true;
+        post("signins/wait", { action });
+      });
+      row.append(b);
+    }
+    node.append(cardHead(card.wall === "verification" ? "ask" : "key", card.say, card.site), row);
+    cardBox.append(node);
+  }
   function endWords() {
     const words = col();
     if (op.end === "handover") {
@@ -510,9 +534,8 @@
     foot.classList.toggle("ended", !running() || Boolean(op.wait));
     endLine.hidden = false;
     if (running() && op.wait) {
-      // Signing in is theirs, in the page: one sentence, and Stop.
-      const said = words.signin[op.wait.wall === "verification" ? "verification" : "sign_in"];
-      endLine.textContent = said.replace("{site}", op.wait.site || "");
+      // Signing in is theirs, in the page: the card above says what the site asks; here only Stop.
+      endLine.hidden = true;
       buttons.push(stop());
     } else if (running()) {
       endLine.hidden = true;
@@ -530,26 +553,27 @@
     actions.replaceChildren(...buttons);
   }
   // The run where the chat is: in its box while the run is under way or waits on the person (once it has ended
-  // otherwise, the chat's reply carries its steps), and in the line under the page while the chat is out of sight.
+  // otherwise, the chat's reply carries its steps), and in the bar while the chat is out of sight.
   function drawRun() {
     const live = !pane.hidden && Boolean(op) && (running() || waits());
     const now = live ? modeOf() : "";
     for (const name of ["acting", "waiting", "theirs", "stopping"]) {
-      for (const node of [pane, panel, strip]) node.classList.toggle(`op-${name}`, now === name);
+      for (const node of [pane, panel, pill]) node.classList.toggle(`op-${name}`, now === name);
     }
     pane.classList.toggle("op-live", live);
     const words = col();
     const said = !live ? "" : running() && op.wait
       ? words.signin.modes[op.wait.wall === "verification" ? "verification" : "sign_in"] : words.modes[now];
-    strip.hidden = !live || beside;
-    if (!strip.hidden) {
-      stripMode.textContent = said;
+    pill.hidden = !live || beside;
+    if (!pill.hidden) {
+      pillMode.textContent = said;
       // What the step under way is for (the loop's note), else its own words.
       const step = op.steps.at(-1);
-      stripStep.textContent = running() ? step?.note || step?.text || words.thinking : endWords();
-      stripStop.hidden = !running();
-      stripStop.textContent = words.stop;
-      stripOpen.textContent = words.open;
+      pillStep.textContent = running() ? step?.note || step?.text || words.thinking : endWords();
+      pillOpen.title = `${said}\n${pillStep.textContent}\n${words.open}`;
+      pillStop.hidden = !running();
+      pillStop.title = `${words.stop} (Esc)`;
+      pillStop.setAttribute("aria-label", words.stop);
     }
     const form = live && beside ? chatNow()?.querySelector(".chat-composer") : null;
     if (!form) return panel.remove();
@@ -562,7 +586,7 @@
     if (running() && !op.card && !op.held && !op.wait && last?.state !== "doing") {
       list.append(stepNode({ text: words.thinking, state: "doing" }));
     }
-    drawCard(running() ? op.card : null);
+    drawCard(running() ? op.card || (op.wait && { ...op.wait, id: `wait:${op.wait.site}:${op.wait.say}`, kind: "wait" }) : null);
     drawFoot();
     if (atEnd && !op.card) scroller.scrollTop = scroller.scrollHeight;
   }
@@ -707,6 +731,7 @@
     if (pane.hidden === !on) return;
     if (!on && document.activeElement === address) address.blur();
     pane.hidden = !on;
+    bar.hidden = !on;
     placed = "";
     fold(on);
     drawChip();

@@ -1,10 +1,9 @@
 "use strict";
-// Settings › Going out: the switch, walks a day and the time of the first, the sites walks keep off or favour, and
-// the record of each walk (where it looked, what it read, what it skipped and why), as GET/POST /api/walks
-// (panels/walks.py) gives them.
+// Settings › Going out: the switch with its status, walks a day, and the record of each walk (a short line; where
+// it looked, what it read, what it skipped and why in its fold), as GET/POST /api/walks (panels/walks.py) gives
+// them. The sites walks keep off or favour and the web search key sit in one closed fold.
 (() => {
   const WALKS = ["0", "1", "2", "3", "4", "5", "6"];
-  const AT_DEFAULT = "08:00";
   // The search APIs a key can be brought for (search.py SEARCH_APIS), and where each hands out its keys.
   const SEARCH_APIS = {
     brave: { name: "Brave Search", keys: "https://api-dashboard.search.brave.com/app/keys" },
@@ -23,35 +22,26 @@
     const node = kit.section("walks", t.hint);
     const error = kit.errorLine();
 
-    // ---- On or off, how often, from when.
+    // ---- On or off, and how often.
     const main = kit.card();
     main.classList.add("setup-options");
     const on = kit.switchRow("walks-on", t.onName, "", (box) => change({ on: box.checked }));
     on.about.classList.add("setup-walks-status");
     const walks = kit.choices(t.walksName, WALKS.map((n) => [n, n]), (n) => change({ walks: Number(n) }));
-    const walksRow = kit.optionRow(t.walksName, t.walksText, walks.group);
-    const timed = kit.switchRow("walks-at", t.atName, t.atOff, (box) => change({ at: box.checked ? view.at || AT_DEFAULT : "" }));
-    const at = el("input", "setup-input setup-recs-time");
-    at.type = "time";
-    at.setAttribute("aria-label", t.atName);
-    at.addEventListener("change", () => at.value && change({ at: at.value }));
-    const atLine = el("div", "setup-recs-hours");
-    atLine.append(at);
-    timed.row.append(atLine);
-    main.append(on.row, walksRow.row, timed.row);
+    const walksRow = kit.optionRow(t.walksName, "", walks.group);
+    main.append(on.row, walksRow.row);
 
-    // ---- Sites to keep off and to favour.
-    const sitesCard = kit.card(t.sitesTitle);
-    sitesCard.append(el("p", "setup-help", t.sitesText));
+    // ---- Folded: the sites to keep off and to favour, and the web search.
+    const more = kit.fold(t.moreTitle);
+    more.node.classList.add("setup-card");
     const hosts = el("datalist");
     hosts.id = "setup-walks-hosts";
     const avoid = siteBlock("avoid", t.avoid);
     const favour = siteBlock("favour", t.favour);
-    sitesCard.append(hosts, avoid.box, favour.box);
 
-    // ---- Web search: the keyless engines, or a search API whose key the person brings.
-    const searchCard = kit.card(t.searchTitle);
-    searchCard.append(el("p", "setup-help", t.searchText));
+    // Web search: the keyless engines, or a search API whose key the person brings.
+    const searchBlock = el("div", "setup-recs-block");
+    searchBlock.append(el("p", "setup-option-name", t.searchTitle));
     const remove = kit.button("setup-button-secondary setup-button-sm", t.searchRemove, () =>
       send(() => ctx.api("walks", { search: "" })));
     const using = kit.optionRow(t.searchUsing, "", remove);
@@ -76,15 +66,18 @@
     key.addEventListener("keydown", (event) => event.key === "Enter" && !event.isComposing && save.click());
     const keyRow = el("div", "setup-inline");
     keyRow.append(keyField.wrap, save);
-    searchCard.append(using.row, apiRow.row, keyRow);
+    searchBlock.append(using.row, apiRow.row, keyRow);
+    more.body.append(hosts, avoid.box, favour.box, searchBlock);
 
     // ---- The record, newest first.
     const recordCard = kit.card(t.recordTitle);
     const entries = el("div", "setup-walks-entries");
     const empty = el("p", "setup-help", t.recordNone);
     recordCard.append(entries, empty);
-    main.hidden = sitesCard.hidden = searchCard.hidden = recordCard.hidden = true;
-    node.append(error, main, sitesCard, searchCard, recordCard);
+    // The walks whose fold is open, kept open when the record is read again.
+    const opened = new Set();
+    main.hidden = more.node.hidden = recordCard.hidden = true;
+    node.append(error, main, more.node, recordCard);
 
     // The service's own mark (providermarks.js).
     function mark(id) {
@@ -115,7 +108,7 @@
       const list = el("div", "setup-words");
       const typed = kit.input("setup-word-input");
       typed.placeholder = t.addSite;
-      typed.setAttribute("aria-label", `${title}: ${t.addSite}`);
+      typed.setAttribute("aria-label", title);
       typed.setAttribute("list", hosts.id);
       typed.addEventListener("keydown", (event) => {
         const site = typed.value.trim();
@@ -153,19 +146,13 @@
 
     function render() {
       const v = view;
-      main.hidden = sitesCard.hidden = searchCard.hidden = recordCard.hidden = false;
+      main.hidden = more.node.hidden = recordCard.hidden = false;
       renderSearch(v);
       on.box.checked = v.on;
       on.box.disabled = posting;
       on.about.textContent = status(v);
       on.about.hidden = !on.about.textContent;
       walks.set(String(v.walks), posting || !v.on);
-      timed.box.checked = Boolean(v.at);
-      timed.box.disabled = posting || !v.on;
-      timed.about.textContent = v.at ? paI18n.t("setup_walks.atText", { time: v.at }) : t.atOff;
-      atLine.hidden = !v.at;
-      at.value = v.at;
-      at.disabled = posting || !v.on;
       hosts.replaceChildren(...v.hosts.map((h) => Object.assign(el("option"), { value: h.key, label: h.name })));
       for (const [block, keys] of [[avoid, v.avoid], [favour, v.favour]]) {
         block.list.replaceChildren(...keys.map(pill), block.typed);
@@ -175,20 +162,23 @@
       empty.hidden = Boolean(v.record.length);
     }
 
-    // One walk: when, what for, how much it read and kept, and why some places could not be read; the pages
-    // and the lists behind it unfold under it.
+    // One walk: when, what for, how much it read and kept; why some places could not be read, the lists and the
+    // pages unfold under it.
     function entry(walk) {
       const box = el("details", "setup-walks-entry");
+      box.open = opened.has(walk.id);
+      box.addEventListener("toggle", () => (box.open ? opened.add(walk.id) : opened.delete(walk.id)));
       const head = el("summary", "setup-walks-head");
       const kept = walk.read.filter((page) => page.kept).length;
       const line = el("span", "setup-walks-line");
       line.append(
         el("span", "setup-walks-time", when(walk.at, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })),
-        el("span", "setup-walks-topic", walk.topic ? paI18n.t(walk.asked ? "setup_walks.asked" : "setup_walks.topic", { topic: walk.topic }) : t.noTopic),
+        el("span", "setup-walks-topic", !walk.topic ? t.noTopic : walk.asked ? paI18n.t("setup_walks.asked", { topic: walk.topic }) : walk.topic),
       );
-      const sums = el("span", "setup-walks-sums", paI18n.t("setup_walks.sums", { lists: walk.lists.length, read: walk.read.length, kept }));
+      const sums = el("span", "setup-walks-sums", paI18n.t("setup_walks.sums", { read: walk.read.length, kept }));
       head.append(kit.icon("chevron", "setup-icon setup-fold-chevron"), line, sums);
       box.append(head);
+      const body = el("div", "setup-walks-body");
       const missed = [...walk.lists.filter((row) => row.why).map((row) => [row.site, row.why]), ...walk.skipped.map((row) => [row.site, row.why])];
       if (missed.length) {
         // The places, grouped by why each could not be read.
@@ -199,9 +189,8 @@
         }
         const names = new Intl.ListFormat(paI18n.locale, { type: "conjunction" });
         const said = [...byWhy].map(([why, places]) => paI18n.t("setup_walks.missed", { site: names.format([...places]), why: reason(why) }));
-        box.append(el("p", "setup-walks-missed", said.join(t.listSep)));
+        body.append(el("p", "setup-walks-missed", said.join(t.listSep)));
       }
-      const body = el("div", "setup-walks-body");
       body.append(part(t.lists, walk.lists.map((list) =>
         place(list.site === "Web" ? t.web : list.site, t.intent[list.intent] || "", list.why ? reason(list.why) : paI18n.t("setup_walks.found", { count: list.found })))));
       body.append(part(t.read, walk.read.map((page) => link(page, page.kept ? t.kept : ""))));

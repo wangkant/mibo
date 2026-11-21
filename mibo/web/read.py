@@ -177,9 +177,10 @@ def _wall(data: dict) -> tuple[str, str]:
 
 
 async def read(tab: Tab, url: str, *, screens: int = 0, here: bool = False, runtime: Optional[Path] = None,
-               background: bool = False, mode: str = "signed_out", item: bool = False) -> Page:
+               background: bool = False, mode: str = "signed_out", item: bool = False, within_s: float = 0.0) -> Page:
     """`url` read in `tab` (`here`: the page the tab is on, not loaded again). `screens` more screens are
-    scrolled and merged for a list; an `item` page settles sooner. With `runtime`, the host's card is asked
+    scrolled and merged for a list; an `item` page settles sooner. With `within_s`, the waits and the screens
+    end by then and what was read so far is the answer. With `runtime`, the host's card is asked
     first (an address known dead, a wall in its back-off, and for a `background` read robots.txt, keep the
     page from loading) and told what the page showed."""
     from . import sites
@@ -189,13 +190,18 @@ async def read(tab: Tab, url: str, *, screens: int = 0, here: bool = False, runt
             return Page(url, wall=held, evidence="remembered")
         if background and not await sites.robots_allow(runtime, tab, url):
             return Page(url, wall="robots", evidence="robots.txt")
-    page = await _read(tab, url, screens=screens, here=here, item=item)
+    page = await _read(tab, url, screens=screens, here=here, item=item,
+                       until=time.monotonic() + within_s if within_s else 0.0)
     if runtime is not None:
         sites.saw(runtime, page, mode, asked=url)
     return page
 
 
-async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool) -> Page:
+async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool, until: float) -> Page:
+    def left(most: float) -> float:
+        # The wait `most`, cut to what is left before `until`.
+        return max(0.0, min(most, until - time.monotonic())) if until else most
+
     found = wall_at(url)
     if found:
         return Page(url, wall=found, evidence="address")
@@ -216,7 +222,7 @@ async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool) -> 
             return Page(final, wall="error", evidence=f"http {status}", status=status)
         if answer.kind and "html" not in answer.kind and "xml" not in answer.kind:
             return Page(final, wall="error", evidence=f"not a page ({answer.kind[:40]})", status=status)
-    await (quiet(tab) if item else settle(tab))
+    await (quiet(tab, left(ITEM_S)) if item else settle(tab, left(SETTLE_S)))
     # An item page's article is read whatever lists sit beside it.
     opts = {"article": True} if item else {}
     try:
@@ -226,20 +232,22 @@ async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool) -> 
     kind, evidence = _wall(data)
     if status >= 400 and kind not in ("verification", "sign_in"):
         return Page(tab.url, wall="error", evidence=f"http {status}", status=status)
-    if kind == "empty":
+    if kind == "empty" and left(SETTLE_S):
         # An empty shell gets one more chance to draw: a longer settle and a screen.
-        await settle(tab)
+        await settle(tab, left(SETTLE_S))
         await tab.scroll(1)
-        await settle(tab, AFTER_SCROLL_S)
+        await settle(tab, left(AFTER_SCROLL_S))
         data = await run_reader(tab, opts)
         kind, evidence = _wall(data)
     rows: dict = {}
     merge(rows, data.get("rows") or [])
     if data.get("kind") == "list" and kind not in STOPS:
         for _ in range(screens):
+            if not left(SCROLL_PAUSE_S):
+                break
             await tab.scroll(1)
-            await asyncio.sleep(SCROLL_PAUSE_S)
-            await settle(tab, AFTER_SCROLL_S)
+            await asyncio.sleep(left(SCROLL_PAUSE_S))
+            await settle(tab, left(AFTER_SCROLL_S))
             try:
                 more = await run_reader(tab)
             except Exception:

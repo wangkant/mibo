@@ -1,11 +1,12 @@
-"""Which program a name means, found the way Start finds one.
+"""Which program a name means, found the way Start and the Desktop find one.
 
 The person says 微信, Word or 网易云; the files are Weixin.exe, WINWORD.EXE and cloudmusic.exe. What joins them
-is Start's own list (win32.start_apps): each entry's name in this Windows' language and the file it starts. A
-name is matched against those names, against what each open window's program says of itself (its file
-description, product and file name) and against the window's title. A window already open is taken before a
-program is started; a program Start lists and no window shows is the entry to open. No path ever comes from
-the model: only what Start lists is started, and only a window's title is read here, never what it shows.
+is Start's own list (win32.start_apps): each entry's name in this Windows' language and the file it starts; and
+the shortcuts on the Desktop and in Start, by their file names (win32.shortcuts). A name is matched against
+those names, against what each open window's program says of itself (its file description, product and file
+name) and against the window's title. A window already open is taken before a program is started; an entry no
+window shows is the one to open. No path ever comes from the model: only what Start and the Desktop list is
+started, and only a window's title is read here, never what it shows.
 
 `resolve` is the matching alone, over rows it is given, so it can be measured on a recorded Start menu
 (tools/desk_names.py); `find` runs it on this computer.
@@ -37,10 +38,13 @@ LISTED = 12
 @dataclass(frozen=True)
 class App:
     """One entry of Start's list: its name there, what starts it, and the file that runs ("" for an app
-    from a package, which is known by its package family instead)."""
+    from a package, which is known by its package family instead). A shortcut or program file on the Desktop,
+    or a shortcut in Start to something not a program, has no AppUserModelID: `file` is it, opened itself, and
+    `target` what it opens."""
     name: str
     aumid: str
     target: str = ""
+    file: str = ""
 
     @property
     def family(self) -> str:
@@ -173,11 +177,13 @@ _apps: tuple[float, list[App]] = (0.0, [])
 
 
 def apps(fresh: bool = False) -> list[App]:
-    """Start's entries that start a program (not the documents, links and help pages listed beside them).
-    Read once, about a second's work, and again when a name is not in the list (`find`)."""
+    """What a name can open: the shortcuts and program files on the Desktop and Start's shortcuts to scripts and
+    folders (win32.shortcuts), first, so the Desktop's grok bot is taken over a Start entry of the same name; then
+    Start's entries that start a program (not the documents, links and help pages listed beside them). Read
+    once, about a second's work, and again when a name is not in the list (`find`)."""
     global _apps
     if fresh or not _apps[1]:
-        rows = []
+        rows = [App(name, "", target, file) for name, file, target in win32.shortcuts()]
         for name, aumid, target in win32.start_apps():
             if aumid == EXPLORER:
                 target = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "explorer.exe")

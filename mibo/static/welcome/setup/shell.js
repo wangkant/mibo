@@ -22,10 +22,10 @@
     const onError = kit.errorLine();
     sw.about.after(elevated, onError);
     sw.box.disabled = true;
-    // How much it does by itself ({mode}, acting.py): read only, ask, or auto-edit (changes in the granted folders
-    // without a card, each turn's checkpoint able to put them back).
+    // How much it does by itself ({mode}, acting.py): read only, or automatic review (read-only commands and changes
+    // in the granted folders without a card, each turn's checkpoint able to put them back; the reviewer looks at the rest).
     const modeSelect = el("select", "setup-input setup-select setup-input-sm");
-    for (const value of ["read", "ask", "auto"]) modeSelect.append(new Option(t.modes[value], value));
+    for (const value of ["read", "auto"]) modeSelect.append(new Option(t.modes[value], value));
     modeSelect.disabled = true;
     modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
     const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
@@ -68,7 +68,7 @@
     function render() {
       sw.box.checked = view.on;
       sw.box.disabled = false;
-      modeSelect.value = view.mode === "off" ? "ask" : view.mode;
+      modeSelect.value = view.mode === "off" ? "auto" : view.mode;
       modeSelect.disabled = !view.on;
       elevated.hidden = !view.elevated;
       folders.hidden = never.node.hidden = record.node.hidden = false;

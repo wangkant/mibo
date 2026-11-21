@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>内容分析 - 创作中心</title>
+<style>
+body { margin: 0; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; background: #f6f6f6; }
+main { max-width: 1100px; margin: 20px auto; background: #fff; padding: 16px 20px; border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; } th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+th { background: #fafafa; color: #666; } td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { color: #8590a6; font-size: 12px; }
+</style></head>
+<body><main>
+<h2>内容分析</h2>
+<p>近一年发布的全部文章（300 篇），按发布时间排列。</p>
+<table><thead><tr><th>标题</th><th>发布时间</th><th>话题</th><th>状态</th><th>流量来源</th><th class="num">阅读</th><th class="num">赞同</th><th class="num">评论</th><th class="num">收藏</th></tr></thead>
+<tbody id="rows"></tbody></table>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// 300 rows, no sort control: the most-read one (row 237) is read off the table, far below the first screen.
+// Its count changes with each reset of the site (tasks.w_reads), so it is read, never remembered.
+const A = ["关于", "聊聊", "怎样看待", "为什么", "如何理解", "一文读懂", "我眼中的", "重新认识"];
+const B = ["城市骑行", "家庭咖啡", "旧书市场", "阳台种菜", "夜跑路线", "胶片相机", "露营装备", "手冲器具", "社区食堂", "地铁通勤"];
+const C = ["的十个细节", "这件小事", "背后的成本", "入门指南", "的常见误区", "三年记录", "的取舍", "清单"];
+const TOPICS = ["生活方式", "城市", "阅读", "摄影", "户外", "美食"];
+fetch("/api/state").then((r) => r.json()).then(({ round }) => {
+  for (let i = 0; i < 300; i++) {
+    const top = i === 236;
+    const title = top ? "如何在三个月内读完一百本书" : A[i % 8] + B[(i * 3) % 10] + C[(i * 7) % 8];
+    const reads = top ? 9100 + 37 * ((round || 0) % 9) : 300 + ((i * 7919) % 8200);
+    const likes = i === 41 ? 9999 : 10 + ((i * 131) % 900);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td></td><td>2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}</td>
+      <td class="tag">${TOPICS[i % 6]}</td><td>已发布</td><td class="tag">首页推荐 ${20 + (i * 7) % 50}% · 搜索 ${10 + (i * 11) % 30}% · 关注页 ${5 + (i * 3) % 20}%</td><td class="num">${reads}</td><td class="num">${likes}</td>
+      <td class="num">${(i * 17) % 300}</td><td class="num">${(i * 29) % 500}</td>`;
+    tr.firstChild.textContent = title;
+    document.getElementById("rows").append(tr);
+  }
+});
+</script></body></html>

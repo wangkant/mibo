@@ -1,10 +1,10 @@
-"""A switched-off ability offered in the chat: one entry tool in place of its tools, and the card that turns it on.
+"""A switched-off ability, turned on from inside the call that needs it.
 
-While commands and files (shell/) or other programs (desk/) are off, the reply model gets one tool, turn_on, that
-names them; its many tools are not sent. When their message asks for one, the model calls it and the chat shows the
-card: what the ability does and what always waits for a press, with 开启 / 暂不开启. A press on 开启 is the same as
-the switch in Settings; the turn then goes on with that ability's tools. Only a press on the app's own page answers
-it, never words typed in the chat, and the card waits only while the person's own turn is under way (cardwait.py).
+While commands and files (shell/) or other programs (desk/) are off, their tools are still offered (search.py). When
+the reply model calls one, the call first shows the card: what the ability does and what always waits for a press,
+with 开启 / 暂不开启. A press on 开启 is the same as the switch in Settings, and the call then runs and answers as it
+would have; on 暂不开启 it answers with an Error line. Only a press on the app's own page answers it, never words
+typed in the chat, and the card waits only while the person's own turn is under way (cardwait.py).
 """
 from __future__ import annotations
 
@@ -19,13 +19,12 @@ from fastapi.responses import JSONResponse
 
 from .cardwait import WAIT_S, Card
 
+# What the waiting row and the step under the reply call the card (chat.js shows it on this name).
 NAME = "turn_on"
 # The abilities that have a switch, and what the model and the card call each.
 FEATURES = {
-    "computer": {"model": "commands and files on this computer (use_computer and the file tools)",
-                 "zh": "文件与命令", "en": "Files and commands"},
-    "programs": {"model": "operating other programs' windows on this computer (use_program)",
-                 "zh": "电脑上的程序", "en": "Other programs"},
+    "computer": {"model": "Commands and files on this computer", "zh": "文件与命令", "en": "Files and commands"},
+    "programs": {"model": "Operating other programs", "zh": "电脑上的程序", "en": "Other programs"},
 }
 
 
@@ -42,24 +41,6 @@ def off(home: Path) -> list[str]:
         from .desk.grants import Grants as DeskGrants
         shut += [] if DeskGrants(desktop).on() else ["programs"]
     return shut
-
-
-def tool(shut: list[str]) -> dict:
-    """The entry tool for the abilities in `shut`."""
-    return {"type": "function", "function": {
-        "name": NAME,
-        "description": (
-            "These abilities of yours are switched off: " + "; ".join(FEATURES[k]["model"] for k in shut) + ". When "
-            "their message asks for something only one of them can do (a file, a folder, a command, a program's "
-            "window), call this: they get a card to switch it on, and once they do, its tools come in this same "
-            "turn and you carry on. Never say it is done, or that you cannot, without calling this first."),
-        "parameters": {"type": "object", "properties": {
-            "feature": {"type": "string", "enum": list(shut)},
-            "why": {"type": "string", "description": "what they asked that needs it, in a few words"},
-            **({"folder": {"type": "string", "description": "for computer: the folder their message names "
-                                                            "(downloads, documents, desktop, or a full path); the "
-                                                            "same card grants it"}} if "computer" in shut else {})},
-            "required": ["feature"]}}}
 
 
 def card_of(feature: str) -> dict:
@@ -121,29 +102,27 @@ def mount(app, workspace, body) -> None:
 # ----------------------------------------------------------- the agent's side
 
 _SAID = {
-    "on": "On now: its tools are offered from your next call. Carry on with what they asked.",
-    "declined": "They chose not to turn it on. Nothing was done; tell them it stays off, in a sentence.",
-    "unanswered": "The card waited with no answer. Nothing was done; say it needs their press to switch it on.",
+    "declined": "Error: {area} is off; they chose to leave it off. Tell them in a sentence.",
+    "unanswered": "Error: {area} is off; the card to turn it on got no answer. Tell them it needs their press.",
 }
 _WAITING = {"zh": "等待你确认是否开启", "en": "Asking whether to turn it on"}
 
 
-async def use(agent, args: dict, lookups) -> str:
+async def use(agent, feature: str, folder: str, lookups) -> str:
+    """The card for `feature` inside the call that needs it: "" once it is on, so the call goes on; else the
+    Error line the call answers with. Commands and files turn on with the folder the call names, on the shell's
+    own card (shell/panel.py enable)."""
     from . import today
     from .browsed import _ask
-    feature = args.get("feature")
-    if feature not in FEATURES:
-        return f"(feature is one of: {', '.join(FEATURES)})"
     home = today.runtime_of(agent).parent
     lang = "zh" if str(getattr(agent, "chat_lang", "") or "zh").startswith("zh") else "en"
-    # Commands and files turn on with the folder named, on the shell's own card (shell/panel.py enable).
     computer = feature == "computer"
     lookups.doing("shell" if computer else NAME, _WAITING[lang])
     # Waiting on their press is not the turn's model time.
     lookups.away_since = time.monotonic()
     try:
         outcome = await asyncio.to_thread(_ask, home, "POST", "/api/shell/enable" if computer else "/api/turnon/ask",
-                                          WAIT_S + 30, json={"feature": feature, "folder": str(args.get("folder") or ""),
+                                          WAIT_S + 30, json={"feature": feature, "folder": folder,
                                                              "conversation": lookups.conversation})
     finally:
         lookups.away_s, lookups.away_since = lookups.away(), None
@@ -152,4 +131,4 @@ async def use(agent, args: dict, lookups) -> str:
     lookups.trace.append({"tool": NAME, "status": status, "what": (
         (f"已开启「{named}」" if status == "on" else f"未开启「{named}」") if lang == "zh"
         else (f"Turned on {named}" if status == "on" else f"{named} left off"))})
-    return _SAID[status]
+    return "" if status == "on" else _SAID.get(status, _SAID["unanswered"]).format(area=FEATURES[feature]["model"])

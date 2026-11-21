@@ -24,6 +24,14 @@ settle wait holds while the page says it is busy; a control drawn again since
 the look is found again by its role, name and the text before it; and a ring
 stays round the control a card asks about.
 
+The whole page, not the window: the state holds the whole tree when it fits;
+when it does not, its top, its end and what stands on the screen now, with
+how many lines are cut above and below, so scrolling shows the rest (as
+browser-use shows what is in view). A table's cells stay apart by `|`.
+`whole` gives every word of the page for a question (browser-use's and
+Stagehand's extract), the page taken to its end, a list that draws only the
+rows in view read step by step; `seek` scrolls to a row not drawn yet.
+
 A frame from another site runs in a process of its own, which the page's
 session does not reach: as Playwright and Stagehand do, each is read in its own
 session (Tab.frames, from Target.setAutoAttach with flatten) and printed where
@@ -33,6 +41,8 @@ Payment, sign-in and bot-check frames are named and left to the person.
 from __future__ import annotations
 
 import asyncio
+import bisect
+import difflib
 import json
 import math
 import re
@@ -47,6 +57,7 @@ CONTROLS = set(
     "menuitemcheckbox menuitemradio treeitem".split(" "))
 # Text inside these is one line; text across them is not joined.
 BLOCKS = {"paragraph", "listitem", "row", "LabelText"}
+CELLS = {"cell", "gridcell", "columnheader", "rowheader"}
 NATIVE_INPUTS = {"Date", "DateTime", "InputTime", "ColorWell"}
 # Input types set by value, as Playwright fills them (injectedScript.ts fill), and the form each takes.
 SET_BY_VALUE = {"date": "YYYY-MM-DD", "time": "HH:MM, 24-hour", "datetime-local": "YYYY-MM-DDTHH:MM",
@@ -82,6 +93,9 @@ BLANK_S = 8.0
 # How far `scroll ... until` goes, in wheels, and how long it waits for more to load at the end of a list.
 UNTIL_WHEELS = 30
 MORE_S = 2.5
+# Reading the whole page: steps down each scroller at most, and characters at most.
+WHOLE_STEPS = 60
+TEXT_MOST = 400_000
 # How long `wait` with `until` or `gone` waits for the words (Playwright MCP's wait_for), seconds.
 WAIT_S = 15.0
 # Mouse moves a drag takes from one control to the other, so a list that follows the mouse sees it go by.
@@ -281,6 +295,93 @@ VISIBLE_JS = r"""() => {
     }
   }
   return out.join(' ').replace(/\s+/g, ' ').toLowerCase();
+}"""
+
+# Text on the screen now, lowercased: shown, inside the window and not scrolled out of the boxes it sits in (for
+# `scroll ... until`, which stops once the words are where a person sees them).
+SCREEN_JS = r"""() => {
+  const out = [], roots = [document], clips = new Map();
+  const clip = (e) => {
+    if (!clips.has(e)) { const s = getComputedStyle(e); clips.set(e, s.overflowX !== 'visible' || s.overflowY !== 'visible'); }
+    return clips.get(e);
+  };
+  for (let i = 0; i < roots.length; i++) {
+    const walk = document.createTreeWalker(roots[i], NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (n.nodeType === Node.ELEMENT_NODE) { if (n.shadowRoot) roots.push(n.shadowRoot); continue; }
+      const e = n.parentElement;
+      if (!e || !n.textContent.trim() || !e.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      let {top, bottom, left, right} = range.getBoundingClientRect();
+      top = Math.max(top, 0); bottom = Math.min(bottom, innerHeight); left = Math.max(left, 0); right = Math.min(right, innerWidth);
+      for (let a = e; a && top < bottom && left < right; a = a.parentElement) {
+        if (a === document.body || a === document.documentElement || !clip(a)) continue;
+        const r = a.getBoundingClientRect();
+        top = Math.max(top, r.top); bottom = Math.min(bottom, r.bottom); left = Math.max(left, r.left); right = Math.min(right, r.right);
+      }
+      if (top < bottom && left < right) out.push(n.textContent);
+    }
+  }
+  return out.join(' ').replace(/\s+/g, ' ').toLowerCase();
+}"""
+
+# The words of the whole document as plain lines, past what the window shows (browser-use's extract reads the page
+# as markdown the same way): headings as `## `, list items as `- `, a table row by row with its cells between `|`
+# and its header row marked, through open shadow roots and frames of the page's own site; what fields hold is left
+# out. With `this` an element, only what is in it.
+TEXT_JS = r"""function(most) {
+  const root = this && this.nodeType === 1 ? this : document.body;
+  const out = [];
+  let line = [], size = 0;
+  const end = () => { const t = line.join(' ').replace(/\s+/g, ' ').trim(); if (t) { out.push(t); size += t.length; } line = []; };
+  const cell = (c) => (c.innerText || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '/');
+  const walk = (n) => {
+    if (size > most) return;
+    if (n.nodeType === 3) { if (n.textContent.trim()) line.push(n.textContent); return; }
+    if (n.nodeType !== 1) return;
+    const tag = n.tagName;
+    if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'INPUT', 'TEXTAREA', 'SELECT', 'svg'].includes(tag)) return;
+    if (tag === 'SLOT') { const given = n.assignedNodes({flatten: true}); for (const c of given.length ? given : n.childNodes) walk(c); return; }
+    if (!n.checkVisibility({checkVisibilityCSS: true})) return;
+    if (tag === 'IFRAME') {
+      try { const d = n.contentDocument; if (d && d.body) { end(); walk(d.body); end(); } } catch (_) {}
+      return;
+    }
+    if (tag === 'BR') { end(); return; }
+    if (tag === 'TABLE') {
+      end();
+      for (const row of n.rows) {
+        const cells = [...row.cells].map(cell);
+        if (!cells.some(Boolean)) continue;
+        out.push(`| ${cells.join(' | ')} |`);
+        size += out[out.length - 1].length;
+        if (row.parentElement.tagName === 'THEAD' || [...row.cells].every((c) => c.tagName === 'TH')) out.push(`|${' --- |'.repeat(cells.length)}`);
+      }
+      return;
+    }
+    const heading = /^H[1-6]$/.test(tag);
+    const block = heading || /^(block|flex|grid|list-item|table|flow-root)/.test(getComputedStyle(n).display);
+    if (block) end();
+    if (heading) line.push('##');
+    else if (tag === 'LI') line.push('-');
+    for (const c of (n.shadowRoot || n).childNodes) walk(c);
+    if (block) end();
+  };
+  walk(root);
+  end();
+  return out.join('\n');
+}"""
+
+# A scroller (`this`, or the page when it is none) moved: "down" on most of a screen, "end" to its end, a number to
+# that place, "where" nowhere; how far down it is, how tall, and whether it moved.
+SCROLL_JS = r"""function(to) {
+  const e = this && this.nodeType === 1 ? this : (document.scrollingElement || document.documentElement);
+  const was = e.scrollTop;
+  if (to === 'down') e.scrollTop = was + Math.max(80, e.clientHeight * 0.85);
+  else if (to === 'end') e.scrollTop = e.scrollHeight;
+  else if (to !== 'where') e.scrollTop = to;
+  return {top: e.scrollTop, height: e.scrollHeight, moved: e.scrollTop !== was};
 }"""
 
 # The caret at the end of a field or an editable box, for typing that adds to what it holds.
@@ -664,6 +765,41 @@ FACTS_JS = r"""function() {
 }"""
 
 
+def merge(merged: list[str], last: list[str], now: list[str]) -> list[str]:
+    """What a scroller shows after a step (`now`) put after what it showed before it (`last`, already in `merged`):
+    the lines after the part the two have in common; all of `now` when they share none (a page that only grew
+    keeps its first lines and adds the rest)."""
+    if not last:
+        return list(now)
+    blocks = [b for b in difflib.SequenceMatcher(None, last, now, autojunk=False).get_matching_blocks() if b.size]
+    if not blocks:
+        return merged + now
+    end = blocks[-1]
+    return merged + now[end.b + end.size:]
+
+
+class Lines(list):
+    """The state's lines, each with where it stands down the page (`at`, from the last node the walk passed that
+    has a place: `y`), so a page too long for one look shows what is on the screen."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.at: list[float | None] = []
+        self.y: float | None = None
+
+    def append(self, line: str) -> None:
+        super().append(line)
+        self.at.append(self.y)
+
+    def insert(self, i: int, line: str) -> None:
+        super().insert(i, line)
+        self.at.insert(i, self.y)
+
+    def pop(self, i: int = -1) -> str:
+        self.at.pop(i)
+        return super().pop(i)
+
+
 class Refused(Exception):
     """An action the page operations will not do; its text goes back to the loop as is."""
 
@@ -756,6 +892,91 @@ class Page:
     async def visible_text(self, session: str = "") -> str:
         return await self._evaluate(VISIBLE_JS, session) or ""
 
+    async def screen_text(self) -> str:
+        return await self._evaluate(SCREEN_JS) or ""
+
+    async def _scroller(self, box: int | None, to: Any) -> Any:
+        """SCROLL_JS on a box that scrolls by itself, or with None on the page."""
+        if box is None:
+            return await self._evaluate(f"function(){{return ({SCROLL_JS}).call(null, {json.dumps(to)})}}")
+        return await self.on_node(box, SCROLL_JS, to)
+
+    def _boxes(self) -> list[int]:
+        """The boxes of the last look that scroll by themselves, in the page itself."""
+        return [i for i, (role, _) in self.last.items() if role == "scrollable" and i < FRAME_IDS]
+
+    async def whole(self) -> str:
+        """The whole page's words (TEXT_JS), as far down as it goes: the page is taken to its end (again while a
+        feed loads more there), and a box that scrolls by itself the same way; one that no longer holds what it
+        showed at its top (a list that draws only the rows in view) is read step by step from the top, what each
+        step shows merged in order. Each is put back where it was. At most WHOLE_STEPS steps a scroller and
+        TEXT_MOST characters."""
+        async def capture(box: int | None) -> list[str]:
+            got = await (self._evaluate(f"function(){{return ({TEXT_JS}).call(null, {TEXT_MOST})}}")
+                         if box is None else self.on_node(box, TEXT_JS, TEXT_MOST))
+            return [x for x in str(got or "").split("\n") if x]
+
+        async def through(box: int | None) -> list[str]:
+            began = (await self._scroller(box, "where"))["top"]
+            first = await capture(box)
+            for _ in range(WHOLE_STEPS):
+                height = (await self._scroller(box, "end"))["height"]
+                waited = time.monotonic()
+                while (time.monotonic() - waited < MORE_S
+                       and (await self._scroller(box, "where"))["height"] == height):
+                    await asyncio.sleep(0.3)
+                if (await self._scroller(box, "where"))["height"] == height:
+                    break
+                await self.settle(cap_ms=1500)
+            lines = await capture(box)
+            kept = set(lines)
+            if sum(1 for x in first if x in kept) < 0.8 * len(first):
+                await self._scroller(box, 0)
+                await self.settle(cap_ms=1500)
+                lines, last = [], []
+                for _ in range(WHOLE_STEPS):
+                    now_lines = await capture(box)
+                    lines, last = merge(lines, last, now_lines), now_lines
+                    if not (await self._scroller(box, "down"))["moved"]:
+                        break
+                    await self.settle(cap_ms=1500)
+                else:
+                    lines.append("... it goes on past what was read")
+            await self._scroller(box, began)
+            return lines
+
+        parts = ["\n".join(await through(None))]
+        for box in self._boxes():
+            try:
+                rows = await through(box)
+            except Exception:
+                # Gone since the look.
+                continue
+            name = self.last[box][1]
+            parts.append(f"--- the box{' ' + quote(clip(name, 40)) if name else ''} that scrolls by itself, "
+                         f"all of it:\n" + "\n".join(rows))
+        return well_formed("\n".join(parts))[:TEXT_MOST]
+
+    async def seek(self, words: str) -> int | None:
+        """Something showing these words that is not drawn yet (a row far down a list that draws only the rows in
+        view): each box that scrolls by itself, then the page, scrolled from its top until the words are there;
+        its id, or None with each put back where it was."""
+        for box in [*self._boxes(), None]:
+            try:
+                began = (await self._scroller(box, "where"))["top"]
+            except Exception:
+                continue
+            await self._scroller(box, 0)
+            for _ in range(WHOLE_STEPS):
+                await self.settle(cap_ms=1500)
+                found = await self.locate(words)
+                if found is not None:
+                    return found
+                if not (await self._scroller(box, "down"))["moved"]:
+                    break
+            await self._scroller(box, began)
+        return None
+
     async def _capture(self, session: str = "") -> list[dict]:
         """AX trees of a document (the page's, or with `session` a frame's from another site) and of every child
         frame in its process; a payment or sign-in frame among those is left to the person. A frame from another
@@ -836,7 +1057,7 @@ class Page:
             try:
                 doc["layout"] = await self._layout(doc["session"])
             except Exception:
-                doc["layout"] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
+                doc["layout"] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}}
             try:
                 doc["visible"] = await self.visible_text(doc["session"])
             except Exception:
@@ -855,7 +1076,7 @@ class Page:
         snap = await self._in(session, "DOMSnapshot.captureSnapshot",
                               computedStyles=["cursor", "overflow-y", "visibility"], includeDOMRects=True)
         strings = snap.get("strings") or []
-        out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
+        out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}}
 
         def text(i: int) -> str:
             return strings[i] if isinstance(i, int) and 0 <= i < len(strings) else ""
@@ -897,6 +1118,12 @@ class Page:
                 style[i] = [text(v) for v in (layout.get("styles") or [[]])[k]]
                 box[i] = k
             bounds = layout.get("bounds") or []
+            if doc is (snap.get("documents") or [None])[0]:
+                # Where each node of the page itself stands down the document, text included, for the state to
+                # show what is on the screen when the page is too long for one look.
+                for i, k in box.items():
+                    if i < len(backend) and k < len(bounds) and len(bounds[k]) == 4 and bounds[k][3] > 0:
+                        out["y"][backend[i]] = bounds[k][1]
             scrolls, clients = layout.get("scrollRects") or [], layout.get("clientRects") or []
 
             def styled(i: int) -> int:
@@ -967,8 +1194,9 @@ class Page:
         previous = self.last
         self.before = (self.last, self.near)
         self.last, self.secrets, self.interactive, self.near, self.values = {}, set(), 0, {}, {}
-        lines: list[str] = []
+        lines = Lines()
         text: list[str] = []
+        tops = docs[0]["layout"]["y"]
 
         def flush() -> None:
             if text:
@@ -1028,6 +1256,11 @@ class Page:
                 kids = n.get("childIds") or []
                 local = n.get("backendDOMNodeId")
                 ident = base + local if local else local
+                if not base and local in tops:
+                    lines.y = tops[local]
+                if role in CELLS and text:
+                    # The cells of a table's row stay apart, so its columns can be compared.
+                    text.append("|")
                 if local in scrollable and ident not in self.last:
                     # A box that scrolls by itself: a conversation list, a feed in a column.
                     flush()
@@ -1181,12 +1414,37 @@ class Page:
                     return i
             return len(src)
 
-        body = lines or ["(nothing in the accessibility tree: the page is blank or still loading)"]
-        # Over max, keep the top and the last fifth: a dialog's Send is usually its last line.
+        body = list(lines) or ["(nothing in the accessibility tree: the page is blank or still loading)"]
         if fit(lines, max) < len(lines):
-            head = fit(lines, max * 0.8)
-            tail = fit(lines[::-1], max * 0.2)
-            body = [*lines[:head], f"... {len(lines) - head - tail} lines cut here", *lines[len(lines) - tail:]]
+            # Over max: the top of the page (its title and menu), the last lines (a dialog's Send is usually its
+            # last line), and between them what stands on the screen now, as browser-use shows what is in view:
+            # scrolling shows the rest.
+            head, tail = fit(lines, max * 0.15), fit(lines[::-1], max * 0.1)
+            end = len(lines) - tail
+            room = max * 0.75
+            sy, vh, at = probe.get("sy", 0), probe.get("vh", 0), lines.at
+            # The lines on the screen (a box scrolled inside the page included); the window holding most of them
+            # starts at the first of these.
+            seen = [i for i in range(head, end) if at[i] is not None and sy - 40 <= at[i] <= sy + vh]
+            shown = next((i for i in range(head, end) if at[i] is not None and at[i] >= sy), end)
+            if seen:
+                shown = sorted(seen, key=lambda c: (bisect.bisect_left(seen, c + fit(lines[c:end], room))
+                                                    - bisect.bisect_left(seen, c)) * -1)[0]
+            # A few lines over the screen's first, then on down as far as there is room.
+            # (`max` here is the state's size, so the larger of two is taken by hand.)
+            start = shown - fit(lines[head:shown][::-1], room * 0.15)
+            start = start if start > head else head
+            stop = start + fit(lines[start:end], room)
+            if stop == end:
+                start = end - fit(lines[head:end][::-1], room)
+                start = start if start > head else head
+            body = [*lines[:head],
+                    *([f"... {start - head} lines above cut here: scroll up to see them, or find or read them"]
+                      if start > head else []),
+                    *lines[start:stop],
+                    *([f"... {end - stop} lines below cut here: scroll down to see them, or find or read them"]
+                      if stop < end else []),
+                    *lines[end:]]
         return well_formed(f"{header}\n" + "\n".join(body) + "\n[/state]")
 
     # --- one node
@@ -1279,13 +1537,14 @@ class Page:
         return f"[{ident}] {n[0]}" + (f' "{clip(n[1], 60)}"' if n[1] else "")
 
     def grep(self, words: str) -> str:
-        """The lines of the last look (before it was cut) that hold these words, each with the line before it;
-        and in a field's whole value, the part around them."""
+        """The lines of the last look (before it was cut) that hold these words, each with the line before it and
+        the two after it (a table row whose name is a link goes on in the next line); and in a field's whole
+        value, the part around them."""
         want = [w for w in fold(words).split() if w]
         hits: list[str] = []
         for i, line in enumerate(self.lines):
             if want and all(w in fold(line) for w in want):
-                hits += [x for x in (self.lines[i - 1] if i else "", line) if x and x not in hits]
+                hits += [x for x in self.lines[max(0, i - 1):i + 3] if x not in hits]
         for ident, value in self.values.items():
             if not want or all(w in fold(value[:VALUE_MAX]) for w in want):
                 continue
@@ -1417,7 +1676,15 @@ class Page:
             await self._in(session, "DOM.scrollIntoViewIfNeeded", backendNodeId=local)
         except Exception:
             pass
-        p = await self.on_node(ident, POINT_JS, editable_cover)
+        try:
+            p = await self.on_node(ident, POINT_JS, editable_cover)
+        except RuntimeError as error:
+            if "outside viewport" not in str(error):
+                raise
+            # Still out of the window after the browser's own scroll (inside a box that clips it, a row of a
+            # carousel): brought to the middle, as a person scrolls to it.
+            await self.on_node(ident, CENTER_JS)
+            p = await self.on_node(ident, POINT_JS, editable_cover)
         if p["covered"]:
             try:
                 await self.on_node(ident, CENTER_JS)
@@ -1602,7 +1869,7 @@ class Page:
 
     async def scroll(self, down: bool = True, ident: int | None = None, until: str = "") -> str:
         """A wheel over the box `ident` (or the page's middle), as a person scrolls; with `until`, on wheel by wheel
-        until those words show, waiting at the end of a list for more to load."""
+        until those words are on the screen, waiting at the end of a list for more to load."""
         want = fold(until).strip()
 
         async def where() -> dict:
@@ -1625,7 +1892,7 @@ class Page:
                 x, y, step = wide / 2, high / 2, high * 0.8
             wheels = 0
             for wheels in range(1, (UNTIL_WHEELS if want else 1) + 1):
-                if want and want in await self.visible_text():
+                if want and want in await self.screen_text():
                     return f" until {quote(clip(until, 40))}: it shows after {wheels - 1} wheels"
                 before = await where()
                 await self.cdp("Input.dispatchMouseEvent", type="mouseWheel", x=x, y=y, deltaX=0,
@@ -1643,7 +1910,7 @@ class Page:
                                     f"wheels")
                         return " — it did not move: the end, or not the box that scrolls"
             if want:
-                if want in await self.visible_text():
+                if want in await self.screen_text():
                     return f" until {quote(clip(until, 40))}: it shows after {wheels} wheels"
                 return f" until {quote(clip(until, 40))}: not found in {wheels} wheels"
             return " down" if down else " up"

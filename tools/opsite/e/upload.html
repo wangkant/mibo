@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>资料提交 - 报名系统</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>报名系统</b><a href="#">我的报名</a></header>
+<main><div class="card">
+<h2>上传报名材料</h2>
+<p class="hint">请上传 PDF 文件，大小不超过 10 MB。</p>
+<label for="file">选择文件</label>
+<input type="file" id="file" accept=".pdf">
+<p><button class="go" id="send">上传</button></p>
+<p id="said" class="hint"></p>
+</div></main>
+<script>
+// The site receives the chosen file's name and size, which the bench reads back from the site's state.
+document.getElementById("send").onclick = async () => {
+  const file = document.getElementById("file").files[0];
+  if (!file) { document.getElementById("said").textContent = "请先选择文件。"; return; }
+  await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: file.name, size: file.size }) });
+  document.getElementById("said").textContent = `已上传：${file.name}`;
+};
+</script>
+</body></html>

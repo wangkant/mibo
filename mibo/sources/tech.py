@@ -71,13 +71,13 @@ def _iso(seconds: int) -> str:
 
 # Hacker News
 
-async def _hn_top(http: httpx.AsyncClient) -> list[Find]:
+async def _hn_top(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     # The official list gives the front page's order; one search gives every story on it.
     ranks = await get_json(http, "https://hacker-news.firebaseio.com/v0/topstories.json")
     found = await get_json(http, "https://hn.algolia.com/api/v1/search", tags="front_page", hitsPerPage=60)
     place = {story_id: n for n, story_id in enumerate(ranks)}
     hits = sorted(found["hits"], key=lambda hit: place.get(int(hit["objectID"]), len(place)))
-    return [_hn(hit) for hit in hits[:PER_SOURCE]]
+    return [_hn(hit) for hit in hits[:limit]]
 
 
 async def _hn_show(http: httpx.AsyncClient) -> list[Find]:
@@ -126,11 +126,11 @@ async def _stackoverflow(http: httpx.AsyncClient) -> list[Find]:
             for q in found["items"]]
 
 
-async def _juejin(http: httpx.AsyncClient) -> list[Find]:
+async def _juejin(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     found = await get_json(http, "https://api.juejin.cn/content_api/v1/content/article_rank",
                            category_id=1, type="hot")
     picks = []
-    for entry in found["data"][:PER_SOURCE]:
+    for entry in found["data"][:limit]:
         content, counter = entry["content"], entry.get("content_counter") or {}
         picks.append(find(f"https://juejin.cn/post/{content['content_id']}", content["title"], site="掘金",
                           text=content.get("brief") or f"{counter.get('view', 0)} 阅读 · {counter.get('like', 0)} 赞",

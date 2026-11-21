@@ -252,7 +252,10 @@ class Hub:
                     self._set(runner, "failed", "elevated")
                     await runner.wake.wait()
                     continue
-                spec = {**spec, "env": runtimes.env(self.home, spec.get("env"))}
+                # A mirror for npx's or uvx's downloads where the vendor's registry does not answer; the server's own
+                # env wins.
+                reach_env = await runtimes.reach_env(self.home, spec["command"])
+                spec = {**spec, "env": {**reach_env, **runtimes.env(self.home, spec.get("env"))}}
             # A sign-in the person started, or tokens kept from one: the SDK's OAuth client goes along.
             attempt, auth = runner.attempt, None
             if not runner.local and (attempt or KeptTokens(self.home, runner.name).signed_in()):
@@ -525,9 +528,17 @@ class Hub:
             if mode == mt.NEVER:
                 self._log(server, tool_name, arguments, "never")
                 return {"status": "never"}
-            if mode == mt.ASK and (server, tool_name, tool["fp"]) in self.session.get(conversation, set()):
+            passed = None
+            if mode == mt.AUTO and (server, tool_name, tool["fp"]) in self.session.get(conversation, set()):
                 how = "this_chat"
-            elif mode == mt.ASK:
+            elif mode == mt.AUTO and tool["hints"].get("destructiveHint") is not True:
+                # The reviewer first, on the person's own words of this turn; a tool marked destructive skips it.
+                passed = await self._review(server, tool, arguments)
+                if passed.decision == "refuse":
+                    self._log(server, tool_name, arguments, "refused", "review", passed.reason)
+                    return {"status": "refused", "reason": passed.reason}
+                how = "review" if passed.decision == "go" else how
+            if mode == mt.AUTO and how == mt.AUTO:
                 card = self._tool_card(runner, tool, arguments, changed)
                 answer = await self.ask(card, conversation)
                 if answer in (None, "no"):
@@ -536,7 +547,7 @@ class Hub:
                     return {"status": status}
                 how = answer
                 if card["read_default"]:
-                    self.grants.set_group(server, "read", mt.ALWAYS if self.read_default else mt.ASK, runner.tools)
+                    self.grants.set_group(server, "read", mt.ALWAYS if self.read_default else mt.AUTO, runner.tools)
                 if answer == "always":
                     self.grants.set_mode(server, tool, mt.ALWAYS)
                 elif answer == "chat":
@@ -558,6 +569,18 @@ class Hub:
             return {"status": "done", "how": how, "is_error": result.is_error, "left_out": result.left_out,
                     "pictures": result.pictures, "text": result.text[: mt.RESULT_CHARS * 2],
                     "title": tool["title"] or tool["name"]}
+
+    async def _review(self, server: str, tool: dict, arguments: dict):
+        """The reviewer's verdict on one call: the person's own messages of the turn under way, the tool's name and
+        its maker's description as data, the arguments as the text it sends."""
+        from . import acting, review
+        request = await asyncio.to_thread(acting.asked, self.workspace)
+        marks = ["its maker marks it read-only"] if tool["hints"].get("readOnlyHint") is True else []
+        return await review.decide("tools", request, {
+            "kind": "tool", "where": server, "target": [tool["title"] or tool["name"]], "effects": marks,
+            "text": json.dumps(arguments, ensure_ascii=False)[:2000], "page_says": tool["description"][:200]},
+            ask=acting.reviewer(self.workspace), attended=True,
+            lang=str(self.workspace.config().get("AGENT_LANG") or "zh"))
 
     def _log(self, server: str, tool: str, arguments: dict, outcome: str, how: str = "", out: str = "") -> None:
         self.grants.log({"server": server, "tool": tool, "outcome": outcome, "how": how,
@@ -603,7 +626,7 @@ class Hub:
         if answer is None:
             return False
         if card["read_default"] and answer != "no":
-            self.grants.set_group(runner.name, "read", mt.ALWAYS if self.read_default else mt.ASK, runner.tools)
+            self.grants.set_group(runner.name, "read", mt.ALWAYS if self.read_default else mt.AUTO, runner.tools)
         self.answer_start(runner.name, answer)
         return answer != "no"
 

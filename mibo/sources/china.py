@@ -72,9 +72,9 @@ def _bili(video: dict) -> Find:
                 length=video.get("duration") or None)
 
 
-async def _bili_hot(http: httpx.AsyncClient) -> list[Find]:
-    data = await get_json(http, "https://api.bilibili.com/x/web-interface/popular", ps=PER_SOURCE, pn=1)
-    return [_bili(v) for v in data["data"]["list"]][:PER_SOURCE]
+async def _bili_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
+    data = await get_json(http, "https://api.bilibili.com/x/web-interface/popular", ps=limit, pn=1)
+    return [_bili(v) for v in data["data"]["list"]][:limit]
 
 
 async def _bili_articles(http: httpx.AsyncClient) -> list[Find]:
@@ -107,9 +107,9 @@ async def _bili_precious(http: httpx.AsyncClient) -> list[Find]:
 
 
 def _bili_rank(rid: int):
-    async def fetch(http: httpx.AsyncClient) -> list[Find]:
+    async def fetch(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
         data = await get_json(http, "https://api.bilibili.com/x/web-interface/ranking/v2", rid=rid, type="all")
-        return [_bili(v) for v in data["data"]["list"]][:PER_SOURCE]
+        return [_bili(v) for v in data["data"]["list"]][:limit]
     return fetch
 
 
@@ -136,16 +136,16 @@ _BILI_PARTITIONS = (
 
 # ---------------------------------------------------------------- communities
 
-async def _v2ex_hot(http: httpx.AsyncClient) -> list[Find]:
+async def _v2ex_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     topics = await get_json(http, "https://www.v2ex.com/api/topics/hot.json")
     return [find(t["url"], t["title"], site="V2EX", kind="post", text=t.get("content", ""),
                  author=t["member"]["username"], published=_stamp(t.get("created")))
-            for t in topics][:PER_SOURCE]
+            for t in topics][:limit]
 
 
-async def _zhihu_hot(http: httpx.AsyncClient) -> list[Find]:
+async def _zhihu_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     # api.zhihu.com answers a visitor; www.zhihu.com's hot list asks for a sign-in.
-    data = await get_json(http, "https://api.zhihu.com/topstory/hot-list", limit=PER_SOURCE)
+    data = await get_json(http, "https://api.zhihu.com/topstory/hot-list", limit=limit)
     found = []
     for card in data["data"]:
         question = card["target"]
@@ -155,7 +155,7 @@ async def _zhihu_hot(http: httpx.AsyncClient) -> list[Find]:
         found.append(find(f"https://www.zhihu.com/question/{question['id']}", question["title"], site="知乎",
                           kind="post", text=question.get("excerpt", ""), published=_stamp(question.get("created")),
                           picture=picture))
-    return found[:PER_SOURCE]
+    return found[:limit]
 
 
 _IMG_SRC = re.compile(r'<img[^>]+src="([^"]+)"')
@@ -163,27 +163,27 @@ _TIEBA = re.compile(r'<li class="topic-top-item"><img src="([^"]*)".*?<a href="(
                     r'.*?<p class="topic-top-item-desc">([^<]*)</p>', re.S)
 
 
-async def _tieba_hot(http: httpx.AsyncClient) -> list[Find]:
+async def _tieba_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     # Tieba's hot topics page: each topic with its line and picture, readable signed out.
     page = await get_text(http, "https://tieba.baidu.com/hottopic/browse/topicList", res_type=1)
     return [find(html.unescape(url), title, site="百度贴吧", kind="page", text=about, picture=html.unescape(cover))
-            for cover, url, title, about in _TIEBA.findall(page)][:PER_SOURCE]
+            for cover, url, title, about in _TIEBA.findall(page)][:limit]
 
 
 # ---------------------------------------------------------------- hot lists
 
-async def _baidu_hot(http: httpx.AsyncClient) -> list[Find]:
+async def _baidu_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     data = await get_json(http, "https://top.baidu.com/api/board", platform="pc", tab="realtime")
     card = data["data"]["cards"][0]
     return [find(entry["url"], entry["word"], site="百度热搜", kind="page", text=entry.get("desc", ""),
                  picture=entry.get("img", ""))
-            for entry in card.get("topContent", []) + card["content"]][:PER_SOURCE]
+            for entry in card.get("topContent", []) + card["content"]][:limit]
 
 
-async def _toutiao_hot(http: httpx.AsyncClient) -> list[Find]:
+async def _toutiao_hot(http: httpx.AsyncClient, limit: int = PER_SOURCE) -> list[Find]:
     data = await get_json(http, "https://www.toutiao.com/hot-event/hot-board/", origin="toutiao_pc")
     return [find(_bare(entry["Url"]), entry["Title"], site="今日头条", picture=(entry.get("Image") or {}).get("url", ""))
-            for entry in data["data"]][:PER_SOURCE]
+            for entry in data["data"]][:limit]
 
 
 # ---------------------------------------------------------------- tech and science sites

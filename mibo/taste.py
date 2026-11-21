@@ -318,7 +318,8 @@ def history(events: list, until: float = math.inf) -> dict[str, dict]:
             h = found[ident] = {"f": extra.get("f"), "at": at, "s": extra.get("s", ""), "p": extra.get("p", ""),
                                 "r": extra.get("r"), "site": site, "kind": kind, "open": False, "like": False,
                                 "skip": False, "hide": False, "play": 0.0, "acted": None, "end": "",
-                                "ended": None, "said": False, "opened": None, "back": False, "talk": False}
+                                "ended": None, "said": False, "opened": None, "back": False, "talk": False,
+                                "walled": False}
         h["f"] = h["f"] or extra.get("f")
         if action == "seen":
             h["s"] = h["s"] or extra.get("s", "")
@@ -326,6 +327,10 @@ def history(events: list, until: float = math.inf) -> dict[str, dict]:
         if action == "end":
             # How a card went is not a reaction of its own: it says how to read the others, or their absence.
             h["end"], h["ended"] = extra.get("end") or "", at
+            continue
+        if action == "walled":
+            # It opened to a sign-in or a check (feed.walled): no lesson either way.
+            h["walled"] = True
             continue
         h["acted"] = at
         if action == "open":
@@ -380,6 +385,8 @@ def reacted(h: dict) -> Optional[int]:
 
 def label(h: dict, until: float) -> Optional[tuple[int, float, float]]:
     """(y, confidence, when) from a thing's final mark by `until`, or None while it says nothing yet."""
+    if h["walled"]:
+        return None
     if h["hide"]:
         y, c = HIDE
     elif h["like"]:

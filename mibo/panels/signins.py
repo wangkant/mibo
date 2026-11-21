@@ -29,19 +29,35 @@ from fastapi import Request
 ERRORS: frozenset[str] = frozenset({"signin_invalid", "signin_window", "signin_none"})
 # Settings' sign-in waits this long for the person before the column lets go.
 SETTINGS_WAIT_S = 600.0
-# A run's page past the sign-in this many looks in a row with no account: the person went on without one.
-PAST_LOOKS = 3
 # A site the cookies say is signed in: its sign-in page is looked at this long after it is opened.
 CHECK_S = 3.0
-# Steps in the column: the wait, its end, the press of the site's sign-in button, the task of a sign-in from Settings.
+# While waiting, a page with this many characters and no password field is plainly past the wall (no model call),
+# and the model is asked at most once in this many seconds.
+PLAIN_CHARS = 2500
+JUDGE_GAP_S = 3.0
+# Steps in the column: the wait, its end, the press of the site's sign-in button, the task of a sign-in from Settings;
+# the wait's sentence when the judgment gave none, its two buttons, and the run's line when the person skips.
 SAID = {
     "zh": {"wait": "等待登录 {host}", "check": "等待完成 {host} 的验证", "done": "已登录 {host}",
            "skip": "未登录，继续操作", "press": "按下网站的「{button}」按钮", "open": "打开 {host}",
-           "task": "登录 {name}", "read": "已登录，继续读取。", "signed": "已登录 {name}，可以关闭此网页。"},
+           "task": "登录 {name}", "read": "已登录，继续读取。", "signed": "已登录 {name}，可以关闭此网页。",
+           "say_account": "{host} 需要登录账号后才能查看。", "say_check": "{host} 需要完成人机验证后才能访问。",
+           "go": "前往登录", "pass": "跳过此网站", "passed": "已跳过 {host}",
+           "without": "{host} 需要登录后才能查看，本次未使用该网站。登录后可再次尝试。",
+           "walled_account": "{host} 需要登录后才能查看此推荐，在该网站登录前不再推荐其同类内容；可在浏览器中登录，也可查看其他推荐。",
+           "walled_check": "{host} 要求完成人机验证后才能查看此推荐，在该网站登录前不再推荐其同类内容；可在浏览器中登录，也可查看其他推荐。"},
     "en": {"wait": "Waiting for sign-in on {host}", "check": "Waiting for the check on {host}",
            "done": "Signed in on {host}", "skip": "Not signed in; going on", "press": "Press the site’s “{button}” button",
            "open": "Open {host}", "task": "Sign in to {name}", "read": "Signed in; reading goes on.",
-           "signed": "Signed in to {name}. You can close this page."},
+           "signed": "Signed in to {name}. You can close this page.",
+           "say_account": "{host} asks for an account to see this page.",
+           "say_check": "{host} asks you to pass a check before the visit.",
+           "go": "Sign in", "pass": "Skip this site", "passed": "Skipped {host}",
+           "without": "{host} needs an account to see this, so it was left out this time. Sign in to try again.",
+           "walled_account": "{host} needs an account to open this find, so its finds of this kind wait until you sign "
+                             "in there; sign in from the browser, or look at another find.",
+           "walled_check": "{host} asks for a check before it opens this find, so its finds of this kind wait until you "
+                           "sign in there; sign in from the browser, or look at another find."},
 }
 
 
@@ -54,29 +70,62 @@ def _lang(app) -> str:
 class Waiting:
     """The one wait in the pane: for which wall, on which page and site, whose the column's run is when it is its
     own ("read", or the site's name from Settings or the chat), whether a wall has been seen yet, the 自动登录 card
-    and its answer, and where the site's sign-in button was pressed."""
+    and its answer, and where the site's sign-in button was pressed. Whether the page still asks for an account or
+    a check is the model's judgment (web/pagejudge.py), asked with `ask` when the page changed."""
 
-    def __init__(self, desktop):
+    def __init__(self, desktop, ask=None):
         self.desktop = desktop
+        self.ask = ask
         self.state: dict | None = None
 
-    def begin(self, pane, wall: str, lang: str, own: str = "", seen: bool = True) -> None:
+    def begin(self, pane, wall: str, lang: str, own: str = "", seen: bool = True, say: str = "") -> None:
+        """The column waits: its sentence (the judgment's, else the site's name in a plain one), and where its
+        登录 button goes: the page's own sign-in link, else the site's sign-in as the hints know it, else its
+        front page; none on a page that is a sign-in itself or for a check."""
         from ..web import signin
         url = pane.address()
         host = urlsplit(url).hostname or ""
+        page = signin.page(pane.cdp)
+        place = signin.hint(signin.key(url))
+        to = "" if wall == "verification" or page.get("password") or signin.in_flow(url) else (
+            (page.get("link") or {}).get("href") or place.get("signin") or signin.home_of(url))
+        kind = "check" if wall == "verification" else "account"
         self.state = {"wall": wall, "host": host, "site": signin.key(url), "lang": lang, "own": own, "seen": seen,
-                      "asked": False, "once": False, "pressed": "", "card": "", "began": time.time(), "past": 0}
-        pane.op["wait"] = {"wall": wall, "site": host}
+                      "asked": False, "once": False, "pressed": "", "card": "", "began": time.time(),
+                      "judged": "", "at": 0.0}
+        pane.op["wait"] = {"wall": wall, "site": host, "to": to, "say": say or SAID[lang]["say_" + kind].format(host=host),
+                           **{k: SAID[lang][k] for k in ("go", "pass")}}
         pane.op_said(SAID[lang]["check" if wall == "verification" else "wait"].format(host=host))
+
+    def _asks(self, pane, url: str, found: dict) -> str:
+        """What the page asks of the person now, "readable", "account", "check" or "box": the model's judgment of
+        the page as it is, none asked on a page that plainly has content or within JUDGE_GAP_S of the last."""
+        import asyncio as aio
+
+        from ..web import pagejudge, signin
+        state, page = self.state, signin.page(pane.cdp)
+        if not page:
+            return state["judged"] or "account"
+        if page["chars"] >= PLAIN_CHARS and not page["password"] and not signin.in_flow(url):
+            return "readable"
+        if state["judged"] and time.monotonic() - state["at"] < JUDGE_GAP_S:
+            return state["judged"]
+        hints = {**found, "flow": signin.in_flow(url)}
+        verdict = aio.run(pagejudge.judge(page, hints, self.ask, state["lang"])) if self.ask else \
+            pagejudge.from_code(hints, url, state["lang"])
+        state["judged"], state["at"] = verdict.asks, time.monotonic()
+        return verdict.asks
 
     def poll(self, pane, within: float) -> dict:
         """Look at the page until it is past the wall or `within` seconds went: {"status": "ok"|"waiting"|
-        "stopped"}, "ok" with "signed": False when a run's page went on without an account."""
+        "stopped"|"skipped"}, "ok" with "signed": False when a run's page went on without an account."""
         from .. import signwatch
         from ..web import signin
         state, until = self.state, time.monotonic() + within
         while True:
             op = pane.op
+            if state is not None and state.get("skipped"):
+                return self._skipped(pane)
             if state is None or state is not self.state or op is None or not op.get("wait"):
                 return {"status": "stopped"}
             if op.get("held") == "stopped":
@@ -84,18 +133,16 @@ class Waiting:
                 return {"status": "stopped"}
             url = pane.address()
             found = signwatch.check(pane.cdp, url)
-            if found.get("kind") in signin.WAITED or found.get("form"):
-                state["seen"] = state["seen"] or found.get("kind") in signin.WAITED
-                state["past"] = 0
-                signwatch.observe(pane, url, found)
-            elif signin.past(found, url):
-                now = signwatch.observe(pane, url, found)
-                entry = signin.load(self.desktop).get(signin.key(url)) or {}
-                if now == "in" and (state["seen"] or entry.get("at", 0) >= state["began"] - 1):
-                    return self._past(pane, url, True)
-                state["past"] += 1
-                if not state["own"] and state["seen"] and state["past"] >= PAST_LOOKS:
-                    return self._past(pane, url, False)
+            signwatch.observe(pane, url, found)
+            if self._asks(pane, url, found) in ("readable", "box"):
+                # Past it. Signed in when a wall stood here first and the page does not offer to sign in now.
+                signed = state["seen"] and found.get("account") != "out"
+                if signed and not signin.signed_in(self.desktop, url):
+                    signin.became(self.desktop, url, "page")
+                if signed or not state["own"]:
+                    return self._past(pane, url, signed)
+            else:
+                state["seen"] = True
             if found.get("filled") and found.get("button"):
                 self._filled(pane, url, found["button"])
             if time.monotonic() > until:
@@ -113,6 +160,26 @@ class Waiting:
             pane.op_end("done", said["read"] if state["own"] == "read" else said["signed"].format(name=state["own"]))
         self.state = None
         return {"status": "ok", "url": url, "signed": signed}
+
+    def skip(self, pane) -> bool:
+        """The person's 跳过 on the column: the wait ends at its next look, and the task goes on without the site."""
+        if self.state is None or pane.op is None or not pane.op.get("wait"):
+            return False
+        self.state["skipped"] = True
+        return True
+
+    def _skipped(self, pane) -> dict:
+        state, op = self.state, pane.op
+        said = SAID[state["lang"]]
+        self.state = None
+        if op is not None:
+            if op["steps"] and op["steps"][-1]["state"] == "doing":
+                op["steps"][-1].update(state="done", text=said["passed"].format(host=state["host"]))
+            op.update(wait=None, card=None)
+            pane._tell_op()
+            if state["own"]:
+                pane.op_end("stopped", "")
+        return {"status": "skipped", "said": said["without"].format(host=state["host"])}
 
     def _filled(self, pane, url: str, button: dict) -> None:
         """The browser filled a saved password: the site's own button is pressed when the person allows it for
@@ -160,13 +227,35 @@ class Waiting:
 
 
 def mount(app, workspace, body) -> None:
-    from .. import browsed
+    from .. import browsed, signwatch
     from ..web import gate, signin, sites
     from .runtime import WINDOW_HEADER
 
+    from .. import acting
     desktop = workspace.home / "runtime" / "desktop"
     runtime = desktop.parent
-    waiting = Waiting(desktop)
+    # The judgment on the person's own model, as the app's settings name it when it is asked.
+    waiting = Waiting(desktop, lambda system, messages: acting.reviewer(workspace)(system, messages))
+
+    def landed(pane, url: str, found: dict) -> None:
+        """A find opened in the pane (no run there): when the model judges its page a sign-in or a check, the
+        recommender hears it (feed.walled) and the chat says so in one sentence. A page plainly with content is
+        not judged."""
+        from ..web import pagejudge
+        from . import feed
+        ident = (pane._reading or {}).get("id")
+        if not ident or pane.op is not None:
+            return
+        page = signin.page(pane.cdp)
+        if not page or page["chars"] >= PLAIN_CHARS and not page["password"] and not signin.in_flow(url):
+            return
+        lang = _lang(app)
+        verdict = asyncio.run(pagejudge.judge(page, {**found, "flow": signin.in_flow(url)}, waiting.ask, lang))
+        item = workspace._library().get(ident)
+        if verdict.asks in ("account", "check") and item is not None and feed.walled(runtime, item):
+            asyncio.run(workspace.remark(SAID[lang]["walled_" + verdict.asks].format(host=urlsplit(url).hostname)))
+
+    signwatch.heard = landed
 
     def window_or_none():
         window = getattr(app.state, "window", None)
@@ -253,7 +342,12 @@ def mount(app, workspace, body) -> None:
         if op == "begin":
             if pane.op is None:
                 return {"status": "stopped"}
-            await asyncio.to_thread(waiting.begin, pane, str(payload.get("wall") or "sign_in"), _lang(app))
+            # The page is the person's while they sign in: nothing of the run holds its requests.
+            run = getattr(app.state, "operating", None)
+            if run is not None and run.hands is not None:
+                await run.hands.let_go()
+            await asyncio.to_thread(waiting.begin, pane, str(payload.get("wall") or "sign_in"), _lang(app),
+                                    say=str(payload.get("say") or "")[:160])
             return await asyncio.to_thread(waiting.poll, pane, 2.0)
         if op == "read":
             url, task = payload.get("url"), payload.get("task")
@@ -282,6 +376,20 @@ def mount(app, workspace, body) -> None:
             if waiting.state is not None and waiting.state["site"] == site and pane.op is not None:
                 return {"status": "waiting"}
             return {"status": "ok" if await asyncio.to_thread(state_of, window, site) == "in" else "stopped"}
+        raise ValueError("signin_invalid")
+
+    @app.post("/api/signins/wait")
+    async def signin_wait(request: Request):
+        """The person's press on the waiting column, from the app window's own page alone: "go" opens the site's
+        sign-in in the pane, "skip" lets the task go on without the site."""
+        window = own_window(request)
+        what = (await body(request)).get("action")
+        wait = (window.pane.op or {}).get("wait") or {}
+        if what == "go" and browsed.web(wait.get("to") or ""):
+            await asyncio.to_thread(window.pane.go, wait["to"])
+            return {"ok": True}
+        if what == "skip":
+            return {"ok": waiting.skip(window.pane)}
         raise ValueError("signin_invalid")
 
     @app.post("/api/signins/card")

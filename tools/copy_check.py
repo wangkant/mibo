@@ -33,6 +33,7 @@ SPOKEN = (
     r"东西", r"不碰|碰到", r"亲口", r"(?<![识区类告级特性分个差辨])别[^人的名处墅]", r"要不要|行不行|好不好|有没有|都行", r"没问题", r"够多|很多|太[多大]",
     r"就(?:停|行|好)", r"不算", r"少看|想看|看过|看的(?:网页|内容)", r"画出来|说法|原样|自己挑|你自己", r"[说聊]点什么|回消息|刚回来",
     r"没有回应|不通", r"没有?人回答|没人", r"没有(?:做|成功|同意|允许|打开|等到)", r"还没有?", r"一小段|一两[条个]", r"来了几",
+    r"口味",
     # The app speaking as a person to a person.
     r"先问你|问你", r"替你|帮你", r"等你", r"不用问|不用管", r"交给你|交还给你", r"我来|我[能在]", r"想在|想让", r"你在用|在用这个",
     r"它[会们]|给它|等它", r"点下面|下面的按钮|点这里", r"怎么对待",
@@ -45,7 +46,7 @@ SPOKEN = (
 CATALOG = ROOT / "locales" / "zh.json"
 # Catalog keys the character or the person says, and the namespaces of the command line, which is not interface text here.
 VOICE_KEYS = ("activity.goOnSaid", "chat.ideas", "chat.ideasPlain", "onboard.saying", "onboard.sayingNoModel",
-              "onboard.bye", "onboard.findsLooking", "onboard.heard", "petbox.asks")
+              "onboard.bye", "onboard.findsSaying", "onboard.findsLooking", "onboard.heard", "petbox.asks")
 NOT_PAGES = ("cli", "start", "tray", "petshot", "catalog")
 CJK = re.compile(r"[一-鿿]")
 VOICE = "copy: voice"

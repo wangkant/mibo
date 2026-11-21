@@ -15,8 +15,8 @@ outside waits at /api/browser/confirm, which only the app window's own page
 can answer (its window key), never the service. The kinds the person let
 through per site are listed and revoked at /api/browser/allowed, and the
 person's mode for the pane (acting.py) is read and set at /api/browser/acting;
-a run begins with its plan, on a card when the start address is the model's
-own pick of another site or the mode is auto. What the
+a run begins with its plan, on a card only when the start address is the
+model's own pick of a site the person did not name. What the
 person types in the chat beside the page is a chat message like any other,
 marked for the page by its turn choice (turns.TURN_CHOICES), which the
 character does there itself."""
@@ -130,10 +130,10 @@ class Operating:
         here = await asyncio.to_thread(pane.address)
         await asyncio.to_thread(pane.operate, task, go_on)
         if not go_on:
-            # The plan before the first step: the site the run works on, on a card when the start address is the
-            # model's own pick of another site, or in auto mode.
+            # The plan before the first step: the site the run works on, on a card only when the start address is
+            # the model's own pick of a site the person did not name.
             words = " ".join(m["text"] for m in await asyncio.to_thread(acting.asked, self.workspace))
-            laid = plan(start, here if browsed.web(here) else "", words, mode)
+            laid = plan(start, here if browsed.web(here) else "", words)
             sites = "、".join(laid["sites"])
             if laid["card"]:
                 answer = await self.ask({"id": secrets.token_urlsafe(8), "kind": "plan", "site": sites, "to": sites,
@@ -161,7 +161,7 @@ class Operating:
         return {"status": "ok", "url": await asyncio.to_thread(pane.address)}
 
     async def review(self, action: dict):
-        """Auto mode's reviewer on one action: the person's own messages of the turn under way, never the page."""
+        """The reviewer on one action: the person's own messages of the turn under way, never the page."""
         from .. import acting, review
         request = await asyncio.to_thread(acting.asked, self.workspace)
         return await review.decide("browser", request, action, ask=acting.reviewer(self.workspace),

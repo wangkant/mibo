@@ -156,6 +156,7 @@
     "system": "Ouvrir dans le navigateur du système",
     "close": "Fermer",
     "private": "Nouvel onglet privé : les pages consultées dans cet onglet ne sont pas conservées",
+    "privateTab": "Nouvel onglet privé",
     "newTab": "Nouvel onglet",
     "closeTab": "Fermer l'onglet",
     "tabs": "Onglets",
@@ -262,8 +263,6 @@
           "sign_in": "En attente de connexion",
           "verification": "En attente de vérification"
         },
-        "sign_in": "{site} vous demande de vous connecter. Connectez-vous sur la page ; la suite reprend d'elle-même une fois connecté.",
-        "verification": "{site} vous demande une vérification. Effectuez-la sur la page ; la suite reprend d'elle-même ensuite.",
         "autoTitle": "Se connecter automatiquement à {site} ?",
         "autoMeta": "Le navigateur a rempli votre mot de passe enregistré. Seul le bouton de connexion du site est actionné ; le mot de passe n'est jamais lu.",
         "once": "Autoriser une fois",
@@ -299,7 +298,6 @@
       "title": "Façon d'agir dans les pages",
       "off": "Désactivé",
       "read": "Lecture seule",
-      "ask": "Demander à chaque fois",
       "auto": "Vérification automatique"
     },
     "prompt": {
@@ -570,8 +568,6 @@
       "standard": "Réfléchit un peu avant de répondre",
       "deep": "Réfléchit en profondeur, prend plus de temps"
     },
-    "once": "Pour le prochain message uniquement",
-    "onceTag": "une fois",
     "model": "Modèle",
     "more": "Plus de modèles",
     "manage": "Gérer les modèles…",
@@ -635,7 +631,6 @@
     "names": {
       "tools": "Appels d'outils",
       "pictures": "Images",
-      "json": "Sortie JSON",
       "thinking": "Raisonnement"
     },
     "states": {
@@ -647,7 +642,6 @@
     "instead": {
       "tools": "Mibo cherche lui-même sur le web et transmet les résultats au modèle ; le pilotage du navigateur et de l'ordinateur n'est pas disponible.",
       "pictures": "Les images ne sont pas envoyées au modèle, seulement leur description.",
-      "json": "Le format est demandé dans l'instruction et extrait de la réponse.",
       "thinking": "Aucun réglage de réflexion ne s'affiche à côté de la zone de message."
     },
     "unstable": "La vérification a donné des résultats variables ; un échec est traité comme non pris en charge.",
@@ -713,7 +707,7 @@
     "connectLater": "Je lirai des pages web publiques tout seul et j'enverrai des extraits au modèle choisi. Tu peux changer cela dans Réglages › Sorties.",
     "findsSaying": "J'ai déjà trouvé quelques contenus. Voyons lesquels te conviennent.",
     "findsLooking": "Je cherche des contenus sur les sujets que tu as choisis. Un instant.",
-    "findsWait": "Recherche de contenus sur les sujets choisis. Cela prend jusqu'à 30 secondes.",
+    "findsWait": "Cela prend jusqu'à 30 secondes.",
     "video": "Vidéo",
     "want": "Je veux voir",
     "notWant": "Pas pour moi",
@@ -734,7 +728,7 @@
     "toldLater": "Conservé pour l'instant ; ce sera utilisé la prochaine fois que je ferai le point sur ce que je sais.",
     "tellAgain": "Modifier",
     "heard": "Compris, merci de me l'avoir dit !",
-    "tellLater": "Une fois un modèle connecté, vous pourrez le lui dire dans la discussion.",
+    "tellLater": "Une fois un modèle connecté, vous pourrez le préciser dans la discussion.",
     "it": "le personnage",
     "errors": {
       "profile_invalid": "Écrivez entre 1 et 1000 caractères.",
@@ -1115,7 +1109,6 @@
     "abilities": {
       "tools": "Appels d'outils",
       "pictures": "Images",
-      "json": "Sortie JSON",
       "thinking": "Raisonnement"
     },
     "checkingAbilities": "Vérification des capacités du modèle…",
@@ -1458,10 +1451,9 @@
     "typed": "Texte",
     "logFold_one": "Historique (dernière {count})",
     "modeName": "Façon d'agir",
-    "modeText": "Lecture seule : lit la fenêtre sans rien faire. Demander à chaque fois : toute action ayant un effet extérieur attend votre accord. Vérification automatique : un modèle vérifie d'abord ; les envois et soumissions clairement demandés se font, le paiement, la suppression et le compte demandent toujours.",
+    "modeText": "Afficher seulement : lit la fenêtre sans effectuer aucune action. Vérification automatique : ce qui ne fait que lire ou peut être annulé s’exécute ; le reste est d’abord évalué par un modèle de vérification, les étapes de la tâche confiée s’exécutent et votre confirmation n’est demandée qu’en cas d’échec de la vérification. Les paiements, suppressions et modifications de compte demandent toujours votre confirmation.",
     "modes": {
       "read": "Lecture seule",
-      "ask": "Demander à chaque fois",
       "auto": "Vérification automatique"
     },
     "tiers": {
@@ -1484,12 +1476,9 @@
     },
     "paceText": "Jusqu'à {count} par jour, seulement quand vous êtes disponible.",
     "quietName": "Heures calmes",
-    "quietText": "Aucune de {from} à {to}.",
-    "quietOff": "Une fois définies, rien n'est recommandé pendant ces heures.",
     "quietFrom": "Début",
     "quietTo": "Fin",
-    "tasteTitle": "Vos goûts",
-    "tasteText": "Les recommandations suivent les sujets choisis, vos réactions et ce que vous dites aimer dans la discussion.",
+    "tasteTitle": "Préférences de recommandation",
     "topics": "Sujets suivis",
     "topicsNone": "Aucun sujet choisi pour l'instant.",
     "lean": {
@@ -1501,10 +1490,10 @@
     "removeTopic": "Ne plus suivre {name}",
     "addTopic": "Ajouter un sujet",
     "add": "Ajouter",
-    "learned": "Appris de vos réactions",
+    "learned": "D'après votre activité",
     "takes": "Vous ouvrez souvent",
     "passes": "Vous passez souvent",
-    "learnedNone": "Rien pour l'instant. Ce qui est appris apparaît ici après quelques recommandations ouvertes ou passées.",
+    "learnedNone": "Apparaît après quelques recommandations ouvertes ou passées.",
     "learnedOff": "Ne plus tenir compte de {name}",
     "kind": {
       "video": "vidéos",
@@ -1517,8 +1506,8 @@
       "1": "Plus : {name}",
       "-1": "Moins : {name}"
     },
-    "said": "Ce que vous avez dit dans la discussion",
-    "saidNone": "Rien pour l'instant. Dites dans la discussion ce que vous aimez ou ne voulez pas, et cela apparaîtra ici.",
+    "said": "Mentionné dans la discussion",
+    "saidNone": "Apparaît quand vous dites dans la discussion ce que vous aimez.",
     "like": "Aime : {topic}",
     "avoid": "Pas intéressé : {topic}",
     "hidden": "Exclu : {name}",
@@ -1531,11 +1520,10 @@
     "formRow": "Format : {parts}",
     "saidOff": "Supprimer {what}",
     "wishes": "Pour les prochains jours",
-    "wishText": "Souhaits à court terme exprimés dans la discussion. Chacun prend fin après trois jours sans toucher à vos goûts durables.",
     "wish": "{topic} (jusqu'au {day})",
-    "reset": "Réinitialiser les goûts",
-    "resetAsk": "Réinitialiser vos goûts ?",
-    "resetText": "Ce qui a été appris de vos réactions et de la discussion est effacé. Vos sujets, la fréquence et les heures calmes sont conservés. Cette action est irréversible.",
+    "reset": "Réinitialiser les préférences",
+    "resetAsk": "Réinitialiser les préférences de recommandation ?",
+    "resetText": "Ce qui a été appris de votre activité, vos ajustements et ce que vous avez mentionné dans la discussion sont effacés. Vos sujets, la fréquence et les heures calmes sont conservés. Cette action est irréversible.",
     "resetOk": "Réinitialiser",
     "week": "Cette semaine : {shown} proposés, {opened} ouverts.",
     "weekNone": "Rien de proposé cette semaine pour l'instant.",
@@ -1546,26 +1534,20 @@
     "listSep": ", "
   },
   "setup_walks": {
-    "hint": "Le personnage lit seul des pages web publiques et envoie des extraits au modèle choisi pour retenir ce qui vaut la peine d'être rapporté.",
+    "hint": "Le personnage lit seul des pages web publiques et envoie des extraits au modèle choisi.",
+    "moreTitle": "Plus de réglages",
     "onName": "Sortir de lui-même",
     "offText": "Désactivé. Les recherches demandées dans la discussion le sont aussi.",
     "walksName": "Sorties par jour",
-    "walksText": "Une recherche demandée dans la discussion peut ajouter une sortie par jour.",
-    "atName": "Première sortie du jour",
-    "atOff": "Non définie : les sorties sont réparties sur la journée.",
-    "atText": "La première sortie du jour part à {time} ou plus tard.",
-    "sitesTitle": "Sites",
-    "sitesText": "Saisissez une adresse ou un domaine, par exemple example.com.",
-    "avoid": "Ne jamais visiter",
-    "favour": "Visiter en priorité",
-    "addSite": "Ajouter un site",
+    "avoid": "Sites à ne jamais visiter",
+    "favour": "Sites à visiter en priorité",
+    "addSite": "par ex. example.com",
     "siteOff": "Retirer {site}",
     "recordTitle": "Journal des sorties",
     "recordNone": "Aucune sortie pour l'instant.",
     "noTopic": "Contenus populaires",
-    "topic": "Sujet : {topic}",
-    "asked": "Demandé par vous : {topic}",
-    "sums": "Sources {lists} · Lues {read} · Rapportées {kept}",
+    "asked": "Demandé : {topic}",
+    "sums": "Lues {read} · Rapportées {kept}",
     "missed": "{site} : {why}",
     "lists": "Où il a cherché",
     "read": "Pages lues",
@@ -1601,7 +1583,6 @@
       "no_model": "Connectez un modèle pour sortir."
     },
     "searchTitle": "Recherche web",
-    "searchText": "La recherche web lors des sorties et dans la conversation utilise par défaut des moteurs sans clé, dont les résultats peuvent être irréguliers. Saisissez une clé d’API Brave Search ou Tavily pour utiliser ce service à la place. La clé est conservée dans le gestionnaire d’identifiants du système, et non dans un fichier de réglages.",
     "searchUsing": "En service",
     "searchKeyless": "Recherche sans clé",
     "searchApi": "Service de recherche",
@@ -1713,11 +1694,10 @@
     "foldersText": "Dans ces dossiers, le personnage peut consulter, créer, copier, renommer et déplacer des fichiers ; la suppression demande toujours, et la modification d'un fichier suit le mode. La première fois qu'il a besoin d'un dossier, la conversation vous le demande aussi.",
     "foldersNone": "Aucun dossier autorisé pour l'instant.",
     "modeName": "Mode de fonctionnement",
-    "modeText": "Consultation seule : lit les fichiers des dossiers autorisés sans rien modifier ni lancer. Demander à chaque fois : modifier des fichiers, lancer des programmes, etc. attendent votre accord. Modification automatique : modifier et créer des fichiers dans les dossiers qu'il peut ranger ne demande pas, et « Annuler ces modifications » sous la réponse les rétablit ; la suppression, le réseau et l'installation de logiciels demandent toujours.",
+    "modeText": "Afficher seulement : lit les fichiers des dossiers autorisés sans rien modifier ni exécuter. Vérification automatique : la modification et la création de fichiers dans les dossiers qu’il peut ranger se font sans demande, et « Annuler ces modifications » sous la réponse les rétablit ; l’exécution d’un programme dans un dossier autorisé est d’abord évaluée par un modèle de vérification, et votre confirmation n’est demandée qu’en cas d’échec. La suppression, le réseau et l’installation de logiciels demandent toujours votre confirmation.",
     "modes": {
       "read": "Consultation seule",
-      "ask": "Demander à chaque fois",
-      "auto": "Modification automatique"
+      "auto": "Vérification automatique"
     },
     "rulesTitle": "Programmes toujours autorisés",
     "rulesText": "Ces programmes s'exécutent dans leurs dossiers sans demander. L'envoi par le réseau et l'installation de logiciels n'y figurent jamais ; ils demandent à chaque fois.",
@@ -1731,7 +1711,8 @@
       "this_chat": "autorisé pour cette conversation",
       "always": "toujours autorisé",
       "rule": "toujours autorisé",
-      "auto_edit": "modification automatique"
+      "auto_edit": "modification automatique",
+      "review": "validé par vérification"
     },
     "addPlaceholder": "Collez l'adresse d'un dossier, par exemple D:\\Photos",
     "add": "Ajouter",
@@ -1818,6 +1799,54 @@
     "importHave": "Une compétence de ce nom est déjà installée",
     "search": "Rechercher par nom, usage ou étiquette",
     "allCategories": "Toutes",
+    "categories": {
+      "writing": "Écriture",
+      "documents": "Documents et diapositives",
+      "study": "Études et recherche",
+      "work": "Bureau et équipe",
+      "life": "Vie quotidienne",
+      "design": "Design",
+      "media": "Image, vidéo et audio",
+      "data": "Données et finances",
+      "business": "Affaires et marketing",
+      "web": "Web et automatisation",
+      "development": "Programmation"
+    },
+    "subs": {
+      "compose": "Rédaction et relecture",
+      "social": "Publications sociales",
+      "fiction": "Fiction et scénarios",
+      "office": "Word, Excel et PDF",
+      "slides": "Présentations",
+      "cloud": "Documents en ligne",
+      "learning": "Apprendre et réfléchir",
+      "papers": "Articles et bibliographie",
+      "science": "Recherche scientifique",
+      "mail": "Courriel et agenda",
+      "plan": "Plans et notes",
+      "team": "Travail d'équipe",
+      "files": "Fichiers et ordinateur",
+      "ui": "Interfaces et pages web",
+      "visual": "Graphisme et marque",
+      "diagrams": "Graphiques et schémas",
+      "motion": "Animation",
+      "image": "Images",
+      "video": "Vidéo",
+      "audio": "Audio et voix",
+      "analysis": "Analyse de données",
+      "finance": "Finances",
+      "investing": "Investissement et trading",
+      "marketing": "Marketing et croissance",
+      "sales": "Ventes et clients",
+      "product": "Gestion de produit",
+      "company": "RH, juridique et opérations",
+      "search": "Recherche et collecte",
+      "browser": "Automatisation du navigateur",
+      "code": "Code et revue",
+      "agents": "Agents et compétences",
+      "ai": "Modèles et IA",
+      "deploy": "Déploiement et exploitation"
+    },
     "sort": "Trier par",
     "sortPopular": "Les plus populaires",
     "sortRecent": "Mises à jour récemment",
@@ -2214,11 +2243,11 @@
       },
       "ollama": {
         "name": "Ollama (sur cet ordinateur)",
-        "note": "Saisissez le nom d'un modèle déjà téléchargé. Les outils, le JSON et les images dépendent de ce modèle : un modèle de la classe Qwen3 ou Llama 3.1 de 8B ou plus gère les outils et le JSON, un modèle de vision lit les images. Portez la longueur de contexte du serveur à 16k ou plus ; la valeur par défaut de 4k coupe la mémoire."
+        "note": "Saisissez le nom d'un modèle déjà téléchargé. Les outils et les images dépendent de ce modèle : un modèle de la classe Qwen3 ou Llama 3.1 de 8B ou plus gère les outils, un modèle de vision lit les images. Portez la longueur de contexte du serveur à 16k ou plus ; la valeur par défaut de 4k coupe la mémoire."
       },
       "lmstudio": {
         "name": "LM Studio (sur cet ordinateur)",
-        "note": "Saisissez le nom d'un modèle déjà téléchargé. Les outils, le JSON et les images dépendent de ce modèle : un modèle de la classe Qwen3 ou Llama 3.1 de 8B ou plus gère les outils et le JSON, un modèle de vision lit les images. Portez la longueur de contexte du serveur à 16k ou plus ; la valeur par défaut de 4k coupe la mémoire."
+        "note": "Saisissez le nom d'un modèle déjà téléchargé. Les outils et les images dépendent de ce modèle : un modèle de la classe Qwen3 ou Llama 3.1 de 8B ou plus gère les outils, un modèle de vision lit les images. Portez la longueur de contexte du serveur à 16k ou plus ; la valeur par défaut de 4k coupe la mémoire."
       },
       "other": {
         "name": "Autre service compatible OpenAI"

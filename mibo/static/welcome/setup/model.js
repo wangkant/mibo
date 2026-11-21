@@ -46,7 +46,6 @@
     server: "M5 4.5h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zM5 13.5h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zM7.5 7.5h.01M7.5 16.5h.01",
     tools: "M14.7 6.3a4 4 0 0 0-5.4 5.4l-4.8 4.8a1.4 1.4 0 0 0 2 2l4.8-4.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2-.4-.4-2z",
     pictures: "M5 5h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 16l4.5-4.5L13 16M13.5 13.5l2-2L20 16M15.5 8.5h.01",
-    json: "M9 4.5c-1.8 0-2.5.8-2.5 2.5v2.3c0 1.1-.7 2-2 2.2 1.3.2 2 1.1 2 2.2V17c0 1.7.7 2.5 2.5 2.5M15 4.5c1.8 0 2.5.8 2.5 2.5v2.3c0 1.1.7 2 2 2.2-1.3.2-2 1.1-2 2.2V17c0 1.7-.7 2.5-2.5 2.5",
     thinking: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z",
   };
 
@@ -785,7 +784,7 @@
       }
       const rec = bar.abilities;
       if (!rec) return;
-      for (const name of ["tools", "pictures", "thinking", "json"]) {
+      for (const name of ["tools", "pictures", "thinking"]) {
         // Only what works shows here; the card below says what is missing and why.
         if (rec[name] !== "yes") continue;
         const chip = el("span", "mp-ability");
@@ -963,7 +962,7 @@
     // ---- The backup model and the models for other uses (GET/POST /api/tuning).
     function buildMore() {
       const box = fold(t.more);
-      box.node.classList.add("setup-card", "mp-more");
+      box.node.classList.add("setup-card");
       const form = el("form", "mp-more-form");
       form.noValidate = true;
       const fields = {};

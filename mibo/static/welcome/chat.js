@@ -1581,7 +1581,7 @@ window.paChat = (() => {
       grow();
       paintTray();
       // Beside a page in the app's browser, the page it is about goes with it (browse.js).
-      send(text, null, quote, files, [...plus.take(), ...bar.take(), ...(window.paBeside?.take() || [])]);
+      send(text, null, quote, files, [...plus.take(), ...(window.paBeside?.take() || [])]);
     }
     async function send(text, retrySeq = null, quote = null, files = [], choices = []) {
       sending = true;

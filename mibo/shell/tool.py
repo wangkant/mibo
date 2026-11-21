@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import secrets
+import sys
 import time
 
 from ..cardwait import WAIT_S
@@ -34,27 +35,20 @@ WITHIN_S = 240.0
 # How often the waiting row says how long a command has run.
 PROGRESS_S = 3.0
 
-_FOLDER = {"type": "string", "description": "the folder relative paths start from: a full path, or downloads, "
-                                           "documents, desktop, pictures, music, videos. Left out, the folder of "
-                                           "the step before (or the first folder they granted)"}
+_FOLDER = {"type": "string", "description": "where relative paths start: a full path, or downloads, documents, "
+                                           "desktop, pictures, music, videos; left out, the one in use"}
 
 TOOL = {"type": "function", "function": {
     "name": NAME,
     "description": (
-        "Run one Windows PowerShell 5.1 command on this computer, because they asked in this message: what "
-        "takes the disk space, facts about this computer, sorting or renaming many files by a rule, zipping and "
-        "unzipping, anything the file tools do not cover. For reading, writing, editing, listing, searching, "
-        "opening, moving and deleting files, the file tools are simpler: use them. Prefer commands and file tools "
-        "to clicking through windows; when they name a program to do it in (用计算器, 在记事本里), that is "
-        "use_program. Write PowerShell only, plainly and in full: never cmd, a nested powershell, "
-        "Invoke-Expression, encoded or assembled commands, aliases you define, or -WhatIf. Output comes back as "
-        "UTF-8 text; tables are not cut. The app reads every command before it runs. It works only in the folders "
-        "they granted (it asks them for a folder the first time); deleting, overwriting, moving out of a granted "
-        "folder, the network, installing software and running programs wait for their press on a card; some "
-        "things are never run (administrator rights, security and system settings, passwords and keys, shutting "
-        "down). When the app says a command is never run, tell them plainly why and do not try another way or "
-        "another spelling. Deletes go to the Recycle Bin, and every change to files this message makes can be taken "
-        "back by them with 撤销这次的改动 under your reply."),
+        "Run one Windows PowerShell 5.1 command on this computer, because they asked in this message: disk space, "
+        "facts about this computer, renaming many files by a rule, zipping, anything the file tools do not cover "
+        "(for files, use them). PowerShell only, plainly and in full: never cmd, a nested powershell, "
+        "Invoke-Expression, encoded or assembled commands, aliases you define, or -WhatIf. It works in the folders "
+        "they granted; deleting, overwriting, moving out, the network, installing and "
+        "running programs wait for their press on a card; administrator rights, system settings, passwords and "
+        "shutting down are never run: when the app says so, tell them why and try no other way. "
+        "Deletes go to the Recycle Bin, and 撤销这次的改动 under your reply takes back this message's changes."),
     "parameters": {"type": "object", "properties": {
         "command": {"type": "string", "description": "the PowerShell command, relative paths from `folder`"},
         "folder": _FOLDER,
@@ -69,9 +63,8 @@ def _tool(name: str, description: str, properties: dict, required: list[str]) ->
 
 _PATH = {"type": "string", "description": "a file name or path, relative to `folder`, or a full path"}
 FILE_TOOLS = [
-    _tool("read_file", "Read a text file (any encoding: UTF-8, UTF-16, GBK), or the text of a .docx, .xlsx or "
-                       ".pptx. Lines come numbered; a long file comes in parts (offset, limit). A binary file "
-                       "comes back as one sentence with its kind and size.",
+    _tool("read_file", "Read a text file in any encoding, or the text of a .docx, .xlsx or .pptx. Lines come "
+                       "numbered; a long file comes in parts (offset, limit).",
           {"path": _PATH, "offset": {"type": "integer", "description": "first line, from 1"},
            "limit": {"type": "integer", "description": "how many lines, 400 when left out"}}, ["path"]),
     _tool("list_files", "List what is in a folder with sizes and dates: each folder's total size, or with "
@@ -86,21 +79,23 @@ FILE_TOOLS = [
            "path": {"type": "string", "description": "the folder to search in; empty for `folder`"},
            "pattern": {"type": "string", "description": "only names like this, such as *.md"}}, ["text"]),
     _tool("write_file", "Write a text file whole (UTF-8). Making a new file runs at once; replacing one that is "
-                        "there shows them the difference on a card first. To change part of a file, edit_file.",
+                        "there shows them the difference on a card first.",
           {"path": _PATH, "content": {"type": "string", "description": "the whole text of the file"}},
           ["path", "content"]),
     _tool("edit_file", "Change part of a text file by exact replacement: old_string must be in the file exactly "
-                       "once (copied from read_file, without the line numbers), or set replace_all. They see the "
-                       "difference on a card and press yes first. read_file it before.",
+                       "once (from read_file, no line numbers), or set replace_all. They confirm the "
+                       "difference on a card.",
           {"path": _PATH, "old_string": {"type": "string"}, "new_string": {"type": "string"},
            "replace_all": {"type": "boolean"}}, ["path", "old_string", "new_string"]),
-    _tool("open_file", "Open a file, a folder or a web address for them with its default program, as a "
-                       "double-click would. Documents, pictures and folders open at once; a web address, a program "
-                       "or a script waits for their press; some kinds are never opened.",
+    _tool("open_file", "Open a file, a folder or a web address for them with its default program. Documents, "
+                       "pictures and folders open at once; a web address, a program or a script waits for their "
+                       "press; some kinds are never opened."
+                       # Another program's window, and a shortcut to one, are the desk tool's (Windows only).
+                       + (" A program or a shortcut on their desktop: use_program." if sys.platform == "win32" else ""),
           {"path": {"type": "string", "description": "a file or folder relative to `folder`, a full path, or an "
                                                      "http(s) address"}}, ["path"]),
     _tool("move_files", "Move, rename or copy files and folders, many in one call. A `to` ending in \\ or naming "
-                        "a folder that is there puts the item inside it (a new folder is made); otherwise `to` is "
+                        "a folder that is there puts the item inside it; otherwise `to` is "
                         "the new name. Nothing that is already there is replaced.",
           {"moves": {"type": "array", "items": {"type": "object", "properties": {
               "from": {"type": "string"}, "to": {"type": "string"}}, "required": ["from", "to"]}},
@@ -111,9 +106,8 @@ FILE_TOOLS = [
 PLAN_TOOL = {"type": "function", "function": {
     "name": "update_plan",
     "description": (
-        "For a task on this computer that takes several steps (tidying a folder, renaming a batch, merging files): "
-        "write the short plan first, then call it again to tick steps off as you go, the whole list each time. "
-        "They see it under your reply. Not for one-step tasks."),
+        "For a task on this computer of several steps (tidying a folder, renaming a batch): write the short plan "
+        "first, then call it again to tick steps off, the whole list each time. They see it under your reply."),
     "parameters": {"type": "object", "properties": {
         "steps": {"type": "array", "items": {"type": "object", "properties": {
             "step": {"type": "string", "description": "a short line, in their language"},
@@ -127,8 +121,7 @@ OPS = {"read_file": "read", "list_files": "list", "search_files": "search", "wri
 NAMES = {NAME, PLAN_TOOL["function"]["name"], *OPS}
 
 _STATUS = {
-    "off": "Not done: working on this computer is turned off. Call turn_on with feature computer and the folder "
-           "their message names; they get one card to turn it on.",
+    "off": "Error: working on this computer is turned off. Tell them in a sentence; it is in Settings.",
     "elevated": "Not done: this app itself runs as administrator, and nothing is run with those rights. Tell them "
                 "to open the app normally.",
     "unwatched": "Not done: this runs only during a turn they started in the app's chat.",

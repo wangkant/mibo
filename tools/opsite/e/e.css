@@ -1,0 +1,16 @@
+/* The everyday bench's pages (tools/everyday.py): plain, as small sites of each kind look. */
+body { margin: 0; font: 15px/1.6 system-ui, "Microsoft YaHei", sans-serif; color: #222; background: #f5f5f5; }
+header { display: flex; gap: 16px; align-items: center; padding: 10px 20px; background: #fff; border-bottom: 1px solid #e5e5e5; }
+header b { font-size: 17px; }
+header a { color: #555; text-decoration: none; }
+main { max-width: 820px; margin: 18px auto; padding: 0 16px; }
+.card { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+.row { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.row:last-child { border-bottom: 0; }
+.n { width: 28px; color: #e8590c; font-weight: 700; }
+.hint { color: #888; font-size: 13px; }
+label { display: block; margin: 10px 0 4px; }
+input[type=text], input[type=email], textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+button { padding: 7px 16px; border: 1px solid #bbb; border-radius: 6px; background: #fff; font: inherit; cursor: pointer; }
+button.go { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+.notice { padding: 40px 20px; text-align: center; color: #555; }

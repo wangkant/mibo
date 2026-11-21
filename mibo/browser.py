@@ -106,13 +106,14 @@ DOWNLOAD_TELL_S = 0.5
 # A selection 问 Mibo puts in the chat's box, at most this long.
 ASK_MAX = 2000
 # Beside the pane's WebView2 folder: the page open last ({"url", "title"}), each site's own zoom, the window's
-# size while a site is in front, once the person set one ([wide, high] in px at 100 %), the downloads, and the site
-# permissions allowed always ({origin: kinds}).
+# size while a site is in front, once the person set one ([wide, high] in px at 100 %), the downloads, the site
+# permissions allowed always ({origin: kinds}), and whether sites are fitted to the pane's width.
 KEPT = "kept.json"
-# Fit to width (the bar's switch, off until pressed): a pane narrower than this many CSS px zooms the site out
-# until its layout gets this width, down to FIT_MIN, below which text stops being easy to read and the site lays
-# out narrower instead.
-FIT_WIDTH = 1200
+# Fit to width (on until the ··· menu's switch turns it off, as mobile browsers lay a desktop site out at a desktop
+# width and show it whole): a pane narrower than this many CSS px, what a site laid out for a desktop wants
+# (browse.js PAGE_WIDE), zooms the site out until its layout gets this width, so it does not scroll sideways, down
+# to FIT_MIN, below which text stops being easy to read and the site lays out narrower instead.
+FIT_WIDTH = 1024
 FIT_MIN = 0.67
 # What a page read for a tool gives: its text clipped to this, and a list's rows.
 TEXT_MAX = 6000
@@ -367,12 +368,12 @@ class Pane:
         self._op_seen = 0
         self._op_tick = lambda sender, args: self._input_tick()
         self._listeners: list = []
-        # Zoom: the bar's 适应宽度 (fit to width, off until pressed), the app page's px per CSS px, the person's own
-        # zoom per site (kept in KEPT; in private mode for this run only), the factor last set here, and what the
-        # bar was told. KEPT also holds the page open last and the window's size with a site in front.
-        self.fit = False
+        # Zoom: the app page's px per CSS px, the person's own zoom per site (kept in KEPT; in private mode for this
+        # run only), the menu's 适应宽度 (fit to width, kept in KEPT, on until turned off), the factor last set here,
+        # and what the bar was told. KEPT also holds the page open last and the window's size with a site in front.
         self._scale = 1.0
         self._kept = self._read_kept()
+        self.fit = self._kept["fit"]
         self._zoom_private: dict[str, float] = {}
         self._zoom_set = 0.0
         self._zoom_told: tuple = ()
@@ -1207,8 +1208,9 @@ class Pane:
         elif action == "tab_reopen" and self._closed:
             self._open(self._closed.pop())
         elif action == "fit":
-            # The bar's 适应宽度 / 100%: the site fitted to the pane's width, or at its own size.
-            self.fit = not self.fit
+            # The menu's 适应宽度: the site fitted to the pane's width, or at its own size, from now on.
+            self.fit = self._kept["fit"] = not self.fit
+            self._keep()
             self._zoom(show=True)
         elif action in ("op_stop", "op_take"):
             # The bar's 停止 (or Esc) and 我来接手: the run stops at its next step.
@@ -1281,8 +1283,10 @@ class Pane:
     def _fit_factor(self) -> float:
         if not self.fit or self._box is None:
             return 1.0
-        # The site's CSS px at zoom 1 are the monitor's, whatever the app page's own zoom.
-        wide = self._box.Width / self.form._scale
+        # The site's CSS px at zoom 1 are the monitor's, whatever the app page's own zoom. The form's scale is the
+        # one it was made on, and the WebView may draw at the app page's (a window far off the screens): the larger
+        # of the two never leaves the site wider than the pane.
+        wide = self._box.Width / max(self.form._scale, self._scale)
         return 1.0 if wide >= FIT_WIDTH else max(FIT_MIN, wide / FIT_WIDTH)
 
     def _host(self) -> str:
@@ -1359,7 +1363,7 @@ class Pane:
         except (OSError, ValueError):
             kept = {}
         return {"zoom": kept.get("zoom") or {}, "last": kept.get("last") or {}, "size": kept.get("size") or [],
-                "downloads": kept.get("downloads") or [], "permits": kept.get("permits") or {}}
+                "downloads": kept.get("downloads") or [], "permits": kept.get("permits") or {}, "fit": kept.get("fit", True)}
 
     def _keep(self) -> None:
         self.folder.mkdir(parents=True, exist_ok=True)

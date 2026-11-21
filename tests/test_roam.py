@@ -258,23 +258,23 @@ def test_read_pages_with_standard_descriptions_or_none(tmp_path):
     walker = make(tmp_path, site=site)
 
     async def go():
-        return {name: await walker.read(f"{site.url}/{name}") for name in ("og", "ld", "both", "none")}
+        return {name: await walker._read(f"{site.url}/{name}") for name in ("og", "ld", "both", "none")}
     try:
         got = run(_closing(walker, go()))
     finally:
         site.close()
-    og, ld, both, none = got["og"], got["ld"], got["both"], got["none"]
+    og, ld, both, none = got["og"].item, got["ld"].item, got["both"].item, got["none"].item
     assert (og.title, og.site, og.kind, og.description) == ("Tide pools at dawn", "Shore Notes", "article",
                                                             "What lives in a tide pool.")
     # Readability drops a heading that repeats the title.
     assert og.text.startswith("Paragraph 0") and "Menu entry" not in og.text
-    assert og.picture and (walker.library.pictures / og.picture).stat().st_size <= PICTURE_MAX_BYTES
+    assert 0 < len(got["og"].picture) <= PICTURE_MAX_BYTES
     assert (ld.title, ld.kind, ld.length, ld.author, ld.published) == ("Making bread by hand", "video", 200,
                                                                        "Ana", "2026-11-01")
-    assert ld.embed == "https://player.vimeo.com/video/123" and ld.picture
+    assert ld.embed == "https://player.vimeo.com/video/123" and got["ld"].picture
     assert (both.title, both.site, both.author, both.kind) == ("Harbour reopens", "Port Daily", "Lee Chen", "article")
     assert both.published == "2026-11-17T08:00:00Z"
-    assert none.title == "Plain page" and none.kind == "article" and none.embed == "" and not none.picture
+    assert none.title == "Plain page" and none.kind == "article" and none.embed == "" and not got["none"].picture
     assert none.text.startswith("Paragraph 0") and "Menu entry" not in none.text and "Copyright" not in none.text
 
 
@@ -285,9 +285,9 @@ def test_internal_addresses_redirects_and_subrequests_are_refused(tmp_path):
     walker = make(tmp_path, site=site)
 
     async def go():
-        return [await walker.read(inside.url + "/direct"), await walker.read(f"{site.url}/redirect"),
-                await walker.read(f"{site.url}/sub"), await walker.read("file:///C:/Windows/win.ini"),
-                await walker.read(f"{site.url}/hop")]
+        return [await walker._read(inside.url + "/direct"), await walker._read(f"{site.url}/redirect"),
+                await walker._read(f"{site.url}/sub"), await walker._read("file:///C:/Windows/win.ini"),
+                await walker._read(f"{site.url}/hop")]
     try:
         direct, redirected, sub, local_file, hop = run(_closing(walker, go()))
     finally:
@@ -295,12 +295,12 @@ def test_internal_addresses_redirects_and_subrequests_are_refused(tmp_path):
         inside.close()
     assert direct is None and redirected is None and local_file is None
     # A redirect to a public address is followed.
-    assert hop is not None and hop.title == "Tide pools at dawn" and hop.url == f"{site.url}/og"
-    assert sub is not None and sub.title == "With a picture"
+    assert hop is not None and hop.item.title == "Tide pools at dawn" and hop.item.url == f"{site.url}/og"
+    assert sub is not None and sub.item.title == "With a picture"
     assert inside.hits == []
     # The real rule, with no stand-in exception, refuses the stand-in itself.
     plain = make(tmp_path / "plain")
-    assert run(_closing(plain, plain.read("http://127.0.0.1:9/"))) is None
+    assert run(_closing(plain, plain._read("http://127.0.0.1:9/"))) is None
     assert plain.visitor.context is None
 
 
@@ -310,7 +310,7 @@ def test_walls_and_downloads_end_the_page(tmp_path):
     walker = make(tmp_path, site=site)
 
     async def go():
-        return [await walker.read(f"{site.url}/{name}")
+        return [await walker._read(f"{site.url}/{name}")
                 for name in ("login", "check", "paid", "file", "gone")]
     try:
         got = run(_closing(walker, go()))

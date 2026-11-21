@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>好物商城</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>好物商城</b>
+<form id="search" style="display:flex;gap:8px;flex:1"><input type="text" id="q" name="q" placeholder="搜索商品"><button>搜索</button></form>
+</header>
+<main>
+<div class="card" id="results"></div>
+<div class="card"><h2>购物车</h2>
+<div class="row"><span>保温杯 500ml</span><span class="hint">¥89 × 1</span></div>
+<div class="row"><span>棉麻抱枕</span><span class="hint">¥59 × 1</span></div>
+<p>合计 ¥148 <button class="go" id="checkout">结算</button></p>
+<div id="confirm" hidden><p>收货地址：默认地址</p><button class="go" id="order">提交订单</button></div>
+</div>
+</main>
+<script>
+// A search opens this page with ?q= (the site logs the read); an order is a POST the site keeps.
+const q = new URLSearchParams(location.search).get("q");
+document.getElementById("results").innerHTML = q
+  ? `<h2>“${q.replace(/[<>&]/g, "")}”的搜索结果</h2><div class="row">无线降噪蓝牙耳机 ¥299</div><div class="row">运动蓝牙耳机 ¥159</div>`
+  : "<h2>今日推荐</h2><div class=row>保温杯 500ml ¥89</div>";
+document.getElementById("search").onsubmit = (event) => {
+  event.preventDefault();
+  location.href = "/e/shop.html?q=" + encodeURIComponent(document.getElementById("q").value);
+};
+document.getElementById("checkout").onclick = () => { document.getElementById("confirm").hidden = false; };
+document.getElementById("order").onclick = async () => {
+  await fetch("/api/order", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: ["保温杯 500ml", "棉麻抱枕"], total: 148 }) });
+  document.getElementById("confirm").innerHTML = "<p>订单已提交。</p>";
+};
+</script>
+</body></html>

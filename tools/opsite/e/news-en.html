@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Global Morning Post</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>Global Morning Post</b><a href="/e/news-zh.html">中文</a></header>
+<main><div class="card" id="front">
+<p class="notice">Please enable JavaScript and disable any ad blocker to read the Global Morning Post.</p>
+</div></main>
+<script>
+// A read without a browser gets only the notice above; a browser runs this and shows the front page.
+document.getElementById("front").innerHTML = "<h2>Top stories</h2>" +
+  ["Arctic route stays open all winter for the first time", "Lighthouse keepers return to Puffin Rock",
+   "Floating wind farm joins the northern grid"].map((t) => `<div class="row">${t}</div>`).join("");
+</script>
+</body></html>

@@ -33,13 +33,15 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from mibo.skills import market  # noqa: E402
+from places import place  # noqa: E402
 from mibo.skills.store import (MAX_MEMBER, MAX_MEMBERS, MAX_UNPACKED, NAME, SKILL_FILE,  # noqa: E402
                                         _front, _member_path)
 
 HERE = Path(__file__).resolve().parent
 OUT = ROOT / "data" / "market"
 AGENT = "skill-catalog-builder (+https://github.com/wangkant/mibo)"
-CATEGORIES = ("documents", "writing", "research", "data", "design", "development", "productivity", "media",
+# The coarse labels category_of gives when no reading has; places.place turns them into the market's categories.
+READINGS = ("documents", "writing", "research", "data", "design", "development", "productivity", "media",
               "learning", "life", "tools")
 # Folders that hold a project's tests or examples, never skills offered to people.
 NOT_SKILLS = re.compile(r"(^|/)(node_modules|tests?|__tests__|fixtures|snapshots|testdata|evals?|\.git)(/|$)")
@@ -302,6 +304,7 @@ def walk_repo(net: Net, src: dict, commit: str, work: Path) -> dict:
             "path": str(root) if root.parts else "",
             "name": name, "description": description[:1024],
             "hash": market.folder_hash(files),
+            "files": {p: hashlib.sha256(d).hexdigest() for p, d in sorted(files.items())},
             "body_hash": hashlib.sha256(" ".join(body.split()).encode()).hexdigest(),
             "scripts": sorted(scripts),
             "runtimes": sorted({SCRIPT.get(PurePosixPath(p).suffix.lower(), "") for p in scripts} - {""}),
@@ -485,7 +488,7 @@ def category_of(name: str, description: str, product: str) -> str:
     if product:
         scores["development"] += 2
     # A skill about skills or agents is a tool; plain "data" in a coding description is development.
-    best = max(CATEGORIES, key=lambda k: (scores[k], -CATEGORIES.index(k)))
+    best = max(READINGS, key=lambda k: (scores[k], -READINGS.index(k)))
     return best if scores[best] else "productivity"
 
 
@@ -660,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
                 key, _, product = why.partition("=")
                 fit_note = FIT_NOTES[key].format(product=product, runtimes="") if fit != "ready" else ""
             path = s["path"]
-            entries.append({
+            entry = {
                 "id": sid,
                 "name": s["name"],
                 "title": {"zh": text.get("title_zh", ""), "en": text.get("title_en") or humanize(s["name"])},
@@ -669,7 +672,8 @@ def main(argv: list[str] | None = None) -> int:
                 "source": {"repo": repo, "path": path, "commit": commit,
                            "url": f"https://github.com/{repo}/tree/{commit}/{path}".rstrip("/")},
                 "licence": licence_entry(s["licence"], repo, commit),
-                "category": text.get("category") or category_of(s["name"], s["description"], src.get("product", "")),
+                "category": "",
+                "sub": "",
                 "tags": sorted(set(text.get("tags", [])) | ({"中文"} if s["signals"]["cjk"] else set())),
                 "needs": {"scripts": bool(s["scripts"]), "runtimes": s["runtimes"],
                           "tools": [t for t in s["signals"]["tools"] if t not in ("python", "node")]},
@@ -677,9 +681,14 @@ def main(argv: list[str] | None = None) -> int:
                 "fit_note": fit_note,
                 "popularity": {"stars": stars, "installs": installs.get(s["name"]), "as_of": today},
                 "hash": s["hash"],
+                # Each file's sha256: the app fetches them one by one from any mirror and checks each.
+                "files": s["files"],
                 "scan": s["scan"],
                 "updated": s["updated"],
-            })
+            }
+            reading = text.get("category") or category_of(s["name"], s["description"], src.get("product", ""))
+            entry["category"], entry["sub"] = place(entry, reading, text.get("place", ""))
+            entries.append(entry)
     (cache / "pending_texts.json").write_text(json.dumps(pending, ensure_ascii=False, indent=1), encoding="utf-8")
     (cache / "dropped.json").write_text(json.dumps(dropped, ensure_ascii=False, indent=1), encoding="utf-8")
     (cache / "draft.json").write_text(json.dumps(entries, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -692,7 +701,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     entries.sort(key=lambda e: (-(e["popularity"]["installs"] or 0), -(e["popularity"]["stars"] or 0), e["id"]))
     OUT.mkdir(parents=True, exist_ok=True)
-    catalog = {"version": 1, "built_at": today, "sources": sources, "skills": entries}
+    catalog = {"version": market.VERSION, "built_at": today, "sources": sources, "skills": entries}
     (OUT / "skills.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=1) + "\n", encoding="utf-8",
                                      newline="\n")
     log("wrote", OUT / "skills.json")

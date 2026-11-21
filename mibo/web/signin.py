@@ -155,9 +155,26 @@ def in_flow(url: str) -> bool:
     return (parts.hostname or "").split(".")[0] in SIGNIN_HOST or bool(SIGNIN_PATH.search(parts.path or "/"))
 
 
-def past(found: dict, url: str) -> bool:
-    """The page is past the sign-in: it answered, shows no wall, and the address left the sign-in flow."""
-    return bool(found) and found.get("kind") not in WAITED and not in_flow(url)
+# What the model is shown of a page while the person signs in (web/pagejudge.py), and the page's own sign-in link
+# for the column's 登录 button.
+PAGE_JS = r"""(() => {
+  const shown = (e) => { const b = e.getBoundingClientRect(); return b.width > 2 && b.height > 2; };
+  const text = ((document.body && document.body.innerText) || '').replace(/\s+/g, ' ').trim();
+  const link = [...document.querySelectorAll('a[href^="http"]')].find((a) => shown(a) &&
+    (a.innerText || '').trim().length <= 16 && /登录|登入|登錄|log ?in|sign ?in|ログイン|로그인|войти/i.test(a.innerText || ''));
+  return {url: location.href, title: document.title || '', text: text.slice(0, 2500), chars: text.length,
+    password: [...document.querySelectorAll('input[type=password]')].some(shown), link: link ? {href: link.href} : null};
+})()"""
+
+
+def page(cdp: Callable[..., dict]) -> dict:
+    """PAGE_JS on the page `cdp` reaches; {} when it did not answer."""
+    try:
+        answer = cdp("Runtime.evaluate", {"expression": PAGE_JS, "returnByValue": True}, timeout=8)
+    except RuntimeError:
+        return {}
+    value = (answer.get("result") or {}).get("value")
+    return value if isinstance(value, dict) else {}
 
 
 def key(url: str) -> str:
@@ -396,16 +413,20 @@ def asker(home: Path) -> Callable[..., dict]:
     return ask
 
 
-async def wait(ask: Callable[..., dict], wall: str, first: dict | None = None) -> dict:
-    """Wait in the pane for the person to get past `wall` (sign in, pass the check). `ask(op, timeout, **fields)`
-    reaches /api/browser/signin in the app; `first` is its answer when the wait was begun already. {"status":
-    "ok"} once the page is past it, else "stopped", "paused" or "handover" (no sign-in in time, or no app) with
-    a line for the model."""
+async def wait(ask: Callable[..., dict], wall: str, first: dict | None = None, say: str = "") -> dict:
+    """Wait in the pane for the person to get past `wall` (sign in, pass the check); `say` is the judgment's
+    sentence for them. `ask(op, timeout, **fields)` reaches /api/browser/signin in the app; `first` is its answer
+    when the wait was begun already. {"status": "ok"} once the page is past it; "failed" with the person's own
+    sentence when they skipped the site; else "stopped", "paused" or "handover" (no sign-in in time, or no app)
+    with a line for the model."""
     began = time.monotonic()
-    answer = first or await asyncio.to_thread(ask, "begin", 30, wall=wall)
+    answer = first or await asyncio.to_thread(ask, "begin", 30, wall=wall, say=say)
     while answer.get("status") == "waiting" and time.monotonic() - began < WAIT_S:
         answer = await asyncio.to_thread(ask, "poll", POLL_S + 10)
     status = answer.get("status")
+    if status == "skipped":
+        # In the person's language: the reply shows it as it is.
+        return {"status": "failed", "line": answer["said"]}
     if status == "ok" and answer.get("signed") is False:
         return {"status": "ok", "line": "[not signed in] the page moved on without a sign-in (the person closed it or "
                                         "went past it); go on signed out where the task allows, and say in one "

@@ -6,9 +6,12 @@ hub (mcp_hub.py) on a small stand-in server whose tools carry the provider's rea
 
 Each errand is run under each way of answering the card that the tree offers: `once` (本次允许, every card), `chat`
 (本次对话内允许 where the card offers it, else once), `always` (始终允许 where offered, else once), and, for commands,
-`auto` (the commands mode 自动编辑, cards answered once) and `auto+always` (that mode, 始终允许 where offered). A push and an install are answered no. One line per run with
-the cards per conversation and what each step came to; <out>/askcount.json keeps them. --tree measures another copy
-of the code (a snapshot from before a change).
+`auto` (the commands mode set to automatic review, cards answered once) and `auto+always` (that mode, 始终允许 where
+offered). A push and an install are answered no. One line per run with the cards per conversation, the reviewer's
+calls and what each step came to; <out>/askcount.json keeps them. --tree measures another copy of the code (a snapshot
+from before a change). The reviewer is a stand-in that passes whatever code sends it (--reviewer go) or one that
+never answers (--reviewer none), so the count shows what code leaves to the reviewer; tools/review_score.py
+measures the real reviewer's judgment.
 """
 from __future__ import annotations
 
@@ -71,6 +74,38 @@ SERVER = textwrap.dedent('''
 ''')
 
 
+# The person's message the errands answer, as the chat record holds it.
+SAID = "看看这个仓库的状态，记几条笔记，提交一下，然后把 notes.txt 删掉；推送和安装先不要"
+REVIEWED = {"calls": 0}
+
+
+def workspace_for(home: Path) -> SimpleNamespace:
+    """A stand-in workspace with the chat record acting.asked reads: the person's message in each conversation."""
+    import time
+    rooms = {c: SimpleNamespace(conversation=c, history=[{"role": "user", "text": SAID, "at": time.time()}])
+             for c in ("c1", "c2")}
+    return SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=lambda: {},
+                           _main=SimpleNamespace(conversation="main", history=[]), _chats=rooms)
+
+
+def stand_in(verdict: str) -> None:
+    """acting.reviewer replaced by a stand-in: "go" passes what code sends it, "none" never answers."""
+    try:
+        from mibo import acting
+    except ImportError:
+        return
+
+    def reviewer(workspace):
+        async def ask(system: str, messages: list) -> str:
+            REVIEWED["calls"] += 1
+            if verdict != "go":
+                raise RuntimeError("no reviewer")
+            return json.dumps({"kind_asked": True, "target_named": True, "text_given": True, "nothing_added": True,
+                               "decision": "go", "reason": "stand-in"})
+        return ask
+    acting.reviewer = reviewer
+
+
 def wipe(folder: Path) -> None:
     """Removes a run's folder from before, git's read-only files too."""
     def writable(func, path, _):
@@ -128,7 +163,7 @@ async def shell_run(out: Path, policy: str) -> dict:
     for args in (["init", "-q"], ["config", "user.email", "m@example.com"], ["config", "user.name", "m"],
                  ["add", "-A"], ["commit", "-q", "-m", "first"]):
         subprocess.run([git, *args], cwd=proj, check=True, capture_output=True)
-    workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=lambda: {})
+    workspace = workspace_for(home)
     app = SimpleNamespace(state=SimpleNamespace(window=None))
     shell = panel.Shell(app, workspace)
     shell.grants.set_on(True)
@@ -143,10 +178,12 @@ async def shell_run(out: Path, policy: str) -> dict:
         else:
             shell.cards.press(card["id"], answer != "no")
 
+    # "auto+always": auto-edit with the cards answered "always"; plain "auto" answers them "once".
+    press_as = policy.partition("+")[2] or ("once" if policy == "auto" else policy)
     result = {"conversations": []}
     for n, conversation in enumerate(("c1", "c2")):
         log, steps, state = [], [], {"refuse": False}
-        task = asyncio.ensure_future(presser(shell.cards, press, log, policy.partition("+")[2] or ("once" if policy == "auto" else policy), state))
+        task = asyncio.ensure_future(presser(shell.cards, press, log, press_as, state))
         try:
             async with Turn(workspace, shell.desktop, conversation):
                 for i, step in enumerate(SHELL_STEPS):
@@ -180,7 +217,7 @@ async def mcp_run(out: Path, policy: str) -> dict:
     script.write_text(SERVER, encoding="utf-8")
     mcp_tools.write_servers(home, {"notes": {"command": sys.executable, "args": [str(script), json.dumps(MCP_TOOLS)]}},
                             lambda values: None)
-    workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=lambda: {})
+    workspace = workspace_for(home)
     hub = mcp_hub.Hub(workspace)
     hub.reconcile()
     desktop = mcp_tools.desktop_dir(home)
@@ -217,6 +254,7 @@ def main() -> int:
     parser.add_argument("--out", default="askcount-out")
     parser.add_argument("--tree", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--only", default="shell,mcp")
+    parser.add_argument("--reviewer", default="go", choices=("go", "none"))
     args = parser.parse_args()
     sys.path.insert(0, str(Path(args.tree).resolve()))
     out = Path(args.out).resolve()
@@ -224,23 +262,29 @@ def main() -> int:
     os.environ["SHELL_OPEN_DRY"] = "1"
     import mibo
     print("tree:", Path(mibo.__file__).parent)
+    stand_in(args.reviewer)
     runs = {}
     only = args.only.split(",")
     for policy in ("once", "chat", "always", "auto", "auto+always"):
         if "shell" in only:
+            REVIEWED["calls"] = 0
             got = asyncio.run(shell_run(out, policy))
+            got["reviewed"] = REVIEWED["calls"]
             runs[f"shell/{policy}"] = got
             per = [c["cards"] for c in got["conversations"]]
             # A command PowerShell could not find prints its error with exit code 0: shown as "!".
             ran = [f"{s['step'].split(' ')[0] if s['step'].startswith('git') else s['step']}:{s['status']}"
                    + (f"({s['code']})" if s.get("code") not in (None, 0) else "") + ("!" if s.get("err") else "")
                    for s in got["conversations"][0]["steps"]]
-            print(f"shell {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} | {' '.join(ran)}")
+            print(f"shell {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} reviewed {got['reviewed']} | "
+                  f"{' '.join(ran)}")
         if "mcp" in only and not policy.startswith("auto"):
+            REVIEWED["calls"] = 0
             got = asyncio.run(mcp_run(out, policy))
+            got["reviewed"] = REVIEWED["calls"]
             runs[f"mcp/{policy}"] = got
             per = [c["cards"] for c in got["conversations"]]
-            print(f"mcp   {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} | "
+            print(f"mcp   {policy:11} cards c1={per[0]} c2={per[1]} total={sum(per)} reviewed {got['reviewed']} | "
                   + " ".join(f"{s['step']}:{s['status']}/{s['how']}" for s in got["conversations"][1]["steps"]))
     (out / "askcount.json").write_text(json.dumps(runs, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0

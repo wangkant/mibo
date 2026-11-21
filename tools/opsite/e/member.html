@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>跑步圈 - 会员专栏</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>跑步圈</b><a href="#">专栏</a><a href="#" id="who">登录</a></header>
+<main><div class="card" id="body"></div></main>
+<script>
+// Strangers see a sign-in notice; once signed in (the bench sets the mark the site keeps) the column shows.
+const BODY = document.getElementById("body");
+if (localStorage.getItem("member") === "1") {
+  document.getElementById("who").textContent = "已登录";
+  BODY.innerHTML = "<h2>会员专栏：本周晨跑路线</h2><p>本周推荐的晨跑路线是滨江步道，全程 5 公里，" +
+    "从灯塔码头出发，沿江向东到樱花桥折返。早上六点半有领跑员带队。</p>";
+} else {
+  BODY.innerHTML = '<div class="notice"><h2>请先登录</h2><p>本专栏仅对会员开放，登录后即可查看全文。</p>' +
+    '<p><a href="/e/signin.html"><button class="go">登录</button></a></p></div>';
+}
+</script>
+</body></html>

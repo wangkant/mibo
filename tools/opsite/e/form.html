@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>活动报名表</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>社区活动</b><a href="#">报名</a></header>
+<main><form class="card" id="form">
+<h2>周末读书会报名</h2>
+<label for="name">姓名</label><input type="text" id="name" name="name">
+<label for="email">邮箱</label><input type="email" id="email" name="email">
+<label for="note">备注</label><textarea id="note" name="note" rows="2"></textarea>
+<p><button class="go" type="submit">提交报名</button></p>
+</form></main>
+<script>
+// Submitting sends the fields to the site; filling them sends nothing.
+document.getElementById("form").onsubmit = async (event) => {
+  event.preventDefault();
+  const body = Object.fromEntries(new FormData(event.target).entries());
+  await fetch("/api/form", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  event.target.innerHTML = "<p>报名成功。</p>";
+};
+</script>
+</body></html>

@@ -295,14 +295,15 @@ class Desk:
             return {"status": "unfound", "line": f"{program[:60]!r} could be any of: {listed}. Use the tool again "
                                                  f"with the full name of the one they mean, or ask them which."}
         return {"status": "unfound", "line": (
-            f"No program called {program[:60]!r} is open or in the Start menu of this computer"
+            f"No program called {program[:60]!r} is open, on the Desktop or in the Start menu of this computer"
             + (f". Open now: {listed}" if listed else "")
             + f". Start names programs in {win32.ui_language() or 'its own language'} here: when this one goes by "
               f"another name, use the tool again with that name; otherwise tell them it was not found.")}
 
     def _launch(self, app) -> dict:
-        """A program Start lists and no window shows, opened from its Start entry once the person said yes on
-        a card (or granted it always before): {"hwnd", "allowed"}, or the result that ends the task."""
+        """A program Start or the Desktop lists and no window shows, opened from its entry once the person said yes
+        on a card (or granted it always before): {"hwnd", "allowed"}, or the result that ends the task. A shortcut
+        to something that is not a program is opened at once, and that ends the task."""
         from . import names, win32
         from .hands import grant_text, published_by
         why = never_named(app.name) or never_named(Path(app.target).name)
@@ -313,6 +314,14 @@ class Desk:
             self.grants.log({"do": "use", "program": app.name, "exe": app.target, "status": "refused", "line": why[1]})
             return {"status": "refused", "line": f"[refused] {app.name} is never operated: {why[1]}",
                     "why": {"zh": why[0], "en": why[1]}}
+        if app.file and not app.target.lower().endswith(".exe"):
+            # A shortcut to a script, a folder or a page, which the person named: opened as a double-click on it
+            # opens it, and it has no window of its own to work in.
+            win32.open_file(app.file)
+            self.grants.log({"do": "open", "program": app.name, "exe": app.file, "status": "ok",
+                             "line": "opened the shortcut"})
+            return {"status": "done", "line": f"[done] opened {app.name} ({app.file}), which starts "
+                                              f"{app.target or 'what the shortcut names'}"}
 
         def its(exe: str) -> bool:
             return names.runs(app, exe) or names.beside(app, exe)
@@ -330,7 +339,10 @@ class Desk:
                 return {"status": "declined", "line": f"[declined] the person did not let you open {app.name}; do "
                                                       f"not use it for this task"}
         before = {w.hwnd for w in names.open_windows() if not win32.minimized(w.hwnd)}
-        win32.open_app(app.aumid)
+        if app.file:
+            win32.open_file(app.file)
+        else:
+            win32.open_app(app.aumid)
         end = time.monotonic() + LAUNCH_S
         while time.monotonic() < end:
             time.sleep(0.3)
@@ -463,7 +475,7 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         state = desk()
         # Turning off, taking back and tightening need no more than this computer; loosening needs the app's own page.
-        if (payload.get("on") is True or payload.get("pictures") is True or payload.get("mode") in ("ask", "auto")
+        if (payload.get("on") is True or payload.get("pictures") is True or payload.get("mode") == "auto"
                 or "unblock" in payload or (payload.get("tier") or {}).get("tier") in ("full", "click")
                 ) and not own_page(request):
             return _error("local_only", 403)

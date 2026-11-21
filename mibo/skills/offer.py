@@ -103,13 +103,12 @@ async def ask(home: Path, ident: str) -> dict:
 # ----------------------------------------------------------- the agent's side
 
 async def offer(agent, said: str, lookups) -> None:
-    """Before the reply in the person's own chat in the app: offers the market skill the message plainly fits and,
-    when they press 安装 and it installs, names it for this turn (lookups.skills_offered)."""
+    """Before the reply in the person's own chat in the app: offers the market skill the message plainly fits; once
+    they press 安装 and it installs, use_skill names it from this turn's first round (tool.offered)."""
     from ..browsed import _ask
     from ..textproc import _WEB_DESC_SPAN
     from ..turns import turn_choices
     from .tool import _home
-    lookups.skills_offered = ""
     # Only the person's own words: not a quoted reply or a shared page's description inside the message.
     said = _WEB_DESC_SPAN.sub("\n", said or "")
     conversation = lookups.conversation
@@ -130,9 +129,7 @@ async def offer(agent, said: str, lookups) -> None:
     lookups.doing("skill_offer", _WAITING[lang])
     lookups.away_since = time.monotonic()
     try:
-        outcome = await asyncio.to_thread(_ask, home, "POST", "/api/skills/offer/ask", CARD_S + INSTALL_S + 30,
-                                          json={"id": one["id"]})
+        await asyncio.to_thread(_ask, home, "POST", "/api/skills/offer/ask", CARD_S + INSTALL_S + 30,
+                                json={"id": one["id"]})
     finally:
         lookups.away_s, lookups.away_since = lookups.away(), None
-    if outcome.get("installed"):
-        lookups.skills_offered = str(outcome.get("name") or "")

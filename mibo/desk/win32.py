@@ -334,9 +334,57 @@ def start_apps() -> list[tuple[str, str, str]]:
     return out
 
 
+# Windows' ids for the Public Desktop and for the Start menu's Programs folders, the person's own and everyone's.
+PUBLIC_DESKTOP = "{C4AA340D-F20F-4863-AFEF-F87EF2E6BA25}"
+PROGRAMS = ("{A77F5D77-2E2B-44C3-A6A2-ABA601054A51}", "{0139D44E-6AFE-49F2-8690-3DAFCAE6FFB8}")
+
+
+def shortcuts() -> list[tuple[str, str, str]]:
+    """What a person opens from the Desktop and Start besides Start's own programs: every .lnk, .url and .exe on
+    their Desktop (shell.grants.known_folder, which USER_DESKTOP_DIR can point elsewhere) and on the Public
+    Desktop, and every .lnk in Start's Programs folders that starts no program (a script, a folder). As (name,
+    the file, what it opens): the name is the file's without its extension; a shortcut's target is read through
+    the shell's own object, as Explorer reads it ("" when it names none)."""
+    import clr  # noqa: F401  pythonnet, which pywebview has loaded
+    from System import Activator, Type
+    from System.Reflection import BindingFlags
+
+    from ..shell.grants import KNOWN, known_folder
+    shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"))
+
+    def target(path: str) -> str:
+        if path.lower().endswith(".exe"):
+            return path
+        link = shell.GetType().InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, None, shell, [path])
+        return str(link.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, None, link, None) or "")
+
+    out = []
+    for folder in (known_folder(KNOWN[2][1]), known_folder(PUBLIC_DESKTOP)):
+        if folder and os.path.isdir(folder):
+            for entry in os.scandir(folder):
+                if entry.is_file() and entry.name.lower().endswith((".lnk", ".url", ".exe")):
+                    out.append((os.path.splitext(entry.name)[0], entry.path, target(entry.path)))
+    for folder in filter(None, map(known_folder, PROGRAMS)):
+        for root, _dirs, files in os.walk(folder):
+            for name in files:
+                if name.lower().endswith(".lnk"):
+                    path = os.path.join(root, name)
+                    aim = target(path)
+                    if aim and not aim.lower().endswith(".exe"):
+                        out.append((os.path.splitext(name)[0], path, aim))
+    return out
+
+
 def open_app(aumid: str) -> bool:
     """Start an entry of Start's list by its AppUserModelID, as a click in Start does."""
     return shell32.ShellExecuteW(None, "open", "shell:AppsFolder\\" + aumid, None, None, 1) > 32
+
+
+def open_file(path: str) -> bool:
+    """Open a shortcut or a program file itself, as a double-click on it does: a program in its own folder, a
+    shortcut in the folder it names."""
+    folder = os.path.dirname(path) if path.lower().endswith(".exe") else None
+    return shell32.ShellExecuteW(None, "open", path, None, folder, 1) > 32
 
 
 def ui_language() -> str:

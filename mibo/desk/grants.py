@@ -1,6 +1,6 @@
 """Which programs the character may operate, decided here in code.
 
-The master switch is off until the person turns it on in Settings. A program is
+The master switch is on unless the person turns it off in Settings. A program is
 granted on a card the first time it is needed: this once (for the task asked
 for in chat, kept in memory by `hands`), always (kept here, listed in Settings,
 revocable), or no. One grant covers looking and operating. A grant names the
@@ -209,15 +209,16 @@ class Grants:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return {"on": False, "grants": []}
-        return data if isinstance(data, dict) else {"on": False, "grants": []}
+            return {"grants": []}
+        return data if isinstance(data, dict) else {"grants": []}
 
     def _write(self, data: dict) -> None:
         from ..storage import atomic_write_text
         atomic_write_text(self.path, json.dumps(data, ensure_ascii=False, indent=1))
 
     def on(self) -> bool:
-        return self._read().get("on") is True
+        """On unless the person turned it off."""
+        return self._read().get("on") is not False
 
     def set_on(self, on: bool) -> dict:
         with self.lock:

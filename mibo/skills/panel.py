@@ -211,7 +211,7 @@ def mount(app, workspace, body) -> None:
         one = await asyncio.to_thread(market.by_id, home, id)
         if one is None:
             return _error("market_gone", 404)
-        text, moved = await asyncio.gather(market.preview(one), market.changed(one))
+        text, moved = await asyncio.gather(market.preview(home, one), market.changed(home, one))
         return {"id": one["id"], "skill_md": text, "fetched": text is not None, "changed": moved}
 
     @app.get("/api/skills/market/mark/{owner}")

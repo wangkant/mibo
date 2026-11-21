@@ -6,11 +6,13 @@ Offline, every entry: the fixed shape, one entry per skill (ids, folders and has
 https git hosts at a full commit, a licence marked installable only when it was read from a file or field and is
 an open one (or none was stated), and no third-party text beyond the skill's name (the written titles and
 sentences share no long run of words with the skill's own description). Online, a sample per repository: the
-source page opens at its commit, and the folder fetched fresh from the host hashes to the entry's hash.
+source page opens at its commit, and the installer's own fetch (file by file, mirrors included) brings the folder
+whole.
 """
 from __future__ import annotations
 
 import argparse
+import asyncio
 import difflib
 import json
 import re
@@ -18,17 +20,19 @@ import sys
 import time
 import urllib.error
 import urllib.request
-import zipfile
 from collections import Counter, defaultdict
+import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from build import AGENT, CATEGORIES, OPEN, OUT, SHARE_ALIKE, market  # noqa: E402
+from build import AGENT, OPEN, OUT, SHARE_ALIKE, market  # noqa: E402
+from places import layout  # noqa: E402
 
 HOSTS = ("https://github.com/", "https://gitlab.com/", "https://codeberg.org/", "https://gitee.com/")
-SHAPE = {"id", "name", "title", "about", "publisher", "source", "licence", "category", "tags", "needs", "fit",
-         "fit_note", "popularity", "hash", "scan", "updated"}
+SHAPE = {"id", "name", "title", "about", "publisher", "source", "licence", "category", "sub", "tags", "needs", "fit",
+         "fit_note", "popularity", "hash", "files", "scan", "updated"}
+PLACES = layout()
 # The spoken forms tools/copy_check.py lists; the catalog's Chinese is interface text too.
 SPOKEN = re.compile(r"[吧啦呀哦嘛呗]|呢[。？！”\"]|一下|看看|试试|做了什么|先问你|替你|帮你|等你|[搞弄]|啥|咋|没找到|找不到|"
                     r"打不开|用不了|这台电脑|东西|要不要|没问题|觅波")
@@ -54,8 +58,10 @@ def problems_offline(catalog: dict, cache: Path) -> list[str]:
         if not src["url"].startswith(HOSTS) or not re.fullmatch(r"[0-9a-f]{40}", src["commit"]) \
                 or not re.fullmatch(r"[\w.-]+/[\w.-]+", src["repo"]) or ".." in src["path"]:
             out.append(f"{sid}: source not a public git host at a full commit")
-        if e["category"] not in CATEGORIES:
-            out.append(f"{sid}: category {e['category']}")
+        if e["category"] not in PLACES or e["sub"] not in (PLACES[e["category"]] or [""]):
+            out.append(f"{sid}: place {e['category']}/{e['sub']}")
+        if market.listed_hash(e["files"]) != e["hash"]:
+            out.append(f"{sid}: file hashes do not make up the folder hash")
         if e["fit"] not in ("ready", "partial", "no") or (e["fit"] != "ready") != bool(e["fit_note"]):
             out.append(f"{sid}: fit")
         if e["scan"]["risk"] not in ("none", "low", "high"):
@@ -89,39 +95,20 @@ def problems_offline(catalog: dict, cache: Path) -> list[str]:
     return out
 
 
-def fetch(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": AGENT})
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=600) as r:
-                return r.read()
-        except (urllib.error.URLError, TimeoutError):
-            if attempt == 2:
-                raise
-            time.sleep(5)
-    raise AssertionError
-
-
 def check_online(catalog: dict, per_repo: int) -> tuple[int, list[str]]:
     by_repo = defaultdict(list)
     for e in sorted(catalog["skills"], key=lambda e: e["hash"]):
         by_repo[(e["source"]["repo"], e["source"]["commit"])].append(e)
     checked, out = 0, []
+    home = Path(tempfile.mkdtemp(prefix="skillmarket-check-"))
     for (repo, commit), entries in sorted(by_repo.items()):
         sample = entries[:per_repo]
-        try:
-            data = fetch(f"https://codeload.github.com/{repo}/zip/{commit}")
-        except urllib.error.URLError as e:
-            out.append(f"{repo}@{commit[:10]}: archive did not open ({e})")
-            continue
         for e in sample:
-            # The installer's own path: the folder taken out of the archive as it takes it, hashed as it hashes.
+            # The installer's own path: each file from the first host that answers, checked against the entry.
             try:
-                fresh = market.folder_hash(market.folder_files(data, e["source"]["path"]))
-            except (ValueError, zipfile.BadZipFile) as err:
-                fresh = f"refused ({err})"
-            if fresh != e["hash"]:
-                out.append(f"{e['id']}: fresh hash {fresh[:24]} != {e['hash'][:12]}")
+                asyncio.run(market.fetch(home, market.entry(e)))
+            except ValueError as err:
+                out.append(f"{e['id']}: not fetched whole ({err})")
             try:
                 page = urllib.request.urlopen(urllib.request.Request(e["source"]["url"], headers={
                     "User-Agent": AGENT}), timeout=60)

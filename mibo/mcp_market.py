@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from . import mcp_tools as mt
-from . import secretstore
+from . import reach, secretstore
 from .storage import atomic_write_text
 
 REGISTRY = "https://registry.modelcontextprotocol.io/v0/servers"
@@ -161,7 +161,7 @@ def entry(item, reviewed: bool = False) -> dict | None:
     tags = listing.get("tags") if isinstance(listing.get("tags"), list) else []
     return {"id": ident, "name": name or "server", "title": title, "about": about,
             "publisher": _publisher(ident, owner), "owner": owner, "repo": repo_url,
-            "category": _text(listing.get("category"), 30) or "tools", "licence": _text(listing.get("licence"), 40),
+            "category": _text(listing.get("category"), 30), "sub": _text(listing.get("sub"), 30), "licence": _text(listing.get("licence"), 40),
             "tags": [_text(t, 30) for t in tags[:12] if _text(t, 30)],
             "match": [_text(t, 30).lower() for t in (listing.get("match") or [])[:6] if _text(t, 30)],
             "get_key": _https(listing.get("get_key")), "sync": sync, "reviewed": reviewed,
@@ -255,6 +255,9 @@ async def refresh_latest(home: Path, force: bool = False) -> None:
         key = f"{kind}:{package}"
         if not force and time.time() - float((known.get(key) or {}).get("at") or 0) < LATEST_S:
             continue
+        # A version from a mirror would be unchecked, so only npm's or PyPI's own answer counts; asked again later.
+        if not await reach.answers(reach.runtime_of(home), urlsplit(LATEST[kind]).hostname):
+            continue
         result = await _get(LATEST[kind].format(quote(package, safe="@") if kind == "npm" else package))
         version = ""
         if result is not None:
@@ -315,9 +318,9 @@ def _with_installed(one: dict, config: dict) -> dict:
 
 def view(home: Path) -> dict:
     """What the market shows: the shipped list, each entry with the server it is installed as."""
-    from .skills.market import categories
+    from .skills.market import layout
     data, config = shipped(), mt.load_config(home)["mcpServers"]
-    return {"built_at": data["built_at"], "categories": categories(),
+    return {"built_at": data["built_at"], "categories": layout(),
             "servers": [_with_installed(one, config) for one in data["servers"]],
             "synced": bool(secretstore.get(home, TOKEN_KEY))}
 
@@ -329,6 +332,9 @@ async def search(home: Path, query: str) -> list[dict]:
         return []
     hit = _searched.get(query.lower())
     if hit is None or time.time() - hit[0] > SEARCH_S:
+        # The registry has no mirror: a network without it is told at once rather than after a long wait.
+        if not await reach.answers(reach.runtime_of(home), urlsplit(REGISTRY).hostname):
+            raise mt.ToolsError("market_search_failed")
         result = await _get(f"{REGISTRY}?search={quote(query)}&version=latest&limit=40")
         if result is None:
             raise mt.ToolsError("market_search_failed")

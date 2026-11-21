@@ -192,6 +192,18 @@
   outline: var(--pa-focus);
   outline-offset: 2px;
 }
+/* A category's places: a lighter row under the categories. */
+.skm-chips-inner .skm-chip {
+  height: 26px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: none;
+}
+.skm-chips-inner .skm-chip[aria-pressed="true"] {
+  border-color: var(--pa-line-strong);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+}
 .setup-select.skm-sort {
   flex: none;
   width: auto;

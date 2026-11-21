@@ -98,7 +98,7 @@
       valueSave: "保存",
       valuePlaceholder: "输入新值",
       tools: "工具（{n}）",
-      mode: { ask: "每次询问", always: "始终允许", never: "禁止" },
+      mode: { auto: "自动审查", always: "始终允许", never: "禁止" },
       modeLabel: (name) => `${name} 的权限`,
       readonlyHint: "提供方标注为只读",
       destructiveHint: "提供方标注为可能删除或覆盖数据",
@@ -114,8 +114,8 @@
       logClearText: "记录将被删除，无法恢复。",
       outcome: { done: "已完成", error: "工具返回错误", failed: "失败", declined: "已拒绝", unanswered: "未确认",
         never: "已禁止", changed: "工具已更改，未调用", start_once: "允许启动（本次）", start_always: "允许启动（始终）",
-        start_no: "拒绝启动" },
-      how: { always: "始终允许", once: "本次允许", chat: "本次对话内允许", this_chat: "本次对话内已允许" },
+        start_no: "拒绝启动", refused: "审查已拦截" },
+      how: { always: "始终允许", once: "本次允许", chat: "本次对话内允许", this_chat: "本次对话内已允许", review: "审查通过" },
       importOpen: "从其他应用导入",
       importTitle: "其他应用中的连接器",
       importHelp: "以下连接器来自本机 Claude、Cursor、VS Code 和 Cherry Studio 的配置。导入时复制一份到 Mibo，原配置保持不变；其中的值保存在系统凭据存储中。",
@@ -284,7 +284,7 @@
       valueSave: "Save",
       valuePlaceholder: "New value",
       tools: "Tools ({n})",
-      mode: { ask: "Ask each time", always: "Always allow", never: "Never" },
+      mode: { auto: "Auto review", always: "Always allow", never: "Never" },
       modeLabel: (name) => `Permission for ${name}`,
       readonlyHint: "Its maker marks it read-only",
       destructiveHint: "Its maker marks it as able to delete or overwrite data",
@@ -300,9 +300,9 @@
       logClearText: "The record is deleted and cannot be brought back.",
       outcome: { done: "Done", error: "The tool reported an error", failed: "Failed", declined: "Declined", unanswered: "Not answered",
         never: "Blocked", changed: "The tool changed; not called", start_once: "Start allowed (this time)",
-        start_always: "Start allowed (always)", start_no: "Start declined" },
+        start_always: "Start allowed (always)", start_no: "Start declined", refused: "Turned down by review" },
       how: { always: "always allowed", once: "allowed this time", chat: "allowed for this conversation",
-        this_chat: "already allowed for this conversation" },
+        this_chat: "already allowed for this conversation", review: "passed by review" },
       importOpen: "Import from other apps",
       importTitle: "Connectors in other apps",
       importHelp: "These connectors are in the configurations of Claude, Cursor, VS Code and Cherry Studio on this computer. Importing copies them into Mibo and leaves the originals as they are; their values go to the system's credential store.",
@@ -880,11 +880,12 @@
     }
 
     function renderChips() {
-      const names = market.categories || {};
+      // The categories skills use too, named in the locales.
+      const names = kit.words("setup_skills").categories;
       const used = new Set(market.servers.map((one) => one.category));
-      const keys = ["", ...Object.keys(names).filter((key) => used.has(key))];
+      const keys = ["", ...Object.keys(market.categories || {}).filter((key) => used.has(key))];
       chips.replaceChildren(...keys.map((key) => {
-        const chip = el("button", "skm-chip", key ? both(names[key]) : t.allCategories);
+        const chip = el("button", "skm-chip", key ? names[key] : t.allCategories);
         chip.type = "button";
         chip.setAttribute("aria-pressed", String(query.category === key));
         chip.addEventListener("click", () => {

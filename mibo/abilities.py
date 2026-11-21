@@ -143,19 +143,12 @@ def set_effort(runtime, level: str) -> None:
     _change(runtime, lambda data: data.__setitem__("effort", level))
 
 
-def turn_effort(runtime) -> str:
-    """The level for the turn being handled: chosen for this one message, else the saved one."""
-    from .turns import turn_choices
-    once = next((c.removeprefix("think_") for c in turn_choices() if c.startswith("think_")), "")
-    return once if once in EFFORTS else effort(runtime)
-
-
 def reply_effort(runtime, url: str, model: str):
     """(level, parameter) when replies should think at a level the model was
     measured to take; None leaves the call as the app decides."""
     if runtime is None:
         return None
-    level = turn_effort(runtime)
+    level = effort(runtime)
     if level not in ("standard", "deep"):
         return None
     rec = record(runtime, url, model)

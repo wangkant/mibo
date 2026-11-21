@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>我的回答 - 问答社区</title>
+<style>
+body { margin: 0; font: 14px/1.5 system-ui, "Microsoft YaHei", sans-serif; background: #f6f6f6; }
+main { max-width: 760px; margin: 20px auto; background: #fff; border-radius: 6px; }
+h2 { margin: 0; padding: 14px 18px; border-bottom: 1px solid #eee; font-size: 16px; }
+.list { position: relative; height: 520px; overflow-y: auto; }
+.row { position: absolute; left: 0; right: 0; height: 64px; padding: 8px 18px; box-sizing: border-box; border-bottom: 1px solid #f0f0f0; }
+.t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .m { color: #8590a6; font-size: 12px; }
+</style></head>
+<body><main>
+<h2>我的回答（400）</h2>
+<div class="list" id="list"><div id="spacer"></div></div>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// 400 answers in a list that draws only the rows in view, as large sites do; the most-read one is row 291.
+// Its count changes with each reset of the site (tasks.w_reads).
+const Q = ["第一份工作该选大厂还是小公司", "怎样坚持每天运动", "有哪些值得一读的科普书", "租房要注意什么", "怎么做一顿简单的晚饭",
+  "学吉他从哪里开始", "如何整理一个小房间", "周末一个人可以去哪里"];
+let items = [];
+fetch("/api/state").then((r) => r.json()).then(({ round }) => {
+  for (let i = 0; i < 400; i++) {
+    const top = i === 290;
+    items.push({ title: top ? "养猫之前需要想清楚哪些事" : Q[i % 8] + "？（" + (i + 1) + "）",
+      reads: top ? 8800 + 37 * ((round || 0) % 9) : 120 + ((i * 6151) % 7900), day: `11-${String(1 + (i % 28)).padStart(2, "0")}` });
+  }
+  spacer.style.height = items.length * ROW + "px";
+  draw();
+});
+const ROW = 64, list = document.getElementById("list"), spacer = document.getElementById("spacer");
+function draw() {
+  const first = Math.max(0, Math.floor(list.scrollTop / ROW) - 2);
+  const last = Math.min(items.length, Math.ceil((list.scrollTop + list.clientHeight) / ROW) + 2);
+  for (const r of [...list.querySelectorAll(".row")]) r.remove();
+  for (let i = first; i < last; i++) {
+    const it = items[i], row = document.createElement("div");
+    row.className = "row";
+    row.style.top = i * ROW + "px";
+    row.innerHTML = `<div class="t"></div><div class="m">发布于 ${it.day} · 阅读 ${it.reads} · 赞同 ${(i * 13) % 400}</div>`;
+    row.firstChild.textContent = it.title;
+    list.append(row);
+  }
+}
+list.addEventListener("scroll", draw);
+</script></body></html>

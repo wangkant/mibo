@@ -152,7 +152,6 @@ window.paModelBar = (() => {
     let models = null;
     let usage = null;
     let usageAt = 0;
-    let once = "";
     let open = false;
     let view = "main";
     let busyWith = "";
@@ -177,16 +176,13 @@ window.paModelBar = (() => {
       wrap.hidden = !info.configured;
       if (!info.configured) return;
       const t = w();
-      const level = once || info.effort;
+      const level = info.effort;
       const offered = info.abilities?.efforts || [];
       name.textContent = busyWith ? t.switching : info.short;
       const showLevel = offered.length && level !== "auto" && offered.includes(level);
       tag.replaceChildren();
       tag.hidden = !showLevel;
-      if (showLevel) {
-        tag.append(svg(I.bulb), el("span", "", t.levels[level]));
-        if (once) tag.append(el("span", "mb-once", t.onceTag));
-      }
+      if (showLevel) tag.append(svg(I.bulb), el("span", "", t.levels[level]));
       button.title = `${info.model}${showLevel ? ` · ${t.levels[level]}` : ""}`;
       button.setAttribute("aria-label", `${t.open}: ${button.title}`);
       button.classList.toggle("busy", Boolean(busyWith));
@@ -260,7 +256,7 @@ window.paModelBar = (() => {
       const out = [];
       const offered = info.abilities?.efforts || [];
       if (offered.length) {
-        const level = once || info.effort;
+        const level = info.effort;
         out.push(head(t.thinking));
         const row = el("div", "mb-levels");
         row.setAttribute("role", "radiogroup");
@@ -277,18 +273,7 @@ window.paModelBar = (() => {
           row.append(seg);
         }
         out.push(row, el("p", "mb-level-hint", t.levelHints[offered.includes(level) ? level : "auto"]));
-        const onceRow = item(null, t.once, () => {
-          wantOnce = !wantOnce;
-          if (!wantOnce && once) once = "";
-          paint();
-          draw();
-        }, { cls: "mb-once-row" });
-        onceRow.setAttribute("role", "menuitemcheckbox");
-        onceRow.setAttribute("aria-checked", String(wantOnce));
-        const box = el("span", `mb-box${wantOnce ? " on" : ""}`);
-        if (wantOnce) box.append(svg(I.check));
-        onceRow.prepend(box);
-        out.push(onceRow, rule());
+        out.push(rule());
       }
       out.push(head(t.model));
       out.push(item(I.chip, info.short, () => close(true), { checked: true, hint: info.checking ? t.checking : "" }));
@@ -380,13 +365,11 @@ window.paModelBar = (() => {
     }
     const items = () => [...menu.querySelectorAll(".mb-item, .mb-search-input")];
     const focusFirst = () => items()[view === "main" ? 0 : 1]?.focus();
-    let wantOnce = false;
 
     async function show(fromKeys = false) {
       if (open || busyWith) return;
       open = true;
       view = "main";
-      wantOnce = Boolean(once);
       button.setAttribute("aria-expanded", "true");
       wrap.classList.add("open");
       menu.hidden = false;
@@ -416,13 +399,6 @@ window.paModelBar = (() => {
     }
 
     async function setLevel(level) {
-      if (wantOnce) {
-        once = level === info.effort ? "" : level;
-        paint();
-        close(true);
-        return;
-      }
-      once = "";
       try {
         info = await ctx.api("modelbar/effort", { level });
       } catch {
@@ -439,7 +415,6 @@ window.paModelBar = (() => {
       paint();
       try {
         info = await ctx.api("modelbar/model", { model });
-        once = "";
         models = null;
       } catch (error) {
         busyWith = "";
@@ -508,14 +483,6 @@ window.paModelBar = (() => {
       refresh() {
         load();
         if (Date.now() - usageAt > USAGE_EVERY_MS) readUsage();
-      },
-      // The level chosen for the next message only, as a turn choice (connector.TURN_CHOICES).
-      take() {
-        if (!once) return [];
-        const level = once;
-        once = "";
-        paint();
-        return [`think_${level}`];
       },
       // At the limit a message asks once a month before it goes; `retry` sends it after a yes.
       allow(retry) {
@@ -629,7 +596,7 @@ window.paModelBar = (() => {
       if (!info?.configured) return;
       const rec = info.abilities;
       rows.replaceChildren();
-      for (const key of ["tools", "pictures", "json", "thinking"]) {
+      for (const key of ["tools", "pictures", "thinking"]) {
         const value = info.checking ? "checking" : rec?.[key] || "";
         const row = make("div", "mb-ability");
         const words = make("div", "mb-ability-words");

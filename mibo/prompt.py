@@ -43,8 +43,6 @@ _NOT_KEPT_NOTE = (
 _CHOICE_NOTES = {
     "browser": "They chose \"operate the browser\" for it: they ask you to do it in the app's browser, so call "
                "use_browser in this reply.",
-    "computer": "They chose \"operate the computer\" for it: they ask you to do it on this computer, in a "
-                "program's window (use_program) or by command (use_computer), whichever fits.",
     "search_off": "They switched web search off for it: answer from what you already know, and do not say you "
                   "searched.",
     "schedule": "They chose \"scheduled task\" for it: make it with schedule_create in this reply, asking only "

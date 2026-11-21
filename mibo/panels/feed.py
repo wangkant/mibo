@@ -37,6 +37,7 @@ from .. import taste as model
 from ..library import DISMISSED, KEPT, Item, Library
 from ..sources import weights
 from ..storage import atomic_write_text
+from ..web import signin
 
 TASTE_FILE = "feed.json"
 # "hide_source" is "less like this source": the thing is skipped and its source read and ranked far less.
@@ -142,10 +143,13 @@ def _marks(events: list, until: Optional[float] = None) -> tuple[dict, float]:
         if until is not None and at > until:
             continue
         mark = marks.setdefault(ident, {"seen": False, "open": False, "like": False, "skip": False,
-                                        "hide": False, "play": 0.0, "end": "", "site": site, "kind": kind})
+                                        "hide": False, "play": 0.0, "end": "", "site": site, "kind": kind,
+                                        "walled": False})
         mark["seen"] = True
         if action == "seen":
             shown = max(shown, at)
+        elif action == "walled":
+            mark["walled"] = True
         elif action == "open":
             mark["open"] = True
         elif action == "like":
@@ -392,18 +396,29 @@ def ranked(library: Library, events: list, at: float, topics: list[str] = (), *,
         acted = sum(1 for mark in then.values() if mark["open"] or mark["like"] or mark["skip"])
         topical = TOPIC * 0.5 ** (acted / TOPIC_HALF)
     reachable: dict[str, bool] = {}
+    # A site and kind whose find opened to a sign-in or a check: held back while the person is signed out there.
+    walls = {(mark["site"], mark["kind"]) for mark in now.values() if mark["walled"]}
+    signed: dict[str, bool] = {}
 
     def up(host: str) -> bool:
         if host not in reachable:
             reachable[host] = situation.gate(runtime, host=host)
         return reachable[host]
 
+    def held(shaped: dict) -> bool:
+        if (shaped["site"], shaped["kind"]) not in walls:
+            return False
+        if shaped["site"] not in signed:
+            signed[shaped["site"]] = signin.signed_in(runtime / "desktop", shaped["url"])
+        return not signed[shaped["site"]]
+
     rows = []
     for item in items:
-        if item.state == DISMISSED or item.seen_at > at or then.get(item.id, {}).get("skip"):
+        if item.state == DISMISSED or item.seen_at > at or then.get(item.id, {}).get("skip") \
+                or now.get(item.id, {}).get("walled"):
             continue
         shaped = shape(item, now)
-        if shaped is None or errand(shaped["url"]):
+        if shaped is None or errand(shaped["url"]) or held(shaped):
             continue
         # A thing whose page or player cannot be reached is held back, not shown and not counted against.
         if all(up(host) for host in model.hosts(item, shaped)):
@@ -531,7 +546,8 @@ def remember(runtime: Path, item: Item, action: str, now: Optional[float] = None
                 "unlike": not (mark and mark["like"]), "skip": mark and mark["skip"],
                 "hide_source": mark and mark["hide"], "play": play_s <= (mark["play"] if mark else 0),
                 "read": play_s <= (mark["play"] if mark else 0), "end": mark and mark["end"]}[action]
-        if done:
+        # A find that opened to a wall says nothing more of the person's taste.
+        if done or mark and mark["walled"]:
             return False
         events.append([at, item.id, action, shaped["site"] if shaped else item.site,
                        shaped["kind"] if shaped else "text", extra])
@@ -573,6 +589,32 @@ def take_back(runtime: Path, item: Item) -> None:
 
         weights.change(runtime, edit)
     model.fit(runtime)
+
+
+def walled(runtime: Path, item: Item) -> bool:
+    """A find opened in the app's browser came to a sign-in or a check: its open, its time there and the card's
+    ending by the open go, with the open's points for its source, so it counts as neither interest nor dislike;
+    it is not shown again, and its site's finds of its kind wait while the person is signed out there (`ranked`).
+    Whether it was new."""
+    path = Path(runtime) / TASTE_FILE
+    with _lock:
+        events = _load(path)
+        mark = _marks(events)[0].get(item.id)
+        if mark is None or mark["walled"]:
+            return False
+        gone = [e for e in events if e[1] == item.id and (
+            e[2] in ("open", "read") or e[2] == "end" and e[5].get("end") == "open")]
+        events = [e for e in events if e not in gone]
+        events.append([round(life.clock(), 3), item.id, "walled", mark["site"], mark["kind"], {}])
+        _save(path, events, load_topics(path))
+    if item.source and any(e[2] == "open" for e in gone):
+        def edit(state: dict) -> None:
+            row = state[item.source]
+            row["points"] = round(row["points"] - weights.POINTS["open"], 2)
+
+        weights.change(runtime, edit)
+    model.fit(runtime)
+    return True
 
 
 def forget_items(runtime: Path, ids: set[str]) -> None:

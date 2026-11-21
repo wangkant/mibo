@@ -23,7 +23,7 @@
     paceCard.classList.add("setup-options");
     const pace = kit.choices(t.paceName, PACES.map((key) => [key, t.pace[key]]), (key) => change({ pace: key }));
     const paceRow = kit.optionRow(t.paceName, "", pace.group);
-    const quiet = kit.switchRow("recs-quiet", t.quietName, t.quietOff, (box) =>
+    const quiet = kit.switchRow("recs-quiet", t.quietName, "", (box) =>
       change({ quiet_hours: box.checked ? view.quiet_hours || QUIET_DEFAULT : null }));
     const hours = el("div", "setup-recs-hours");
     const from = clock(t.quietFrom);
@@ -32,9 +32,8 @@
     quiet.row.append(hours);
     paceCard.append(paceRow.row, quiet.row);
 
-    // ---- Taste.
+    // ---- Preferences.
     const tasteCard = kit.card(t.tasteTitle);
-    tasteCard.append(el("p", "setup-help", t.tasteText));
     const topicList = el("div", "setup-recs-topics");
     const offered = el("div", "setup-chips setup-recs-offered");
     const typed = kit.input("setup-word-input");
@@ -58,7 +57,7 @@
     const saidNone = el("p", "setup-help", t.saidNone);
     const wishBlock = el("div", "setup-recs-block");
     const wishes = words();
-    wishBlock.append(el("p", "setup-option-name", t.wishes), el("p", "setup-help", t.wishText), wishes);
+    wishBlock.append(el("p", "setup-option-name", t.wishes), wishes);
     const reset = kit.button("setup-recs-reset", t.reset, askReset);
     tasteCard.append(
       block(t.topics, topicList, offered),
@@ -119,7 +118,6 @@
       paceRow.about.hidden = false;
       quiet.box.checked = Boolean(v.quiet_hours);
       quiet.box.disabled = posting;
-      quiet.about.textContent = v.quiet_hours ? paI18n.t("setup_recs.quietText", { from: v.quiet_hours.from, to: v.quiet_hours.to }) : t.quietOff;
       hours.hidden = !v.quiet_hours;
       for (const [input, key] of [[from, "from"], [to, "to"]]) {
         input.value = v.quiet_hours ? v.quiet_hours[key] : "";

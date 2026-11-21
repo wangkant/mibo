@@ -1,13 +1,16 @@
 {
- "documents": {"zh": "文档", "en": "Documents"},
- "writing": {"zh": "写作", "en": "Writing"},
- "research": {"zh": "研究", "en": "Research"},
- "data": {"zh": "数据", "en": "Data"},
- "design": {"zh": "设计", "en": "Design"},
- "development": {"zh": "开发", "en": "Development"},
- "productivity": {"zh": "效率", "en": "Productivity"},
- "media": {"zh": "图片与视频", "en": "Media"},
- "learning": {"zh": "学习", "en": "Learning"},
- "life": {"zh": "生活", "en": "Life"},
- "tools": {"zh": "工具", "en": "Tools"}
+ "note": "The market's categories in the order the page shows them, each with the places inside it (empty: none). Skills and connectors share them; tools/skillmarket/places.py puts every entry in one. Names are in mibo/locales/<code>.json under setup_skills.categories and setup_skills.subs.",
+ "categories": {
+  "writing": ["compose", "social", "fiction"],
+  "documents": ["office", "slides", "cloud"],
+  "study": ["learning", "papers", "science"],
+  "work": ["mail", "plan", "team", "files"],
+  "life": [],
+  "design": ["ui", "visual", "diagrams", "motion"],
+  "media": ["image", "video", "audio"],
+  "data": ["analysis", "finance", "investing"],
+  "business": ["marketing", "sales", "product", "company"],
+  "web": ["search", "browser"],
+  "development": ["code", "agents", "ai", "deploy"]
+ }
 }

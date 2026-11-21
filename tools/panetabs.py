@@ -130,8 +130,8 @@ def open_a(d) -> None:
 
 def to_a(d) -> None:
     """Back to page A: its tab in the strip where there is one, else page A opened again (as before tabs)."""
-    tab = ("(() => { const t = [...document.querySelectorAll('.browse-tab')].find((n) => /Page A|Signed in/.test(n.textContent));"
-           " if (!t) return false; t.querySelector('.browse-tab-go').click(); return true; })()")
+    tab = ("(() => { const t = [...document.querySelectorAll('.browse-tab-go')].find((n) => /Page A|Signed in/.test(n.title));"
+           " if (!t) return false; t.click(); return true; })()")
     if not (kept_a(pages(d)) and d.js(tab)):
         open_a(d)
     time.sleep(1.5)
@@ -166,10 +166,11 @@ def walk(d, results: dict) -> None:
                                "active": d.app._browser.address()}
     d.log("popup_signin: " + json.dumps(results["popup_signin"]))
 
-    # 3. Private: the page in front, its field half filled, and the bar's private button.
+    # 3. Private: the page in front, its field half filled, and the ··· menu's private tab.
     to_a(d)
     d.app._browser.cdp("Runtime.evaluate", {"expression": "document.getElementById('q').value = 'half typed'"})
-    d.click(".browse-private")
+    d.click(".browse-more")
+    d.click(".browse-menu [data-act=private]")
     time.sleep(3)
     rows = pages(d)
     a = kept_a(rows) or {}

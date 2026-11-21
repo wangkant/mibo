@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>本周新书推荐</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>书单</b><a href="#">推荐</a></header>
+<main><div class="card"><h2>本周新书推荐</h2><div id="books"></div></div></main>
+<script>
+// Rows drawn by script into elements with no list markup, as many sites draw them; the page's text alone has none.
+const BOOKS = [["灯塔看守人的日记", "沈月"], ["雨季的植物学", "顾言"], ["深夜面包店", "唐小禾"], ["山中来信", "陆迟"],
+  ["一个人的天文台", "白鹭"]];
+const root = document.getElementById("books");
+requestAnimationFrame(() => BOOKS.forEach(([title, author], i) => {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `<span class="n">${i + 1}</span><span>《${title}》</span><span class="hint">${author}</span>`;
+  root.append(row);
+}));
+</script>
+</body></html>

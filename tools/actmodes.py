@@ -8,15 +8,17 @@ gate (desk/gate.py) on stand-in controls.
 --tree measures another copy of the code (a snapshot from before a change). One line a check; <out>/modes.json keeps
 them; the exit code is the number of checks that failed. Cards are answered no unless said.
 
-    innocent_post   a button named 整理一下 that posts a delete-all asks on a card; on no nothing is posted
-    innocent_delete a button named 好的 that sends a DELETE asks on a card; on no nothing reaches the site
-    graphql_query   a button that only asks a GraphQL query raises no card, and the query goes
+    innocent_post   a button named 整理一下 that posts a delete-all goes to the reviewer, which asks: one card; on no
+                    nothing is posted
+    innocent_delete a button named 好的 that sends a DELETE asks on a delete card, never the reviewer; on no nothing
+                    reaches the site
+    graphql_query   a button that only asks a GraphQL query raises no card and no reviewer call, and the query goes
     pixel           an image the page loads carrying what was typed, to another site, asks; on no nothing reaches it
     read_press      read only: 整理一下 is pressed, its post is dropped with no card
     read_send       read only: a send is not pressed, no card
     auto_send       auto: a send the person asked for goes on the reviewer's pass, with no card
     auto_delete     auto: a delete asks on a card and the reviewer is never asked
-    plan            the run's plan: a card for a start address on a site the person did not name, and in auto
+    plan            the run's plan: a card only for a start address on a site the person did not name
     decide          the hard kinds and the sensitive sites are never sent to the reviewer
     desk_submit     a 提交 button in a window where the task typed into a field asks (submit)
     desk_menu       a command of a program's own menu named 整理 asks (press)
@@ -60,7 +62,7 @@ class Run:
         self.tab = PlaywrightTab(self.page)
         await self.tab.goto(self.site + path)
 
-    async def run(self, task: str, plan: list, mode: str = "ask", verdict: str = "go") -> dict:
+    async def run(self, task: str, plan: list, mode: str = "auto", verdict: str = "ask") -> dict:
         from opbounds import STOP
         from mibo.web import gate, operate
         plan = list(plan)
@@ -86,7 +88,7 @@ class Run:
             return Verdict(verdict, "stand-in", "review")
 
         more = {"mode": lambda: mode, "review": review} if "mode" in inspect.signature(operate.Hands).parameters else {}
-        if mode != "ask" and not more:
+        if mode != "auto" and not more:
             raise RuntimeError("this copy has no modes")
         hands = operate.Hands(self.tab, ask=ask, allowed=gate.Allowed(self.allow), attended=lambda: True, lang="zh",
                               **more)
@@ -125,13 +127,13 @@ async def innocent_post(r: Run):
 async def innocent_delete(r: Run):
     await r.open(PAGE)
     out = await r.run("看看我的待办", [press("好的")])
-    return len(r.cards) == 1 and not r.logged("DELETE /api/items/7"), out
+    return r.kinds() == ["delete"] and not r.reviewed and not r.logged("DELETE /api/items/7"), out
 
 
 async def graphql_query(r: Run):
     await r.open(PAGE)
     out = await r.run("刷新一下待办列表", [press("刷新列表")])
-    return not r.cards and bool(r.got("/api/graphql")), out
+    return not r.cards and not r.reviewed and bool(r.got("/api/graphql")), out
 
 
 async def pixel(r: Run):
@@ -157,13 +159,13 @@ async def read_send(r: Run):
 
 async def auto_send(r: Run):
     await r.open(PAGE)
-    out = await r.run("留言：八点见", [note("八点见"), press("发送")], mode="auto")
+    out = await r.run("留言：八点见", [note("八点见"), press("发送")], verdict="go")
     return not r.cards and len(r.got("/api/send")) == 1 and len(r.reviewed) == 1, out
 
 
 async def auto_delete(r: Run):
     await r.open(PAGE)
-    out = await r.run("删掉第七条待办", [press("删除")], mode="auto")
+    out = await r.run("删掉第七条待办", [press("删除")])
     return r.kinds() == ["delete"] and not r.reviewed and not r.got("/api/delete"), out
 
 
@@ -172,13 +174,15 @@ def plan_check() -> tuple[bool, dict]:
     if not hasattr(operate, "plan"):
         return False, {"status": "no plan in this copy"}
     here = "https://news.example.org/a"
+    # An older copy takes the mode too: measured as automatic review.
+    more = ["auto"] if len(inspect.signature(operate.plan).parameters) > 3 else []
     rows = {
-        "other unnamed (ask)": operate.plan("https://collect.evil.test/?d=x", here, "看看这篇新闻", "ask")["card"],
-        "other named (ask)": operate.plan("https://www.bilibili.com/", here, "打开 bilibili 搜猫", "ask")["card"],
-        "same site (ask)": operate.plan("https://news.example.org/b", here, "看看下一篇", "ask")["card"],
-        "no start (auto)": operate.plan("", here, "看看这篇新闻", "auto")["card"],
+        "other unnamed": operate.plan("https://collect.evil.test/?d=x", here, "看看这篇新闻", *more)["card"],
+        "other named": operate.plan("https://www.bilibili.com/", here, "打开 bilibili 搜猫", *more)["card"],
+        "same site": operate.plan("https://news.example.org/b", here, "看看下一篇", *more)["card"],
+        "no start": operate.plan("", here, "看看这篇新闻", *more)["card"],
     }
-    want = {"other unnamed (ask)": True, "other named (ask)": False, "same site (ask)": False, "no start (auto)": True}
+    want = {"other unnamed": True, "other named": False, "same site": False, "no start": False}
     return rows == want, {"status": json.dumps(rows, ensure_ascii=False)}
 
 
@@ -192,7 +196,7 @@ def decide_check() -> tuple[bool, dict]:
             for site in ("shop.example.com", "mail.qq.com", "www.icbc.com.cn")}
     ok = all(v == ("review" if k.split("@")[0] in ("send", "press") and k.endswith("example.com") else "ask")
              for k, v in rows.items())
-    ok = ok and acting.decide("read", "send", "example.com") == "refuse" and acting.decide("ask", "send") == "ask"
+    ok = ok and acting.decide("read", "send", "example.com") == "refuse" and acting.DEFAULT == "auto" and         "ask" not in acting.MODES
     return ok, {"status": json.dumps(rows)}
 
 

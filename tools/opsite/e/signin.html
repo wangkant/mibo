@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>登录 - 跑步圈</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>跑步圈</b></header>
+<main><form class="card" id="form">
+<h2>登录</h2>
+<label for="user">手机号</label><input type="text" id="user" autocomplete="username">
+<label for="pass">密码</label><input type="password" id="pass" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:7px 9px">
+<p><button class="go" type="submit">登录</button></p>
+</form></main>
+<script>
+// Any number and password sign in here: the mark is kept and the column opens.
+document.getElementById("form").onsubmit = (event) => {
+  event.preventDefault();
+  localStorage.setItem("member", "1");
+  location.href = "/e/member.html";
+};
+</script>
+</body></html>

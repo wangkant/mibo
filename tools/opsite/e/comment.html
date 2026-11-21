@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>街角咖啡馆 - 点评</title><link rel="stylesheet" href="/e/e.css"></head>
+<body>
+<header><b>点评</b><a href="#">附近</a></header>
+<main>
+<div class="card"><h2>街角咖啡馆</h2><p class="hint">人均 32 元 · 营业中</p></div>
+<div class="card" id="comments">
+<div class="row"><b>小周</b><span>这家店的拿铁真的很好喝，下次还来！</span></div>
+</div>
+<div class="card">
+<label for="box">写评论</label>
+<textarea id="box" rows="3"></textarea>
+<p><button class="go" id="post">发表</button></p>
+</div>
+</main>
+<script>
+// A comment goes to the site as it is typed, and is shown under the others.
+document.getElementById("post").onclick = async () => {
+  const text = document.getElementById("box").value.trim();
+  if (!text) return;
+  await fetch("/api/comment", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }) });
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = "<b>我</b><span></span>";
+  row.lastChild.textContent = text;
+  document.getElementById("comments").append(row);
+  document.getElementById("box").value = "";
+};
+</script>
+</body></html>

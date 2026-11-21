@@ -15,12 +15,10 @@ from . import chatlangs
 _TURN_BUDGET_CALLS = 1.5
 
 #: What the person may choose for one message in the chat: no web search this time,
-#: do it in the app's browser, do it in other programs or by commands; and a thinking
-#: level for this message only (abilities.EFFORTS, from the composer's model control); or make it a
+#: do it in the app's browser, do it in other programs or by commands; or make it a
 #: scheduled task (schedule_tool.py). A message typed beside the page in the app's browser carries "page", or
 #: "page_on" to go on with the errand that waits there (panels/browser.py).
-TURN_CHOICES = ("search_off", "browser", "computer", "think_auto", "think_off", "think_standard", "think_deep",
-                "schedule", "page", "page_on")
+TURN_CHOICES = ("search_off", "browser", "computer", "schedule", "page", "page_on")
 
 
 class OutOfTime(TimeoutError):

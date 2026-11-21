@@ -81,7 +81,7 @@
     let view = null;
     let market = null;
     let shown = "installed";
-    const query = { text: "", category: "", sort: "popular" };
+    const query = { text: "", category: "", sub: "", sort: "popular" };
     let detailId = "";
 
     function mark(name, cls) {
@@ -432,11 +432,15 @@
     }
     const chips = el("div", "skm-chips");
     chips.setAttribute("role", "toolbar");
+    // A long category's places, under its chip.
+    const subChips = el("div", "skm-chips skm-chips-inner");
+    subChips.setAttribute("role", "toolbar");
+    subChips.hidden = true;
     // The catalog's date on the left, the order on the right, under the categories.
     const status = el("p", "skm-status");
     const statusRow = el("div", "skm-filters");
     statusRow.append(status, sort);
-    controls.append(searchWrap, chips, statusRow);
+    controls.append(searchWrap, chips, subChips, statusRow);
     const marketError = kit.errorLine();
     const retry = kit.button("setup-button-secondary setup-button-sm skm-retry", t.retry, () => loadMarket(true));
     retry.hidden = true;
@@ -502,6 +506,7 @@
       // No catalog at all: the line and 重试, without a search or filters for nothing.
       searchWrap.hidden = chips.hidden = sort.hidden = !market.skills.length;
       if (!market.skills.length) {
+        subChips.hidden = true;
         grid.replaceChildren();
         return;
       }
@@ -511,21 +516,27 @@
       else renderGrid();
     }
 
+    function chip(text, on, pick) {
+      const button = el("button", "skm-chip", text);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(on));
+      button.addEventListener("click", () => {
+        pick();
+        renderChips();
+        renderGrid();
+      });
+      return button;
+    }
     function renderChips() {
-      const names = market.categories || {};
-      const used = new Set(market.skills.map((one) => one.category));
-      const keys = ["", ...Object.keys(names).filter((key) => used.has(key))];
-      chips.replaceChildren(...keys.map((key) => {
-        const chip = el("button", "skm-chip", key ? (zh ? names[key].zh : names[key].en) : t.allCategories);
-        chip.type = "button";
-        chip.setAttribute("aria-pressed", String(query.category === key));
-        chip.addEventListener("click", () => {
-          query.category = key;
-          renderChips();
-          renderGrid();
-        });
-        return chip;
-      }));
+      const places = market.categories || {};
+      const used = new Set(market.skills.map((one) => `${one.category}/${one.sub}`));
+      const keys = ["", ...Object.keys(places).filter((key) => market.skills.some((one) => one.category === key))];
+      chips.replaceChildren(...keys.map((key) => chip(key ? t.categories[key] : t.allCategories, query.category === key,
+        () => { query.category = key; query.sub = ""; })));
+      const inner = (places[query.category] || []).filter((sub) => used.has(`${query.category}/${sub}`));
+      subChips.hidden = !inner.length;
+      subChips.replaceChildren(...["", ...inner].map((sub) => chip(sub ? t.subs[sub] : t.allCategories,
+        query.sub === sub, () => { query.sub = sub; })));
     }
 
     // How well an entry fits what was typed, from its names, what it does, its tags and its publisher; 0 is no fit.
@@ -536,9 +547,8 @@
     const texts = new WeakMap();
     function textOf(one) {
       if (!texts.has(one)) {
-        const names = market.categories?.[one.category] || {};
         texts.set(one, [one.name, one.id, one.title.zh, one.title.en, one.about.zh, one.about.en, one.publisher,
-          ...one.tags, names.zh, names.en].join(" ").toLowerCase());
+          ...one.tags, t.categories[one.category], t.subs[one.sub]].join(" ").toLowerCase());
       }
       return texts.get(one);
     }
@@ -577,7 +587,8 @@
       }
       const rows = [];
       for (const one of market.skills) {
-        const fit = !query.category || one.category === query.category ? fitOf(textOf(one), words, weight) : 0;
+        const placed = (!query.category || one.category === query.category) && (!query.sub || one.sub === query.sub);
+        const fit = placed ? fitOf(textOf(one), words, weight) : 0;
         if (fit > 0) rows.push({ one, fit: Math.round(fit), use: words.length ? USABLE.indexOf(one.fit) : 0 });
       }
       // The closer fits first and, for a search, the ones that work in Mibo as they are; then the chosen order.

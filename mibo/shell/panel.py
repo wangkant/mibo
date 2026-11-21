@@ -12,9 +12,10 @@ stopped in the chat ends a waiting card and the running command's whole
 process tree.
 
 The person's mode for commands (acting.py) is read at every step: read only
-runs nothing that changes or starts anything; auto-edit lets changes to files
-inside folders that may be changed go without a card, as the turn's checkpoint
-can put them back. A card about a program run in a granted folder offers
+runs nothing that changes or starts anything; automatic review lets changes to
+files inside folders that may be changed go without a card, as the turn's
+checkpoint can put them back, and puts a program run inside a granted folder
+to the reviewer (review.py) before any card. A card about a program run in a granted folder offers
 本次对话内允许 and 对此程序在此文件夹始终允许 (a rule in shell.json that
 Settings lists and takes back), one about edits 本次对话内允许; a delete, the
 network or an install is asked each time, as OpenCode's and Codex's approvals.
@@ -94,7 +95,7 @@ class Shell:
         return self.cards.press(ident, value)
 
     def mode(self) -> str:
-        """The person's mode for commands and files (acting.py): off, read, ask or auto (auto-edit)."""
+        """The person's mode for commands and files (acting.py): off, read or auto (automatic review)."""
         from ..acting import Modes
         return Modes(self.desktop).mode("commands")
 
@@ -290,6 +291,18 @@ class Shell:
             self.last = cwd
         scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" else None
         context["how"] = self._passed(scope, mode, conversation)
+        if verdict.action == "ask" and not context["how"] and scope and scope.get("program") and mode == "auto":
+            # A program run inside a granted folder: the reviewer first, on the person's own words of this turn.
+            from .. import acting, review
+            passed = await review.decide("commands", await asyncio.to_thread(acting.asked, self.workspace), {
+                "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6]},
+                ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"))
+            if passed.decision == "go":
+                context["how"] = "review"
+            elif passed.decision == "refuse":
+                self.log(command, cwd, read_, verdict, "refused", said=asked_said, how="review")
+                return {"status": "refused", "said": asked_said, "why": {"zh": passed.reason, "en": passed.reason},
+                        "reasons": [passed.reason]}, context
         if verdict.action == "ask" and not context["how"]:
             # 本次 always; 本次对话内允许 for a program or for edits; 始终允许 for a program in this folder. Never for a
             # delete, the network or an install, which are asked each time.
@@ -599,14 +612,14 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/shell")
     async def shell_change(request: Request):
-        """Settings: the switch, the mode (read only, ask, auto-edit), a folder granted (a read-only one made
+        """Settings: the switch, the mode (read only, automatic review), a folder granted (a read-only one made
         sortable) or taken back, an always-allow rule taken back. Only on the computer the app runs on."""
         from ..acting import Modes
         payload = await body(request)
         grants = shell().grants
         if isinstance(payload.get("on"), bool):
             await asyncio.to_thread(grants.set_on, payload["on"])
-        elif payload.get("mode") in ("read", "ask", "auto") and grants.on():
+        elif payload.get("mode") in ("read", "auto") and grants.on():
             await asyncio.to_thread(Modes(shell().desktop).set, "commands", payload["mode"])
         elif isinstance(payload.get("forget"), dict):
             rule = payload["forget"]

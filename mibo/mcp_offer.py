@@ -37,6 +37,8 @@ _STATUS = {
     "never": "Not called: they set this tool to never in Settings › Tools and connectors. Tell them so; do not "
              "try another tool to get round it.",
     "changed": "Not called: the tool changed between the card and the press, so nothing was done.",
+    "refused": "Not called: the app's reviewer found this call is not what they asked for. Tell them why in one "
+               "sentence; do not try another tool to get round it.",
     "start_declined": "Not started: they did not allow this server's program to start. They can allow it in "
                       "Settings › Tools and connectors.",
     "unknown_server": "There is no MCP server of that name.",

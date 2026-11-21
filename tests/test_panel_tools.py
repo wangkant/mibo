@@ -88,7 +88,7 @@ def test_allowing_the_start_takes_the_apps_own_page(client, workspace):
     row = _until(client, "stand", "connected", "failed")
     assert row["state"] == "connected" and {t["name"] for t in row["tools"]} >= {"echo", "add"}
     echo = next(t for t in row["tools"] if t["name"] == "echo")
-    assert echo["mode"] == "ask" and echo["description"] == "Say the text back."
+    assert echo["mode"] == "auto" and echo["description"] == "Say the text back."
     view = post(client, {"tool": {"server": "stand", "tool": "echo", "mode": "never"}}).json()
     assert next(t for t in view["servers"][0]["tools"] if t["name"] == "echo")["mode"] == "never"
     assert post(client, {"tool": {"server": "stand", "tool": "nope", "mode": "always"}}).json() == \

@@ -50,7 +50,7 @@ PAGE = """(() => { const area = document.querySelector('.browse-area'), pane = d
     chip: (document.querySelector('.browse-context')?.textContent || '').trim(),
     back_chip: (() => { const c = document.querySelector('.browse-return'); return c && !c.hidden ? c.textContent.trim() : ''; })(),
     run: (document.querySelector('.browse-run .browse-run-mode')?.textContent || '').trim(),
-    strip: (() => { const s = document.querySelector('.browse-strip'); return s && !s.hidden ? s.textContent.trim() : ''; })() }); })()""" % NOW
+    strip: (() => { const s = document.querySelector('.browse-run-pill'); return s && !s.hidden ? s.textContent.trim() : ''; })() }); })()""" % NOW
 STEP: dict = {"n": 0}
 
 

@@ -156,6 +156,7 @@
     "system": "Im Systembrowser öffnen",
     "close": "Schließen",
     "private": "Neuer privater Tab: Seiten darin werden nicht aufbewahrt",
+    "privateTab": "Neuer privater Tab",
     "newTab": "Neuer Tab",
     "closeTab": "Tab schließen",
     "tabs": "Tabs",
@@ -262,8 +263,6 @@
           "sign_in": "Wartet auf Anmeldung",
           "verification": "Wartet auf eine Prüfung"
         },
-        "sign_in": "{site} verlangt eine Anmeldung. Melden Sie sich auf der Seite an; danach geht es von selbst weiter.",
-        "verification": "{site} verlangt eine Prüfung von Ihnen. Schließen Sie sie auf der Seite ab; danach geht es von selbst weiter.",
         "autoTitle": "Automatisch bei {site} anmelden?",
         "autoMeta": "Der Browser hat Ihr gespeichertes Passwort eingetragen. Gedrückt wird nur die Anmeldeschaltfläche der Website; das Passwort wird nie gelesen.",
         "once": "Einmal erlauben",
@@ -299,7 +298,6 @@
       "title": "Handeln in Seiten",
       "off": "Aus",
       "read": "Nur lesen",
-      "ask": "Jedes Mal fragen",
       "auto": "Automatische Prüfung"
     },
     "prompt": {
@@ -570,8 +568,6 @@
       "standard": "Denkt vor der Antwort kurz nach",
       "deep": "Denkt gründlich nach, dauert länger"
     },
-    "once": "Nur für die nächste Nachricht",
-    "onceTag": "einmalig",
     "model": "Modell",
     "more": "Weitere Modelle",
     "manage": "Modelle verwalten…",
@@ -635,7 +631,6 @@
     "names": {
       "tools": "Tool-Aufrufe",
       "pictures": "Bilder",
-      "json": "JSON-Ausgabe",
       "thinking": "Schlussfolgern"
     },
     "states": {
@@ -647,7 +642,6 @@
     "instead": {
       "tools": "Mibo sucht selbst im Web und übergibt dem Modell die Ergebnisse; das Bedienen von Browser und Computer ist nicht verfügbar.",
       "pictures": "Bilder werden nicht an das Modell gesendet, nur ihre Beschreibungen.",
-      "json": "Das Format wird im Prompt verlangt und aus der Antwort ausgelesen.",
       "thinking": "Neben dem Nachrichtenfeld wird keine Denk-Einstellung angezeigt."
     },
     "unstable": "Die Prüfung ergab wechselnde Ergebnisse; ein Fehlschlag wird als nicht unterstützt behandelt.",
@@ -713,7 +707,7 @@
     "connectLater": "Ich lese allein öffentliche Webseiten und sende Auszüge an das gewählte Modell. Das lässt sich unter Einstellungen › Ausflüge ändern.",
     "findsSaying": "Ich habe schon ein paar Dinge gefunden. Schauen wir, was davon für dich ist.",
     "findsLooking": "Ich suche nach Inhalten zu den Themen, die du gewählt hast. Einen Moment.",
-    "findsWait": "Es wird nach Inhalten zu den gewählten Themen gesucht. Das dauert bis zu 30 Sekunden.",
+    "findsWait": "Das dauert bis zu 30 Sekunden.",
     "video": "Video",
     "want": "Möchte ich sehen",
     "notWant": "Nichts für mich",
@@ -734,7 +728,7 @@
     "toldLater": "Vorerst aufbewahrt; wird verwendet, wenn ich das nächste Mal mein Wissen durchgehe.",
     "tellAgain": "Bearbeiten",
     "heard": "Verstanden, danke, dass du es mir erzählt hast!",
-    "tellLater": "Sobald ein Modell verbunden ist, können Sie es im Chat erzählen.",
+    "tellLater": "Sobald ein Modell verbunden ist, können Sie dies im Chat ergänzen.",
     "it": "die Figur",
     "errors": {
       "profile_invalid": "Schreiben Sie zwischen 1 und 1000 Zeichen.",
@@ -1115,7 +1109,6 @@
     "abilities": {
       "tools": "Tool-Aufrufe",
       "pictures": "Bilder",
-      "json": "JSON-Ausgabe",
       "thinking": "Schlussfolgern"
     },
     "checkingAbilities": "Fähigkeiten des Modells werden geprüft…",
@@ -1458,10 +1451,9 @@
     "typed": "Text",
     "logFold_one": "Protokoll (letzter {count})",
     "modeName": "Handlungsweise",
-    "modeText": "Nur lesen: liest das Fenster und tut nichts. Jedes Mal fragen: Alles mit Wirkung nach außen wartet auf Sie. Automatische Prüfung: Ein Prüfmodell sieht zuerst hin; eindeutig gewünschtes Senden und Absenden geht weiter, Bezahlen, Löschen und Kontoänderungen fragen weiterhin.",
+    "modeText": "Nur ansehen: Das Fenster wird nur gelesen, es wird nichts ausgeführt. Automatische Prüfung: Was nur liest oder sich rückgängig machen lässt, wird ausgeführt; den Rest beurteilt zuerst ein Prüfmodell, Schritte der erteilten Aufgabe werden ausgeführt, und Sie werden nur gefragt, wenn die Prüfung nicht besteht. Zahlungen, Löschungen und Kontoänderungen erfordern stets Ihre Bestätigung.",
     "modes": {
       "read": "Nur lesen",
-      "ask": "Jedes Mal fragen",
       "auto": "Automatische Prüfung"
     },
     "tiers": {
@@ -1484,12 +1476,9 @@
     },
     "paceText": "Bis zu {count} am Tag, nur wenn Sie Zeit haben.",
     "quietName": "Ruhezeiten",
-    "quietText": "Keine von {from} bis {to}.",
-    "quietOff": "Wenn festgelegt, wird in diesen Stunden nichts empfohlen.",
     "quietFrom": "Beginn",
     "quietTo": "Ende",
-    "tasteTitle": "Ihr Geschmack",
-    "tasteText": "Empfehlungen richten sich nach den gewählten Themen, Ihren Reaktionen darauf und dem, was Sie im Chat als Vorlieben nennen.",
+    "tasteTitle": "Empfehlungseinstellungen",
     "topics": "Themen, denen Sie folgen",
     "topicsNone": "Noch keine Themen gewählt.",
     "lean": {
@@ -1501,10 +1490,10 @@
     "removeTopic": "{name} nicht mehr folgen",
     "addTopic": "Thema hinzufügen",
     "add": "Hinzufügen",
-    "learned": "Aus Ihren Reaktionen gelernt",
+    "learned": "Aus Ihrer Nutzung",
     "takes": "Öffnen Sie oft",
     "passes": "Überspringen Sie oft",
-    "learnedNone": "Noch nichts. Was gelernt wird, erscheint hier, sobald Sie einige Empfehlungen geöffnet oder übersprungen haben.",
+    "learnedNone": "Erscheint, sobald Sie einige Empfehlungen geöffnet oder übersprungen haben.",
     "learnedOff": "{name} nicht mehr berücksichtigen",
     "kind": {
       "video": "Videos",
@@ -1517,8 +1506,8 @@
       "1": "Mehr: {name}",
       "-1": "Weniger: {name}"
     },
-    "said": "Was Sie im Chat gesagt haben",
-    "saidNone": "Noch nichts. Sagen Sie im Chat, was Sie mögen oder nicht möchten, dann erscheint es hier.",
+    "said": "Im Chat erwähnt",
+    "saidNone": "Erscheint, sobald Sie im Chat nennen, was Sie mögen.",
     "like": "Mag: {topic}",
     "avoid": "Kein Interesse: {topic}",
     "hidden": "Ausgeschlossen: {name}",
@@ -1531,11 +1520,10 @@
     "formRow": "Form: {parts}",
     "saidOff": "{what} löschen",
     "wishes": "Für die nächsten Tage",
-    "wishText": "Kurzfristige Wünsche aus dem Chat. Jeder endet nach drei Tagen und lässt Ihren dauerhaften Geschmack unberührt.",
     "wish": "{topic} (bis {day})",
-    "reset": "Geschmack zurücksetzen",
-    "resetAsk": "Ihren Geschmack zurücksetzen?",
-    "resetText": "Was aus Ihren Reaktionen und dem Chat gelernt wurde, wird gelöscht. Ihre Themen, die Häufigkeit und die Ruhezeiten bleiben. Dies kann nicht rückgängig gemacht werden.",
+    "reset": "Einstellungen zurücksetzen",
+    "resetAsk": "Empfehlungseinstellungen zurücksetzen?",
+    "resetText": "Was aus Ihrer Nutzung gelernt wurde, Ihre Gewichtungen und das im Chat Erwähnte werden gelöscht. Ihre Themen, die Häufigkeit und die Ruhezeiten bleiben. Dies kann nicht rückgängig gemacht werden.",
     "resetOk": "Zurücksetzen",
     "week": "Diese Woche: {shown} gebracht, {opened} geöffnet.",
     "weekNone": "Diese Woche wurde noch nichts gebracht.",
@@ -1546,26 +1534,20 @@
     "listSep": ", "
   },
   "setup_walks": {
-    "hint": "Die Figur liest selbstständig öffentliche Webseiten und sendet Auszüge an das gewählte Modell, um auszuwählen, was sich mitzubringen lohnt.",
+    "hint": "Die Figur liest selbstständig öffentliche Webseiten und sendet Auszüge an das gewählte Modell.",
+    "moreTitle": "Weitere Einstellungen",
     "onName": "Selbstständig losgehen",
     "offText": "Aus. Nachforschungen aus dem Chat sind ebenfalls aus.",
     "walksName": "Ausflüge pro Tag",
-    "walksText": "Eine im Chat erbetene Nachforschung darf einen zusätzlichen Ausflug pro Tag nutzen.",
-    "atName": "Erster Ausflug des Tages",
-    "atOff": "Nicht festgelegt: Die Ausflüge verteilen sich über den Tag.",
-    "atText": "Der erste Ausflug des Tages beginnt frühestens um {time}.",
-    "sitesTitle": "Websites",
-    "sitesText": "Geben Sie eine Adresse oder Domain ein, etwa example.com.",
-    "avoid": "Nie besuchen",
-    "favour": "Bevorzugt besuchen",
-    "addSite": "Website hinzufügen",
+    "avoid": "Nie besuchte Websites",
+    "favour": "Bevorzugte Websites",
+    "addSite": "z. B. example.com",
     "siteOff": "{site} entfernen",
     "recordTitle": "Ausflugsprotokoll",
     "recordNone": "Noch keine Ausflüge.",
     "noTopic": "Beliebte Inhalte",
-    "topic": "Thema: {topic}",
-    "asked": "Von Ihnen erbeten: {topic}",
-    "sums": "Quellen {lists} · Gelesen {read} · Mitgebracht {kept}",
+    "asked": "Erbeten: {topic}",
+    "sums": "Gelesen {read} · Mitgebracht {kept}",
     "missed": "{site}: {why}",
     "lists": "Wo gesucht wurde",
     "read": "Gelesene Seiten",
@@ -1601,7 +1583,6 @@
       "no_model": "Verbinden Sie ein Modell, um Ausflüge zu ermöglichen."
     },
     "searchTitle": "Websuche",
-    "searchText": "Die Websuche bei Ausflügen und im Chat nutzt standardmäßig Suchmaschinen ohne Schlüssel, deren Ergebnisse unzuverlässig sein können. Mit einem API-Schlüssel von Brave Search oder Tavily wird stattdessen dieser Dienst verwendet. Der Schlüssel wird im Anmeldeinformationsspeicher des Systems abgelegt, nicht in einer Einstellungsdatei.",
     "searchUsing": "In Verwendung",
     "searchKeyless": "Suche ohne Schlüssel",
     "searchApi": "Suchdienst",
@@ -1713,11 +1694,10 @@
     "foldersText": "In diesen Ordnern darf die Figur Dateien ansehen, erstellen, kopieren, umbenennen und verschieben; Löschen fragt weiterhin, Änderungen an Dateien folgen der Arbeitsweise. Braucht sie einen Ordner zum ersten Mal, fragt der Chat ebenfalls.",
     "foldersNone": "Noch keine Ordner erlaubt.",
     "modeName": "Arbeitsweise",
-    "modeText": "Nur ansehen: liest Dateien in freigegebenen Ordnern und ändert oder startet nichts. Jedes Mal fragen: Dateiänderungen, Programmstarts und Ähnliches warten auf dich. Automatisch bearbeiten: Ändern und Erstellen von Dateien in Ordnern, die geordnet werden dürfen, fragt nicht; „Diese Änderungen rückgängig machen“ unter der Antwort stellt sie wieder her. Löschen, Netzwerk und Installationen fragen weiterhin.",
+    "modeText": "Nur ansehen: Dateien in den erlaubten Ordnern werden nur gelesen, nichts wird geändert oder ausgeführt. Automatische Prüfung: Dateien in Ordnern, die aufgeräumt werden dürfen, werden ohne Rückfrage geändert und angelegt; „Diese Änderungen rückgängig machen“ unter der Antwort stellt sie wieder her. Ein Programm in einem erlaubten Ordner beurteilt zuerst ein Prüfmodell, und Sie werden nur gefragt, wenn die Prüfung nicht besteht. Löschen, Netzwerkzugriffe und Softwareinstallationen erfordern stets Ihre Bestätigung.",
     "modes": {
       "read": "Nur ansehen",
-      "ask": "Jedes Mal fragen",
-      "auto": "Automatisch bearbeiten"
+      "auto": "Automatische Prüfung"
     },
     "rulesTitle": "Immer erlaubte Programme",
     "rulesText": "Diese Programme laufen in ihren Ordnern ohne Rückfrage. Senden über das Netzwerk und Softwareinstallationen stehen nie auf dieser Liste; sie fragen jedes Mal.",
@@ -1731,7 +1711,8 @@
       "this_chat": "in diesem Gespräch erlaubt",
       "always": "immer erlaubt",
       "rule": "immer erlaubt",
-      "auto_edit": "automatisch bearbeiten"
+      "auto_edit": "automatisch bearbeiten",
+      "review": "durch Prüfung freigegeben"
     },
     "addPlaceholder": "Adresse eines Ordners einfügen, z. B. D:\\Fotos",
     "add": "Hinzufügen",
@@ -1818,6 +1799,54 @@
     "importHave": "Ein Skill mit diesem Namen ist bereits installiert",
     "search": "Namen, Verwendungen oder Tags suchen",
     "allCategories": "Alle",
+    "categories": {
+      "writing": "Schreiben",
+      "documents": "Dokumente & Folien",
+      "study": "Lernen & Forschung",
+      "work": "Büro & Team",
+      "life": "Alltag",
+      "design": "Design",
+      "media": "Bild, Video & Audio",
+      "data": "Daten & Finanzen",
+      "business": "Business & Marketing",
+      "web": "Web & Automatisierung",
+      "development": "Programmieren"
+    },
+    "subs": {
+      "compose": "Verfassen & Überarbeiten",
+      "social": "Social-Media-Beiträge",
+      "fiction": "Romane & Drehbücher",
+      "office": "Word, Excel und PDF",
+      "slides": "Präsentationen",
+      "cloud": "Online-Dokumente",
+      "learning": "Lernen & Denken",
+      "papers": "Fachartikel & Literatur",
+      "science": "Wissenschaft",
+      "mail": "E-Mail & Kalender",
+      "plan": "Pläne & Notizen",
+      "team": "Teamarbeit",
+      "files": "Dateien & Computer",
+      "ui": "Oberflächen & Webseiten",
+      "visual": "Grafik & Marke",
+      "diagrams": "Diagramme",
+      "motion": "Animation",
+      "image": "Bilder",
+      "video": "Video",
+      "audio": "Audio & Sprache",
+      "analysis": "Datenanalyse",
+      "finance": "Finanzen",
+      "investing": "Investieren & Handeln",
+      "marketing": "Marketing & Wachstum",
+      "sales": "Vertrieb & Kunden",
+      "product": "Produktmanagement",
+      "company": "Personal, Recht & Betrieb",
+      "search": "Suche & Erfassung",
+      "browser": "Browser-Automatisierung",
+      "code": "Programmierung & Review",
+      "agents": "Agenten & Skills",
+      "ai": "Modelle & KI",
+      "deploy": "Bereitstellung & Betrieb"
+    },
     "sort": "Sortieren nach",
     "sortPopular": "Am beliebtesten",
     "sortRecent": "Zuletzt aktualisiert",
@@ -2214,11 +2243,11 @@
       },
       "ollama": {
         "name": "Ollama (auf diesem Computer)",
-        "note": "Den Namen eines bereits heruntergeladenen Modells eingeben. Werkzeuge, JSON und Bilder hängen vom Modell ab: Ein Modell der Klasse Qwen3 oder Llama 3.1 ab 8B beherrscht Werkzeuge und JSON, ein Vision-Modell liest Bilder. Die Kontextlänge des Servers auf 16k oder mehr erhöhen; die Voreinstellung von 4k schneidet das Gedächtnis ab."
+        "note": "Den Namen eines bereits heruntergeladenen Modells eingeben. Werkzeuge und Bilder hängen vom Modell ab: Ein Modell der Klasse Qwen3 oder Llama 3.1 ab 8B beherrscht Werkzeuge, ein Vision-Modell liest Bilder. Die Kontextlänge des Servers auf 16k oder mehr erhöhen; die Voreinstellung von 4k schneidet das Gedächtnis ab."
       },
       "lmstudio": {
         "name": "LM Studio (auf diesem Computer)",
-        "note": "Den Namen eines bereits heruntergeladenen Modells eingeben. Werkzeuge, JSON und Bilder hängen vom Modell ab: Ein Modell der Klasse Qwen3 oder Llama 3.1 ab 8B beherrscht Werkzeuge und JSON, ein Vision-Modell liest Bilder. Die Kontextlänge des Servers auf 16k oder mehr erhöhen; die Voreinstellung von 4k schneidet das Gedächtnis ab."
+        "note": "Den Namen eines bereits heruntergeladenen Modells eingeben. Werkzeuge und Bilder hängen vom Modell ab: Ein Modell der Klasse Qwen3 oder Llama 3.1 ab 8B beherrscht Werkzeuge, ein Vision-Modell liest Bilder. Die Kontextlänge des Servers auf 16k oder mehr erhöhen; die Voreinstellung von 4k schneidet das Gedächtnis ab."
       },
       "other": {
         "name": "Anderer OpenAI-kompatibler Dienst"

@@ -17,7 +17,8 @@ asks too (leave).
 Every other press is pressed, and a card comes only if a request that is not a
 GET really leaves on it (operate.Hands holds it), whatever the control's name:
 a 好的 that deletes asks as a 提交 does, as Gemini and Claude in Chrome confirm
-at the point of risk. A form sent by GET is "watch", the same; so are a right
+at the point of risk (in automatic review the reviewer looks at that request
+first). A form sent by GET is "watch", the same; so are a right
 click, a drag from one control onto another and a keyboard shortcut (`chord`);
 a chord that ends in Enter or Space is that key, and one that uses the
 clipboard is refused. The words kept here are the hard rules (paying, deleting,

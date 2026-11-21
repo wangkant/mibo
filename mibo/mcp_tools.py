@@ -56,8 +56,9 @@ SCHEMA_CHARS = 20_000
 #: Characters of one result the model reads, and the record keeps.
 RESULT_CHARS = 4000
 LOG_KEPT = 500
-ASK, ALWAYS, NEVER = "ask", "always", "never"
-MODES = (ASK, ALWAYS, NEVER)
+# auto: the reviewer (review.py) looks first and a card comes only where it does not pass; always; never.
+AUTO, ALWAYS, NEVER = "auto", "always", "never"
+MODES = (AUTO, ALWAYS, NEVER)
 
 
 class ToolsError(ValueError):
@@ -489,21 +490,21 @@ class Grants:
             atomic_write_text(self.path, json.dumps(data, ensure_ascii=False, indent=1))
 
     def mode(self, server: str, tool: dict) -> tuple[str, bool]:
-        """(ask, always or never, and whether an "always" was given to a tool that has changed since)."""
+        """(auto, always or never, and whether an "always" was given to a tool that has changed since)."""
         data = self.read()
         row = data["tools"].get(f"{server}/{tool['name']}")
         destructive = tool["hints"].get("destructiveHint") is True
         if isinstance(row, dict) and row.get("mode") in (ALWAYS, NEVER):
             if row["mode"] == ALWAYS and (row.get("fp") != tool["fp"] or destructive):
-                return ASK, row.get("fp") != tool["fp"]
+                return AUTO, row.get("fp") != tool["fp"]
             return row["mode"], False
         group = self.group(server, group_of(tool))
-        return (ASK if group == ALWAYS and destructive else group), False
+        return (AUTO if group == ALWAYS and destructive else group), False
 
     def set_mode(self, server: str, tool: dict, mode: str) -> None:
         def change(data: dict) -> None:
             key = f"{server}/{tool['name']}"
-            if mode == ASK:
+            if mode == AUTO:
                 data["tools"].pop(key, None)
             else:
                 data["tools"][key] = {"mode": mode, "fp": tool["fp"], "at": time.time()}
@@ -511,7 +512,7 @@ class Grants:
 
     def group(self, server: str, group: str) -> str:
         kept = (self.read()["groups"].get(server) or {}).get(group)
-        return kept if kept in MODES and not (group == "write" and kept == ALWAYS) else ASK
+        return kept if kept in MODES and not (group == "write" and kept == ALWAYS) else AUTO
 
     def chosen(self, server: str) -> bool:
         """The person has chosen, once, whether this server's read-only tools ask."""

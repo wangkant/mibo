@@ -1,9 +1,12 @@
 """Which skills fit a message, chosen in code so a small context is never filled with a list of them.
 
-Each skill is read as words: its name, its description, and the search words kept for it (the built-in ones'
-own, or made in the person's language when it was added). A message is read the same way, Chinese, Japanese
-and Korean as pairs of characters, other languages as words. A skill scores by the words it shares with the
-message, rarer words counting more; the ones over a floor are listed, best first, a few at most.
+A skill is read two ways. Its keywords (its name, the search words kept for it, its Chinese title) are matched
+whole, as a dictionary segmenter reads Chinese: "文件夹" is one keyword, not two pairs of characters. Its
+descriptions are read as words, Chinese, Japanese and Korean as pairs of characters, where a run of matched pairs
+counts once per two pairs. A skill scores by what it shares with the message, rarer terms counting more and
+keywords double. Two terms in common are needed to be listed at all, and two whole keywords for a skill to be put
+in a turn by itself, which the person then sees as a skill used; a phrase the skill lists as asking for it by
+itself (metadata mibo-asks: "哪个更", "worth it") counts as two.
 """
 from __future__ import annotations
 
@@ -29,6 +32,8 @@ please thanks let lets per them they've i'm it's don't something anything everyt
 _COMMON_CJK = {"帮我", "我的", "一下", "可以", "什么", "怎么", "这个", "那个", "我们", "你们", "他们", "一个", "没有", "就是",
                "还是", "不是", "现在", "今天", "时候", "然后", "如果", "因为", "所以", "但是", "已经", "知道", "觉得",
                "请你", "给我", "麻烦", "谢谢", "好的", "我想", "想要", "需要", "用户", "技能", "使用"}
+# Characters that make a pair in a description say nothing ("的文" in "杂乱的文件夹").
+_FILLER = set("的了是在和与及或把被给也都就还而吗呢吧啊么着过我你他她它们这那")
 
 
 def _stem(word: str) -> str:
@@ -42,65 +47,116 @@ def words(text: str) -> set[str]:
     found: set[str] = set()
     for run in _WORD.findall((text or "").lower()):
         if _CJK.match(run):
-            pairs = {run[i:i + 2] for i in range(len(run) - 1)} if len(run) > 1 else set()
-            found |= pairs - _COMMON_CJK
+            found |= {run[i:i + 2] for i in range(len(run) - 1)} - _COMMON_CJK
         elif len(run) > 1 and run not in _COMMON and not run.isdigit():
             found.add(_stem(run))
     return found
 
 
-def _skill_words(skill) -> tuple[set[str], set[str]]:
-    """(the name's and kept words, the description's words); the first count double."""
-    return words(skill.name.replace("-", " ") + " " + skill.words + " " + skill.title_zh), \
-        words(skill.description + " " + skill.description_zh)
+def _keywords(skill) -> set[str]:
+    """The skill's keywords: Latin ones stemmed, Chinese ones whole."""
+    found: set[str] = set()
+    for run in _WORD.findall((skill.name.replace("-", " ") + " " + skill.words + " " + skill.title_zh).lower()):
+        if _CJK.match(run):
+            if len(run) > 1 and run not in _COMMON_CJK:
+                found.add(run)
+        elif len(run) > 1 and run not in _COMMON and not run.isdigit():
+            found.add(_stem(run))
+    return found
 
 
-def score(skills: list, said: str) -> list[tuple[float, object]]:
-    """Every skill with its score for the message, best first."""
+def _read(skill) -> tuple[set[str], set[str], str]:
+    """(keywords, the descriptions' words, all its text in lower case, for counting how many skills have a term)."""
+    plain = skill.description + " " + skill.description_zh
+    return _keywords(skill), words(plain), " ".join((skill.name, skill.words, skill.title_zh, plain)).lower()
+
+
+def _apart(spans: list[tuple[int, int, str]]) -> list[tuple[int, int, str]]:
+    """The most keyword matches that do not overlap in the message: "整理下载文件夹" reads as 整理, 下载, 文件夹."""
+    kept, end = [], -1
+    for start, stop, term in sorted(spans, key=lambda s: (s[1], s[0])):
+        if start >= end:
+            kept.append((start, stop, term))
+            end = stop
+    return kept
+
+
+def _match(said: str, latin: set[str], keywords: set[str], plain: set[str]) -> tuple[list[str], list[list[str]]]:
+    """(the skill's keywords the message holds, apart; the description's terms it holds besides, adjacent Chinese
+    pairs taken two at a time)."""
+    spans = [(m.start(), m.end(), k) for k in keywords if _CJK.match(k) for m in re.finditer(re.escape(k), said)]
+    apart = _apart(spans)
+    # A keyword said twice ("邮件客户端收不到新邮件") is still one.
+    strong = [k for k in keywords if not _CJK.match(k) and k in latin] + list(dict.fromkeys(k for _, _, k in apart))
+    taken = {i for start, stop, _ in apart for i in range(start, stop)}
+    runs = [[w] for w in latin if w in plain and w not in strong]
+    run: list[str] = []
+    for i in range(len(said)):
+        pair = said[i:i + 2]
+        if pair in plain and _CJK.match(pair[-1]) and _CJK.match(pair) and not taken & {i, i + 1} \
+                and not _FILLER & set(pair):
+            run.append(pair)
+        elif run:
+            runs += [run[j:j + 2] for j in range(0, len(run), 2)]
+            run = []
+    return strong, runs
+
+
+def score(skills: list, said: str) -> list[tuple[float, int, object]]:
+    """Every skill with its score for the message and how many of its keywords the message holds, best first."""
+    said = (said or "").lower()
     asked = words(said)
     if not asked or not skills:
         return []
-    read = [(s, *_skill_words(s)) for s in skills]
-    # How many skills have each word: one most of them have says little.
-    have: dict[str, int] = {}
-    for _, strong, plain in read:
-        for w in strong | plain:
-            have[w] = have.get(w, 0) + 1
+    latin = {w for w in asked if not _CJK.match(w)}
+    read = [(s, *_read(s)) for s in skills]
     n = len(read)
+    have: dict[str, int] = {}
+
+    def weight(term: str) -> float:
+        # How many skills have the term: one most of them have says little.
+        if term not in have:
+            have[term] = sum(1 for _, k, p, text in read if (term in text if _CJK.match(term) else term in k or term in p))
+        return math.log(1 + (n + 2) / max(1, have[term]))
+
     scored = []
-    for skill, strong, plain in read:
-        total, shared = 0.0, 0
-        for w in asked:
-            weight = 2.0 if w in strong else 1.0 if w in plain else 0.0
-            if weight:
-                total += weight * math.log(1 + (n + 2) / have[w])
-                shared += 1
-        # One word in common ("下载" in "我下载了一部电影") is chance, not a fit.
-        if shared < 2:
+    for skill, keywords, plain, _ in read:
+        strong, runs = _match(said, latin, keywords, plain)
+        # A phrase that asks for the skill by itself counts as two keywords.
+        strong += 2 * [a for a in (a.strip().lower() for a in skill.asks.split(","))
+                       if a and re.search(rf"(?<![a-z0-9]){re.escape(a)}(?![a-z0-9])", said)][:1]
+        total =sum(2.0 * weight(k) for k in strong) + sum(sum(map(weight, r)) / len(r) for r in runs)
+        # One term in common ("下载" in "我下载了一部电影") is chance, not a fit.
+        if len(strong) + len(runs) < 2:
             total = 0.0
         # The skill's own name in the message ("用 tidy-downloads", "/tidy-downloads") is enough by itself.
-        if skill.name in (said or "").lower():
-            total += ALONE + 1
-        scored.append((round(total, 2), skill))
-    return sorted(scored, key=lambda pair: -pair[0])
+        if re.search(rf"(?<![a-z0-9-]){re.escape(skill.name)}(?![a-z0-9-])", said):
+            total, strong = total + ALONE + 1, [*strong, skill.name, skill.name]
+        scored.append((round(total, 2), len(strong), skill))
+    return sorted(scored, key=lambda row: -row[0])
 
 
 def shortlist(skills: list, said: str, keep: tuple = ()) -> list:
     """The few skills worth naming to the model for this message, best first; a skill in `keep` (named with
     "/name") goes first."""
     shown = [s for s in skills if s.name in keep]
-    for value, skill in score(skills, said):
+    for value, _, skill in score(skills, said):
         if value >= FLOOR and skill not in shown:
             shown.append(skill)
     return shown[:SHOWN]
 
 
+def clear(ranked: list, least: float, lead: float):
+    """The top skill of `score` when the message holds two of its keywords, it scores `least` and it leads the next
+    by `lead` times; else None."""
+    if not ranked or ranked[0][0] < least or ranked[0][1] < 2 or (len(ranked) > 1 and ranked[1][0] * lead > ranked[0][0]):
+        return None
+    return ranked[0][2]
+
+
 def best(skills: list, said: str):
     """The one skill a message clearly asks for, for a model that cannot load one itself; else None."""
-    ranked = score(skills, said)
-    if not ranked or ranked[0][0] < ALONE or (len(ranked) > 1 and ranked[1][0] > ranked[0][0] * 0.8):
-        return None
-    return ranked[0][1]
+    return clear(score(skills, said), ALONE, 1.25)
 
 
 _GESTURE = re.compile(r"(?:^|\s)/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)")

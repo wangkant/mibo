@@ -1,0 +1,46 @@
+{"url": "https://www.douban.com/mine/", "expect": "account", "note": "a short page that says to sign in first"}
+{"url": "https://web.okjike.com/", "expect": "account", "note": "sends a visitor to a QR sign-in page"}
+{"url": "https://www.zhihu.com/signin", "expect": "account", "note": "the site's own sign-in page, code field"}
+{"url": "https://github.com/settings/profile", "expect": "account", "note": "sends a visitor to its sign-in"}
+{"url": "https://www.linkedin.com/feed/", "expect": "check", "note": "a headless visitor gets Cloudflare's check"}
+{"url": "https://www.instagram.com/accounts/edit/", "expect": "account", "note": "sign-in wall"}
+{"url": "https://mail.google.com/mail/u/0/", "expect": "account", "note": "webmail sign-in"}
+{"url": "https://www.facebook.com/settings", "expect": "account", "note": "sign-in wall"}
+{"url": "https://passport.bilibili.com/login", "expect": "account", "note": "QR and password sign-in"}
+{"url": "https://x.com/home", "expect": "account", "note": "sign-in wall"}
+{"url": "https://mp.weixin.qq.com/", "expect": "account", "note": "the platform's QR sign-in page"}
+{"url": "local:/login", "expect": "account", "note": "practice site: password form"}
+{"url": "local:/code", "expect": "account", "note": "practice site: one-time code"}
+{"url": "https://www.zhihu.com/question/20796435", "expect": "check", "note": "signed out: a page that refuses the visit, or asks to sign in", "headed": true}
+{"url": "https://www.zhihu.com/question/2107239235015263538", "expect": "check", "note": "headless visitor: the visit refused (40362)"}
+{"url": "https://nowsecure.nl/", "expect": "check", "note": "Cloudflare challenge"}
+{"url": "https://www.zillow.com/homes/for_sale/", "expect": "check", "note": "bot check for a headless visitor"}
+{"url": "https://www.etsy.com/", "expect": "check", "note": "bot check for a headless visitor"}
+{"url": "https://www.indeed.com/jobs?q=nurse", "expect": "check", "note": "bot check for a headless visitor"}
+{"url": "local:/story", "expect": "box", "note": "practice site: a long article with a sign-up box over it"}
+{"url": "https://www.pinterest.com/ideas/", "expect": "account", "note": "content behind a sign-in box with no close button"}
+{"url": "https://www.quora.com/What-is-the-best-way-to-learn-programming", "expect": "check", "note": "a headless visitor gets Cloudflare's check"}
+{"url": "https://www.instagram.com/natgeo/", "expect": "box", "note": "a public profile under a sign-up box with a close button"}
+{"url": "https://sspai.com/post/119337", "expect": "readable", "note": "article"}
+{"url": "https://sspai.com/post/119327", "expect": "readable", "note": "article"}
+{"url": "https://www.v2ex.com/t/1258512", "expect": "check", "note": "a headless visitor gets Cloudflare's check"}
+{"url": "https://www.v2ex.com/t/1258549", "expect": "check", "note": "a headless visitor gets Cloudflare's check"}
+{"url": "https://www.bilibili.com/video/BV1atse6EEfx", "expect": "readable", "note": "video page with a sign-in button"}
+{"url": "https://www.bilibili.com/video/BV1tysi6LET8", "expect": "readable", "note": "video page with a sign-in button"}
+{"url": "https://en.wikipedia.org/wiki/Web_browser", "expect": "readable", "note": "encyclopedia"}
+{"url": "https://news.ycombinator.com/", "expect": "readable", "note": "list with a login link"}
+{"url": "https://github.com/microsoft/vscode", "expect": "readable", "note": "repository with a sign-in button"}
+{"url": "https://developer.mozilla.org/en-US/docs/Web/HTML", "expect": "readable", "note": "documentation"}
+{"url": "https://book.douban.com/latest", "expect": "readable", "note": "list with 登录/注册 at the top"}
+{"url": "https://www.thepaper.cn/", "expect": "check", "note": "a headless visitor gets 403 Forbidden"}
+{"url": "https://www.python.org/", "expect": "readable", "note": "front page"}
+{"url": "local:/inbox", "expect": "readable", "note": "practice site: just after a sign-in, the account's inbox"}
+{"url": "local:/home", "expect": "readable", "note": "practice site: just after a sign-in, 你好 demo with a feed"}
+{"url": "https://www.facebook.com/NASA/", "expect": "box", "note": "a public page with a sign-in box"}
+{"url": "https://www.threads.net/@nasa", "expect": "box", "note": "a public profile under a sign-in box that a click beside it closes"}
+{"url": "https://www.tiktok.com/@nasa", "expect": "readable", "note": "a public profile"}
+{"url": "https://www.reddit.com/r/Python/", "expect": "check", "note": "a headless visitor is blocked"}
+{"url": "https://medium.com/@karpathy", "expect": "check", "note": "a headless visitor gets Cloudflare's check"}
+{"url": "https://juejin.cn/", "expect": "readable", "note": "list with 登录 注册 at the top"}
+{"url": "https://www.ithome.com/", "expect": "readable", "note": "news front page"}
+{"url": "https://www.cnblogs.com/", "expect": "readable", "note": "list with 注册 登录 at the top"}

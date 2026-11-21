@@ -573,6 +573,14 @@
   gap: var(--pa-s4);
   margin-top: var(--pa-s3);
 }
+/* A card that is a fold: the backup model, Going out's more settings. */
+.setup-card.setup-fold {
+  display: block;
+  padding: var(--pa-s4) var(--pa-s5);
+}
+.setup-card.setup-fold > .setup-fold-summary {
+  color: var(--pa-ink);
+}
 
 /* ---- This computer: start at sign-in, hiding, remarks; a line and its switch each, a hairline between. */
 .setup-options {
@@ -1400,14 +1408,6 @@
 .mp-foot {
   margin-top: 2px;
 }
-/* The backup model and other uses: a card that is a fold. */
-.mp-more.setup-fold {
-  display: block;
-  padding: var(--pa-s4) var(--pa-s5);
-}
-.mp-more .setup-fold-summary {
-  color: var(--pa-ink);
-}
 .mp-more-form {
   display: flex;
   flex-direction: column;
@@ -1533,6 +1533,11 @@
 .setup-recs-block[hidden] {
   display: none;
 }
+/* The first block under a card's title needs no line above it. */
+.setup-card-title + .setup-recs-block {
+  padding-top: 0;
+  border-top: 0;
+}
 .setup-recs-topics {
   display: flex;
   flex-direction: column;
@@ -1637,8 +1642,7 @@
   flex: none;
 }
 .setup-walks-missed {
-  margin: var(--pa-s1) 0 0;
-  padding-left: 22px;
+  margin: 0;
 }
 .setup-walks-body {
   display: flex;

@@ -1,8 +1,9 @@
-"""Settings › 外出 (static/welcome/setup/walks.js): whether the character goes out on its own, how often and
-from what time, the sites it keeps off or favours, and the record of its walks.
+"""Settings › 外出 (static/welcome/setup/walks.js): whether the character goes out on its own, how often,
+the sites it keeps off or favours, and the record of its walks. The time of the day's first walk (ROAM_AT) is
+read from the home's .env only.
 
-GET /api/walks is all of it; POST /api/walks changes one part: {on}, {walks}, {at} (written to the home's
-.env and applied to the walk loop at once), {site, steer} ("avoid", "favour" or "" on the host's card,
+GET /api/walks is all of it; POST /api/walks changes one part: {on}, {walks} (written to the home's .env and
+applied to the walk loop at once), {site, steer} ("avoid", "favour" or "" on the host's card,
 web/sites.py), or {search, key}: the web search API the person brought ("brave" or "tavily", tried once
 before it is kept in the system's credential store; "" removes it). The key is never sent back. Each walk
 writes one entry to the record when it is back (roam.Roam.walk), whatever it kept.
@@ -21,7 +22,6 @@ from fastapi import Request
 from .. import search, secretstore
 from .. import setup_wizard as sw
 from ..config_env import env_bool, env_int
-from ..settings import walk_time
 from ..storage import atomic_write_text
 from ..web import sites
 
@@ -71,7 +71,6 @@ def mount(app, workspace, body) -> None:
         return {
             "on": env_bool("ROAM_ENABLED", True, env=values),
             "walks": env_int("ROAM_WALKS_A_DAY", 3, minimum=0, maximum=WALKS_MAX, env=values),
-            "at": walk_time(values.get("ROAM_AT", "")),
             # Why no walk of its own may leave now ("" when one may), when the next one may, and today's count.
             "why": roam._held(now) if roam else "",
             "where": roam.library.outing().site if roam else "",
@@ -98,21 +97,18 @@ def mount(app, workspace, body) -> None:
                 raise ValueError("walks_invalid")
             sites.steer(workspace._runtime(), key, how)
             return view()
-        on, walks, at = payload.get("on"), payload.get("walks"), payload.get("at")
+        on, walks = payload.get("on"), payload.get("walks")
         if on is not None and not isinstance(on, bool) or walks is not None and (
-                isinstance(walks, bool) or not isinstance(walks, int) or not 0 <= walks <= WALKS_MAX) or (
-                at is not None and (not isinstance(at, str) or at and not walk_time(at))):
+                isinstance(walks, bool) or not isinstance(walks, int) or not 0 <= walks <= WALKS_MAX):
             raise ValueError("walks_invalid")
         changes = {**({"ROAM_ENABLED": "true" if on else "false"} if on is not None else {}),
-                   **({"ROAM_WALKS_A_DAY": str(walks)} if walks is not None else {}),
-                   **({"ROAM_AT": walk_time(at)} if at is not None else {})}
+                   **({"ROAM_WALKS_A_DAY": str(walks)} if walks is not None else {})}
         with workspace._lock:
             sw.write_env(workspace.env, changes)
         if roam:
             # The walk loop reads its settings as it goes: the change holds from its next look.
             roam.settings.roam_enabled = on if on is not None else roam.settings.roam_enabled
             roam.settings.roam_walks_a_day = walks if walks is not None else roam.settings.roam_walks_a_day
-            roam.settings.roam_at = walk_time(at) if at is not None else roam.settings.roam_at
         return view()
 
     @app.get("/api/walks")
