@@ -92,34 +92,21 @@ def _mem_of(raw: str, mem: str):
     return ops if isinstance(ops, list) else mem
 
 
-# A prose answer's own "mem: add like 羽毛球" lines (a weak model's way of
-# writing the operations): read as `mem`, never shown.
+# A prose answer's own "mem: ..." lines (a weak model's way of writing the
+# operations): never shown.
 _PROSE_MEM = re.compile(r"^[ 	]*mem[ 	]*[:：][ 	]*(.*)$", re.IGNORECASE | re.MULTILINE)
 
 
 def _prose_answer(text: str) -> str:
-    """A prose answer as the protocol object, its "mem:" lines as `mem`."""
+    """A prose answer as the protocol object, without its "mem:" lines."""
     # Prose with the protocol object written after it: the object is the answer.
     data = salvage_json_object(text)
     if isinstance(data, dict) and isinstance(data.get("reply"), str):
         return json.dumps(data, ensure_ascii=False)
     if not _PROSE_MEM.search(text):
         return _as_protocol_object(text)
-    ops = []
-    for line in _PROSE_MEM.findall(text):
-        verb, _, rest = line.strip().partition(" ")
-        kind, _, words = rest.strip().partition(" ")
-        verb, kind = verb.lower(), kind.lower()
-        if verb == "add" and kind in person.TURN_KINDS and words.strip():
-            ops.append({"op": verb, "kind": kind, "text": words.strip()})
-    return json.dumps({"reasoning": "", "intent": "chat", "reply": _PROSE_MEM.sub("", text).strip(),
-                       "mem": ops[:person.OPS_MAX]}, ensure_ascii=False)
-
-
-def _said_before(history: list[dict]) -> str:
-    """The person's two turns before the one being answered."""
-    said = [str(t.get("content") or "") for t in history[:-2] if t.get("role") == "user"]
-    return "\n".join(said[-2:])
+    return json.dumps({"reasoning": "", "intent": "chat", "reply": _PROSE_MEM.sub("", text).strip(), "mem": []},
+                      ensure_ascii=False)
 
 
 def _with_found(messages: list[dict], found: str) -> list[dict]:
@@ -394,8 +381,7 @@ class DirectMessages:
                 if not run_of():
                     # The one person's store, which every chat reads (person.py); a scheduled run's
                     # request is not something they said now.
-                    self._person_turn(pkey, asked, reply, auto_mem, before=_said_before(history),
-                                      refs=[history[-2]["seq"]] if len(history) > 1 else [])
+                    self._person_turn(pkey, asked, reply, auto_mem)
                 if unsaid:
                     scrub = self._drop_unsaid(pkey, asked, reply)
                     if texts:

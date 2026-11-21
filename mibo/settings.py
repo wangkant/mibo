@@ -16,6 +16,7 @@ warning.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field, fields
 from typing import Optional
 
@@ -32,6 +33,12 @@ def _env(read):
     """A field whose default is ``read(None)`` (os.environ); ``from_env(env=...)``
     calls ``read(env)`` instead."""
     return field(default_factory=lambda: read(None), metadata={"env": read})
+
+
+def walk_time(value: str) -> str:
+    """`value` as "HH:MM" when it is a time of day, else ""."""
+    match = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", value or "")
+    return f"{int(match[1]):02d}:{match[2]}" if match else ""
 
 
 def normalize_lang(value: object) -> str:
@@ -127,11 +134,10 @@ class AgentSettings:
     #: file reads stay out of this record.
     persona: Optional[str] = None
 
-    # ---- vision, search ---------------------------------------------------
+    # ---- vision ------------------------------------------------------------
     vision_model: str = ""
     vision_api_key: str = ""
     vision_base_url: str = ""
-    tavily_key: str = ""
 
     # ---- retrieval embeddings (optional) ---------------------------------
     #: An OpenAI-compatible /embeddings model that adds a semantic signal to
@@ -156,6 +162,9 @@ class AgentSettings:
         lambda env: env_bool("ROAM_ENABLED", True, env=env))
     roam_walks_a_day: int = _env(
         lambda env: env_int("ROAM_WALKS_A_DAY", 3, minimum=0, maximum=6, env=env))
+    #: "HH:MM" local time before which the day's first walk of its own does not leave; "" for any time.
+    roam_at: str = _env(
+        lambda env: walk_time(env_str("ROAM_AT", "", strip=True, env=env)))
     roam_gap_h: float = _env(
         lambda env: env_float("ROAM_GAP_HOURS", 3.0, minimum=1.0, maximum=24.0, env=env))
     #: Pages read in one walk at most; it reads at least 3.
@@ -169,7 +178,6 @@ class AgentSettings:
         self.llm_fallback_base_url = self.llm_fallback_base_url.rstrip("/")
         self.vision_base_url = self.vision_base_url.rstrip("/")
         self.vision_model = self.vision_model.strip()
-        self.tavily_key = self.tavily_key.strip()
         self.embedding_model = self.embedding_model.strip()
         self.embedding_base_url = self.embedding_base_url.strip().rstrip("/")
         self.embedding_api_key = self.embedding_api_key.strip()
@@ -239,7 +247,6 @@ class AgentSettings:
             vision_model=_str("VISION_MODEL"),
             vision_api_key=vision_key,
             vision_base_url=vision_base,
-            tavily_key=_str("TAVILY_API_KEY"),
             embedding_model=_str("EMBEDDING_MODEL"),
             embedding_base_url=_str("EMBEDDING_BASE_URL"),
             embedding_api_key=_str("EMBEDDING_API_KEY"),

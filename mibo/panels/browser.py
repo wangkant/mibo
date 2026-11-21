@@ -169,8 +169,9 @@ class Operating:
         if self.answer is not None and not self.answer.done():
             self.answer.set_result(None)
         if self.hands is not None:
-            # A run the person said no to, stopped or that did not finish puts back what it typed and never let out.
-            await self.hands.close(restore=status in ("declined", "stopped", "cap", "failed"))
+            # A run the person said no to, stopped or that did not finish puts back what it typed and never let out
+            # (one at its ceiling waits for them to say 继续, as a handover does).
+            await self.hands.close(restore=status in ("declined", "stopped", "failed"))
         self.hands = None
         if self.window.pane is not None:
             # A download the page began after the last step was never put to the person: it is not saved.
@@ -307,7 +308,7 @@ def mount(app, workspace, body) -> None:
         if window.pane is None:
             raise ValueError("browse_invalid")
         await asyncio.to_thread(window.show)
-        await asyncio.to_thread(window.pane.open, url)
+        await asyncio.to_thread(window.pane.go, url)
         return {"ok": True}
 
     @app.post("/api/browser/op")
@@ -335,12 +336,12 @@ def mount(app, workspace, body) -> None:
         if run.hands is None:
             return {"status": "stopped", "line": "[stopped] no run in the pane"}
         if op == "look":
-            return await run.hands.look()
-        if op == "picture":
-            areas = payload.get("areas")
-            if not isinstance(areas, list) or not all(isinstance(a, dict) for a in areas):
+            most = payload.get("most")
+            if not isinstance(most, int) or isinstance(most, bool):
                 raise ValueError("browse_invalid")
-            return await run.hands.picture(areas[:4])
+            return await run.hands.look(most)
+        if op == "picture":
+            return await run.hands.picture()
         if op == "act":
             action = payload.get("action")
             if not isinstance(action, dict):
@@ -470,7 +471,8 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/browser/do")
     async def browser_do(request: Request):
         window = own_window(request)
-        action = (await body(request)).get("action")
-        if action not in ACTIONS:
+        payload = await body(request)
+        action, tab = payload.get("action"), payload.get("tab", 0)
+        if action not in ACTIONS or not isinstance(tab, int) or isinstance(tab, bool):
             raise ValueError("browse_invalid")
-        return {"ok": window.browse_do(action)}
+        return {"ok": window.browse_do(action, tab)}

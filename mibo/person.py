@@ -7,9 +7,8 @@ rewrote themselves.
 Nothing is overwritten: a new value in a slot leaves the old fact as past with
 its `until` day, and day words are written as dates when a fact is kept
 ("今天下午拔了智齿" said on 27 Nov is "11-27下午拔了智齿"). The background fold
-(consolidate.py) is the one writer of facts and plans; a reply's `mem` keeps
-only what must apply at once (how to treat them, what they like or do not
-want), checked by `apply_turn` against their own words. No model call and no
+(consolidate.py) is the one writer of facts and plans; a reply's `mem` only
+marks the plans it asked about (`apply_turn`). No model call and no
 Agent import."""
 from __future__ import annotations
 
@@ -18,8 +17,6 @@ import json
 import re
 import shutil
 import unicodedata
-from collections import Counter
-from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -32,10 +29,8 @@ FILE = "person.json"
 FORMAT = 1
 #: What a fact can be about.
 KINDS = ("who", "like", "dislike", "form", "life", "people", "health", "manner", "other")
-#: What a reply's `mem` keeps at once; the rest is the fold's.
-TURN_KINDS = ("manner", "like", "dislike", "form")
-#: The operations a reply may write, at most OPS_MAX a turn.
-OPS = ("add", "asked")
+#: A reply's `mem` names the plans it asked about, at most OPS_MAX; every fact about them is the fold's,
+#: which files it better than a reply model writing in passing. Also the most facts one 记住 keeps.
 OPS_MAX = 3
 TEXT_MAX = 60
 SLOT_MAX = 40
@@ -49,8 +44,9 @@ DONE_AFTER_DAYS = 7
 #: going through (kind life) once it has not been said again for LIFE_DAYS.
 DAY_FACT_DAYS = 3
 LIFE_DAYS = 30
-#: Kinds that stay true until changed, dated or not.
-LASTING_KINDS = ("who", "manner", "like", "dislike", "form")
+#: Kinds that stay true until changed, dated or not: who someone in their life is outlasts the day it was
+#: said with ("室友小雅…11-24跟她吵了一架").
+LASTING_KINDS = ("who", "manner", "like", "dislike", "form", "people")
 FACTS_MAX = 200
 #: Past facts kept for "where did they live before" and for restore.
 PAST_MAX = 200
@@ -145,15 +141,22 @@ def forget_that(text: str) -> bool:
     return any(pat.search(str(text or "").strip()) for _code, pat in _FORGET_THAT_RE)
 
 
-def dated(text: str, at: float, tz, langs: Iterable[str] = ()) -> tuple[str, str]:
+def dated(text: str, at: float, tz, langs: Iterable[str] = (), said: Optional[str] = None,
+          now: float = 0.0) -> tuple[str, str]:
     """`text` with each day word that names one past day written as that day, counted from `at`
     ("今天下午拔了智齿" is "11-27下午拔了智齿"), and the ISO day of the first; (text, "") when none does.
-    Words for a longer span ("上周") stay as said."""
+    Words for a longer span ("上周") stay as said. With `said`, a day word not in it was written by
+    whoever reworded the line on the day `now` ("昨天" for a line's "今天" read the morning after) and
+    counts from `now`."""
     first = ""
 
     def day_of(m: re.Match, lang: str) -> str:
         nonlocal first
-        span = timewords.resolve(m.group(0), at, tz, (lang,))
+        # "每天早上" is a habit, not a day.
+        if re.search(r"(?:每|天天|every|each)\s*\S?$", m.string[max(0, m.start() - 4):m.start()], re.IGNORECASE):
+            return m.group(0)
+        base = at if said is None or m.group(0) in said else now
+        span = timewords.resolve(m.group(0), base, tz, (lang,))
         start = datetime.fromtimestamp(span[0], tz) if span else None
         # One day: "today" and "yesterday"; "last night" runs past midnight and is its evening's day.
         if start is None or span[1] - span[0] > 86400:
@@ -242,14 +245,10 @@ def _lapses(f: dict, tz) -> float:
 
 
 def read_ops(value) -> list[dict]:
-    """The reply's `mem` as operations: its objects with an op of OPS, at most OPS_MAX; anything else
-    (a plain note, a plan) is left to the fold."""
-    out = []
-    for item in value if isinstance(value, list) else []:
-        op = str(item.get("op") or "add").lower() if isinstance(item, dict) else ""
-        if op in OPS:
-            out.append({**item, "op": op})
-    return out[:OPS_MAX]
+    """The reply's `mem` as operations: its "asked" objects, at most OPS_MAX; anything else (a fact, a
+    plain note, a card) is not the person store's."""
+    items = value if isinstance(value, list) else []
+    return [item for item in items if isinstance(item, dict) and str(item.get("op") or "").lower() == "asked"][:OPS_MAX]
 
 
 class Person:
@@ -337,22 +336,26 @@ class Person:
                                    "item": dict(item), "why": why, "at": now})
 
     def _set_name(self, slot: str, text: str) -> None:
-        """A name fact also names them: "name" or "call_me" with short words."""
-        value = _NAME_LEAD.sub("", _CALL_LEAD.sub("", text.strip())).strip(" ，,。.")
-        value = re.sub(r"^(?:叫|我是|名字是|名字叫|i'm)\s*", "", value, flags=re.IGNORECASE)
-        # "叫小晓，全名林晓": the first of the names.
-        value = re.sub(r"(?:就行|就好|就可以|好了|吧|です|だよ|입니다|이에요|예요|と呼んで.*|(?:이)?라고 불러.*)$", "",
-                       re.split(r"[，,、;；。]", value)[0].strip())
-        # "别叫鱼片" names what not to call them.
-        if not value or len(value) > 12 or timewords.has_negation(value):
-            return
-        # "叫我阿杰" is what to call them, whatever slot it came in.
-        if _CALL_LEAD.search(text.strip()):
-            slot = "call_me"
-        if slot in ("name", "name.full", "name.real"):
-            self.data["name"]["name"] = value
-        elif slot in ("call_me", "name.call", "name.call_me", "nickname", "name.nickname"):
-            self.data["name"]["call_me"] = value
+        """A name fact also names them: "name" or "call_me" with short words, from its first clause
+        ("叫小晓，全名林晓": the first of the names); a later clause only when it says what to call them
+        ("我叫林晓，叫我小晓就行" sets both)."""
+        for i, clause in enumerate(re.split(r"[，,、;；。]", text.strip())):
+            clause = clause.strip()
+            # "叫我阿杰" is what to call them, whatever slot it came in.
+            called = bool(_CALL_LEAD.search(clause))
+            if i and not called:
+                continue
+            value = _NAME_LEAD.sub("", _CALL_LEAD.sub("", clause)).strip(" ，,。.")
+            value = re.sub(r"^(?:叫|我是|名字是|名字叫|本名|全名|真名|i'm)\s*", "", value, flags=re.IGNORECASE)
+            value = re.sub(r"(?:就行|就好|就可以|好了|吧|です|だよ|입니다|이에요|예요|と呼んで.*|(?:이)?라고 불러.*)$", "",
+                           value).strip()
+            # "别叫鱼片" names what not to call them.
+            if not value or len(value) > 12 or timewords.has_negation(value):
+                continue
+            if called or slot in ("call_me", "name.call", "name.call_me", "nickname", "name.nickname"):
+                self.data["name"]["call_me"] = value
+            elif slot in ("name", "name.full", "name.real"):
+                self.data["name"]["name"] = value
 
     def put_fact(self, kind: str, slot: str, text: str, now: float, *, src: str = "fold",
                  conv: str = "", refs: Iterable[int] = (), imp: int = 3, day: str = "") -> tuple[dict, list[dict]]:
@@ -378,11 +381,12 @@ class Person:
             held["at"] = now
             return held, []
         if slot:
-            # "cat" and "cat.health" are one thing only in much the same words. A reply's fact of
-            # another kind in the slot is the fold's to file again.
+            # "cat" and "cat.health" are one thing only in much the same words, and never for what happened
+            # on one day ("mother" and "mother.visit"). A reply's fact of another kind in the slot is the
+            # fold's to file again.
             old = [f for f in self.facts() if (f.get("kind") in (kind, "other") or f.get("src") == "turn") and (
                 slot_key(f.get("slot")) == slot or _same_slot(slot_key(f.get("slot")), slot)
-                and _share(f["text"], text) >= 0.3)]
+                and not (day or f.get("day")) and _share(f["text"], text) >= 0.3)]
         else:
             old = [f for f in self.facts() if not f.get("slot") and f.get("kind") in (kind, "other")
                    and _tokens(f["text"]) and _share(f["text"], text) >= SAME_FACT]
@@ -574,87 +578,23 @@ def chatlog_refs() -> int:
 
 # ---- the turn's operations -----------------------------------------------------
 
-@dataclass
-class Turn:
-    """What a turn's operations are checked against."""
-    said: str                      # the person's words this turn
-    before: str = ""               # their two turns before it
-    reply: str = ""
-    at: float = 0.0
-    conv: str = ""
-    refs: tuple = ()
-    tz: Optional[tzinfo] = None
-
-
-@dataclass
-class Applied:
-    facts: list = field(default_factory=list)      # rows kept
-    asked: list = field(default_factory=list)
-    refused: Counter = field(default_factory=Counter)
-
-
-def _without_names(text: str, store: Person) -> str:
-    """The op's words as the person would say them: their name and "the
-    user" out, so "小晓的弟弟高二" grounds on "我弟弟高二"."""
-    for word in (store.data["name"]["name"], store.data["name"]["call_me"]):
-        if word:
-            text = text.replace(word, "")
-    return re.sub(r"用户|主人|对方|對方|\b(?:the )?user\b|\bowner\b", "", text, flags=re.IGNORECASE)
-
-
-def _kind_of(op: dict, text: str) -> str:
-    kind = str(op.get("kind") or "other").lower()
-    kind = kind if kind in KINDS else "other"
-    # "不喜欢X" written as a like is a dislike.
-    if kind == "like" and timewords.has_negation(text):
-        return "dislike"
-    return kind
-
-
-def apply_turn(store: Person, ops: list[dict], turn: Turn) -> Applied:
-    """Keep what must apply at once of a reply's operations: how they want to be treated, what they
-    like or do not want and in what form (TURN_KINDS), grounded in the person's words, not a like the
-    words negate, not something forgotten, one fact of at most TEXT_MAX characters; and the plans the
-    reply asks about. Every other fact and plan is the fold's. Never saves."""
-    out = Applied()
-    sources = f"{turn.said}\n{turn.before}"
+def apply_turn(store: Person, ops: list[dict], reply: str, at: float, tz: Optional[tzinfo]) -> list[dict]:
+    """The open plans a sent reply asked about: those its asked operations name, and those due by today
+    that the reply shares two words with, op or not. What the person says of themselves is the fold's.
+    Never saves."""
+    asked = []
     for op in ops:
-        if op["op"] == "asked":
-            row = store.get(str(op.get("plan") or ""))
-            if row is not None and row.get("status") == "open":
-                store.mark_asked(row, turn.at)
-                out.asked.append(row)
-            continue
-        text = _clean_prompt_source(op.get("text") or "").strip()
-        kind = _kind_of(op, text)
-        # A form only when it reads as one the profile can apply ("别太长", "短视频").
-        if kind not in TURN_KINDS or kind == "form" and form_of(text) == (None, None):
-            out.refused["kind"] += 1
-            continue
-        if not text or len(text) > TEXT_MAX:
-            out.refused["long" if text else "empty"] += 1
-            continue
-        if store.tombed(text):
-            out.refused["forgotten"] += 1
-            continue
-        text = said_part(text, lambda t: grounded(_without_names(t, store), sources))
-        if not text:
-            out.refused["grounding"] += 1
-            continue
-        if kind == "like" and any(timewords.has_negation(s) for s in _sentences_with(text, sources)):
-            out.refused["negated"] += 1
-            continue
-        row, _old = store.put_fact(kind, str(op.get("slot") or ""), text, turn.at, src="turn",
-                                   conv=turn.conv, refs=turn.refs)
-        out.facts.append(row)
-    _asked_in_reply(store, turn, out)
-    return out
-
-
-def _sentences_with(text: str, sources: str) -> list[str]:
-    """The sentences of `sources` that share a token with `text`."""
-    tokens = _tokens(text)
-    return [s for s in re.split(r"[。！？!?\n,，;；]", sources) if tokens & _tokens(s)]
+        row = store.get(str(op.get("plan") or ""))
+        if row is not None and row.get("status") == "open":
+            store.mark_asked(row, at)
+            asked.append(row)
+    today = _day(at, tz).isoformat()
+    said = _tokens(reply)
+    for plan in store.plans("open"):
+        if str(plan.get("due") or "9") <= today and len(_tokens(plan["text"]) & said) >= 2:
+            store.mark_asked(plan, at)
+            asked.append(plan)
+    return asked
 
 
 def denies(fact: str, said: str) -> bool:
@@ -664,15 +604,13 @@ def denies(fact: str, said: str) -> bool:
     return any(re.search(n, said) and not re.search(n, fact) for n in nots)
 
 
-def _asked_in_reply(store: Person, turn: Turn, out: Applied) -> None:
-    """A plan due by today that the reply asks about is asked, op or not:
-    the reply shares two of its words."""
-    today = _day(turn.at, turn.tz).isoformat()
-    said = _tokens(turn.reply)
-    for plan in store.plans("open"):
-        if str(plan.get("due") or "9") <= today and len(_tokens(plan["text"]) & said) >= 2:
-            store.mark_asked(plan, turn.at)
-            out.asked.append(plan)
+def denied(fact: dict, said: str) -> bool:
+    """Do their words deny what the fact says first ("不住闵行了" for "住闵行，离学校近"), whatever kind or
+    slot it was kept under? Never a dislike or a fact with a "not" of its own: "别放香菜" agrees with one."""
+    if fact.get("kind") == "dislike" or timewords.has_negation(fact["text"]):
+        return False
+    head = re.split(r"[，,；;。]", fact["text"])[0]
+    return any(grounded(head, m.group(1)) for m in re.finditer(r"(?:不|没|沒|别|別)(?:再|是|在)?([^，,。；;！!？?\n]+)", said))
 
 
 def topic_of(text: str) -> str:
@@ -970,7 +908,8 @@ def recall_block(store: Person, focus: str, now: float, tz, lang: str, budget: i
             tail = ranking.memory_age(f.get("born"), f.get("at", now), now)
         kind = f.get('kind', 'other')
         # Who a person is lives in the slot ("roommate"), which their words may leave out.
-        kind += f" {f['slot']}" if kind == "people" and f.get("slot") else ""
+        if kind == "people" and f.get("slot"):
+            kind = f"about their {f['slot'].split('.')[0].replace('_', ' ')}"
         return f"- {json.dumps(f['text'], ensure_ascii=False)} ({kind}, {tail})"
 
     # What lapsed since the last tidy is past already.
@@ -1008,12 +947,20 @@ def recall_block(store: Person, focus: str, now: float, tz, lang: str, budget: i
         left -= len(talk_text) + 1
 
     rest = [f for f in facts if f not in always]
-    query = ranking.Query(_focus_tokens(focus, lang), focus, [(f["text"].lower(),) for f in rest + past])
+    # A fact is found by the words of those it replaced in its slot too: "室友" finds "和小雅和好了" there.
+    before: dict[str, str] = {}
+    for f in past:
+        if f.get("why") == "replaced" and f.get("slot"):
+            before[f["slot"]] = before.get(f["slot"], "") + " " + f["text"]
+
+    def words(f: dict) -> str:
+        return (f["text"] + before.get(f.get("slot") or "\0", "")).lower()
+    query = ranking.Query(_focus_tokens(focus, lang), focus, [(words(f),) for f in rest + past])
     weights = ranking.MEMORY_WEIGHTS
     if rest:
 
         def score(f: dict) -> float:
-            return ranking.score(weights, lexical=query.score((f["text"].lower(),), weights.fields),
+            return ranking.score(weights, lexical=query.score((words(f),), weights.fields),
                                  age_s=now - max(_num(f.get("at")), _num(f.get("used"))),
                                  importance=f.get("imp", 3), uses=f.get("uses") or 0)
         rest = sorted(rest, key=lambda f: (-score(f), -_num(f.get("at"))))

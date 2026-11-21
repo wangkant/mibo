@@ -301,6 +301,114 @@ body {
   white-space: nowrap;
 }
 
+/* The tab strip over the bar (browsetabs.js): the tab in front in the bar's own colour, joined to it. */
+.browse-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 36px;
+  padding: 0 8px;
+  border-top: 1px solid var(--pa-line);
+  background: var(--pa-sunken);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.browse-tabs + .browse-bar {
+  border-top: 0;
+}
+.browse-tab {
+  flex: 0 1 200px;
+  min-width: 44px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--pa-r-sm) var(--pa-r-sm) 0 0;
+  color: var(--pa-muted);
+}
+.browse-tab:hover {
+  background: var(--pa-hover);
+}
+.browse-tab.active {
+  background: var(--pa-chrome);
+  color: var(--pa-ink);
+}
+.browse-tab-go {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: var(--pa-fs-sm) / 1 var(--pa-font);
+  cursor: pointer;
+}
+.browse-tab-go span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-tab svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.browse-tab.private .browse-tab-go svg:first-child {
+  stroke: var(--pa-accent);
+}
+.browse-tab.loading .browse-tab-go svg:first-child {
+  animation: browse-tab-loading 0.9s ease-in-out infinite alternate;
+}
+@keyframes browse-tab-loading {
+  to {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browse-tab.loading .browse-tab-go svg:first-child {
+    animation: none;
+  }
+}
+.browse-tab-x {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pa-muted);
+  cursor: pointer;
+}
+.browse-tab-x:hover {
+  background: var(--pa-press);
+  color: var(--pa-ink);
+}
+.browse-tab-x svg {
+  width: 13px;
+  height: 13px;
+}
+/* The cross shows on the tab in front and under the pointer only. */
+.browse-tab:not(.active):not(:hover) .browse-tab-x {
+  visibility: hidden;
+}
+.browse-tabs .browse-tab-new {
+  align-self: center;
+  width: 28px;
+  height: 28px;
+}
+
 /* The page. Its frame is its border: the WebView lies inside it, so the border shows only while the character
    works in the page, in the accent while it acts and in amber once the page is the person's. */
 .browse-body {

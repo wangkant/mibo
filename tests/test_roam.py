@@ -203,7 +203,7 @@ def test_what_holds_a_walk_with_a_fake_clock(tmp_path, monkeypatch):
     walker.library.returned(0, now=NOON + 2 * 3600)
     assert not walker._due(NOON + 2 * 3600 + 60)
     walker.agent.settings.roam_enabled = False
-    assert walker._held(NOON + 2 * 3600) == "off"
+    assert walker._held(NOON + 2 * 3600) == "walks_off"
     walker.agent.enabled = False
     assert walker._held(NOON + 2 * 3600) == "no_model"
     monkeypatch.setattr(roam_mod.importlib.util, "find_spec", lambda name: None)

@@ -3,11 +3,13 @@
 Every address here answers a visitor without a key, a sign-in or a cookie.
 Places that refused a plain visitor when this was written (Weibo's hot search
 sends one to a visitor check, Douyin answers empty, Qidian and 什么值得买 answer
-with a script challenge, Bilibili's 每周必看 with a risk-control code) are not
-here.
+with a script challenge, Bilibili's 每周必看 and its search with a risk-control
+code) are not here, nor are those whose robots.txt turns programs away
+(Hupu's boards).
 """
 from __future__ import annotations
 
+import html
 import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit, urlunsplit
@@ -75,6 +77,30 @@ async def _bili_hot(http: httpx.AsyncClient) -> list[Find]:
     return [_bili(v) for v in data["data"]["list"]][:PER_SOURCE]
 
 
+async def _bili_articles(http: httpx.AsyncClient) -> list[Find]:
+    # The 专栏 ranking: Bilibili's written posts, one list whatever category is asked for.
+    data = await get_json(http, "https://api.bilibili.com/x/article/rank/list", cid=1)
+    if data.get("code") != 0:
+        raise ValueError(f"Bilibili refused the ranking: {data.get('message')}")
+    return [find(f"https://www.bilibili.com/read/cv{post['id']}", post["title"], site="哔哩哔哩专栏", kind="post",
+                 text=post.get("summary", ""), author=(post.get("author") or {}).get("name", ""),
+                 published=_stamp(post.get("publish_time")),
+                 picture=_https(next(iter(post.get("image_urls") or []), "") or post.get("banner_url", "")))
+            for post in data["data"]][:PER_SOURCE]
+
+
+async def _acfun_rank(http: httpx.AsyncClient) -> list[Find]:
+    data = await get_json(http, "https://www.acfun.cn/rest/pc-direct/rank/channel", channelId="", subChannelId="",
+                          rankLimit=PER_SOURCE, rankPeriod="DAY")
+    if data.get("result") != 0:
+        raise ValueError(f"AcFun refused the ranking: {data.get('error_msg')}")
+    return [find(f"https://www.acfun.cn/v/ac{video['contentId']}", video["contentTitle"], site="AcFun", kind="video",
+                 text=video.get("contentDesc", ""), author=video.get("userName", ""),
+                 published=_stamp(int(video.get("contributeTime") or 0) // 1000), picture=_https(video.get("coverUrl", "")),
+                 length=int(video.get("durationMillis") or 0) // 1000 or None)
+            for video in data["rankList"]][:PER_SOURCE]
+
+
 async def _bili_precious(http: httpx.AsyncClient) -> list[Find]:
     data = await get_json(http, "https://api.bilibili.com/x/web-interface/popular/precious")
     return [_bili(v) for v in data["data"]["list"]][:PER_SOURCE]
@@ -133,6 +159,15 @@ async def _zhihu_hot(http: httpx.AsyncClient) -> list[Find]:
 
 
 _IMG_SRC = re.compile(r'<img[^>]+src="([^"]+)"')
+_TIEBA = re.compile(r'<li class="topic-top-item"><img src="([^"]*)".*?<a href="([^"]+)"[^>]*class="topic-text">([^<]+)</a>'
+                    r'.*?<p class="topic-top-item-desc">([^<]*)</p>', re.S)
+
+
+async def _tieba_hot(http: httpx.AsyncClient) -> list[Find]:
+    # Tieba's hot topics page: each topic with its line and picture, readable signed out.
+    page = await get_text(http, "https://tieba.baidu.com/hottopic/browse/topicList", res_type=1)
+    return [find(html.unescape(url), title, site="百度贴吧", kind="page", text=about, picture=html.unescape(cover))
+            for cover, url, title, about in _TIEBA.findall(page)][:PER_SOURCE]
 
 
 # ---------------------------------------------------------------- hot lists
@@ -287,7 +322,13 @@ SOURCES: list[Source] = [
       for slug, rid, (en, zh), (about_en, about_zh) in _BILI_PARTITIONS],
     Source("bili-precious", ("Bilibili Must-Watch", "B站入站必刷"), ("the classics Bilibili says every newcomer should see", "B站官方选出的入站必刷视频"),
            "video", _bili_precious),
+    Source("acfun-rank", ("AcFun Daily Ranking", "AcFun 日榜"), ("AcFun's most watched videos today: anime, games and fun", "AcFun 今日最热视频：动画、游戏与趣味"),
+           "video", _acfun_rank),
     # communities
+    Source("bili-articles", ("Bilibili Articles", "B站专栏热门"), ("Bilibili's most read written posts", "B站专栏阅读最多的文章"),
+           "community", _bili_articles),
+    Source("tieba-hot", ("Tieba Hot Topics", "贴吧热议"), ("the topics Baidu Tieba is talking about: games, shows and life", "百度贴吧正在热议的话题：游戏、影视与生活"),
+           "community", _tieba_hot),
     Source("zhihu-hot", ("Zhihu Hot", "知乎热榜"), ("the questions everyone on Zhihu is answering", "知乎上大家正在讨论的问题"),
            "community", _zhihu_hot, default="zh"),
     Source("v2ex-hot", ("V2EX Hot", "V2EX 最热"), ("today's most-discussed V2EX topics", "V2EX 今日最热主题"),
@@ -310,6 +351,19 @@ SOURCES: list[Source] = [
            "news", _thepaper, default="zh"),
     Source("xinhua-home", ("Xinhua", "新华网"), ("the stories on Xinhua's front page", "新华网首页的报道"),
            "news", _xinhua),
+    # China News Service's channel feeds: written news on the subjects the hot lists leave thin.
+    _feed("chinanews-culture", ("China News: Culture", "中新网·文化"), ("culture, history, heritage, books and the arts", "文化、历史、非遗、读书与艺术"),
+          "culture", "https://www.chinanews.com.cn/rss/culture.xml"),
+    _feed("chinanews-life", ("China News: Living", "中新网·生活"), ("everyday life: food, travel, health and shopping", "日常生活：美食、旅游、健康与消费"),
+          "news", "https://www.chinanews.com.cn/rss/life.xml"),
+    _feed("chinanews-sports", ("China News: Sports", "中新网·体育"), ("football, basketball, the Olympics and fitness", "足球、篮球、奥运与健身"),
+          "news", "https://www.chinanews.com.cn/rss/sports.xml"),
+    _feed("chinanews-finance", ("China News: Finance", "中新网·财经"), ("the economy, markets, companies and money", "经济、市场、公司与理财"),
+          "news", "https://www.chinanews.com.cn/rss/finance.xml"),
+    _feed("chinanews-edu", ("China News: Education", "中新网·教育"), ("schools, universities, exams and parenting", "中小学、高校、考试与家庭教育"),
+          "news", "https://www.chinanews.com.cn/rss/edu.xml"),
+    _feed("chinanews-photo", ("China News: Photos", "中新网·图片"), ("the day in pictures: places, scenery and events", "图片新闻：各地风光与现场"),
+          "news", "https://www.chinanews.com.cn/rss/photo.xml"),
     _feed("initium", ("Initium Media", "端传媒"), ("long-form reporting from Initium (some paywalled)", "端传媒的深度报道（部分需付费）"),
           "news", "https://theinitium.com/rss/"),
     _feed("ft-chinese", ("FT Chinese", "FT中文网"), ("Financial Times stories in Chinese", "FT中文网的财经报道"),

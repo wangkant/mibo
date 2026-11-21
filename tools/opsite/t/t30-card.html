@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>安全支付</title>
+<style>
+body { margin: 0; padding: 10px 14px; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; }
+label { display: inline-block; width: 60px; color: #555; } input { width: 200px; margin: 3px 0; padding: 4px; }
+button { margin-top: 6px; background: #1a7f37; color: #fff; border: 0; padding: 5px 16px; border-radius: 5px; }
+</style></head>
+<body>
+<div><label for="n">卡号</label><input id="n" autocomplete="cc-number" inputmode="numeric"></div>
+<div><label for="e">有效期</label><input id="e" autocomplete="cc-exp" placeholder="MM/YY"></div>
+<div><label for="c">安全码</label><input id="c" autocomplete="cc-csc"></div>
+<button id="pay">支付 ¥68</button>
+<script>
+document.getElementById("pay").addEventListener("click", () => fetch("/api/pay", { method: "POST",
+  headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: document.getElementById("n").value }) }));
+</script></body></html>

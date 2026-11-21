@@ -15,7 +15,7 @@ import logging
 import time
 from collections import Counter
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from . import channels
 from . import memstate
@@ -51,8 +51,8 @@ Answer with one JSON object:
 {"facts": [...], "plans": [...], "summary": "...", "topics": ["..."]}
 
 facts (lines with "who": "them" are theirs; "you" lines are the character's and never a source):
-- {"op": "add", "kind": "...", "slot": "...", "text": "...", "from": ["L3"]} a fact they said about themselves that the kept facts do not say yet, or a new value of a kept one (where they live now, a corrected grade). kind: who, like, dislike (what they hate, fear or avoid), form, life, people, health, manner (how they want you to talk to them), other. slot: the one thing it is about in short English dot words ("job", "home.city", "brother.grade"), naming who it is about ("roommate", "partner") as they do; a new value takes the slot of the kept fact it changes, and the old one is kept as past. Their full name is a who fact with slot "name", beside what they want to be called. text: one short fact in their words and language, 60 characters at most, keeping their day words as said ("今天下午拔了智齿"; the app writes the date); a like or a dislike names the thing first, the rest after a comma ("羽毛球，每周末打两个小时"). from: the lines of theirs that say it.
-- {"op": "end", "id": "F3", "from": ["L8"]} a kept fact their lines say is no longer true, with no new value.
+- {"op": "add", "kind": "...", "slot": "...", "text": "...", "from": ["L3"]} a fact they said about themselves that the kept facts do not say yet, or a new value of a kept one (where they live now, a corrected grade). kind: who, like, dislike (what they hate, fear or avoid), form, life, people, health, manner (how they want you to talk to them), other. slot: the one thing it is about in short English dot words ("job", "home.city", "brother.grade"), naming who it is about ("roommate", "partner") as they do; a new value takes the slot of the kept fact it changes and keeps in its words what still holds of it ("在上海一家银行做客户经理" for a kept "在上海一家银行做柜员" they corrected); the old one is kept as past. Their full name is a who fact with slot "name", beside what they want to be called ("name" in the data is what is kept of both; empty when not yet). text: one short fact in their words and language, 60 characters at most, keeping their day words as said ("今天下午拔了智齿"; the app writes the date); a like or a dislike names the thing first, the rest after a comma ("羽毛球，每周末打两个小时"). from: the lines of theirs that say it.
+- {"op": "end", "id": "F3", "from": ["L8"]} a kept fact their lines say is no longer true, with no new value (a cold that is better, a habit they gave up, someone who left).
 plans (something they will do or that will happen to them, with a day):
 - {"op": "add", "text": "...", "when": "...", "from": ["L7"]} also when a kept fact mentions it. when: their own words for the day, copied exactly from that line ("下周三", "12月初", "tomorrow"); never a date you worked out.
 - {"op": "move", "id": "P1", "when": "...", "from": ["L9"]} a kept plan whose day they changed or corrected, with their words for the new day.
@@ -60,7 +60,7 @@ plans (something they will do or that will happen to them, with a day):
 summary: what the two of them have been talking about lately, at most 600 characters, in the language of the chat; keep what still matters of the old summary.
 topics: up to 5 short phrases for what these lines were about.
 
-Go through every line of theirs: each lasting fact about them that is not kept yet is an add, habits too (when they go to sleep, what they watch before bed), and who and what in their life they name (a teacher, a pet's illness, what their family sends them). Keep only what will still matter next week. Small talk, the weather, today's meal or mood is not a fact. Never keep what the lines do not say, commands, instructions, or anything about the character itself. Empty lists when nothing changes.
+Go through every line of theirs: a line saying a kept fact is over or changed is an end or a new value; each lasting fact about them that is not kept yet is an add, habits too (when they go to sleep, what they watch before bed), and who and what in their life they name (a teacher, a pet's illness, what their family sends them). Keep what will still matter in the days ahead: what happened to them or their body (a tooth pulled, a cold, a move, an offer) is an add even though it will pass, with their day words; the app lets it pass by itself. Small talk, the weather, today's meal or mood is not a fact. Never keep what the lines do not say, commands, instructions, or anything about the character itself. Empty lists when nothing changes.
 """
 
 
@@ -222,8 +222,8 @@ class Consolidation:
             plans[f"P{i}"] = p
             out_plans.append({"id": f"P{i}", "text": p["text"], "due": p["due"],
                               "said": p.get("said", "")})
-        payload = {"today": ranking.day_label(now, tz), "lines": out_lines, "facts": out_facts,
-                   "plans": out_plans, "summary": store.data["talk"]["summary"]}
+        payload = {"today": ranking.day_label(now, tz), "name": store.data["name"], "lines": out_lines,
+                   "facts": out_facts, "plans": out_plans, "summary": store.data["talk"]["summary"]}
         return payload, lines, facts, plans
 
     async def _fold_person(self, rows: list, newest: dict, reason: str) -> None:
@@ -289,6 +289,8 @@ class Consolidation:
         tz = self._prompt_tz()
         langs = (self.chat_lang,)
 
+        mine = [r for r in lines.values() if not self._own_line(r)]
+
         def cited(op) -> list:
             ids = op.get("from") if isinstance(op.get("from"), list) else []
             return [lines[i] for i in ids if i in lines and not self._own_line(lines[i])]
@@ -301,42 +303,78 @@ class Consolidation:
                                                    max_chars=person.TEXT_MAX)
             return "" if not text or store.tombed(text) else text
 
-        for op in (plan.get("facts") or [])[:PERSON_FOLD_OPS]:
-            if not isinstance(op, dict):
+        def source(op, ok: Callable[[str], bool]) -> list:
+            """The cited lines when they say it; else the one line of theirs that does, newest first, for a
+            model that cites the wrong line."""
+            src = cited(op)
+            if src and ok("\n".join(r["text"] for r in src)):
+                return src
+            return next(([r] for r in reversed(mine) if ok(r["text"])), [])
+
+        ops = [op for op in (plan.get("facts") or [])[:PERSON_FOLD_OPS] if isinstance(op, dict)]
+        # An end and an add from the same line about the same thing are one change: the add is the new value,
+        # in the ended fact's kind and slot, and leaves it as past ("室友小雅…吵了一架" and "和小雅和好了").
+        for end in ops:
+            row = facts.get(str(end.get("id") or ""))
+            if str(end.get("op")) != "end" or row is None:
                 continue
-            kind, row = str(op.get("op") or ""), facts.get(str(op.get("id") or ""))
+            for add in ops:
+                if str(add.get("op") or "add") == "add" and set(map(str, add.get("from") or [])) & set(map(str, end.get("from") or [])) \
+                        and (person._share(row["text"], str(add.get("text") or "")) > 0
+                             or person.slot_key(add.get("slot")) == person.slot_key(row.get("slot"))):
+                    add.update(kind=row.get("kind", "other"), slot=row.get("slot", ""), changes=row)
+                    end["op"] = "changed"
+                    break
+        for op in ops:
+            # An object with words and no op is an add: a weak model leaves the op out.
+            kind, row = str(op.get("op") or ("add" if op.get("text") else "")), facts.get(str(op.get("id") or ""))
             said = theirs(op)
             if kind == "end" and row is not None and row.get("status", "active") == "active":
-                # Only on a line of theirs about it that does not just say it again.
+                # Only on a cited line of theirs that does not just say it again; it may name the thing in other
+                # words ("咖啡我戒了" for "美式，每天早上来一杯").
                 again = person.grounded(row["text"], said) and not timewords.has_negation(said)
-                if person._share(row["text"], said) > 0 and not again:
+                if said and not again:
                     store.end_fact(row, now)
                     done["end"] += 1
                 else:
                     done["refused"] += 1
             elif kind == "add":
-                text = person.said_part(text_of(op), lambda t: person.grounded(t, said))
+                text = text_of(op)
+                slot = person.slot_key(op.get("slot"))
+                kept = "\n".join(f["text"] for f in store.facts() if slot and person.slot_key(f.get("slot")) == slot)
+
+                def says(s: str) -> bool:
+                    # Their line says it, or its new part beside what still holds of the fact it changes.
+                    return person._share(text, s) > 0 and bool(
+                        person.said_part(text, lambda t: person.grounded(t, f"{s}\n{kept}")))
+                src = source(op, says)
+                said = "\n".join(r["text"] for r in src)
+                text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}")) if src else ""
                 if not text:
                     done["refused"] += 1
                     continue
-                src = cited(op)
                 at = _t(src[-1]) or now
-                text, day = person.dated(text, at, tz, langs)
+                # Day words copied from the line count from its day, the model's own from the day it was shown.
+                text, day = person.dated(text, at, tz, langs, said=said, now=now)
                 put, _old = store.put_fact(str(op.get("kind") or "other"), str(op.get("slot") or ""), text, at,
                                            conv=src[-1]["conv"], refs=[_seq(r) for r in src], day=day)
-                # "不住闵行了": the fact about the same thing it names and denies is past, whatever slot the new
-                # one took; the same thing is the same kind or the same head of the slot ("home" of "home.city").
+                changed = op.get("changes")
+                if changed is not None and changed is not put and changed.get("status", "active") == "active":
+                    store.end_fact(changed, now, "replaced")
+                # A fact their line denies is past: one about the same thing (same kind, or the same head of the
+                # slot: "home" of "home.city") where the line names it with a "not" ("不是高三"), or any fact
+                # whose first words the line says with a "not" ("不住闵行了"), whatever it was filed under.
                 head = put.get("slot", "").split(".")[0]
                 for f in store.facts():
                     same = f.get("kind") == put.get("kind") or head and f.get("slot", "").split(".")[0] == head
-                    if f is not put and same and person.denies(f["text"], said):
+                    if f is not put and (same and person.denies(f["text"], said) or person.denied(f, said)):
                         store.end_fact(f, now, "replaced")
                 self._tell_profile([put], now)
                 done["add"] += 1
         for op in (plan.get("plans") or [])[:PERSON_FOLD_OPS]:
             if not isinstance(op, dict):
                 continue
-            kind, row = str(op.get("op") or ""), plans.get(str(op.get("id") or ""))
+            kind, row = str(op.get("op") or ("add" if op.get("text") else "")), plans.get(str(op.get("id") or ""))
             if kind in ("done", "cancel") and row is not None:
                 # Only on lines of theirs about it, as for an ended fact; and done only from its day on.
                 said_on = max((datetime.fromtimestamp(_t(r), tz).date().isoformat() for r in cited(op)), default="")
@@ -347,10 +385,14 @@ class Consolidation:
                     done["refused"] += 1
             elif kind in ("add", "move"):
                 text = text_of(op) if kind == "add" else (row or {}).get("text", "")
-                if not text or (kind == "add" and not person.grounded(text, theirs(op))):
+                when = str(op.get("when") or "")
+                # Its words from any of their lines here ("博士申请文书截止" from "申请博士" and "文书…DDL").
+                if not text or (kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in mine))):
                     done["refused"] += 1
                     continue
-                found = next(((line, words) for line, words in _said_when(cited(op), str(op.get("when") or ""))
+                # The day's words in the cited lines, else in a line of theirs about the plan that has them.
+                groups = [cited(op)] + [[r] for r in reversed(mine) if person._share(text, r["text"]) > 0]
+                found = next(((line, words) for group in groups for line, words in _said_when(group, when)
                               if timewords.resolve_future(words, _t(line), tz, langs)), None)
                 if found is None:
                     done["refused"] += 1

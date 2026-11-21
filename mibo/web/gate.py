@@ -17,7 +17,9 @@ asks too (leave).
 A control that only its name calls a submission (a bare 确认, 应用, save, a form
 sent by GET) is "watch": it is pressed, and a card comes only if a request that
 is not a GET really leaves on the press (operate.Hands holds it), as Gemini and
-Claude in Chrome confirm at the point of risk.
+Claude in Chrome confirm at the point of risk. So are a right click, a drag
+from one control onto another and a keyboard shortcut (`chord`); a chord that
+ends in Enter or Space is that key, and one that uses the clipboard is refused.
 
 `classify` sorts one action by what the page says of its target: its
 accessible name, role and the form facts pageops.FACTS_JS reads. The
@@ -160,6 +162,31 @@ def classify(mode: str, name: str, role: str, facts: dict, url: str = "") -> tup
             and not facts.get("link")):
         return "watch", f"the name {name!r} is submission vocabulary"
     return "", "reading or moving about"
+
+
+# Ours: chords that read or fill the person's clipboard, which may hold their password; keys that only edit a field.
+CLIPBOARD = re.compile(r"^(?:(?:Control|Meta)\+(?:Shift\+)?[vcxVCX]|Shift\+(?:Insert|Delete)|Control\+Insert)$")
+EDITING = re.compile(r"^(?:(?:Control\+)?(?:Shift\+)?(?:[azyAZY]|Arrow\w+|Home|End|Backspace|Delete)|Shift\+.)$")
+
+
+def chord(keys: str, editing: bool) -> tuple[str, str]:
+    """How a key or chord, as pageops.chord spells it ("Control+Enter"), is pressed: "enter" or "click" when it
+    ends in Enter or Space (classify then decides as for that key alone: Control+Enter sends as Enter does),
+    "refuse" for the clipboard, "watch" for a shortcut a page may act on (any chord with Control, Alt or Meta; a
+    letter or Delete outside a field, as a mail page deletes on #), "" for moving about and editing a field.
+    `editing`: the focus is in a text field."""
+    key = keys.rsplit("+", 1)[-1]
+    if key == "Enter":
+        return "enter", f"{keys} is Enter"
+    if key == "Space":
+        return "click", f"{keys} is Space"
+    if CLIPBOARD.match(keys):
+        return "refuse", f"{keys} uses the person's clipboard"
+    if editing and EDITING.match(keys):
+        return "", "editing the field"
+    if re.match(r"(?:Control|Alt|Meta)\+", keys) or (not editing and (len(key) == 1 or key in ("Delete", "Backspace"))):
+        return "watch", f"{keys} is a shortcut the page may act on"
+    return "", "moving about"
 
 
 def _sent(form: dict) -> str:

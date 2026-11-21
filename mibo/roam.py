@@ -44,8 +44,10 @@ from .textproc import (SLEEP_HOUR_END, SLEEP_HOUR_START, _UNTRUSTED_INPUT_RULES,
 
 logger = logging.getLogger("mibo.roam")
 
-# What stops a walk.
-OUT, ASLEEP, LIMIT, OFF, NO_MODEL = "out", "asleep", "limit", "off", "no_model"
+# What stops a walk; walks switched off in Settings › 外出 are WALKS_OFF.
+OUT, ASLEEP, LIMIT, WALKS_OFF, NO_MODEL = "out", "asleep", "limit", "walks_off", "no_model"
+# What a host the person favours adds to its place in a walk's order (Settings › 外出).
+FAVOUR = 2.0
 
 IDLE_S = 300.0
 # The shortest and the longest the walk loop sleeps between looks.
@@ -490,7 +492,7 @@ class Roam:
         if code:
             return code
         if not self.settings.roam_enabled:
-            return OFF
+            return WALKS_OFF
         if self._walking or self.library.outing().state == "out":
             return OUT
         if not wonder and self._asleep(now):
@@ -519,7 +521,8 @@ class Roam:
             times.append(0.0)
         elif not self._held(now):
             last = self.library.outing().last_end
-            times.append(max(self.started + FIRST_WALK_S, last + self.settings.roam_gap_h * 3600) - now)
+            times.append(max(self.started + FIRST_WALK_S, last + self.settings.roam_gap_h * 3600,
+                             self._not_before(now)) - now)
         if self.visitor.context is not None:
             times.append(self.visitor.used + IDLE_S - self.visitor.clock())
         return max(TICK_S, min(times))
@@ -530,19 +533,38 @@ class Roam:
         if self._held(now):
             return False
         last = self.library.outing().last_end
-        return now - self.started >= FIRST_WALK_S and now - last >= self.settings.roam_gap_h * 3600
+        return (now - self.started >= FIRST_WALK_S and now - last >= self.settings.roam_gap_h * 3600
+                and now >= self._not_before(now))
+
+    def next_walk(self, now: float) -> Optional[float]:
+        """When the next walk of its own may leave, for Settings › 外出; None while one cannot."""
+        if self._held(now):
+            return None
+        last = self.library.outing().last_end
+        return max(now, self.started + FIRST_WALK_S, last + self.settings.roam_gap_h * 3600, self._not_before(now))
+
+    def _not_before(self, now: float) -> float:
+        """With a set time (ROAM_AT) and no walk yet today, the day's first walk waits for it; else 0."""
+        if not self.settings.roam_at or self._walks_today(now):
+            return 0.0
+        hour, minute = map(int, self.settings.roam_at.split(":"))
+        return datetime.fromtimestamp(now).replace(hour=hour, minute=minute, second=0, microsecond=0).timestamp()
+
+    def changed(self) -> None:
+        """Settings › 外出 changed `settings`: the loop looks again at once."""
+        self._wake.set()
 
     async def loop(self) -> None:
         code = self.available()
-        if code or not self.settings.roam_enabled:
-            logger.info("roam: walks are off (%s)", code or OFF)
-            # No browser support, no model, or switched off: each comes back only with a restart of
-            # the service (a new install, or a settings save), so there is nothing to wake for.
+        if code:
+            logger.info("roam: walks cannot leave (%s)", code)
+            # No browser support or no model: each comes back only with a new install or a settings save,
+            # which builds the character again.
             return
         try:
             while True:
-                # Asleep, out of walks for the day or just back, a look at the next wake is enough;
-                # words queued wake it at once (request).
+                # Asleep, switched off, out of walks for the day or just back, a look at the next wake is
+                # enough; words queued and a change in Settings › 外出 wake it at once.
                 with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(self._wake.wait(), self._nap(self.clock()))
                 self._wake.clear()
@@ -730,7 +752,7 @@ class Roam:
         else:
             learned = site_taste(runtime)
         found.sort(key=lambda c: -(situation.walk_prior(runtime, c["label"], c["region"])
-                                   + learned.get(c["label"], 0.0) + random.random()))
+                                   + learned.get(c["label"], 0.0) + FAVOUR * c["favour"] + random.random()))
         return found
 
     def _ui_lang(self) -> str:
@@ -739,10 +761,13 @@ class Roam:
     async def _search(self, words: str) -> list[Found]:
         """The web search's results for `words` as pages to read; the visitor's guards apply as each is read."""
         found = []
+        avoided = {key for key, how in sites.steered(self.library.root.parent).items() if how == "avoid"}
         for row in await self.agent._search_rows(words, max_results=WEB_RESULTS):
             url = row["url"]
-            # A site's front page is a place to go, not a thing to read, and a broad word finds mostly those.
-            if urlsplit(url).scheme in ("http", "https") and row["title"] and urlsplit(url).path.strip("/"):
+            # A site's front page is a place to go, not a thing to read, and a broad word finds mostly those;
+            # a site the person keeps walks off is left.
+            if (urlsplit(url).scheme in ("http", "https") and row["title"] and urlsplit(url).path.strip("/")
+                    and sites.key_of(url) not in avoided):
                 found.append(Found(url, row["title"], site_name(url)))
         return found
 
@@ -782,6 +807,9 @@ class Roam:
         read: list[_Read] = []
         # [site, why] for each list or page it could not read, for the report of a lookup.
         missed: list[tuple[str, str]] = []
+        # The walk record (Settings › 外出): each list it asked and each page it could not read.
+        tried: list[dict] = []
+        skipped: list[dict] = []
         # A web search is no place; the pages it leads to say where it is.
         self.library.left(plan.sources[0][0] if plan.sources and plan.sources[0][0] != WEB else "", now=now)
         try:
@@ -796,13 +824,17 @@ class Roam:
                     self.library.at(site)
                 if not found:
                     missed.append((site, wall or "none"))
+                tried.append({"site": site, "intent": intent, "found": len(found), "why": "" if found else wall or "none"})
                 lists.append(found)
                 await self._rest()
             # A topic no list found anything for: a host's hot list instead.
             hot = self._hosts("hot")[:1] if plan.topic and not any(lists) else []
             for card in hot:
                 if self._may_visit(card["label"], now):
-                    lists.append((await self._list(card["key"], "hot", ""))[0])
+                    found, wall = await self._list(card["key"], "hot", "")
+                    tried.append({"site": card["label"], "intent": "hot", "found": len(found),
+                                  "why": "" if found else wall or "none"})
+                    lists.append(found)
                     self._count_page(card["label"], now)
             wanted = random.randint(3, max(3, self.settings.roam_pages))
             # A site whose pages it could not read twice in this walk is left for the rest of it.
@@ -820,6 +852,8 @@ class Roam:
                 if page is None:
                     unread[found.site] = unread.get(found.site, 0) + 1
                     missed.append((found.site, walls[0] if walls else "unread"))
+                    skipped.append({"site": found.site, "title": found.title, "url": found.url,
+                                    "why": walls[0] if walls else "unread"})
                 elif all(r.item.id != page.item.id for r in read):
                     # Two rows can lead to one page (a redirect, a canonical address): it is kept once.
                     read.append(page)
@@ -841,6 +875,12 @@ class Roam:
         finally:
             self._walking = False
             self.library.returned(len(kept), sites, now=self.clock())
+            from .panels import walks as walk_log
+            walk_log.record(self.library.root.parent, {
+                "id": outing, "at": int(now), "end": int(self.clock()), "topic": plan.topic, "asked": plan.asked,
+                "lists": tried, "skipped": skipped,
+                "read": [{"site": r.item.site, "title": r.item.title, "url": r.item.url, "kept": r.item.id in kept}
+                         for r in read]})
             if plan.wonder:
                 from . import today
                 today.wondered(self.library.root.parent, plan.wonder, kept, self.clock(), asked=plan.asked,

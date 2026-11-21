@@ -280,7 +280,7 @@ def s_open(d):
 
 
 def c_open(d, reply, log):
-    opened = [r for r in log if r.get("outcome") == "ran" and "Invoke-Item" in r.get("command", "")
+    opened = [r for r in log if r.get("outcome") == "ran" and re.search(r"Invoke-Item|^open_file ", r.get("command", ""))
               and r.get("command", "").rstrip("'").endswith("季度报告.docx")]
     return bool(opened), "opened 季度报告.docx"
 

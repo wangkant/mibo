@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>账户中心</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f6f7f9; }
+main { max-width: 640px; margin: 24px 40px; } iframe { width: 100%; height: 420px; border: 0; border-radius: 8px; }
+</style></head>
+<body><main>
+<h1>账户中心</h1>
+<p>资料由会员服务提供。</p>
+<iframe id="profile" title="个人资料"></iframe>
+<button id="done">完成</button>
+</main>
+<script>
+// The profile form comes from another site (see t30-embed.html) and saves each field by itself when it loses focus.
+const port = new URLSearchParams(location.search).get("frames") || location.port;
+document.getElementById("profile").src = `http://localhost:${port}/t/t22-autosave.html`;
+</script>
+</body></html>

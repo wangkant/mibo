@@ -172,20 +172,23 @@ async def _anilist(http: httpx.AsyncClient) -> list[Find]:
     return found
 
 
-async def _bilibili_anime(http: httpx.AsyncClient) -> list[Find]:
-    """Bilibili's anime ranking over the last three days."""
-    data = await get_json(http, "https://api.bilibili.com/pgc/web/rank/list", day=3, season_type=1)
-    if data.get("code") != 0:
-        raise ValueError(f"Bilibili refused the ranking: {data.get('message')}")
-    found = []
-    for show in data["result"]["list"][:PER_SOURCE]:
-        episode = (show.get("new_ep") or {}).get("index_show", "")
-        plays = (show.get("icon_font") or {}).get("text", "")
-        found.append(find(show["url"], show["title"], site="Bilibili", kind="page",
-                          text=" · ".join(filter(None, [episode, show.get("rating", ""),
-                                                       f"{plays} 播放" if plays else ""])),
-                          picture=_https(show.get("ss_horizontal_cover") or show.get("cover", ""))))
-    return found
+def _bilibili_shows(season_type: int):
+    """Bilibili's ranking of one kind of licensed show over the last three days: 1 anime, 2 films,
+    3 documentaries, 4 Chinese animation, 5 TV series."""
+    async def fetch(http: httpx.AsyncClient) -> list[Find]:
+        data = await get_json(http, "https://api.bilibili.com/pgc/web/rank/list", day=3, season_type=season_type)
+        if data.get("code") != 0:
+            raise ValueError(f"Bilibili refused the ranking: {data.get('message')}")
+        found = []
+        for show in data["result"]["list"][:PER_SOURCE]:
+            episode = (show.get("new_ep") or {}).get("index_show", "")
+            plays = (show.get("icon_font") or {}).get("text", "")
+            found.append(find(show["url"], show["title"], site="Bilibili", kind="page",
+                              text=" · ".join(filter(None, [episode, show.get("rating", ""),
+                                                           f"{plays} 播放" if plays else ""])),
+                              picture=_https(show.get("ss_horizontal_cover") or show.get("cover", ""))))
+        return found
+    return fetch
 
 
 # ---------------------------------------------------------------- film and books
@@ -250,8 +253,8 @@ def _tidy_feed(key: str, name: tuple[str, str], about: tuple[str, str], url: str
             mailbox = _MAILBOX.match(f.item.author)
             if mailbox:
                 f.item.author = mailbox.group(1)
-            if "?utm_" in f.item.url:
-                f.item.url = f.item.url.split("?utm_", 1)[0]
+            if "?utm_" in f.item.url or "?source=rss" in f.item.url:
+                f.item.url = f.item.url.split("?", 1)[0]
             if f.picture.endswith("/undefined"):
                 f.picture = ""
         return found
@@ -352,7 +355,19 @@ SOURCES: list[Source] = [
            ("This season's anime ranked by Bangumi members", "本季新番的 Bangumi 排名"), "culture", _bangumi_season),
     Source("bilibili-anime", ("Bilibili · Anime ranking", "哔哩哔哩 · 番剧排行"),
            ("The most watched anime on Bilibili these three days", "B 站近三日播放最多的番剧"), "culture",
-           _bilibili_anime),
+           _bilibili_shows(1)),
+    Source("bilibili-guochuang", ("Bilibili · Chinese animation", "哔哩哔哩 · 国创排行"),
+           ("The most watched Chinese animation on Bilibili these three days", "B 站近三日播放最多的国产动画"), "culture",
+           _bilibili_shows(4)),
+    Source("bilibili-docs", ("Bilibili · Documentaries", "哔哩哔哩 · 纪录片排行"),
+           ("Documentaries on history, nature, food and science most watched on Bilibili", "B 站近三日播放最多的纪录片：历史、自然、美食与科学"),
+           "culture", _bilibili_shows(3)),
+    Source("bilibili-films", ("Bilibili · Films", "哔哩哔哩 · 电影排行"),
+           ("The films most watched on Bilibili these three days", "B 站近三日播放最多的电影"), "culture",
+           _bilibili_shows(2)),
+    Source("bilibili-tv", ("Bilibili · TV series", "哔哩哔哩 · 电视剧排行"),
+           ("The TV series most watched on Bilibili these three days", "B 站近三日播放最多的电视剧"), "culture",
+           _bilibili_shows(5)),
     Source("anilist-trending", ("AniList · Trending", "AniList · 热门"),
            ("Anime trending on AniList now", "AniList 上正在流行的动画"), "culture", _anilist),
     feed_source("ann", ("Anime News Network", "Anime News Network"),
@@ -407,10 +422,22 @@ SOURCES: list[Source] = [
                 "culture", "https://www.openculture.com/feed", site="Open Culture"),
     _tidy_feed("hypebeast", ("Hypebeast", "Hypebeast"), ("Fashion, sneakers, art and design", "潮流、球鞋、艺术与设计"),
                "https://hypebeast.com/feed", "Hypebeast"),
+
+    # Medium's public tag feeds: writers on the subjects the press above covers least.
+    *[_tidy_feed(f"medium-{tag}", (f"Medium · {en}", f"Medium · {zh}"), (about_en, about_zh),
+                 f"https://medium.com/feed/tag/{tag}", "Medium")
+      for tag, en, zh, about_en, about_zh in (
+          ("travel", "Travel", "旅行", "Travel stories and guides from Medium writers", "Medium 作者的旅行故事与攻略"),
+          ("history", "History", "历史", "History essays from Medium writers", "Medium 作者的历史随笔"),
+          ("photography", "Photography", "摄影", "Photography essays and tips from Medium writers", "Medium 作者的摄影随笔与技巧"),
+          ("fitness", "Fitness", "健身", "Fitness and training from Medium writers", "Medium 作者的健身与训练文章"),
+          ("personal-finance", "Personal finance", "个人理财", "Money and personal finance from Medium writers",
+           "Medium 作者的理财文章"))],
 ]
 
 SOURCES = written_in("zh", SOURCES, {"netease-hot", "netease-new", "gcores", "yystv", "bangumi-today", "bangumi-season",
-                                     "bilibili-anime", "douban-film-reviews",
+                                     "bilibili-anime", "bilibili-guochuang", "bilibili-docs", "bilibili-films",
+                                     "bilibili-tv", "douban-film-reviews",
                                      "douban-book-reviews"})
 # The Chinese-language ones are mainland sites; the rest are read worldwide.
 SOURCES = local_to("CN", SOURCES, {s.key for s in SOURCES if s.lang == "zh"})

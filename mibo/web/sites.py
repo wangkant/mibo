@@ -133,7 +133,9 @@ def card(runtime: Path, address: str) -> dict:
     hot = [{"url": u, "how": "seed", "kind": _kind(u)} for u in sown.get("hot") or []]
     search = {"template": sown["search"], "how": "seed", "kind": _kind(sown["search"])} if sown.get("search") else {}
     return {"key": key, "name": sown.get("name", ""), "lang": sown.get("lang", ""), "region": sown.get("region", ""),
-            "walk": sown.get("walk", True), "home": stored.get("home") or home,
+            # The person's word on walks to it (`steer`: "avoid" or "favour") over the seed's.
+            "walk": sown.get("walk", True) and stored.get("steer") != "avoid",
+            "favour": stored.get("steer") == "favour", "home": stored.get("home") or home,
             "hot": stored.get("hot") or hot, "search": stored.get("search") or search,
             "shape": stored.get("shape", ""), "walls": stored.get("walls") or {}, "dead": stored.get("dead") or {},
             "policy": stored.get("policy") or {}, "health": stored.get("health") or {}}
@@ -146,6 +148,21 @@ def plant(runtime: Path, key: str, entries: dict) -> None:
         stored["hot"] = [{"url": u, "how": "seed", "kind": "page"} for u in entries.get("hot") or []]
         stored["search"] = {"template": entries["search"], "how": "seed"} if entries.get("search") else {}
     _change(runtime, key, edit)
+
+
+def steer(runtime: Path, address: str, how: str) -> None:
+    """The person's word on walks to the host: "avoid", "favour", or "" for none."""
+    def edit(stored: dict) -> None:
+        if how:
+            stored["steer"] = how
+        else:
+            stored.pop("steer", None)
+    _change(runtime, key_of(address), edit)
+
+
+def steered(runtime: Path) -> dict[str, str]:
+    """{host key: "avoid" | "favour"} for every host the person gave their word on."""
+    return {key: c["steer"] for key, c in load(runtime).items() if isinstance(c, dict) and c.get("steer")}
 
 
 def forget(runtime: Path, address: str) -> None:

@@ -17,7 +17,7 @@ from . import memstore
 from . import person
 from . import timewords
 from .addressing import _HAS_CJK, names_regex
-from .textproc import _FULL_STOP_RE, _focus_tokens, _strip_web_desc
+from .textproc import _FULL_STOP_RE, _focus_tokens
 
 logger = logging.getLogger("agent")
 
@@ -475,11 +475,9 @@ class Memory:
             except (OSError, ValueError) as e:
                 logger.warning("[Agent] profile not told (%s): %s", kind, e)
 
-    def _person_turn(self, conv: str, said: str, reply: str, mem, *,
-                     before: str = "", refs=()) -> None:
-        """Keep what a sent reply's `mem` operations say of the person, as
-        person.apply_turn checks them; a turn they asked not to keep keeps
-        nothing, and its words only as hashes."""
+    def _person_turn(self, conv: str, said: str, reply: str, mem) -> None:
+        """After a sent reply: the plans it asked about (person.apply_turn); a turn they asked not to keep
+        leaves its words only as hashes. What they said of themselves is the fold's."""
         store = self.person_store
         now = time.time()
         if person.unsaid(said):
@@ -487,23 +485,8 @@ class Memory:
             self._save_person()
             logger.info("[Agent] person: a turn not kept (%s)", conv)
             return
-        ops = []
-        for op in person.read_ops(mem):
-            text = op.get("text") or op.get("what")
-            if op["op"] == "asked" or self._validate_memory_candidate(str(text or "")):
-                ops.append(op)
-        turn = person.Turn(said=_strip_web_desc(said), before=before, reply=reply, at=now, conv=conv,
-                           refs=tuple(refs), tz=self._prompt_tz())
-        out = person.apply_turn(store, ops, turn)
-        if not (out.facts or out.asked):
-            if out.refused:
-                logger.info("[Agent] person: nothing kept, refused %s", dict(out.refused))
-            return
-        self._save_person()
-        self._tell_profile(out.facts, now)
-        # Never the text: a forgotten thing must not live on in the log.
-        logger.info("[Agent] person: %d facts, %d asked%s", len(out.facts), len(out.asked),
-                    f", refused {dict(out.refused)}" if out.refused else "")
+        if person.apply_turn(store, person.read_ops(mem), reply, now, self._prompt_tz()):
+            self._save_person()
 
     def _drop_unsaid(self, conv: str, said: str, reply: str) -> dict:
         """After the reply to a turn they asked not to keep: the turn, its

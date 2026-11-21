@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>评论</title>
+<style>
+body { margin: 0; padding: 10px 14px; font: 13px/1.5 system-ui, "Microsoft YaHei", sans-serif; }
+.c { padding: 6px 0; border-bottom: 1px solid #f0f0f0; } .c b { margin-right: 6px; }
+.more { margin: 8px 0; background: none; border: 0; color: #36c; cursor: pointer; padding: 0; }
+textarea { width: 100%; height: 50px; box-sizing: border-box; resize: none; }
+.send { margin-top: 6px; background: #36c; color: #fff; border: 0; padding: 5px 16px; border-radius: 5px; }
+</style></head>
+<body>
+<div id="list">
+<div class="c"><b>橘子妈</b>换粮那段太有用了，我家猫之前直接换就拉肚子。</div>
+<div class="c"><b>阿飞</b>请问幼猫可以吃冻干吗？</div>
+<div class="c"><b>小鱼干</b>收藏了，周末接猫回家。</div>
+</div>
+<button class="more" id="more">查看更多</button>
+<textarea id="t" placeholder="写下你的评论…"></textarea>
+<button class="send" id="b">发表</button>
+<script>
+document.getElementById("more").addEventListener("click", (e) => {
+  for (const [who, said] of [["豆豆", "猫砂盆真的要放安静的地方。"], ["Momo", "第一周别洗澡。"]]) {
+    const c = document.createElement("div");
+    c.className = "c"; c.innerHTML = "<b></b>"; c.firstChild.textContent = who; c.append(said);
+    document.getElementById("list").append(c);
+  }
+  e.target.remove();
+});
+document.getElementById("b").addEventListener("click", async () => {
+  const t = document.getElementById("t"), text = t.value.trim();
+  if (!text) return;
+  const r = await fetch("/api/comment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+  if ((await r.json()).ok) {
+    const c = document.createElement("div");
+    c.className = "c"; c.innerHTML = "<b>我</b>"; c.append(text);
+    document.getElementById("list").append(c);
+    t.value = "";
+  }
+});
+</script></body></html>

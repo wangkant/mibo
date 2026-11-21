@@ -14,10 +14,16 @@ want, where the screen allows (`_room`). The page open last, until the pane is
 closed, each site's own zoom (outside private mode) and the size the person gave
 the window while a site was in front are kept in kept.json beside that folder.
 
+The pane has tabs (the strip is browsetabs.js): one WebView2 each, on the same
+folder and so the same browser processes. A site's new tab or popup opens as a
+tab of its own that the site keeps hold of (window.opener), so a sign-in popup
+hands its answer back and closes; the bar's private button opens an InPrivate
+tab beside the others. Only the tab in front is shown, timed and operated.
+
 Every page is timed while the window is in front, shown and in use. When it is
 left it goes to `visit` (browsed.py keeps the row; a find's time also goes to
-the recommender), unless the bar's private switch is on or the page is a
-sign-in or payment page.
+the recommender), unless its tab is private or the page is a sign-in or
+payment page.
 
 `Reader` reads one address with the person's session, out of sight: a second
 WebView2 on the same folder, made for the read and gone after.
@@ -60,7 +66,9 @@ def language() -> str:
         _LANGUAGE.append({"zh": "zh-CN"}.get(code, code))
     return _LANGUAGE[0]
 ACTIONS = ("back", "forward", "reload", "stop", "system", "close", "private", "hide", "return", "mute", "loaded",
-           "op_stop", "op_take", "fit")
+           "op_stop", "op_take", "fit", "tab_new", "tab_close", "tab_select", "tab_reopen", "tab_next", "tab_prev")
+# Tabs closed that Ctrl+Shift+T can bring back, newest last (never a private one).
+CLOSED_KEPT = 10
 # Beside the pane's WebView2 folder: the page open last ({"url", "title"}), each site's own zoom, and the window's
 # size while a site is in front, once the person set one ([wide, high] in px at 100 %).
 KEPT = "kept.json"
@@ -91,7 +99,7 @@ VK_ESCAPE = 0x1B
 # The steps of a run the column beside the page lists (browse.js), the ends after which the page is the person's
 # until they say to go on, and for how long a run going on from one of those keeps its steps.
 STEPS_KEPT = 40
-THEIRS = ("handover", "asked", "paused")
+THEIRS = ("handover", "asked", "paused", "cap")
 GO_ON_S = 30 * 60.0
 
 
@@ -203,9 +211,10 @@ def _wait(asked, seconds: float):
     return heard[0] if done.wait(seconds) and heard else None
 
 
-def _devtools(core, method: str, params: dict, box: dict, done: threading.Event) -> None:
-    """One DevTools protocol call in the page, in process (no debugging port); started on the form's thread,
-    its answer heard on a pool thread, so a thread waiting for it never holds the form."""
+def _devtools(core, method: str, params: dict, box: dict, done: threading.Event, session: str = "") -> None:
+    """One DevTools protocol call in the page, or with `session` in one of its frames from another site, in
+    process (no debugging port); started on the form's thread, its answer heard on a pool thread, so a thread
+    waiting for it never holds the form."""
     from System import Action, String
     from System.Threading.Tasks import Task
 
@@ -217,11 +226,12 @@ def _devtools(core, method: str, params: dict, box: dict, done: threading.Event)
             box["error"] = str(inner.Message if inner is not None else "the call failed")
         done.set()
     box["handler"] = finished
-    core.CallDevToolsProtocolMethodAsync(method, json.dumps(params)).ContinueWith(
-        Action[Task[String]](finished))
+    call = (core.CallDevToolsProtocolMethodForSessionAsync(session, method, json.dumps(params)) if session
+            else core.CallDevToolsProtocolMethodAsync(method, json.dumps(params)))
+    call.ContinueWith(Action[Task[String]](finished))
 
 
-def _call(ui: Callable, core_of: Callable, method: str, params: dict, timeout: float) -> dict:
+def _call(ui: Callable, core_of: Callable, method: str, params: dict, timeout: float, session: str = "") -> dict:
     """`method` sent to the page `core_of()` gives (on the form's thread), from a thread other than the
     form's; a suspended page is resumed first. Raises RuntimeError with the page's own reason."""
     box: dict = {}
@@ -235,7 +245,7 @@ def _call(ui: Callable, core_of: Callable, method: str, params: dict, timeout: f
             return
         if core.IsSuspended:
             core.Resume()
-        _devtools(core, method, params, box, done)
+        _devtools(core, method, params, box, done, session)
     ui(start)
     if not done.wait(timeout):
         raise RuntimeError(f"Timed out: {method}")
@@ -244,8 +254,22 @@ def _call(ui: Callable, core_of: Callable, method: str, params: dict, timeout: f
     return box["result"]
 
 
+class _Tab:
+    """One tab of the pane: its WebView (made once it has a page to show), its core once that is ready, whether it
+    is private (an InPrivate profile: no sign-in of the person's, nothing kept), the address on its way, the
+    site's request a popup waits on (with its deferral), the tab that opened it, and what the strip shows."""
+
+    def __init__(self, ident: int, private: bool, opener: "_Tab | None" = None):
+        self.id, self.private, self.opener = ident, private, opener
+        self.view = self.core = None
+        self.pending = ""
+        self.popup: tuple | None = None
+        self.url = self.title = ""
+        self.loading = self.sound = False
+
+
 class Pane:
-    """The site's WebView in the app window's `form`, made when a link opens and
+    """The site's WebViews in the app window's `form`, one per tab, made when a link opens and
     gone again when the pane closes. Its work runs on the form's thread, through
     `ui`. `tell(state)` hands the page what its bar shows, `find` names the find
     at an address ("" for none; called on a thread of its own), and `visit(row)`
@@ -263,10 +287,14 @@ class Pane:
         self.find = find
         self.visit = visit
         self.full = full
-        self._view = self._core = None
-        # Where to go once the WebView is ready, the space the page keeps for it (form px), and what of the app page
-        # lies over it (the chat in a narrow window, the address bar's suggestions): rects in its CSS px.
-        self._pending = ""
+        # The tabs in the strip's order, the one in front, the addresses of tabs closed (Ctrl+Shift+T), and the
+        # last tab number given.
+        self._tabs: list[_Tab] = []
+        self._tab: _Tab | None = None
+        self._closed: list[str] = []
+        self._made = 0
+        # The space the page keeps for the WebView (form px), and what of the app page lies over it (the chat in a
+        # narrow window, the address bar's suggestions): rects in its CSS px.
         self._box = None
         self._cuts: list = []
         # While the pane is in front: the window as it stood for the chat, where it was put, and the size given it.
@@ -276,9 +304,8 @@ class Pane:
         self._reading: dict | None = None
         self._quieted = False
         self._full = False
-        # The bar's private switch: nothing is kept while it is on. Hidden: the person minimized the pane or went to
-        # Settings, and the page goes on behind the chip that brings it back.
-        self.private = False
+        # Hidden: the person minimized the pane or went to Settings, and the page goes on behind the chip that
+        # brings it back.
         self._hidden = False
         self._timer = None
         # .NET holds no reference to these.
@@ -293,7 +320,6 @@ class Pane:
         self._op_seen = 0
         self._op_tick = lambda sender, args: self._input_tick()
         self._listeners: list = []
-        self._loaded = threading.Event()
         # Zoom: the bar's 适应宽度 (fit to width, off until pressed), the app page's px per CSS px, the person's own
         # zoom per site (kept in KEPT; in private mode for this run only), the factor last set here, and what the
         # bar was told. KEPT also holds the page open last and the window's size with a site in front.
@@ -307,10 +333,35 @@ class Pane:
         self._navigating = False
         self.ui(self._watch_form)
 
+    # ---- the tab in front: its WebView, its core, whether it is private
+
+    @property
+    def _view(self):
+        return self._tab.view if self._tab is not None else None
+
+    @property
+    def _core(self):
+        return self._tab.core if self._tab is not None else None
+
+    @property
+    def private(self) -> bool:
+        return self._tab is not None and self._tab.private
+
+    def _tab_of(self, sender) -> _Tab | None:
+        """The tab a WebView or a core belongs to."""
+        return next((tab for tab in self._tabs if sender is not None and (
+            (tab.view is not None and tab.view.Equals(sender)) or (tab.core is not None and tab.core.Equals(sender)))),
+            None)
+
     # ---- what the app asks, from any thread
 
     def open(self, address: str) -> None:
+        """A link from the app: in a new tab when the one in front has a page."""
         self.ui(lambda: self._open(address))
+
+    def go(self, address: str) -> None:
+        """What the person typed in the bar: in the tab in front."""
+        self.ui(lambda: self._open(address, here=True))
 
     def place(self, box: list, scale: float, cuts: list) -> None:
         self.ui(lambda: self._place(box, scale, cuts))
@@ -324,11 +375,12 @@ class Pane:
         if self._box is not None:
             self._place(self._css, self._scale * factor, self._cuts)
 
-    def do(self, action: str) -> None:
-        self.ui(lambda: self._do(action))
+    def do(self, action: str, tab: int = 0) -> None:
+        """A press in the bar or the strip; `tab` names the tab a strip press is for."""
+        self.ui(lambda: self._do(action, tab))
 
     def quiet(self, on: bool) -> None:
-        if self._view is not None:
+        if self._tabs:
             self.ui(lambda: self._quiet(on))
 
     def close(self) -> None:
@@ -369,19 +421,107 @@ class Pane:
         reading = self._reading
         threading.Thread(target=self._look_up, args=(reading,), name="mibo-browser", daemon=True).start()
 
-    def _open(self, address: str) -> None:
+    def _open(self, address: str, here: bool = False) -> None:
+        """`address` in the tab in front when `here` or when it is still empty (and not private), else in a new
+        tab: a link from the app or a tab brought back is never private."""
+        if self._tab is None or not (here or self._tab.view is None and not self._tab.private):
+            self._switch(self._new_tab(False))
+        tab = self._tab
         self._begin(address)
-        if self._core is None:
-            self._pending = address
+        tab.url, tab.title = address, ""
+        if tab.core is None:
+            tab.pending = address
+            # With the pane already placed the WebView is made now; else once the page says where it goes.
+            if tab.view is None and self._box is not None:
+                self._make(tab)
         else:
-            self._core.Navigate(address)
+            tab.core.Navigate(address)
         if self._quieted:
             self._quiet(False)
         if self._hidden:
             self._do("return")
-        # The page shows the pane and says where it is (place); the WebView is made then.
         self.tell({"open": True, "url": address, "host": urlsplit(address).hostname or "", "title": "",
-                   "back": False, "forward": False, "loading": True, "private": self.private})
+                   "back": False, "forward": False, "loading": True, "private": self.private, **self._strip()})
+
+    def _new_tab(self, private: bool, opener: _Tab | None = None) -> _Tab:
+        """A tab with no page yet, after the one in front (a site's new tab beside the tab that opened it)."""
+        self._made += 1
+        tab = _Tab(self._made, private, opener)
+        at = self._tabs.index(self._tab) + 1 if self._tab in self._tabs else len(self._tabs)
+        self._tabs.insert(at, tab)
+        return tab
+
+    def _switch(self, tab: _Tab) -> None:
+        """`tab` comes to the front: the one before is hidden and its reading ends, this one is shown, sized, cut
+        and zoomed as the pane is, and its page is read from now. A run under way pauses (it acts on the page in
+        front only), unless it waits for the person's own sign-in."""
+        if tab is self._tab:
+            return
+        before = self._tab
+        if before is not None:
+            self._send(self._finish())
+            if before.view is not None:
+                before.view.Visible = False
+        self._tab = tab
+        op = self.op
+        if op is not None and not op.get("held") and not op.get("wait"):
+            op["held"] = "paused"
+            self._tell_op()
+        if tab.view is not None:
+            tab.view.Visible = not self._hidden and not self._quieted
+            if self._box is not None:
+                tab.view.Bounds = self._box
+                self._cut()
+            tab.view.BringToFront()
+            self._zoom_told = ()
+            self._zoom()
+        if tab.core is not None and web_address(str(tab.core.Source)):
+            self._begin(str(tab.core.Source))
+            self._reading["begun"] = True
+            self._count()
+        self._state()
+        if tab.core is not None:
+            self._sound(tab.core, None)
+
+    def _close_tab(self, tab: _Tab) -> None:
+        """A tab closes (its ×, Ctrl+W, or the page's own window.close()): its address can come back with
+        Ctrl+Shift+T, unless it was private or a sign-in or payment page. The tab that opened it, else the one
+        beside it, comes to the front; the last tab closes the pane."""
+        if len(self._tabs) == 1:
+            self._send(self._shut())
+            return
+        url = str(tab.core.Source) if tab.core is not None else ""
+        if not tab.private and web_address(url) and not browsed.secret(url):
+            self._closed.append(url)
+            del self._closed[:-CLOSED_KEPT]
+        at = self._tabs.index(tab)
+        if tab is self._tab:
+            self._send(self._finish())
+            self._tab = None
+        self._tabs.remove(tab)
+        self._drop(tab)
+        if self._tab is None:
+            self._switch(tab.opener if tab.opener in self._tabs else self._tabs[min(at, len(self._tabs) - 1)])
+        else:
+            self.tell(self._strip())
+
+    def _drop(self, tab: _Tab) -> None:
+        """A tab's WebView and its page go; a popup still waiting is let go as the site's own."""
+        if tab.popup is not None:
+            args, deferral = tab.popup
+            tab.popup = None
+            args.Handled = True
+            deferral.Complete()
+        if tab.view is not None:
+            self.form.Controls.Remove(tab.view)
+            tab.view.Dispose()
+        tab.view = tab.core = None
+
+    def _strip(self) -> dict:
+        """What the strip shows: each tab's number, title, address, private, loading and sound, and the one in front."""
+        return {"tabs": [{"id": t.id, "title": t.title, "url": t.url, "private": t.private, "loading": t.loading,
+                          "sound": t.sound} for t in self._tabs],
+                "tab": self._tab.id if self._tab is not None else 0}
 
     def _look_up(self, reading: dict) -> None:
         ident = self.find(reading["url"])
@@ -396,7 +536,7 @@ class Pane:
         """The page's pane moved or changed size, or part of the app page came over it (`cuts`: [x, y, wide, high]
         in CSS px inside it): the WebView follows, made the first time."""
         from System.Drawing import Rectangle
-        if not self._pending and self._view is None:
+        if self._tab is None:
             return
         # The app page fills the form; its CSS px times its device pixel ratio make form px.
         origin = self.form.browser.webview.Location
@@ -404,7 +544,10 @@ class Pane:
         self._box = Rectangle(origin.X + x, origin.Y + y, max(wide, 1), max(high, 1))
         self._css, self._scale, self._cuts = box, scale, cuts
         if self._view is None:
-            self._make()
+            # An empty tab (Ctrl+T, the private button) waits for an address.
+            if not self._tab.pending:
+                return
+            self._make(self._tab)
         elif not self._full:
             self._view.Bounds = self._box
         self._cut()
@@ -466,7 +609,8 @@ class Pane:
             roomed["size"] = self._kept["size"] = size
             self._keep()
 
-    def _make(self) -> None:
+    def _make(self, tab: _Tab) -> None:
+        """The tab's WebView, on the pane's folder (so in the same browser processes as the other tabs)."""
         from Microsoft.Web.WebView2.WinForms import CoreWebView2CreationProperties, WebView2
         from System.Drawing import ColorTranslator
 
@@ -474,23 +618,29 @@ class Pane:
         properties = CoreWebView2CreationProperties()
         properties.UserDataFolder = str(self.folder / "webview")
         # Private: an InPrivate profile, so no sign-in of the person's reaches the page and nothing of it stays.
-        properties.IsInPrivateModeEnabled = self.private
+        properties.IsInPrivateModeEnabled = tab.private
         properties.Language = language()
         view.CreationProperties = properties
         view.DefaultBackgroundColor = ColorTranslator.FromHtml(CANVAS[_dark()])
         view.Bounds = self._box
+        view.Visible = tab is self._tab and not self._hidden and not self._quieted
         view.CoreWebView2InitializationCompleted += self._ready
         view.ZoomFactorChanged += self._zoomed
         view.KeyDown += self._key
         self.form.Controls.Add(view)
         view.BringToFront()
-        self._view = view
+        tab.view = view
         view.EnsureCoreWebView2Async(None)
 
     def _ready(self, sender, args) -> None:
-        if not args.IsSuccess or self._view is None:
+        tab = self._tab_of(sender)
+        if tab is None:
             return
-        core = self._view.CoreWebView2
+        if not args.IsSuccess:
+            # No view for it: the tab goes, and a popup waiting on it is let go.
+            self._close_tab(tab)
+            return
+        core = sender.CoreWebView2
         settings = core.Settings
         # Nothing reaches Python from here, and nobody inspects the app through it.
         settings.IsWebMessageEnabled = False
@@ -499,10 +649,11 @@ class Pane:
         settings.IsSwipeNavigationEnabled = True
         # The browser's own password saving and autofill, and each page looked at for a sign-in (signwatch.py).
         from . import signwatch
-        signwatch.ready(self, core)
+        signwatch.ready(self, core, tab.private)
         core.NavigationStarting += self._starting
         core.NavigationCompleted += self._completed
         core.NewWindowRequested += self._new_window
+        core.WindowCloseRequested += self._close_requested
         core.PermissionRequested += self._permission
         core.LaunchingExternalUriScheme += self._external
         core.DocumentTitleChanged += self._changed
@@ -512,17 +663,30 @@ class Pane:
         core.DownloadStarting += self._download
         core.IsDocumentPlayingAudioChanged += self._sound
         core.IsMutedChanged += self._sound
-        self._core = core
-        if self._pending:
-            core.Navigate(self._pending)
-            self._pending = ""
-        self._count()
+        tab.core = core
+        if tab.popup is not None:
+            # The site's popup is this tab's page: it keeps window.opener, so a sign-in hands its answer back.
+            request, deferral = tab.popup
+            tab.popup = None
+            request.NewWindow = core
+            request.Handled = True
+            deferral.Complete()
+        elif tab.pending:
+            core.Navigate(tab.pending)
+            tab.pending = ""
+        if tab is self._tab:
+            self._count()
 
     def _starting(self, sender, args) -> None:
         """Only web addresses load: file:, about:, data: and every other scheme are refused."""
         from Microsoft.Web.WebView2.Core import CoreWebView2NavigationKind
         if not web_address(args.Uri):
             args.Cancel = True
+            return
+        tab = self._tab_of(sender)
+        tab.loading = True
+        if tab is not self._tab:
+            self.tell(self._strip())
             return
         self._navigating = True
         reading = self._reading
@@ -534,9 +698,13 @@ class Pane:
         self._state(loading=True)
 
     def _completed(self, sender, args) -> None:
-        self._loaded.set()
+        tab = self._tab_of(sender)
+        tab.loading = False
+        if tab is not self._tab:
+            self._changed(sender, args)
+            return
         if args.IsSuccess:
-            source = str(self._core.Source)
+            source = str(sender.Source)
             if self._reading is None:
                 # A page come to from the last one.
                 self._begin(source)
@@ -559,31 +727,56 @@ class Pane:
         threading.Thread(target=heard, name="mibo-browser", daemon=True).start()
 
     def _changed(self, sender, args) -> None:
-        self._state()
+        tab = self._tab_of(sender)
+        if tab is self._tab:
+            self._state()
+        elif tab is not None:
+            tab.url, tab.title = str(sender.Source), str(sender.DocumentTitle or "").strip()
+            self.tell(self._strip())
 
     def _state(self, loading: bool | None = None) -> None:
-        core = self._core
-        source = str(core.Source)
-        title = str(core.DocumentTitle or "").strip()
+        """What the bar shows of the tab in front (an empty one has no address yet), with the strip."""
+        tab, core = self._tab, self._core
+        if core is not None:
+            tab.url, tab.title = str(core.Source), str(core.DocumentTitle or "").strip()
+        source, title = tab.url, tab.title
         if self._reading is not None and self._reading["url"] == source:
             self._reading["title"] = title
         state = {"url": source, "host": urlsplit(source).hostname or "", "title": title,
-                 "back": bool(core.CanGoBack), "forward": bool(core.CanGoForward), "private": self.private}
-        if loading is not None:
-            state["loading"] = loading
+                 "back": core is not None and bool(core.CanGoBack), "forward": core is not None and bool(core.CanGoForward),
+                 "private": tab.private, "loading": tab.loading if loading is None else loading, **self._strip()}
         self.tell(state)
         self._keep_last(source, title)
 
     def _sound(self, sender, args) -> None:
-        """The page began or stopped playing sound, or was muted: the bar and the chip show a speaker for it."""
-        self.tell({"sound": bool(self._core.IsDocumentPlayingAudio), "muted": bool(self._core.IsMuted)})
+        """A tab began or stopped playing sound, or was muted: the bar and the chip show a speaker for the one in
+        front, the strip one on each tab that plays."""
+        tab = self._tab_of(sender)
+        tab.sound = bool(sender.IsDocumentPlayingAudio)
+        if tab is self._tab:
+            self.tell({"sound": tab.sound, "muted": bool(sender.IsMuted), **self._strip()})
+        else:
+            self.tell(self._strip())
 
     def _new_window(self, sender, args) -> None:
-        """A new tab or window opens in this same view; only what the person clicked."""
+        """A site's new tab or popup, only from the person's click: a tab of its own in front, whose page the site
+        keeps hold of (the WebView is made, then handed to the site in `_ready`). While the character acts, it
+        opens in the page it acts on instead, so the run stays on the one page its guards watch."""
         args.Handled = True
-        if args.IsUserInitiated and web_address(args.Uri):
-            self._send(self._finish())
-            self._core.Navigate(args.Uri)
+        uri = str(args.Uri)
+        if not args.IsUserInitiated or not (web_address(uri) or uri == "about:blank"):
+            return
+        op = self.op
+        if op is not None and not op.get("held") and not op.get("wait"):
+            if web_address(uri):
+                self._send(self._finish())
+                sender.Navigate(uri)
+            return
+        opener = self._tab_of(sender)
+        tab = self._new_tab(opener.private, opener)
+        tab.popup, tab.url = (args, args.GetDeferral()), uri if web_address(uri) else ""
+        self._switch(tab)
+        self._make(tab)
 
     def _permission(self, sender, args) -> None:
         """Camera, microphone, location, notifications and the rest: refused without asking."""
@@ -610,9 +803,15 @@ class Pane:
         """mailto:, a program's own scheme: nothing on this computer is started from a site."""
         args.Cancel = True
 
+    def _close_requested(self, sender, args) -> None:
+        """The page closed its own window (a sign-in popup that is done): its tab goes, once the event is over."""
+        from System import Action
+        tab = self._tab_of(sender)
+        self.form.BeginInvoke(Action(lambda: self._close_tab(tab) if tab in self._tabs else None))
+
     def _full_screen(self, sender, args) -> None:
         """A video's full screen is the whole monitor's: the window covers it (`full`, then `cover`)."""
-        self.full(self._core, bool(self._core.ContainsFullScreenElement))
+        self.full(sender, bool(sender.ContainsFullScreenElement))
 
     def shows(self, core) -> bool:
         return self._core is not None and core is not None and self._core.Equals(core)
@@ -634,26 +833,31 @@ class Pane:
         # A video full screen is at 1; back in the pane, its own zoom again.
         self._zoom()
 
-    def _do(self, action: str) -> None:
-        """The bar's buttons, from the page."""
+    def _do(self, action: str, ident: int = 0) -> None:
+        """The bar's and the strip's buttons, from the page; `ident` names the tab a strip press is for."""
         core = self._core
         if action == "close":
             self._send(self._shut())
         elif action == "system":
-            # Read elsewhere from here on: the pane has done its part.
-            target = str(core.Source) if core is not None else self._pending
+            # Read elsewhere from here on: the tab has done its part.
+            target = str(core.Source) if core is not None else self._tab.pending
             if web_address(target):
                 threading.Thread(target=webbrowser.open, args=(target,), name="mibo-browser",
                                  daemon=True).start()
-            self._send(self._shut())
-        elif action == "private":
-            # From now on nothing is kept, the page in front included; off again, the next page counts.
-            self.private = not self.private
-            if self.private and self._reading is not None:
-                self._reading["secret"] = True
-            if self._view is not None:
-                self._remake()
-            self.tell({"private": self.private})
+            self._close_tab(self._tab)
+        elif action in ("private", "tab_new"):
+            # An empty tab in front, private or not, and the address to type in; the other tabs stay as they are.
+            self._switch(self._new_tab(action == "private"))
+            self.tell({"focus": "address"})
+        elif action in ("tab_select", "tab_close"):
+            tab = next((t for t in self._tabs if t.id == ident), None)
+            if tab is not None:
+                (self._switch if action == "tab_select" else self._close_tab)(tab)
+        elif action in ("tab_next", "tab_prev") and len(self._tabs) > 1:
+            at = self._tabs.index(self._tab) + (1 if action == "tab_next" else -1)
+            self._switch(self._tabs[at % len(self._tabs)])
+        elif action == "tab_reopen" and self._closed:
+            self._open(self._closed.pop())
         elif action == "fit":
             # The bar's 适应宽度 / 100%: the site fitted to the pane's width, or at its own size.
             self.fit = not self.fit
@@ -680,12 +884,13 @@ class Pane:
         elif action == "loaded":
             # The app page loaded again: a page still open waits behind its chip; with none, the page open last
             # is offered.
-            if core is None:
-                if self._view is None and self._kept["last"]:
+            if self._tab is None:
+                if self._kept["last"]:
                     self.tell({"kept": self._kept["last"]})
                 return
             self._state()
-            self._sound(None, None)
+            if core is not None:
+                self._sound(core, None)
             self._zoom_told = ()
             self._zoom()
             self._do("hide")
@@ -737,7 +942,8 @@ class Pane:
         last) or in full screen: ours goes over it. Otherwise the person's Ctrl +/- or Ctrl wheel, the browser's
         own steps: kept for the site (over the fit, when that is on; Ctrl 0 comes through _key)."""
         view = self._view
-        if view is None:
+        # A tab behind is zoomed again as it comes to the front.
+        if view is None or sender is not None and not view.Equals(sender):
             return
         now = float(view.ZoomFactor)
         if abs(now - self._zoom_set) <= 0.0005:
@@ -756,10 +962,17 @@ class Pane:
             self._keep()
 
     def _key(self, sender, args) -> None:
-        """Ctrl L in the page: to the bar's address, as in any browser. Ctrl 0 (WebView2 may leave the zoom as it
-        is): back to the fit for the site."""
+        """Ctrl L in the page: to the bar's address, as in any browser. Ctrl T, Ctrl W, Ctrl Shift T, Ctrl Tab and
+        Ctrl Shift Tab: a new tab, this one closed, the last one closed back, the next and the one before. Ctrl 0
+        (WebView2 may leave the zoom as it is): back to the fit for the site."""
         from System.Windows.Forms import Keys
-        if args.Control and args.KeyCode == Keys.L:
+        tabs = ((Keys.T, "tab_reopen" if args.Shift else "tab_new"), (Keys.W, "tab_close"),
+                (Keys.Tab, "tab_prev" if args.Shift else "tab_next"))
+        action = next((name for key, name in tabs if args.KeyCode == key), "") if args.Control and not args.Alt else ""
+        if action:
+            args.Handled = True
+            self._do(action, self._tab.id)
+        elif args.Control and args.KeyCode == Keys.L:
             self.form.browser.webview.Focus()
             self.tell({"focus": "address"})
         elif args.Control and args.KeyCode in (Keys.D0, Keys.NumPad0) and self._zooms().pop(self._host(), None):
@@ -794,15 +1007,20 @@ class Pane:
 
     # ---- the character operating the page (web/operate.py), from a thread other than the form's
 
-    def cdp(self, method: str, params: dict | None = None, timeout: float = CDP_S) -> dict:
-        """One DevTools protocol call in the page open now."""
-        return _call(self.ui, lambda: self._core, method, params or {}, timeout)
+    def cdp(self, method: str, params: dict | None = None, timeout: float = CDP_S, session: str = "") -> dict:
+        """One DevTools protocol call in the page open now, or with `session` in one of its frames."""
+        return _call(self.ui, lambda: self._core, method, params or {}, timeout, session)
 
-    def listen(self, name: str, handler: Callable[[dict], None]) -> None:
-        """`handler(params)` on each DevTools event `name` of the page open now."""
+    def listen(self, name: str, handler: Callable[..., None], session: bool = False) -> None:
+        """`handler(params)` on each DevTools event `name` of the page open now; with `session`,
+        `handler(params, session)`, the session it came from ("" for the page, else a frame's)."""
         def on(sender, args) -> None:
             with contextlib.suppress(ValueError):
-                handler(json.loads(str(args.ParameterObjectAsJson)))
+                params = json.loads(str(args.ParameterObjectAsJson))
+                if session:
+                    handler(params, str(args.SessionId or ""))
+                else:
+                    handler(params)
 
         def add() -> None:
             if self._core is not None:
@@ -812,7 +1030,8 @@ class Pane:
 
     def address(self) -> str:
         found: list = []
-        self.ui(lambda: found.append(str(self._core.Source) if self._core is not None else self._pending))
+        self.ui(lambda: found.append(str(self._core.Source) if self._core is not None
+                                     else self._tab.pending if self._tab is not None else ""))
         return found[0] if found else ""
 
     def bar_address(self) -> str:
@@ -973,26 +1192,15 @@ class Pane:
         self.op["held"] = "stopped" if keys(VK_ESCAPE) & 0x8001 else "paused"
         self._tell_op()
 
-    def _remake(self) -> None:
-        """The WebView made again on the same page, in the profile the private switch says."""
-        address = str(self._core.Source) if self._core is not None else self._pending
-        view, self._view, self._core = self._view, None, None
-        self.form.Controls.Remove(view)
-        view.Dispose()
-        self._pending = address if web_address(address) else ""
-        self._make()
-
     def _shut(self, forget: bool = True) -> dict | None:
-        """The pane closes: the WebView and its processes go, and the reading ends. Closed by the person, the page
-        open last is forgotten too; the app quitting keeps it, to offer when the app starts again."""
+        """The pane closes: every tab's WebView and their processes go, and the reading ends. Closed by the person,
+        the page open last is forgotten too; the app quitting keeps it, to offer when the app starts again."""
         sent = self._finish()
         if self._full:
             self.full(self._core, False)
-        if self._view is not None:
-            self.form.Controls.Remove(self._view)
-            self._view.Dispose()
-        self._view = self._core = self._box = None
-        self._pending = ""
+        for tab in self._tabs:
+            self._drop(tab)
+        self._tabs, self._tab, self._box = [], None, None
         self._quieted = self._full = self._hidden = False
         if forget and self._kept["last"]:
             self._kept["last"] = {}
@@ -1001,21 +1209,22 @@ class Pane:
         return sent
 
     def _quiet(self, on: bool) -> None:
-        """Quiet hides the pane's WebView with the pet and suspends its page; it comes back as it was."""
+        """Quiet hides the pane with the pet and suspends every tab's page; they come back as they were."""
         from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
-        if self._view is None or on == self._quieted:
+        if on == self._quieted:
             return
         self._quieted = on
         if on:
             self._pause()
-            self._view.Visible = False
-            if self._core is not None:
-                self._core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low
-                self._core.TrySuspendAsync()
-        else:
-            if self._core is not None:
-                self._core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal
-            self._view.Visible = not self._hidden
+        for tab in self._tabs:
+            if tab.view is not None:
+                tab.view.Visible = not on and tab is self._tab and not self._hidden
+            if tab.core is not None:
+                tab.core.MemoryUsageTargetLevel = (CoreWebView2MemoryUsageTargetLevel.Low if on
+                                                   else CoreWebView2MemoryUsageTargetLevel.Normal)
+                if on:
+                    tab.core.TrySuspendAsync()
+        if not on:
             self._count()
 
     def _resized(self, sender, args) -> None:

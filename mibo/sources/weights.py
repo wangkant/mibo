@@ -30,7 +30,10 @@ TASTE_FILE = "sources_taste.json"
 # Sources read in one round besides the person's own feeds, and the share of it kept for exploring.
 ROUND = 16
 EXPLORE = ROUND // 5
-# The prior: 1 for a source in the reader's language, this in another one.
+# The prior: 1 for a source in the reader's own language (the one the app speaks with them), READ_TOO in another
+# language they read, OTHER_LANG in one they did not say they read. A person who reads Chinese and English in a
+# Chinese app then gets mostly Chinese, with some English, as news apps do for a primary and an added language.
+READ_TOO = 0.2
 OTHER_LANG = 0.05
 # Added for a source on by default for the reader, halved every DEFAULT_HALF things reacted to,
 # since by then what the person does says more. At first a round is then about 10 of the 12 or 13
@@ -151,17 +154,20 @@ def _text(source) -> str:
 def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher: Optional[re.Pattern], *,
           unreadable: set[str] = frozenset(), defaults: Optional[set[str]] = None, supply: Optional[Callable] = None,
           origin: Optional[Callable[[str], float]] = None, retry_s: float = RETRY_S, retry_at: float = 0,
-          now: Optional[float] = None, topical: Optional[dict[str, float]] = None) -> list[dict]:
+          now: Optional[float] = None, topical: Optional[dict[str, float]] = None,
+          own: Optional[set[str]] = None) -> list[dict]:
     """Each source's gate, prior, learned exponent and weight, highest weight first.
 
     w = G * prior * exp(supply(s) + theta) * HIDE^hides * FAILED^min(fails, FAILS_MAX), with
     prior = L * (1 + default * is_default + TOPIC * on_topic), or with `topical` (source key -> pull, 0-1)
     L * (1 + default * is_default + PULL * pull). G is 0 for a blocked source not yet due a
-    retry; L is 1 for a language the person reads, 0 for one they said they cannot, OTHER_LANG otherwise;
+    retry; L is 1 for the person's own language (`own`, all they read when None), READ_TOO for another
+    language they read, 0 for one they said they cannot, OTHER_LANG otherwise;
     theta is `origin(key)` (the taste model's coefficient), or ln 2 times the reactions' exponent without it.
     A source with G or L at 0 gets weight 0 and is never drawn. is_default tests `defaults` (the reader's
     languages unexpanded, so a Simplified reader's defaults are not a Traditional reader's) or else `reader`."""
     readable = {reader} if isinstance(reader, str) else set(reader)
+    own = (readable if own is None else own) - set(unreadable)
     defaults = readable if defaults is None else defaults
     now = time.time() if now is None else now
     acted = sum(row["items"] for row in state.values())
@@ -170,7 +176,7 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
     for source in sources:
         row = state.get(source.key) or _blank()
         gate = 1.0 if open_to(row, now, retry_s, retry_at) else 0.0
-        lang = (1.0 if source.lang in readable or not source.lang
+        lang = (1.0 if source.lang in own or not source.lang else READ_TOO if source.lang in readable
                 else 0.0 if source.lang in unreadable else OTHER_LANG)
         topic = (PULL * topical.get(source.key, 0.0) if topical is not None
                  else TOPIC * bool(matcher and matcher.search(_text(source))))
@@ -188,7 +194,7 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
 
 def pick(weighed: list[dict], rng: random.Random, size: int = ROUND, explore: int = EXPLORE) -> list[dict]:
     """One round: `size - explore` drawn by weight without replacement, then `explore` of the
-    sources read least, a source in another language counted as read 1 / OTHER_LANG times more,
+    sources read least, a source in another language counted as read 1 / its language prior times more,
     and none the person asked to see less of. A source its gate or language leaves out is never drawn."""
     # Efraimidis and Spirakis: the largest u ** (1 / w) are a draw without replacement in proportion to w.
     keyed = sorted((r for r in weighed if r["weight"] > 0), key=lambda r: -math.log(1 - rng.random()) / r["weight"])

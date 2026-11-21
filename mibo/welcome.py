@@ -52,7 +52,7 @@ ASSETS = Path(__file__).with_name("static") / "welcome"
 # mibo/panels with `mount(app, workspace, body)`, drawn by the app
 # page's own files (setup.js and its sections, chat.js).
 PANELS = ("runtime", "desk", "tuning", "detect", "signin", "feed", "sources", "look", "profile", "quiet", "remarks",
-          "browser", "colors", "compose", "links", "modelbar", "signins", "tools", "pet", "schedule")
+          "browser", "colors", "compose", "links", "modelbar", "signins", "tools", "pet", "schedule", "walks")
 # The figures the pet can be, <key>.svg under the page's figures folder; the first is the
 # default, and a character of one's own is it too.
 PET_FIGURES = ("mibo", "chatgpt", "deepseek", "claude")
@@ -60,12 +60,12 @@ PET_FIGURES = ("mibo", "chatgpt", "deepseek", "claude")
 PAGE_ASSETS = ("i18n.js", "app.js", "app.css", "chat.js", "chat.css", "finds.js", "finds.css", "signin.css",
                "onboard.js", "onboard.css", "setup.js", "setup.css",
                "pet.js", "pet.css", "card.js", "card.css", "characters.js", "characters.css",
-               "browse.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
+               "browse.js", "browsetabs.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
                "linkcard.js", "linkcard.css", "modelbar.js", "modelbar.css", "providermarks.js", "sites.js", "sites.css",
                "toolcard.js", "skilloffer.js", "petux.css", "petbox.js", "petline.js", "petedge.js", "petdial.js",
                "petclick.js", "petoff.js", "compact.js", "compact.css", "schedulechat.js")
 # Settings' sections, each a script of its own under ASSETS/setup (setup.js is their shell).
-SETUP_PARTS = ("character", "model", "connect", "language", "recs", "memory", "privacy", "device", "about", "shell", "programs",
+SETUP_PARTS = ("character", "model", "connect", "language", "recs", "walks", "memory", "privacy", "device", "about", "shell", "programs",
                "skills", "tools", "schedule")
 TOKEN_HEADER = "x-mibo-setup-token"
 # Bytes; a chat message may be 8000 characters, three bytes each in Chinese.

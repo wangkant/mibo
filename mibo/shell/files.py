@@ -1,10 +1,11 @@
 """The file tools' own work, done in the page server after the gate let it through (panel.Shell.file).
 
-Each file tool is judged as the PowerShell command that does the same thing (`equivalent`), by the same
-read and judge as a command the model writes, so a folder, a card or a refusal comes the same way. What runs
-afterwards is Python, which can do what PowerShell 5.1 does badly for a model: read text in whatever encoding
-it is in, list and search without following links or opening protected files, show an edit as a difference,
-and delete to the Recycle Bin.
+Each file tool is judged by path rules alone, as coding agents gate their file tools: its full paths become the
+acts a command doing the same would be sorted into (`acts`), and the judge a command goes through (read.judge)
+holds them against the grants and the never list, so a folder, a card or a refusal comes the same way with no
+PowerShell between. What runs afterwards is Python, which can do what PowerShell 5.1 does badly for a model:
+read text in whatever encoding it is in, list and search without following links or opening protected files,
+show an edit as a difference, and delete to the Recycle Bin.
 """
 from __future__ import annotations
 
@@ -17,9 +18,11 @@ import re
 import shutil
 import time
 import zipfile
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from .grants import norm
+from .read import EXE_NEVER, EXE_OPEN, INSTALLERS, OPEN_RISKY, VERBED, Act, Sorter, _base, _copy_overwrites, _local_host
 
 # Lines a read returns when no limit is given, and the most it may ask for; characters kept of one line.
 READ_LINES = 400
@@ -38,49 +41,117 @@ DIFF_LINES = 1500
 DOC_KINDS = {".docx": "Word", ".xlsx": "Excel", ".pptx": "PowerPoint", ".pdf": "PDF"}
 
 
-def quoted(text: str) -> str:
-    """A PowerShell single-quoted string."""
-    return "'" + text.replace("'", "''") + "'"
+# ---------------------------------------------------------------- what the gate holds a file tool to
+
+TOOL_NAMES = {"read": "read_file", "list": "list_files", "search": "search_files", "open": "open_file",
+              "move": "move_files", "delete": "delete_files"}
 
 
-# ---------------------------------------------------------------- the equivalent commands the gate judges
-
-def equivalent(op: str, args: dict) -> str:
-    """The PowerShell command doing what the file tool `op` does, with absolute paths, as the gate reads it."""
-    if op == "read":
-        return f"Get-Content -LiteralPath {quoted(args['path'])}"
-    if op == "list":
-        return (f"Get-ChildItem -LiteralPath {quoted(args['path'])}" + (" -Recurse" if args.get("recursive") else "")
-                + (f" -Filter {quoted(args['pattern'])}" if args.get("pattern") else ""))
-    if op == "search":
-        # The folder as one named place: what is searched inside it skips protected files one by one (_walk).
-        return f"Select-String -LiteralPath {quoted(args['path'])} -Pattern {quoted(args['text'])} -SimpleMatch"
+def call(job: dict) -> str:
+    """A file tool's call as its card and the log show it: the tool and the full paths it works on."""
+    op = job["op"]
     if op == "write":
-        parent = os.path.dirname(args["path"])
-        made = "" if os.path.isdir(parent) else f"New-Item -ItemType Directory -Path {quoted(parent)} -Force; "
-        return f"{made}Set-Content -LiteralPath {quoted(args['path'])} -Value ''"
-    if op == "open":
-        target = args["path"]
-        if re.match(r"^https?://", target, re.IGNORECASE):
-            return f"Start-Process {quoted(target)}"
-        return f"Invoke-Item -LiteralPath {quoted(target)}"
+        return f"{job['kind']}_file {job['path']}"
     if op == "move":
-        parts = []
-        for folder in dict.fromkeys(m["folder"] for m in args["moves"] if m["folder"] and not os.path.isdir(m["folder"])):
-            parts.append(f"New-Item -ItemType Directory -Path {quoted(folder)} -Force")
-        for m in args["moves"]:
-            if args.get("copy"):
-                parts.append(f"Copy-Item -LiteralPath {quoted(m['from'])} -Destination {quoted(m['to'])}"
-                             + (" -Recurse" if os.path.isdir(m["from"]) else ""))
-            elif os.path.dirname(m["from"].rstrip("\\/")).lower() == os.path.dirname(m["to"]).lower():
-                parts.append(f"Rename-Item -LiteralPath {quoted(m['from'])} -NewName {quoted(os.path.basename(m['to']))}")
-            else:
-                parts.append(f"Move-Item -LiteralPath {quoted(m['from'])} -Destination {quoted(m['to'])}")
-        return "; ".join(parts)
+        return "move_files " + "; ".join(f"{m['from']} -> {m['to']}" for m in job["moves"]) + (" (copy)" if job["copy"] else "")
     if op == "delete":
-        deep = any(os.path.isdir(p) for p in args["paths"])
-        return f"Remove-Item -LiteralPath {', '.join(quoted(p) for p in args['paths'])}" + (" -Recurse" if deep else "")
-    raise ValueError(op)
+        return "delete_files " + "; ".join(job["paths"])
+    return f"{TOOL_NAMES[op]} {job['path']}" + (f" “{job['text']}”" if op == "search" else "")
+
+
+def acts(job: dict, cwd: str) -> list[Act]:
+    """What a file tool does, as the acts the judge holds against the grants: the kinds, places and flags a command
+    doing the same is sorted into (read.Sorter), found from the tool's full paths."""
+    sorter = Sorter({"nodes": []}, cwd)
+
+    def places(raws: list[str], write: bool) -> tuple[list[str], bool]:
+        """The paths as the judge takes them, and whether any has a wildcard; a share or a device path is an act
+        of its own."""
+        out, globs, given, wild = [], [], [], False
+        for raw in raws:
+            provider, place = sorter.paths.place(raw)
+            if provider != "file":
+                sorter.provider(provider, place, write, {})
+                continue
+            base, has = _base(place)
+            out.append(base)
+            globs.append(place)
+            given.append(raw)
+            wild = wild or has
+        sorter.last_raw, sorter.last_globs = given, globs
+        return out, wild
+
+    def made(folder: str) -> None:
+        paths, _ = places([folder], True)
+        sorter.add("change", "mkdir", f"creates {', '.join(paths)}", paths=paths, write=True)
+
+    op = job["op"]
+    if op in ("read", "list", "search"):
+        paths, wild = places([job["path"]], False)
+        # A search is of the folder as one named place: what is searched inside it skips protected files (_walk).
+        sorter.add("read", op, f"{op}s {', '.join(paths)}", paths=paths, wild=wild,
+                   recurse=op == "list" and bool(job["recursive"]))
+    elif op == "write":
+        if not os.path.isdir(job["folder"]):
+            made(job["folder"])
+        paths, wild = places([job["path"]], True)
+        sorter.add("overwrite" if any(os.path.isfile(p) for p in paths) else "change", "write",
+                   f"writes {', '.join(paths)}", paths=paths, write=True, wild=wild)
+    elif op == "open" and re.match(r"^https?://", job["path"], re.IGNORECASE):
+        host = (urlsplit(job["path"]).hostname or "").lower()
+        if _local_host(host):
+            sorter.add("system", "loopback", f"opens this computer's own services at {host}")
+        else:
+            sorter.add("network", "browse", f"opens {job['path'][:120]} in the browser", host=host or job["path"][:40],
+                       sends=True)
+    elif op == "open":
+        # Opened as a double-click would: a program, a script or an installer runs code, a document only shows.
+        target = job["path"]
+        base, ext = os.path.splitext(os.path.basename(target))[0].lower(), os.path.splitext(target)[1].lower()
+        place = sorter.paths.place(target)[1]
+        exists = os.path.exists(place)
+        if base in EXE_NEVER:
+            sorter.add(EXE_NEVER[base], EXE_NEVER[base], f"starts {base}")
+        elif ext in INSTALLERS:
+            sorter.add("install", "install", f"starts the installer {target}", name=target, paths=[place] if exists else [])
+        elif (ext in OPEN_RISKY or (not exists and not ext)) and base in EXE_OPEN:
+            sorter.add("read", "open", f"opens {base}", name=base)
+        elif ext in OPEN_RISKY or (not exists and not ext):
+            sorter.add("program", "program", f"starts {target}"[:160], name=target[:160], paths=[place] if exists else [])
+        else:
+            sorter.add("read", "open", f"opens {place} in its own program", paths=[place], name=os.path.basename(place))
+    elif op == "move":
+        for folder in dict.fromkeys(m["folder"] for m in job["moves"] if m["folder"] and not os.path.isdir(m["folder"])):
+            made(folder)
+        for m in job["moves"]:
+            # A move within one folder is a rename; a folder copied takes what is inside it.
+            what = "copy" if job["copy"] else (
+                "rename" if os.path.dirname(m["from"].rstrip("\\/")).lower() == os.path.dirname(m["to"]).lower() else "move")
+            recurse = what == "copy" and os.path.isdir(m["from"])
+            paths, wild = places([m["from"]], True)
+            if what == "rename":
+                dest = os.path.join(os.path.dirname(paths[0]) if len(paths) == 1 else cwd, os.path.basename(m["to"]))
+            else:
+                provider, dest = sorter.paths.place(m["to"])
+                if provider != "file":
+                    sorter.provider(provider, dest, True, {})
+                    continue
+            overwrite = False
+            for src in paths if not wild else []:
+                target = os.path.join(dest, os.path.basename(src)) if os.path.isdir(dest) and what != "rename" else dest
+                overwrite = overwrite or (what == "copy" and os.path.isfile(target)
+                                          and os.path.normcase(target) != os.path.normcase(src)) or (
+                    recurse and os.path.isdir(src) and _copy_overwrites(src, target))
+            sorter.add("overwrite" if overwrite else "change", what,
+                       f"{VERBED.get(what, what + 's')} {', '.join(paths) or 'items'} to {dest}", paths=paths, dest=dest,
+                       write=what in ("move", "rename"), wild=wild, recurse=recurse)
+    elif op == "delete":
+        paths, wild = places(job["paths"], True)
+        sorter.add("delete", "delete", f"deletes {', '.join(paths)}", paths=paths, write=True, wild=wild,
+                   recurse=any(os.path.isdir(p) for p in job["paths"]))
+    else:
+        raise ValueError(op)
+    return sorter.acts
 
 
 # ---------------------------------------------------------------- text in whatever encoding it is in

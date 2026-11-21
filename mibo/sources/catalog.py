@@ -137,8 +137,9 @@ def change_choice(runtime: Path, change: Callable[[dict], None]) -> dict:
 
 def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: Optional[random.Random] = None) -> list[dict]:
     """Every public source with its weight for this person, highest first (see `weights.weigh`):
-    the languages they read (the character's always among them), the situation's supply term, and the
-    taste model's sampled coefficient for each source while the model is on."""
+    the languages they read (the character's own first, the others less), the defaults of the character's
+    language, the situation's supply term, and the taste model's sampled coefficient for each source while
+    the model is on."""
     from .. import taste
     runtime = Path(runtime)
     matcher = feed_panel.topic_matcher(feed_panel.load_topics(runtime / feed_panel.TASTE_FILE))
@@ -147,8 +148,10 @@ def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: Optional[
     if taste.enabled(runtime):
         sampler = taste.Sampler(taste.load(runtime), taste.Priors(runtime), (rng or random.Random()).getrandbits(32))
         origin = lambda key: sampler.theta("origin:src:" + key)  # noqa: E731
+    own = situation.primary(lang)
+    defaults = {code for code in situation.default_langs(runtime, lang) if situation.primary(code) == own}
     return weights.weigh(public, weights.load(runtime), situation.readable(runtime) | situation.expand({lang}), matcher,
-                         unreadable=situation.unreadable(runtime), defaults=situation.default_langs(runtime, lang),
+                         own=situation.expand({lang}), unreadable=situation.unreadable(runtime), defaults=defaults,
                          supply=situation.supplier(runtime), origin=origin,
                          retry_s=situation.retry_s(runtime), retry_at=situation.retry_at(runtime),
                          topical=pulls(runtime, public, time.time()))

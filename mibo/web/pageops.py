@@ -16,11 +16,19 @@ a look finds what is shown as clickable though the tree names no control there
 its kind), boxes that scroll by themselves (a virtual conversation list) and
 the tooltip, icon or class of a control with no name; Playwright's ways for
 ordinary controls (date, time, colour and range fields set by value, several options of a list chosen at once,
-the click point on the first box of an element); an element can be found by the
+the click point on the first box of an element) and the rest of Playwright MCP's actions (keys with modifiers,
+typing that adds to a field, double and right clicks, a drag from one element onto another with the browser's own
+drag and drop caught as Playwright's crDragDrop does, waiting until words show or go); an element can be found by the
 words it shows; scrolling goes inside a box and on until some words show; the
 settle wait holds while the page says it is busy; a control drawn again since
 the look is found again by its role, name and the text before it; and a ring
 shows for a moment where the next click or key lands.
+
+A frame from another site runs in a process of its own, which the page's
+session does not reach: as Playwright and Stagehand do, each is read in its own
+session (Tab.frames, from Target.setAutoAttach with flatten) and printed where
+it sits, its ids numbered apart (FRAME_IDS) so an action goes to its session.
+Payment, sign-in and bot-check frames are named and left to the person.
 """
 from __future__ import annotations
 
@@ -31,6 +39,8 @@ import re
 import time
 from typing import Any
 from urllib.parse import urlsplit
+
+from ..browsed import secret as secret_address
 
 CONTROLS = set(
     "button link textbox searchbox combobox listbox option checkbox radio switch slider spinbutton tab menuitem "
@@ -48,8 +58,10 @@ CONTEXT_LOSS = re.compile(r"Execution context was destroyed|Cannot find context|
                           r"context|Inspected target navigated|Target closed|No frame")
 CDP_TIMEOUT_MS = 15_000
 SURROGATE = re.compile("[\ud800-\udfff]")
-# What a state the model sees may hold, characters.
+# What a state the model sees may hold, characters: for the least able model, and the most for one whose context
+# window has room (web/operate.budget), as browser-use gives tens of thousands.
 STATE_MAX = 6000
+STATE_MOST = 20_000
 SECRET_MASK = "•••"
 # A field's own words that make it secret, whatever its type says.
 SECRET_LABEL = re.compile(r"password|passcode|passwd|card\s*number|card\s*no|cvv|cvc|security\s*code|one[-\s]?time|"
@@ -70,8 +82,33 @@ BLANK_S = 8.0
 # How far `scroll ... until` goes, in wheels, and how long it waits for more to load at the end of a list.
 UNTIL_WHEELS = 30
 MORE_S = 2.5
+# How long `wait` with `until` or `gone` waits for the words (Playwright MCP's wait_for), seconds.
+WAIT_S = 15.0
+# Mouse moves a drag takes from one control to the other, so a list that follows the mouse sees it go by.
+DRAG_STEPS = 8
+# Keys a press may name; a chord holds them with modifiers, by Playwright's names and the usual short ones, as
+# CDP's mask (Alt 1, Control 2, Meta 4, Shift 8); one letter, digit or sign is a key too.
+KEYS = {"Enter": 13, "Escape": 27, "Tab": 9, "Backspace": 8, "Delete": 46, "ArrowDown": 40, "ArrowUp": 38,
+        "ArrowLeft": 37, "ArrowRight": 39, "PageDown": 34, "PageUp": 33, "Home": 36, "End": 35, " ": 32}
+KEY_NAMES = {**{k.lower(): k for k in KEYS}, "space": " ", "esc": "Escape", "del": "Delete", "return": "Enter"}
+MODIFIERS = {"alt": ("Alt", 1), "control": ("Control", 2), "ctrl": ("Control", 2), "meta": ("Meta", 4),
+             "cmd": ("Meta", 4), "command": ("Meta", 4), "shift": ("Shift", 8)}
+SIGNS = {"/": 191, ".": 190, ",": 188, "-": 189, "=": 187, ";": 186, "'": 222, "[": 219, "]": 221}
 # How long the ring shows before the action.
 RING_S = 0.45
+# The ids in a frame from another site: the frame's number in the page times this, plus the id in its own process.
+FRAME_IDS = 10_000_000
+# Frames the person fills in themselves, beside browsed.secret's sign-in and payment addresses: card fields of the
+# payment services and bot checks, by host or path.
+PERSON_FRAME = re.compile(r"(^|\.)(stripe\.com|stripe\.network|braintreegateway\.com|braintree-api\.com|adyen\.com|"
+                          r"checkout\.com|klarna\.com|paypalobjects\.com|hcaptcha\.com|recaptcha\.net|"
+                          r"challenges\.cloudflare\.com|arkoselabs\.com|geetest\.com)(/|$)|/recaptcha/", re.I)
+
+
+def for_person(url: str) -> bool:
+    """A frame never read or acted in: payment, sign-in or a bot check."""
+    parts = urlsplit(url)
+    return secret_address(url) or bool(PERSON_FRAME.search(f"{parts.hostname or ''}{parts.path}"))
 
 
 def norm(s: Any) -> str:
@@ -86,6 +123,20 @@ def fold(s: str) -> str:
 
 def clip(s: str, n: int) -> str:
     return f"{s[:n]}…" if len(s) > n else s
+
+
+def chord(keys: str) -> tuple[str, int, str]:
+    """A key or chord as the model writes it ("Control+Enter", "shift+tab", "Delete"): its spelling, the modifier
+    mask and the key. ValueError for a modifier or key it does not know."""
+    *held, key = [p.strip() for p in str(keys).split("+")] if str(keys).strip() else [" "]
+    key = KEY_NAMES.get(key.lower(), key)
+    if not (key in KEYS or key in SIGNS or (len(key) == 1 and key.isascii() and key.isalnum())):
+        raise ValueError(f"no key {key[:20]!r}")
+    if any(p.lower() not in MODIFIERS for p in held):
+        raise ValueError(f"no chord {str(keys)[:30]!r}")
+    mods = dict(MODIFIERS[p.lower()] for p in held)
+    named = [m for m in ("Control", "Alt", "Meta", "Shift") if m in mods]
+    return "+".join(named + ["Space" if key == " " else key]), sum(mods[m] for m in named), key
 
 
 def quote(s: str) -> str:
@@ -234,6 +285,29 @@ VISIBLE_JS = r"""() => {
   return out.join(' ').replace(/\s+/g, ' ').toLowerCase();
 }"""
 
+# The caret at the end of a field or an editable box, for typing that adds to what it holds.
+END_JS = r"""function() {
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  if (typeof e.setSelectionRange === 'function') {
+    try { e.setSelectionRange(e.value.length, e.value.length); return; } catch (x) {}
+  }
+  const r = document.createRange();
+  r.selectNodeContents(e);
+  r.collapse(false);
+  getSelection().removeAllRanges();
+  getSelection().addRange(r);
+}"""
+
+# Where an element sits among its own: the words of the item before and after it (the element, or the nearest of
+# its ancestors, up to five, with neighbours that have words), so a drag can say where it put something.
+PLACE_JS = r"""function() {
+  let e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  const words = (n) => n ? (n.innerText || n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+  for (let up = 0; up < 5 && e.parentElement && e.parentElement !== document.body
+       && !words(e.previousElementSibling) && !words(e.nextElementSibling); up++) e = e.parentElement;
+  return {before: words(e.previousElementSibling), after: words(e.nextElementSibling)};
+}"""
+
 POINT_JS = r"""function(editableCover) {
   const forms = """ + json.dumps(SET_BY_VALUE) + r""";
   const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
@@ -263,6 +337,18 @@ POINT_JS = r"""function(editableCover) {
     py += fr.y + f.clientTop + parseFloat(cs.paddingTop);
   }
   return {x: px, y: py, covered, multi};
+}"""
+
+# Where a frame's own document starts inside its frame element, in the coordinates of the process's top page.
+INNER_JS = r"""function() {
+  const f = this, r = f.getBoundingClientRect(), cs = getComputedStyle(f);
+  let x = r.x + f.clientLeft + parseFloat(cs.paddingLeft), y = r.y + f.clientTop + parseFloat(cs.paddingTop);
+  for (let w = f.ownerDocument.defaultView; w && w.frameElement; w = w.parent) {
+    const o = w.frameElement, or = o.getBoundingClientRect(), os = getComputedStyle(o);
+    x += or.x + o.clientLeft + parseFloat(os.paddingLeft);
+    y += or.y + o.clientTop + parseFloat(os.paddingTop);
+  }
+  return {x, y};
 }"""
 
 # Where an element is, in the top page's coordinates (for the ring and the marks).
@@ -615,30 +701,56 @@ class Page:
         # blank page was waited for on.
         self._world: tuple[Any, int] | None = None
         self._waited: Any = None
+        # Frames from another site read in the last look: number -> {"session", "url", "owner"}, the owner being
+        # its frame element as (session, id) in the document that holds it; each frame's number by its frame id,
+        # kept across looks so its ids stay the same.
+        self.frames: dict[int, dict] = {}
+        self._numbers: dict[str, int] = {}
+        # What a drag the browser caught carries (Input.dragIntercepted), and whether that event is heard yet.
+        self._dragged: dict | None = None
+        self._drag_heard = False
 
     async def cdp(self, method: str, **params: Any) -> dict:
         return await self.tab.cdp(method, params)
 
+    async def _in(self, session: str, method: str, **params: Any) -> dict:
+        """A DevTools command to the page ("") or to a frame from another site."""
+        return await self.tab.cdp(method, params, session)
+
+    def _node(self, ident: int) -> tuple[str, int]:
+        """The session an id is in ("" for the page) and its id there."""
+        k, local = divmod(ident, FRAME_IDS)
+        return (self.frames[k]["session"] if k else ""), local
+
+    def _id(self, session: str, local: int) -> int:
+        return local + FRAME_IDS * next((k for k, f in self.frames.items() if f["session"] == session), 0)
+
+    def frame_url(self, ident: int) -> str:
+        """The address of the frame from another site an id is in; "" for one of the page's own."""
+        k = ident // FRAME_IDS
+        return self.frames[k]["url"] if k else ""
+
     # --- page probes
 
-    async def _evaluate(self, fn: str) -> Any:
-        r = await self.cdp("Runtime.evaluate", expression=f"({fn})()", timeout=CDP_TIMEOUT_MS, awaitPromise=True,
-                     returnByValue=True, userGesture=True)
+    async def _evaluate(self, fn: str, session: str = "") -> Any:
+        r = await self._in(session, "Runtime.evaluate", expression=f"({fn})()", timeout=CDP_TIMEOUT_MS,
+                           awaitPromise=True, returnByValue=True, userGesture=True)
         if r.get("exceptionDetails"):
             d = r["exceptionDetails"]
             raise RuntimeError((d.get("exception") or {}).get("description") or d.get("text"))
         return (r.get("result") or {}).get("value")
 
-    async def probe(self) -> dict:
-        return await self._evaluate(PROBE_JS)
+    async def probe(self, session: str = "") -> dict:
+        return await self._evaluate(PROBE_JS, session)
 
-    async def settle(self, cap_ms: float = 3000, quiet_ms: float = 120, since: float = 0) -> dict:
-        """Wait until the document is parsed and the DOM has been quiet for quiet_ms, at most cap_ms."""
+    async def settle(self, cap_ms: float = 3000, quiet_ms: float = 120, since: float = 0, session: str = "") -> dict:
+        """Wait until the document (the page's, or a frame's from another site) is parsed and the DOM has been
+        quiet for quiet_ms, at most cap_ms."""
         start, probe = now(), None
         limit = cap_ms
         while now() - start < limit:
             try:
-                probe = await self.probe()
+                probe = await self.probe(session)
                 if probe["ready"] == "loading":
                     limit = max(cap_ms, 6000)
                 # The page says it is still answering (a lookup, a list coming): it is given up to 10 s.
@@ -654,27 +766,31 @@ class Page:
             await asyncio.sleep((max(20, quiet_ms - probe["idle"]) if probe and probe["ready"] != "loading" else 60) / 1000)
         return {"why": "cap", "probe": probe}
 
-    async def visible_text(self) -> str:
-        return await self._evaluate(VISIBLE_JS) or ""
+    async def visible_text(self, session: str = "") -> str:
+        return await self._evaluate(VISIBLE_JS, session) or ""
 
-    async def _capture(self) -> list[dict]:
-        """AX trees of the main frame and of every same-process child frame (a frame from another site runs in
-        its own process and is not listed here; `_layout` finds it)."""
+    async def _capture(self, session: str = "") -> list[dict]:
+        """AX trees of a document (the page's, or with `session` a frame's from another site) and of every child
+        frame in its process; a payment or sign-in frame among those is left to the person. A frame from another
+        site is not listed here: `_layout` finds where it sits."""
         for i in range(21):
             try:
-                nodes = (await self.cdp("Accessibility.getFullAXTree"))["nodes"]
+                nodes = (await self._in(session, "Accessibility.getFullAXTree"))["nodes"]
                 children: list[tuple[str, str]] = []
 
                 def walk(tree: dict) -> None:
                     for child in tree.get("childFrames") or []:
                         children.append((child["frame"].get("url", ""), child["frame"]["id"]))
                         walk(child)
-                walk((await self.cdp("Page.getFrameTree"))["frameTree"])
+                walk((await self._in(session, "Page.getFrameTree"))["frameTree"])
                 frames = [{"url": "", "nodes": nodes}]
                 for url, ident in children:
+                    if for_person(url):
+                        frames.append({"url": url, "nodes": [], "person": True})
+                        continue
                     try:
-                        frames.append({"url": url, "nodes": (await self.cdp("Accessibility.getFullAXTree",
-                                                                     frameId=ident))["nodes"]})
+                        frames.append({"url": url, "nodes": (await self._in(session, "Accessibility.getFullAXTree",
+                                                                            frameId=ident))["nodes"]})
                     except Exception:
                         frames.append({"url": url, "nodes": []})
                 return frames
@@ -684,21 +800,73 @@ class Page:
                 await asyncio.sleep(0.05)
         raise AssertionError("unreachable")
 
-    async def _secret_ids(self) -> set[int]:
-        """Fields secret by their type or autocomplete, wherever they are in the main document."""
-        root = (await self.cdp("DOM.getDocument", depth=0))["root"]
+    async def _secret_ids(self, session: str = "") -> set[int]:
+        """Fields secret by their type or autocomplete, wherever they are in a document."""
+        root = (await self._in(session, "DOM.getDocument", depth=0))["root"]
         found = set()
-        for node in (await self.cdp("DOM.querySelectorAll", nodeId=root["nodeId"], selector=SECRET_SELECTOR))["nodeIds"]:
-            found.add((await self.cdp("DOM.describeNode", nodeId=node))["node"]["backendNodeId"])
+        for node in (await self._in(session, "DOM.querySelectorAll", nodeId=root["nodeId"],
+                                     selector=SECRET_SELECTOR))["nodeIds"]:
+            found.add((await self._in(session, "DOM.describeNode", nodeId=node))["node"]["backendNodeId"])
         return found
 
-    async def _layout(self) -> dict:
+    async def _frames(self, url: str, frames: list[dict]) -> list[dict]:
+        """The documents of a look: the page's (`url`, its `frames` as captured) and each frame's from another
+        site, with its owner and its number; a payment or sign-in frame is named and not read. Each comes with
+        what `_layout`, the visible text and the secret fields give of it."""
+        docs = [{"session": "", "url": url, "k": 0, "frames": frames}]
+        found = []
+        for session in await self.tab.frames():
+            try:
+                top = (await self._in(session, "Page.getFrameTree"))["frameTree"]["frame"]
+            except Exception:
+                # Gone since it was listed.
+                continue
+            found.append((session, top["id"], top.get("url", "")))
+        self.frames = {}
+        for session, frame, address in found:
+            owner = None
+            for where in ["", *(s for s, _, _ in found if s != session)]:
+                try:
+                    owner = (where, (await self._in(where, "DOM.getFrameOwner", frameId=frame))["backendNodeId"])
+                    break
+                except Exception:
+                    # Its frame element is in another document.
+                    continue
+            if owner is None:
+                continue
+            k = self._numbers.setdefault(frame, len(self._numbers) + 1)
+            doc = {"session": session, "url": address, "k": k, "owner": owner, "person": for_person(address)}
+            if not doc["person"]:
+                try:
+                    doc["frames"] = await self._capture(session)
+                except Exception:
+                    continue
+                self.frames[k] = {"session": session, "url": address, "owner": owner}
+            docs.append(doc)
+        for doc in docs:
+            if doc.get("person"):
+                continue
+            try:
+                doc["layout"] = await self._layout(doc["session"])
+            except Exception:
+                doc["layout"] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
+            try:
+                doc["visible"] = await self.visible_text(doc["session"])
+            except Exception:
+                doc["visible"] = None
+            try:
+                doc["secret"] = await self._secret_ids(doc["session"])
+            except Exception:
+                doc["secret"] = set()
+        return docs
+
+    async def _layout(self, session: str = "") -> dict:
         """From one DOM snapshot: elements shown as clickable that the tree names no control (a pointer cursor,
         the outermost of its kind), boxes that scroll by themselves with how far down they are, the words a
         control with no name keeps (its tooltip, else its icon's and its class's words), the type of each date,
         time, colour or range field, and the frames shown. Keys are backendNodeIds."""
-        snap = await self.cdp("DOMSnapshot.captureSnapshot", computedStyles=["cursor", "overflow-y", "visibility"],
-                              includeDOMRects=True)
+        snap = await self._in(session, "DOMSnapshot.captureSnapshot",
+                              computedStyles=["cursor", "overflow-y", "visibility"], includeDOMRects=True)
         strings = snap.get("strings") or []
         out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
 
@@ -793,7 +961,9 @@ class Page:
         text, with `*` on ids new since the last look and secret fields masked. `[id] clickable "words"` is
         shown as clickable with no control named there; `[id] scrollable (…)` is a box that scrolls by itself;
         `{words}` after a control with no name is its tooltip, icon or class; `(form)` after a date, time, colour,
-        range or several-choice field is what to type into it; a frame from another site is one line."""
+        range or several-choice field is what to type into it; a frame from another site is printed where it sits,
+        between `--- frame <host> (another site) ---` and `--- end of frame`, or named in one line when it is for
+        the person (payment, sign-in) or cannot be read."""
         settled = await self.settle()
         probe = settled.get("probe") or await self._evaluate("() => ({url: location.href, title: document.title})")
         frames = await self._capture()
@@ -806,26 +976,12 @@ class Page:
             probe = settled.get("probe") or probe
             frames = await self._capture()
         self._waited = probe.get("doc")
-        try:
-            layout = await self._layout()
-        except Exception:
-            layout = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}}
-        try:
-            visible = await self.visible_text()
-        except Exception:
-            visible = None
-        try:
-            secret = await self._secret_ids()
-        except Exception:
-            secret = set()
+        docs = await self._frames(probe.get("url", ""), frames)
         previous = self.last
         self.before = (self.last, self.near)
         self.last, self.secrets, self.interactive, self.near, self.values = {}, set(), 0, {}, {}
         lines: list[str] = []
         text: list[str] = []
-        clickable, scrollable, hints, types = layout["click"], layout["scroll"], layout["hint"], layout["type"]
-        here = urlsplit(probe.get("url", "")).hostname
-        away = {k: host for k, host in layout["frame"].items() if host != here}
 
         def flush() -> None:
             if text:
@@ -837,7 +993,23 @@ class Page:
             here = " ".join(text) if text else next((x for x in reversed(lines) if not x.startswith(("[", "*["))), "")
             return re.sub(r"[\d\s.,:%+-]+", " ", here).strip()[-60:]
 
-        for frame in frames:
+        def emit(doc: dict) -> None:
+            """The lines of one document, the page's or a frame's from another site, its ids numbered by its frame."""
+            base = doc["k"] * FRAME_IDS
+            visible, secret, layout = doc["visible"], doc["secret"], doc["layout"]
+            clickable, scrollable, hints, types = layout["click"], layout["scroll"], layout["hint"], layout["type"]
+            here = urlsplit(doc["url"]).hostname
+            away = {k: host for k, host in layout["frame"].items() if host != here}
+            for frame in doc["frames"]:
+                if frame.get("person"):
+                    flush()
+                    lines.append(f"--- frame {urlsplit(frame['url']).hostname}: payment or sign-in, for the person; "
+                                 f"it is not read")
+                    continue
+                part(frame, base, visible, secret, clickable, scrollable, hints, types, away, doc)
+
+        def part(frame: dict, base: int, visible: Any, secret: set, clickable: dict, scrollable: dict, hints: dict,
+                 types: dict, away: dict, doc: dict) -> None:
             by_id = {n["nodeId"]: n for n in frame["nodes"]}
             start = len(lines)
 
@@ -867,28 +1039,39 @@ class Page:
                 role = "" if role is None else str(role)
                 name = norm(val(n.get("name")))
                 kids = n.get("childIds") or []
-                ident = n.get("backendDOMNodeId")
-                if ident in scrollable and ident not in self.last:
+                local = n.get("backendDOMNodeId")
+                ident = base + local if local else local
+                if local in scrollable and ident not in self.last:
                     # A box that scrolls by itself: a conversation list, a feed in a column.
                     flush()
                     self.near[ident] = context()
                     self.last[ident] = ("scrollable", name)
                     lines.append(("*" if previous and ident not in previous else "")
                                  + f"[{ident}] scrollable" + (f' "{clip(name, 60)}"' if name else "")
-                                 + f" ({scrollable[ident]}; scroll it by this id)")
-                if ident in away:
-                    # Shown where it sits, so the model can say what it cannot reach (a chat widget, a comment box).
+                                 + f" ({scrollable[local]}; scroll it by this id)")
+                if local in away:
+                    # A frame from another site (a chat widget, a comment box), printed where it sits.
                     flush()
-                    lines.append(f"--- frame {away[ident]}: from another site, cannot be read")
+                    inner = next((d for d in docs if d.get("owner") == (doc["session"], local)), None)
+                    host = urlsplit(inner["url"]).hostname if inner else away[local]
+                    if inner is None:
+                        lines.append(f"--- frame {host}: from another site, cannot be read")
+                    elif inner.get("person"):
+                        lines.append(f"--- frame {host}: payment or sign-in, for the person; it is not read")
+                    else:
+                        lines.append(f"--- frame {host} (another site) ---")
+                        emit(inner)
+                        flush()
+                        lines.append("--- end of frame")
                     return
-                if (ident in clickable and ident not in self.last and role not in CONTROLS
+                if (local in clickable and ident not in self.last and role not in CONTROLS
                         and not (prop(n, "focusable") and role != "RootWebArea")):
                     # Shown as clickable though the tree names no control: a row, a menu entry, a day.
                     said: list[str] = []
                     holds = words_in(n, said)
                     shown = clip(name or norm(" ".join(said)), 40 if holds else 100)
                     # An icon with no words (a trash can, a heart) is named by its tooltip, drawing or class.
-                    hint = "" if shown else hints.get(ident, "")
+                    hint = "" if shown else hints.get(local, "")
                     if shown or holds or hint:
                         flush()
                         self.near[ident] = context()
@@ -932,7 +1115,7 @@ class Page:
                 if lines and lines[-1].lower() == name.lower():
                     lines.pop()
                 value = norm(val(n.get("value")))
-                is_secret = ident in secret or (role in ("textbox", "searchbox", "generic") and bool(
+                is_secret = local in secret or (role in ("textbox", "searchbox", "generic") and bool(
                     SECRET_LABEL.search(name)))
                 checked, expanded = prop(n, "checked"), prop(n, "expanded")
                 states = [s for s in [
@@ -955,7 +1138,7 @@ class Page:
                         for k in c.get("childIds") or []:
                             collect(by_id.get(k))
                 collect(popup)
-                kind = types.get(ident, "")
+                kind = types.get(local, "")
                 shown = ("select" if popup else "file" if role == "button" and value
                          else "textbox" if role == "generic" and prop(n, "editable")
                          else kind if kind not in ("", "range", "multiple") else role)
@@ -965,8 +1148,8 @@ class Page:
                 self.last[ident] = (shown, name)
                 self.near[ident] = near
                 self.interactive += 1
-                hint = hints.get(ident, "") if NAMELESS.match(name) and shown in ("button", "link", "generic") else ""
-                if not hint and hints.get(ident, "").endswith("· on") and shown in ("button", "link", "generic"):
+                hint = hints.get(local, "") if NAMELESS.match(name) and shown in ("button", "link", "generic") else ""
+                if not hint and hints.get(local, "").endswith("· on") and shown in ("button", "link", "generic"):
                     states = [*states, "on"]
                 if is_secret:
                     self.secrets.add(ident)
@@ -993,6 +1176,8 @@ class Page:
             flush()
             if frame["url"] and len(lines) > start:
                 lines.insert(start, f"--- frame {frame['url']} ---")
+
+        emit(docs[0])
         header = f"[state] {probe.get('title', '')} | {probe.get('url', '')}"
         if probe.get("sh") and probe.get("vh") and probe["sh"] > probe["vh"] + 40:
             # How much of the page is above and below the screen.
@@ -1020,22 +1205,52 @@ class Page:
     # --- one node
 
     async def on_node(self, ident: int, fn: str, argument: Any = None) -> Any:
-        obj = (await self.cdp("DOM.resolveNode", backendNodeId=ident))["object"]
+        return await self._call_on(*self._node(ident), fn, argument)
+
+    async def _call_on(self, session: str, local: int, fn: str, argument: Any = None) -> Any:
+        obj = (await self._in(session, "DOM.resolveNode", backendNodeId=local))["object"]
         if not obj.get("objectId"):
             raise RuntimeError("Node unavailable.")
         try:
-            r = await self.cdp("Runtime.callFunctionOn", objectId=obj["objectId"], functionDeclaration=fn,
-                         arguments=[{} if argument is None else {"value": argument}], returnByValue=True,
-                         awaitPromise=True)
+            r = await self._in(session, "Runtime.callFunctionOn", objectId=obj["objectId"], functionDeclaration=fn,
+                               arguments=[{} if argument is None else {"value": argument}], returnByValue=True,
+                               awaitPromise=True)
             if r.get("exceptionDetails"):
                 d = (r["exceptionDetails"].get("exception") or {}).get("description")
                 raise RuntimeError(("Node operation failed." if d is None else d).split("\n    at ")[0])
             return (r.get("result") or {}).get("value")
         finally:
             try:
-                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
+                await self._in(session, "Runtime.releaseObject", objectId=obj["objectId"])
             except Exception:
                 pass
+
+    async def _found(self, session: str, r: dict) -> int | None:
+        """The id of the element a Runtime.evaluate in `session` gave back, or None."""
+        obj = r.get("result") or {}
+        if not obj.get("objectId"):
+            return None
+        try:
+            local = (await self._in(session, "DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
+        finally:
+            try:
+                await self._in(session, "Runtime.releaseObject", objectId=obj["objectId"])
+            except Exception:
+                pass
+        return None if local is None else self._id(session, local)
+
+    async def _offset(self, session: str) -> tuple[float, float]:
+        """Where a frame from another site starts in the top page, through every frame it sits in."""
+        x = y = 0.0
+        while session:
+            where, owner = next(f["owner"] for f in self.frames.values() if f["session"] == session)
+            at = await self._call_on(where, owner, INNER_JS)
+            x, y, session = x + at["x"], y + at["y"], where
+        return x, y
+
+    async def focus(self, ident: int) -> None:
+        session, local = self._node(ident)
+        await self._in(session, "DOM.focus", backendNodeId=local)
 
     async def facts(self, ident: int) -> dict:
         return await self.on_node(ident, FACTS_JS) or {}
@@ -1049,22 +1264,20 @@ class Page:
         return await self.on_node(ident, SECRET_EMPTY_JS, SECRET_SELECTOR)
 
     async def active(self) -> int | None:
-        """The backendNodeId of the element with focus, or None."""
-        r = await self.cdp("Runtime.evaluate", expression=ACTIVE_JS)
-        obj = r.get("result") or {}
-        if not obj.get("objectId"):
-            return None
-        try:
-            return (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
-        finally:
-            try:
-                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
-            except Exception:
-                pass
+        """The id of the element with focus, inside a frame from another site when the focus is there; or None."""
+        session = ""
+        while True:
+            ident = await self._found(session, await self._in(session, "Runtime.evaluate", expression=ACTIVE_JS))
+            inner = next((f["session"] for f in self.frames.values() if ident is not None
+                          and f["owner"] == (session, self._node(ident)[1])), None)
+            if inner is None:
+                return ident
+            session = inner
 
     async def secret(self, ident: int) -> bool:
         """A field never typed into: by its type, autocomplete, or its own words (read off the DOM each time)."""
-        node = (await self.cdp("DOM.describeNode", backendNodeId=ident))["node"]
+        session, local = self._node(ident)
+        node = (await self._in(session, "DOM.describeNode", backendNodeId=local))["node"]
         attrs = node.get("attributes") or []
         at = {attrs[i - 1].lower(): attrs[i] for i in range(1, len(attrs), 2)}
         if at.get("type", "").lower() == "password" or SECRET_AUTOCOMPLETE.match(at.get("autocomplete", "")):
@@ -1095,19 +1308,15 @@ class Page:
         return clip("\n".join(hits), 1500)
 
     async def locate(self, words: str) -> int | None:
-        """The element showing these words (see LOCATE_JS), as an id an action takes; it joins the last look
-        as role "text" so the gate and the card can name it."""
-        r = await self.cdp("Runtime.evaluate", expression=f"({LOCATE_JS})({json.dumps(words)})")
-        obj = r.get("result") or {}
-        if not obj.get("objectId"):
-            return None
-        try:
-            ident = (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
-        finally:
-            try:
-                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
-            except Exception:
-                pass
+        """The element showing these words (see LOCATE_JS), in the page or else in a frame from another site
+        read in the last look, as an id an action takes; it joins the last look as role "text" so the gate and
+        the card can name it."""
+        ident = None
+        for session in ["", *(f["session"] for f in self.frames.values())]:
+            ident = await self._found(session, await self._in(session, "Runtime.evaluate",
+                                                               expression=f"({LOCATE_JS})({json.dumps(words)})"))
+            if ident is not None:
+                break
         if ident is not None and ident not in self.last:
             self.last[ident] = ("text", clip(norm(words), 80))
         return ident
@@ -1140,18 +1349,10 @@ class Page:
         near = self.near.get(ident, self.before[1].get(ident, ""))
         if not name:
             return None
-        r = await self.cdp("Runtime.evaluate", userGesture=True, expression=f"({AGAIN_JS})("
-                           f"{json.dumps(name)}, {json.dumps(near)}, {json.dumps(press)})")
-        obj = r.get("result") or {}
-        if not obj.get("objectId"):
-            return None
-        try:
-            found = (await self.cdp("DOM.describeNode", objectId=obj["objectId"]))["node"].get("backendNodeId")
-        finally:
-            try:
-                await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
-            except Exception:
-                pass
+        session = self._node(ident)[0]
+        found = await self._found(session, await self._in(
+            session, "Runtime.evaluate", userGesture=True,
+            expression=f"({AGAIN_JS})({json.dumps(name)}, {json.dumps(near)}, {json.dumps(press)})"))
         if found is not None:
             self.last[found], self.near[found] = (role, name), near
         return found
@@ -1166,7 +1367,9 @@ class Page:
         return await self._act("click", ident, body)
 
     async def box(self, ident: int) -> dict:
-        return await self.on_node(ident, BOX_JS)
+        b = await self.on_node(ident, BOX_JS)
+        x, y = await self._offset(self._node(ident)[0])
+        return {**b, "x": b["x"] + x, "y": b["y"] + y}
 
     async def _ring_world(self) -> int:
         """The app's own script world in the page now, made once per document."""
@@ -1197,7 +1400,11 @@ class Page:
             if ident is None:
                 await self.cdp("Runtime.evaluate", expression=UNRING_JS, contextId=world)
                 return
-            obj = (await self.cdp("DOM.resolveNode", backendNodeId=ident, executionContextId=world))["object"]
+            session, local = self._node(ident)
+            while session:
+                # In a frame from another site: the ring goes round the frame that holds it, in the page.
+                session, local = next(f["owner"] for f in self.frames.values() if f["session"] == session)
+            obj = (await self.cdp("DOM.resolveNode", backendNodeId=local, executionContextId=world))["object"]
             await self.cdp("Runtime.callFunctionOn", objectId=obj["objectId"], functionDeclaration=HOLD_JS)
             await self.cdp("Runtime.releaseObject", objectId=obj["objectId"])
         except Exception:
@@ -1221,37 +1428,54 @@ class Page:
     # --- actions
 
     async def _point(self, ident: int, editable_cover: bool = False) -> dict:
-        """Scroll into view and return an unobstructed centre point, or raise why not."""
+        """Scroll into view and return an unobstructed centre point in the top page, or raise why not."""
+        session, local = self._node(ident)
+        frame = session
+        while frame:
+            # The frames it sits in come into view first.
+            frame, owner = next(f["owner"] for f in self.frames.values() if f["session"] == frame)
+            try:
+                await self._in(frame, "DOM.scrollIntoViewIfNeeded", backendNodeId=owner)
+            except Exception:
+                pass
         try:
-            await self.cdp("DOM.scrollIntoViewIfNeeded", backendNodeId=ident)
+            await self._in(session, "DOM.scrollIntoViewIfNeeded", backendNodeId=local)
         except Exception:
             pass
         p = await self.on_node(ident, POINT_JS, editable_cover)
-        if not p["covered"]:
-            return p
-        try:
-            await self.on_node(ident, CENTER_JS)
-            p = await self.on_node(ident, POINT_JS, editable_cover)
-        except Exception:
-            pass
-        if not p["covered"]:
-            return p
-        raise RuntimeError("Target covered by another element; nothing was clicked")
+        if p["covered"]:
+            try:
+                await self.on_node(ident, CENTER_JS)
+                p = await self.on_node(ident, POINT_JS, editable_cover)
+            except Exception:
+                pass
+        if p["covered"]:
+            raise RuntimeError("Target covered by another element; nothing was clicked")
+        x, y = await self._offset(session)
+        return {**p, "x": p["x"] + x, "y": p["y"] + y}
 
-    async def _click_at(self, x: float, y: float, modifiers: int = 0) -> None:
+    async def _click_at(self, x: float, y: float, modifiers: int = 0, button: str = "left", count: int = 1) -> None:
         if not all(math.isfinite(v) for v in (x, y)):
             raise ValueError("Coordinates must be finite.")
-        await self.cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button="left", clickCount=1,
-                       modifiers=modifiers)
-        await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button="left", clickCount=1,
-                       modifiers=modifiers)
+        # A double click is two presses, the second counted as such (Playwright's clickCount).
+        for n in range(1, count + 1):
+            await self.cdp("Input.dispatchMouseEvent", type="mousePressed", x=x, y=y, button=button, clickCount=n,
+                           modifiers=modifiers)
+            await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=x, y=y, button=button, clickCount=n,
+                           modifiers=modifiers)
 
     async def _act(self, op: str, ident: int | None, body) -> str:
-        """Runs one action and returns one line: navigated to <url> / page changed / no change."""
+        """Runs one action and returns one line: navigated to <url> / page changed / no change. An action in a
+        frame from another site counts what changed in that frame too."""
+        session = self._node(ident)[0] if ident is not None else ""
         try:
             before = await self.probe()
         except Exception:
             before = None
+        try:
+            inner = await self.probe(session) if session else None
+        except Exception:
+            inner = None
         what = self.describe(ident) if ident is not None else ""
         try:
             detail = await body()
@@ -1259,8 +1483,13 @@ class Page:
             raise
         except Exception as e:
             return well_formed(f"[failed] {op} {what}: {e}")
-        settled = await self.settle(since=now())
-        return well_formed(f"[ok] {op} {what}{detail} -> {await self.change(before, settled.get('probe'))}")
+        began = now()
+        moved = await self.settle(since=began, session=session) if session else {}
+        settled = await self.settle(since=began)
+        change = await self.change(before, settled.get('probe'))
+        if change == "no change" and inner and (moved.get("probe") or {}).get("n", inner["n"]) != inner["n"]:
+            change = "page changed"
+        return well_formed(f"[ok] {op} {what}{detail} -> {change}")
 
     async def change(self, before: dict | None, after: dict | None = None) -> str:
         if after is None:
@@ -1274,21 +1503,26 @@ class Page:
             return f"navigated to {after['url']}"
         return "page changed" if after["n"] != before["n"] else "no change"
 
-    async def click(self, ident: int) -> str:
+    async def click(self, ident: int, how: str = "") -> str:
+        """A click; `how` "double" for a double click, "right" for the right button (the page's own menu)."""
         async def body() -> str:
             try:
                 p = await self._point(ident)
             except Exception:
                 if await self.alive(ident):
                     raise
-                # Drawn anew between the look and now: found and pressed in one step.
-                if await self.again(ident, press=True) is None:
+                fresh = await self.again(ident, press=not how)
+                if fresh is None:
                     raise
-                return " (drawn anew since the look: pressed where it is now)"
+                if not how:
+                    # Drawn anew between the look and now: found and pressed in one step.
+                    return " (drawn anew since the look: pressed where it is now)"
+                p = await self._point(fresh)
             # Ctrl (2) adds an option to a list where several can be chosen, as a person does.
-            await self._click_at(p["x"], p["y"], 2 if p["multi"] else 0)
+            await self._click_at(p["x"], p["y"], 2 if p["multi"] and not how else 0, "right" if how == "right" else "left",
+                                 2 if how == "double" else 1)
             return ""
-        return await self._act("click", ident, body)
+        return await self._act(f"{how} click".strip(), ident, body)
 
     async def click_point(self, x: float, y: float) -> str:
         """A click on a point of the page as shown (a canvas has no parts to name)."""
@@ -1297,9 +1531,10 @@ class Page:
             return f" at {round(x)},{round(y)}"
         return await self._act("click", None, body)
 
-    async def type(self, ident: int, text: str, enter: bool = False) -> str:
-        """Replace the field's text with `text`: a list's option (several, commas between, where several can be
-        chosen), a date, time, colour or range field's value, else typed keys; never into a secret field (Refused)."""
+    async def type(self, ident: int, text: str, enter: bool = False, append: bool = False) -> str:
+        """Replace the field's text with `text` (with `append`, add it at the end of what the field holds): a list's
+        option (several, commas between, where several can be chosen), a date, time, colour or range field's value,
+        else typed keys; never into a secret field (Refused)."""
         if await self.secret(ident):
             raise Refused(f"[refused] {self.describe(ident)} is a secret field (password, payment or code): "
                           f"it is for the person to fill")
@@ -1328,13 +1563,16 @@ class Page:
             if moved:
                 raise Refused(f"[refused] typing into {self.describe(ident)} moved to another field; look again")
             try:
-                await self.cdp("DOM.focus", backendNodeId=ident)
+                await self.focus(ident)
             except Exception:
                 pass
-            a = {"key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}
-            await self.cdp("Input.dispatchKeyEvent", type="rawKeyDown", **a, commands=["selectAll"])
-            await self.cdp("Input.dispatchKeyEvent", type="keyUp", **a)
-            if text == "":
+            if append:
+                await self.on_node(ident, END_JS)
+            else:
+                a = {"key": "a", "code": "KeyA", "windowsVirtualKeyCode": 65, "modifiers": 2}
+                await self.cdp("Input.dispatchKeyEvent", type="rawKeyDown", **a, commands=["selectAll"])
+                await self.cdp("Input.dispatchKeyEvent", type="keyUp", **a)
+            if text == "" and not append:
                 await self.key("Backspace")
             else:
                 *chars, last = text
@@ -1352,30 +1590,39 @@ class Page:
                 actual = None
             if enter:
                 await self.key("Enter")
-            return (f" = {quote(clip(text, 60))}"
-                    + (f" (field now shows {quote(clip(actual, 60))})" if actual is not None and actual != text else "")
+            return (f" {'+=' if append else '='} {quote(clip(text, 60))}"
+                    + (f" (field now shows {quote(clip(actual, 60) if not append or len(actual) <= 60 else '…' + actual[-60:])})"
+                       if actual is not None and actual != text else "")
                     + (" — it did not take the text: a field like this is set by its picker or list; click it"
                        if actual is not None and text.strip() and fold(text).strip() not in fold(actual) else "")
                     + (" +Enter" if enter else ""))
         return await self._act("type", ident, body)
 
-    KEYS = {"Enter": 13, "Escape": 27, "Tab": 9, "Backspace": 8, "ArrowDown": 40, "ArrowUp": 38, "ArrowLeft": 37,
-            "ArrowRight": 39, "PageDown": 34, "PageUp": 33, "Home": 36, "End": 35, " ": 32}
-
-    async def key(self, key: str) -> None:
-        code = self.KEYS[key]
-        k = {"key": key, "code": "Space" if key == " " else key, "windowsVirtualKeyCode": code,
-             "nativeVirtualKeyCode": code}
+    async def key(self, key: str, modifiers: int = 0) -> None:
+        """One key (a name of KEYS, a letter, digit or sign) with the modifier mask held, as Playwright presses it:
+        the character it types goes with it only when no Control, Alt or Meta is held."""
+        if key in KEYS:
+            code, name = KEYS[key], "Space" if key == " " else key
+        elif key in SIGNS:
+            code, name = SIGNS[key], ""
+        else:
+            code, name = ord(key.upper()), ("Key" if key.isalpha() else "Digit") + key.upper()
+        text = "" if modifiers & 7 else "\r" if key == "Enter" else (key.upper() if modifiers & 8 else key) \
+            if len(key) == 1 else ""
+        k = {"key": text if text and key != "Enter" else key, "code": name, "windowsVirtualKeyCode": code,
+             "nativeVirtualKeyCode": code, "modifiers": modifiers}
         await self.cdp("Input.dispatchKeyEvent", type="rawKeyDown", **k)
-        if key in ("Enter", " "):
-            text = "\r" if key == "Enter" else " "
+        if text:
             await self.cdp("Input.dispatchKeyEvent", type="char", **k, text=text, unmodifiedText=text)
         await self.cdp("Input.dispatchKeyEvent", type="keyUp", **k)
 
-    async def press(self, key: str) -> str:
+    async def press(self, keys: str) -> str:
+        """A key or a chord ("Control+Enter"), as chord() reads it."""
+        spelled, modifiers, key = chord(keys)
+
         async def body() -> str:
-            await self.key(key)
-            return f" {key}"
+            await self.key(key, modifiers)
+            return f" {spelled}"
         return await self._act("press", None, body)
 
     async def scroll(self, down: bool = True, ident: int | None = None, until: str = "") -> str:
@@ -1435,13 +1682,86 @@ class Page:
             return ""
         return await self._act("hover", ident, body)
 
-    async def wait(self) -> str:
-        """A few seconds for a page that is loading or answering."""
+    async def wait(self, until: str = "", gone: str = "") -> str:
+        """A few seconds for a page that is loading or answering; with `until` (or `gone`), up to WAIT_S until those
+        words show on the page (or no longer do), as Playwright MCP's wait_for."""
+        words = until or gone
+        want = fold(words).strip()
+
         async def body() -> str:
-            await asyncio.sleep(1.0)
-            await self.settle(cap_ms=6000, quiet_ms=800)
-            return ""
+            if not want:
+                await asyncio.sleep(1.0)
+                await self.settle(cap_ms=6000, quiet_ms=800)
+                return ""
+            began = time.monotonic()
+            while (want in await self.visible_text()) != bool(until):
+                if time.monotonic() - began > WAIT_S:
+                    return f" until {quote(clip(words, 40))} {'shows' if until else 'is gone'}: still not after {WAIT_S:.0f} s"
+                await asyncio.sleep(0.3)
+            return (f" until {quote(clip(words, 40))} {'shows' if until else 'is gone'}: "
+                    f"{'it shows' if until else 'gone'} after {time.monotonic() - began:.1f} s")
         return await self._act("wait", None, body)
+
+    async def drag(self, ident: int, to: int) -> str:
+        """The pointer pressed on `ident`, moved onto `to` and let go, as Playwright drags: a drag the page starts
+        with the browser's own drag and drop is caught (Input.setInterceptDrags) and dropped there, any other
+        follows the mouse. It lets go a quarter past the middle of `to`, so in a list it takes `to`'s place; the
+        line says where it now sits."""
+        if not self._drag_heard:
+            await self.tab.events("Input.dragIntercepted", lambda params: setattr(self, "_dragged", params["data"]))
+            self._drag_heard = True
+
+        async def body() -> str:
+            # Both ends in view before the button goes down.
+            await self._point(ident)
+            b = await self._point(to)
+            a = await self._point(ident)
+            box = await self.box(to)
+            try:
+                was = await self.on_node(ident, PLACE_JS)
+            except Exception:
+                was = None
+            await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=a["x"], y=a["y"])
+            await self.cdp("Input.dispatchMouseEvent", type="mousePressed", x=a["x"], y=a["y"], button="left",
+                           clickCount=1)
+            # Past the middle along the way it goes: above it when going up, left of it when going left.
+            dx, dy = b["x"] - a["x"], b["y"] - a["y"]
+            end = ({"x": b["x"], "y": b["y"] + math.copysign(box["h"] / 4, dy)} if abs(dy) >= abs(dx) else
+                   {"x": b["x"] + math.copysign(box["w"] / 4, dx), "y": b["y"]})
+            self._dragged = None
+            await self.cdp("Input.setInterceptDrags", enabled=True)
+            try:
+                first = {"x": a["x"] + (end["x"] - a["x"]) / DRAG_STEPS, "y": a["y"] + (end["y"] - a["y"]) / DRAG_STEPS}
+                await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=first["x"], y=first["y"], button="left",
+                               buttons=1)
+                await asyncio.sleep(0.2)
+            finally:
+                await self.cdp("Input.setInterceptDrags", enabled=False)
+            data, self._dragged = self._dragged, None
+            if data is not None:
+                await self.cdp("Input.dispatchDragEvent", type="dragEnter", x=first["x"], y=first["y"], data=data)
+            for n in range(2, DRAG_STEPS + 1):
+                x, y = a["x"] + (end["x"] - a["x"]) * n / DRAG_STEPS, a["y"] + (end["y"] - a["y"]) * n / DRAG_STEPS
+                if data is not None:
+                    await self.cdp("Input.dispatchDragEvent", type="dragOver", x=x, y=y, data=data)
+                else:
+                    await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y, button="left", buttons=1)
+                    await asyncio.sleep(0.03)
+            if data is not None:
+                await self.cdp("Input.dispatchDragEvent", type="drop", x=end["x"], y=end["y"], data=data)
+            else:
+                await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=end["x"], y=end["y"], button="left",
+                               clickCount=1)
+            await asyncio.sleep(0.2)
+            try:
+                now = await self.on_node(ident, PLACE_JS)
+            except Exception:
+                now = None
+            where = ("" if now is None or was is None else "; it did not move" if now == was else
+                     f"; it now comes after {quote(now['before'])}" if now["before"] else
+                     f"; it now comes first, before {quote(now['after'])}")
+            return f" onto {self.describe(to)}{where}"
+        return await self._act("drag", ident, body)
 
     async def goto(self, url: str) -> str:
         async def body() -> str:

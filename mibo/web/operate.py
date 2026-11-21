@@ -6,9 +6,14 @@ process): it looks at the page (pageops), sorts every action through the gate
 built from the page itself and waits for their press. Nothing it is sent can
 get around that: the model's words never count as consent. `run` is the loop
 the character's turn runs (the service): one model call a step, the latest
-page only, one-line results of the steps before, a cap on calls and actions,
-and the stop rules. It reaches the pane's Hands through the app's page
-(`Remote`); a test or a script can hand it a Hands directly.
+page only, one-line results of the steps before, and the stop rules. It goes
+on while the address, the page or what the model kept moves, and hands the
+page back when nothing has for STUCK_AFTER calls; its ceiling, the page it
+shows and the room of an answer come from the model as the app measured it
+(abilities.py, `budget`), never from its name, and at the ceiling the person
+is asked whether to go on, with what is left. It reaches the pane's Hands
+through the app's page (`Remote`); a test or a script can hand it a Hands
+directly.
 
 While a run goes on, Hands also hears the page's own requests that can change
 something (any that is not an image, a script, a style or a font) and its
@@ -21,9 +26,18 @@ do: the site it began on, the sites the person named and those a link it
 followed led to. Going anywhere else, by an address the model wrote or by the
 page's own script, waits for a card (leave); an address that carries words read
 in the run to another site is refused outright. Each step is shown before it happens, in the pane's bar
-in the person's words and as a ring where it lands. A page that is drawn
-rather than written (a canvas) goes to a model that takes pictures as a
-picture with numbered marks, and back to the person otherwise.
+in the person's words and as a ring where it lands. A model that takes
+pictures gets the page as a picture when it asks, and by itself when the page
+is drawn rather than written (a canvas): the plain picture with each control
+of the lines boxed under its id, and it points at what has none. A model that
+takes no pictures hands a drawn page back to the person.
+
+The actions are Playwright MCP's: click (double, right), type (or add to a
+field), press a key or chord, hover, drag one element onto another, scroll,
+wait (until words show or go), go, back. A double click on a control with an
+effect outside is refused (it would press it twice); a right click, a drag and
+a keyboard shortcut are watched as a bare 确认 is, so what they send waits for
+a card; a chord ending in Enter is Enter; the clipboard is never used.
 
 What the page asks for itself goes to the person on a card too (gate's upload,
 download and dialog), as Playwright's file chooser, download and dialog events
@@ -68,21 +82,34 @@ from typing import Awaitable, Callable, Optional
 from urllib.parse import parse_qsl, unquote_plus, urlencode, urlsplit, urlunsplit
 
 from . import gate, signin
-from .pageops import Page, Refused, clip, fold, quote
+from .pageops import STATE_MAX, STATE_MOST, Page, Refused, chord, clip, fold, quote
 
 logger = logging.getLogger("mibo.web")
 
-# A task's model calls and actions; no change this many times running hands the page back.
+# A run's model calls before the person is asked whether to go on: CALLS_MAX for the least able model, CALLS_MOST
+# for one the app measured calling a tool by itself (abilities.py), as browser-use and Stagehand give tens of steps.
+# Actions: twice the calls and one. Calls running after which nothing moved (the address, the page, what was kept)
+# hand the page back.
 CALLS_MAX = 12
-ACTIONS_MAX = 25
+CALLS_MOST = 40
 STUCK_AFTER = 3
 # Fewer controls than this: a canvas, a map or a game, which a text-only model cannot work.
 FEW_CONTROLS = 3
 HISTORY_SHOWN = 5
-# Actions in one reply; the same action on the same page this many times gets a note, then the page goes back.
+# Actions in one reply (twice as many for a model measured calling tools); the same action on the same page this
+# many times gets a note, then the page goes back.
 ACTIONS_AT_ONCE = 4
 REPEATS_NOTE = 3
 REPEATS_MAX = 5
+# Presses of one control in one click (`times`): a stepper's +, a calendar's next-month arrow.
+TIMES_MAX = 24
+# A context window this large (tokens, as the host states it) gives a page an eighth of it in characters, up to
+# pageops.STATE_MOST, and an answer ANSWER_MOST tokens, so done's result can carry what was read (RESULT_MAX
+# characters); a smaller or unstated one, the least.
+ROOMY = 32_000
+ANSWER_LEAST = 900
+ANSWER_MOST = 3000
+RESULT_MAX = 4000
 # How long after an action a request it set off is waited for; after a confirmed press, how long its own
 # requests are let out.
 HEAR_S = 0.4
@@ -102,19 +129,32 @@ clickable that the page does not name (a row in a list, a menu entry, a day in a
 control says a menu opens from it, on a click or with the pointer over it.
 
 Each reply is ONE JSON object and nothing else:
-{"note": "<what this step is for, a few words in the person's language>", "keep": "<what you read on this page and need later in the task, word for word, or empty>", "actions": [<one to four actions>]}
+{"note": "<what this step is for, a few words in the person's language>", "keep": "<what you read on this page and need later in the task, word for word, or empty>", "actions": [<one to {at_once} actions>]}
 The actions:
 {"do": "click", "id": 123, "element": "<its name as its line shows it>"}
+{"do": "click", "id": 123, "element": "<its name>", "times": 5}   (the same control pressed several times running: a \
+stepper's + or −, a calendar's previous or next month; count the presses from what the page shows)
+{"do": "click", "id": 123, "element": "<its name>", "double": true}   (a double click: a cell or a name to edit, a file \
+to open)
+{"do": "click", "id": 123, "element": "<its name>", "button": "right"}   (the page's own menu for this item)
 {"do": "click", "text": "<words shown on the page>"}   (anything showing these words, when it has no id)
 {"do": "click", "id": 123, "element": "<its name>", "file": "<a file's full path>"}   (a control that asks for a file; \
 give "file" only when the person's message names that file, else leave it out and they choose it on the app's card)
 {"do": "type", "id": 123, "text": "<text>", "enter": false, "element": "<its name>"}   (on a select: the option's words; \
-a list marked several: commas between the choices; a date, time or colour field: the form shown in parentheses on its line)
-{"do": "press", "key": "Enter" | "Escape" | "Tab" | "ArrowDown" | "ArrowUp" | "PageDown" | "PageUp"}
+a list marked several: commas between the choices; a date, time or colour field: the form shown in parentheses on its \
+line; "append": true adds the text at the end of what the field holds instead of replacing it)
+{"do": "press", "key": "Enter" | "Escape" | "Tab" | "Delete" | "ArrowDown" | "PageDown" | "Control+Enter" | \
+"Shift+Tab" | "Control+a" ...}   (a key, or a chord with + between; never the clipboard (Control+c, Control+v): type \
+the words instead)
 {"do": "hover", "id": 123} or {"do": "hover", "text": "<words>"}   (a menu that opens under the pointer)
+{"do": "drag", "id": 12, "element": "<its name>", "to": 34, "target": "<its name>"}   (moves one thing onto another: \
+a card to another column, an item to another place in a list, where it takes the place of the target; with no ids, \
+"text" and "to_text" give the words each shows)
 {"do": "scroll", "direction": "down" | "up", "id": <a scrollable's id, or leave out for the page>, "until": "<words to stop at, or leave out>"}
 {"do": "find", "text": "<words>"}   (the page's lines holding these words, when the page is long and cut)
 {"do": "wait"}   (the page is loading or still answering)
+{"do": "wait", "until": "<words>"} or {"do": "wait", "gone": "<words>"}   (up to 15 seconds, until the words show, \
+or until they are gone: a result being made, a "loading" notice)
 {"do": "navigate", "url": "https://..."}
 {"do": "back"}
 {"do": "ask_person", "question": "<what you need from them>"}
@@ -126,7 +166,7 @@ Rules:
 - When the person's own message is given, it is what they want: do all it asks of the browser, even where the \
 task line names only a part (search, then like the one they named; read a title, then send it). Done comes after \
 the last part, not the first.
-- Ids come only from the latest page and change after every action. Up to four actions in one reply when none \
+- Ids come only from the latest page and change after every action. Up to {at_once} actions in one reply when none \
 before the last leaves the page or opens something new: fill several fields and then click their button. After a \
 click that opens or changes something, look at what came before going on.
 - A list longer than its box shows only part of itself: to find a name or a post in it, scroll the box (or the page) \
@@ -160,14 +200,14 @@ not bear out is not taken, so give in `expect` words that are really there.
 - If the same action has not worked twice, do something else: another control, scroll, wait, or ask_person.
 - To find something out, read it off the page and give it in done's result, word for word where it matters."""
 
-# For a model that takes pictures, when the page is drawn rather than written.
+# For a model that takes pictures: it may ask for one, and with one, how to point.
+ASK_PICTURE = """
+- {"do": "picture"} brings a picture of the page with your next look: for what its lines cannot tell (a chart, a \
+photo, a map, a drawn page, where something sits)."""
 SEEING = """
-A picture of the page comes with this step, because the page is drawn (a canvas, a map) and its lines say little. \
-Numbered marks in the picture are what can be clicked, things drawn on it too (a seat, a pin, a cell: its number \
-just over its top-left corner): {"do": "click", "mark": 7}. On a drawn area with no marks, \
-click a point of the picture: {"do": "click", "x": 312, "y": 140}, in the picture's pixels; the faint blue grid over \
-the drawn area is numbered every 50 pixels, so read the point off it: the middle of the thing, never its edge. One \
-click on a point a reply: the next picture shows what it did."""
+A picture of the page comes with this step. Each control of the lines is boxed in it under its id: click it by that \
+id. Something drawn with no id (a seat, a pin, a cell of a canvas) is clicked at its middle, in the picture's \
+pixels: {"do": "click", "x": 312, "y": 140}. One click on a point a reply: the next look shows what it did."""
 
 FILL = """The person asked for a task in a site's page. Below are ways of doing tasks on this site that worked before, \
 each with blanks in braces. Say which way fits this task, if any, and what fills its blanks, from the person's words \
@@ -293,15 +333,19 @@ SAID = {
     "zh": {"click": "点击「{name}」", "type": "在「{name}」输入「{text}」", "press": "按 {key}", "hover": "将指针移到「{name}」",
            "down": "向下滚动", "up": "向上滚动", "in": "（在「{name}」中）", "until": "，直到出现「{text}」",
            "navigate": "打开 {host}", "back": "返回上一页", "wait": "等待页面加载", "find": "在页面上查找「{text}」",
-           "box": "输入框", "point": "画面上的某个位置", "mark": "画面上的 {n} 号", "held": "网页将发送刚才输入的内容",
-           "chose": "网页将保存刚才的选择", "leave": "网页提示：离开此网页后，未保存的内容可能会丢失。"},
+           "box": "输入框", "point": "画面上的某个位置", "times": "（{n} 次）", "held": "网页将发送刚才输入的内容",
+           "chose": "网页将保存刚才的选择", "leave": "网页提示：离开此网页后，未保存的内容可能会丢失。",
+           "double": "双击「{name}」", "right": "右键单击「{name}」", "drag": "将「{name}」拖到「{to}」",
+           "shows": "等待「{text}」出现", "gone": "等待「{text}」消失"},
     "en": {"click": "Click “{name}”", "type": "Type “{text}” into “{name}”", "press": "Press {key}",
            "hover": "Point at “{name}”", "down": "Scroll down", "up": "Scroll up", "in": " in “{name}”",
            "until": " until “{text}” shows", "navigate": "Open {host}", "back": "Go back",
            "wait": "Wait for the page", "find": "Look for “{text}” on the page", "box": "the box",
-           "point": "a point on the picture", "mark": "mark {n} on the picture",
+           "point": "a point on the picture", "times": " ({n} times)",
            "held": "The page sending what was typed", "chose": "The page saving the choice just made",
-           "leave": "The page warns that what is not saved may be lost if you leave it."},
+           "leave": "The page warns that what is not saved may be lost if you leave it.",
+           "double": "Double-click “{name}”", "right": "Right-click “{name}”", "drag": "Drag “{name}” onto “{to}”",
+           "shows": "Wait for “{text}” to show", "gone": "Wait for “{text}” to go"},
 }
 # Requests the page makes while the character operates that are paused and looked at: navigations, and the kinds
 # that can send or change something. Images, scripts, styles, fonts and media load untouched.
@@ -316,9 +360,6 @@ READ_RUN = 8
 CHOICES = ("checkbox", "radio", "menuitemcheckbox", "menuitemradio", "option", "combobox", "listbox")
 # A base64 run in a body long enough to be typed text, decoded and looked in too.
 BASE64 = re.compile(r"[A-Za-z0-9+/_-]{8,}={0,2}")
-# Shapes on a drawn area, found by colour, get marks of their own: at most this many, each this big at least (px).
-SHAPES_MAX = 80
-SHAPE_MIN = 16
 # A typed text this short must be a whole value of the request to count as carried by it.
 CARRIED_MIN = 3
 
@@ -327,45 +368,6 @@ def _shape(url: str) -> str:
     """An address's path with its ids made {id}, for matching a stored step to the page it was on."""
     path = urlsplit(url).path or "/"
     return re.sub(r"/(?:\d+|[0-9a-zA-Z_-]{16,})(?=/|$)", "/{id}", path)
-
-
-def _shapes(image, area: dict) -> list[tuple[float, float, float, float]]:
-    """The separate things drawn on a canvas (a seat, a pin, a cell), as boxes (x, y, w, h) in the picture's
-    pixels: what stands out from the area's commonest colour and is joined up, no bigger than a third of the area
-    and at least SHAPE_MIN across. None when there are more than SHAPES_MAX (the grid does instead)."""
-    from PIL import Image
-    step = 2
-    left, top = int(max(area["x"], 0)), int(max(area["y"], 0))
-    right, bottom = int(min(area["x"] + area["w"], image.width)), int(min(area["y"] + area["h"], image.height))
-    if right - left < 40 or bottom - top < 40:
-        return []
-    small = image.crop((left, top, right, bottom)).resize(((right - left) // step, (bottom - top) // step),
-                                                           Image.NEAREST)
-    wide, high = small.size
-    colours = [(r >> 4, g >> 4, b >> 4) for r, g, b in small.getdata()]
-    ground = Counter(colours).most_common(1)[0][0]
-    on = [sum(abs(a - b) for a, b in zip(c, ground)) > 3 for c in colours]
-    seen = [False] * len(on)
-    found = []
-    for start, lit in enumerate(on):
-        if not lit or seen[start]:
-            continue
-        seen[start] = True
-        stack, x0, y0, x1, y1 = [start], wide, high, 0, 0
-        while stack:
-            i = stack.pop()
-            x, y = i % wide, i // wide
-            x0, y0, x1, y1 = min(x0, x), min(y0, y), max(x1, x), max(y1, y)
-            for j in (i - 1 if x else -1, i + 1 if x + 1 < wide else -1, i - wide, i + wide):
-                if 0 <= j < len(on) and on[j] and not seen[j]:
-                    seen[j] = True
-                    stack.append(j)
-        w, h = (x1 - x0 + 1) * step, (y1 - y0 + 1) * step
-        if SHAPE_MIN <= w <= (right - left) / 3 and SHAPE_MIN <= h <= (bottom - top) / 3:
-            found.append((left + x0 * step, top + y0 * step, w, h))
-            if len(found) > SHAPES_MAX:
-                return []
-    return found
 
 
 def _squeeze(s: str) -> str:
@@ -522,8 +524,6 @@ class Hands:
         # Words that went out in this run on the person's yes, by kind, page and recipient: the same again would
         # send them twice.
         self.sent: set[tuple] = set()
-        # The marks of the last picture: number -> (x, y, id).
-        self.marks: dict[int, tuple[float, float, Optional[int]]] = {}
         # The run's sites: where it began, those the person named or said yes to, those a link led to. Until
         # `_follow_until` the page may go on to others by itself (a link's redirects).
         self.sites: set[str] = set()
@@ -854,7 +854,7 @@ class Hands:
         if back and self._paused is not None:
             for t in back:
                 try:
-                    await self.page.on_node(t["node"], RESTORE_JS, [t["text"], t["before"]])
+                    await self.page.on_node(t["node"], RESTORE_JS, [t.get("shows", t["text"]), t["before"]])
                 except Exception:
                     logger.debug("[Agent] operate: a typed field was gone before it could be put back")
             await asyncio.sleep(HEAR_S)
@@ -884,13 +884,13 @@ class Hands:
 
     # --- looking
 
-    async def look(self) -> dict:
+    async def look(self, most: int = STATE_MAX) -> dict:
+        """The page as the model reads it, at most `most` characters, and what the page did by itself since."""
         why = self.held()
         if why:
             return {"status": why}
         await self._watch()
-        self.marks = {}
-        state = await self.page.state()
+        state = await self.page.state(min(max(int(most), STATE_MAX), STATE_MOST))
         url = await self.page._evaluate("() => location.href")
         try:
             wall = await self.page._evaluate(WALL_JS) or {}
@@ -906,7 +906,7 @@ class Hands:
             wall = {}
         found = {"status": "ok", "state": state, "url": url, "wall": wall.get("kind", ""),
                  "evidence": wall.get("evidence", ""), "controls": self.page.interactive,
-                 "drawn": bool(wall.get("drawn")), "areas": wall.get("drawn") or []}
+                 "drawn": bool(wall.get("drawn"))}
         lines = [await self._page_said()]
         if self._turned:
             found.update(status="declined", kind=self._turned)
@@ -920,9 +920,9 @@ class Hands:
             found["held"] = "\n".join(x for x in lines if x)
         return found
 
-    async def picture(self, areas: list[dict]) -> dict:
-        """The pane as the person sees it, with a numbered box on each control and clickable thing of the last
-        look and a ruler along the edges of each drawn area; the marks are kept for `click` by mark."""
+    async def picture(self) -> dict:
+        """The pane as the person sees it, in the page's own pixels, with each control and clickable thing of the
+        last look boxed under its id; nothing else drawn on it."""
         from PIL import Image, ImageDraw
         metrics = await self.page.cdp("Page.getLayoutMetrics")
         view = metrics.get("cssVisualViewport") or {}
@@ -932,11 +932,11 @@ class Hands:
             "scale": 1})
         image = Image.open(io.BytesIO(base64.b64decode(shot["data"]))).convert("RGB")
         if image.size != (round(wide), round(high)):
-            # A scaled display gives device pixels: the picture is brought to the page's own pixels, so a mark, a
-            # point read off the grid and a click all mean the same place.
+            # A scaled display gives device pixels: the picture is brought to the page's own pixels, so a point
+            # read off it and a click mean the same place.
             image = image.resize((round(wide), round(high)), Image.LANCZOS)
         draw = ImageDraw.Draw(image)
-        self.marks = {}
+        boxed = 0
         for ident, (role, _name) in list(self.page.last.items()):
             if role in ("scrollable", "text"):
                 continue
@@ -946,37 +946,13 @@ class Hands:
                 continue
             if b["w"] < 4 or b["h"] < 4 or b["x"] + b["w"] < 0 or b["y"] + b["h"] < 0 or b["x"] > wide or b["y"] > high:
                 continue
-            n = len(self.marks) + 1
-            self.marks[n] = (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2, ident)
+            boxed += 1
             draw.rectangle([b["x"], b["y"], b["x"] + b["w"], b["y"] + b["h"]], outline=(255, 90, 0), width=2)
-            draw.rectangle([b["x"], b["y"] - 13, b["x"] + 8 + 7 * len(str(n)), b["y"]], fill=(255, 90, 0))
-            draw.text((b["x"] + 3, b["y"] - 13), str(n), fill=(255, 255, 255))
-        # The things drawn on a canvas are marked too; an area with none found gets a faint grid every 50 px of the
-        # picture, numbered along its top and left edges, to read a point off.
-        plain = image.copy()
-        grid = Image.new("RGBA", image.size, (0, 0, 0, 0))
-        lines = ImageDraw.Draw(grid)
-        for a in areas:
-            shapes = _shapes(plain, a)
-            for x, y, w, h in shapes:
-                n = len(self.marks) + 1
-                self.marks[n] = (x + w / 2, y + h / 2, None)
-                # Just over the thing's top-left corner, so its own words stay in sight.
-                draw.rectangle([x, y - 11, x + 6 + 6 * len(str(n)), y], fill=(255, 90, 0))
-                draw.text((x + 2, y - 11), str(n), fill=(255, 255, 255))
-            if shapes:
-                continue
-            left, top, right, bottom = a["x"], a["y"], a["x"] + a["w"], a["y"] + a["h"]
-            for x in range(int(left // 50 * 50 + 50), int(right), 50):
-                lines.line([x, top, x, bottom], fill=(0, 140, 255, 90), width=1)
-                lines.text((x + 2, top + 1), str(x), fill=(0, 140, 255, 255))
-            for y in range(int(top // 50 * 50 + 50), int(bottom), 50):
-                lines.line([left, y, right, y], fill=(0, 140, 255, 90), width=1)
-                lines.text((left + 2, y + 1), str(y), fill=(0, 140, 255, 255))
-        image = Image.alpha_composite(image.convert("RGBA"), grid).convert("RGB")
+            draw.rectangle([b["x"], b["y"] - 13, b["x"] + 8 + 7 * len(str(ident)), b["y"]], fill=(255, 90, 0))
+            draw.text((b["x"] + 3, b["y"] - 13), str(ident), fill=(255, 255, 255))
         out = io.BytesIO()
         image.save(out, format="JPEG", quality=80)
-        return {"status": "ok", "picture": base64.b64encode(out.getvalue()).decode(), "marks": len(self.marks),
+        return {"status": "ok", "picture": base64.b64encode(out.getvalue()).decode(), "boxed": boxed,
                 "size": [round(wide), round(high)]}
 
     # --- acting
@@ -986,7 +962,11 @@ class Hands:
         say, do = SAID[self.lang], action.get("do")
         name = clip(" ".join(str(name or action.get("element") or action.get("text") or "").split()), 30)
         if do == "click":
-            return say["click"].format(name=name or say["point"])
+            how = "double" if action.get("double") is True else "right" if action.get("button") == "right" else "click"
+            return say[how].format(name=name or say["point"])
+        if do == "drag":
+            return say["drag"].format(name=name, to=clip(" ".join(str(action.get("target") or action.get("to_text")
+                                                                       or "").split()), 30))
         if do == "type":
             return say["type"].format(name=name or say["box"], text=clip(str(action.get("text") or ""), 40))
         if do == "press":
@@ -999,6 +979,9 @@ class Hands:
                     + (say["until"].format(text=clip(str(action["until"]), 30)) if action.get("until") else ""))
         if do == "navigate":
             return say["navigate"].format(host=urlsplit(str(action.get("url") or "")).hostname or "")
+        if do == "wait" and (action.get("until") or action.get("gone")):
+            return say["shows" if action.get("until") else "gone"].format(
+                text=clip(str(action.get("until") or action.get("gone")), 30))
         if do in ("back", "wait"):
             return say[do]
         if do == "find":
@@ -1053,15 +1036,8 @@ class Hands:
         if "id" in action and action["id"] in (None, ""):
             # {"id": null, "text": "保存"}: the words are the target.
             action = {k: v for k, v in action.items() if k != "id"}
-        if self.marks and isinstance(action.get("id"), int) and action["id"] not in self.page.last:
-            # A mark's number given as an id, on a picture.
-            action = {k: v for k, v in action.items() if k != "id"} | {"mark": action["id"]}
         if do in ("click", "type", "hover") and "id" not in action:
-            if action.get("mark") is not None and int(action["mark"]) in self.marks:
-                x, y, ident = self.marks[int(action["mark"])]
-                action = {**action, "id": ident} if ident is not None else {
-                    **action, "x": x, "y": y, "element": SAID[self.lang]["mark"].format(n=int(action["mark"]))}
-            elif do in ("click", "hover") and str(action.get("text") or "").strip() and action.get("role") is None:
+            if do in ("click", "hover") and str(action.get("text") or "").strip() and action.get("role") is None:
                 # Something shown with no id, by the words it shows.
                 found = await self.page.locate(str(action["text"]))
                 if found is None:
@@ -1081,10 +1057,16 @@ class Hands:
             if do == "click" and "id" not in action:
                 return await self._click_point(float(action["x"]), float(action["y"]), str(action.get("element") or ""))
             if do == "click":
-                return await self._click(int(action["id"]), str(action.get("element") or ""))
+                times = int(action["times"]) if str(action.get("times", "")).isdigit() else 1
+                how = "double" if action.get("double") is True else "right" if action.get("button") == "right" else ""
+                return await self._click(int(action["id"]), str(action.get("element") or ""),
+                                         max(1, min(times, TIMES_MAX)), how)
             if do == "type":
                 return await self._type(int(action["id"]), str(action.get("text") or ""),
-                                        action.get("enter") is True, str(action.get("element") or ""))
+                                        action.get("enter") is True, str(action.get("element") or ""),
+                                        action.get("append") is True)
+            if do == "drag":
+                return await self._drag(action)
             if do == "hover":
                 ident = await self._fresh(int(action["id"]))
                 if ident is None:
@@ -1097,10 +1079,11 @@ class Hands:
                 return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
                         "line": line + await self._changed(ident, before, line, CAME_UP_HOVER)}
             if do == "press":
-                key = str(action.get("key") or "")
-                if key not in Page.KEYS:
-                    return {"status": "failed", "line": f"[failed] no key {key[:20]!r}"}
-                return await self._press(key)
+                try:
+                    keys = chord(str(action.get("key") or ""))[0]
+                except ValueError as error:
+                    return {"status": "failed", "line": f"[failed] {error}"}
+                return await self._press(keys)
             if do == "scroll":
                 ident = action.get("id")
                 ident = await self._fresh(int(ident)) if ident is not None else None
@@ -1116,7 +1099,8 @@ class Hands:
                                                                       else "not on this page")}
             if do == "wait":
                 self.tell(self._said(action))
-                return {"status": "ok", "line": await self.page.wait(), "said": self._said(action)}
+                return {"status": "ok", "said": self._said(action), "line": await self.page.wait(
+                    str(action.get("until") or ""), str(action.get("gone") or ""))}
             if do == "navigate":
                 url = str(action.get("url") or "")
                 if urlsplit(url).scheme not in ("http", "https"):
@@ -1239,7 +1223,10 @@ class Hands:
                 "line": f"[{'ok' if there else 'missing'}] the page {'shows' if there else 'does not show'} "
                         f"{quote(clip(words, 80))}"}
 
-    async def _click(self, ident: int, element: str) -> dict:
+    async def _click(self, ident: int, element: str, times: int = 1, how: str = "") -> dict:
+        """A click; `how` "double" or "right". A double click on a control with an effect outside would press it
+        twice and is refused; a right click presses nothing but opens the page's menu, so what it sends is watched
+        as a bare submission's press is."""
         fresh = await self._fresh(ident)
         if fresh is None:
             return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
@@ -1251,13 +1238,21 @@ class Hands:
             return {"status": "failed", "line": other}
         url = await self._url()
         kind, why = gate.classify("click", "" if role == "text" and facts.get("text") else name, role, facts, url)
-        step = {"path": _shape(url), "role": role, "name": name, "method": "click"}
+        if how == "right":
+            kind, why, times = "watch", "a right click opens the page's own menu", 1
+        elif how == "double" and kind and kind != "watch":
+            return {"status": "failed", "line": f"[failed] double click {self.page.describe(ident)}: it is {kind}, and a "
+                                                f"double click would press it twice; nothing was done. Click it once"}
+        elif how == "double":
+            times = 1
+        # A stored way keeps plain clicks only.
+        step = None if how else {"path": _shape(url), "role": role, "name": name, "method": "click"}
         # An icon is named on the card by its tooltip, as the person sees it on hover.
         shown = name or facts.get("text") or facts.get("label") or ""
         if gate.NO_WORDS.match(shown) and facts.get("tip"):
             shown = f"{shown} {facts['tip']}".strip()
-        said = self._said({"do": "click"}, shown or element)
-        if facts.get("tag") in ("select", "label"):
+        said = self._said({"do": "click", "double": how == "double", "button": how}, shown or element)
+        if facts.get("tag") in ("select", "label") and not how:
             options = await self.page.on_node(ident, OPTIONS_JS)
             if options is not None:
                 return {"status": "ok", "said": said, "line": f"[ok] {self.page.describe(ident)} is a list to choose "
@@ -1270,16 +1265,17 @@ class Hands:
         # The control pressed and what it and the page showed just before, to say after what the press changed.
         seen: dict = {}
 
-        async def press() -> str:
+        async def press(again: bool = False) -> str:
             target = await self._fresh(ident) or ident
-            await self._show(target, said)
-            seen.update(await self._seen(target), target=target)
-            if target != ident or not await self.page.alive(target):
+            if not again:
+                await self._show(target, said)
+                seen.update(await self._seen(target), target=target)
+            if not how and (target != ident or not await self.page.alive(target)):
                 # The page keeps drawing this control anew: found and pressed in one step, never by a point
                 # another row may have moved under.
                 line = await self.page.click_again(target)
             else:
-                line = await self.page.click(target)
+                line = await self.page.click(target, how)
             here = self.page.describe(target)
             return line.replace(here, here + more, 1)
         if kind and kind != "watch":
@@ -1295,19 +1291,34 @@ class Hands:
             if result.get("outside"):
                 result["line"] += await self._changed(seen["target"], seen, result["line"])
             return {**result, "said": said}
-        if facts.get("link") or facts.get("away"):
+        if (facts.get("link") or facts.get("away")) and how != "right":
             # A link the person could see: where it leads (and its redirects) is one of the run's sites.
             self._follow_until = time.monotonic() + FOLLOW_S
-        away = await self.page.on_node(ident, BLANK_JS) if facts.get("link") else None
+        away = await self.page.on_node(ident, BLANK_JS) if facts.get("link") and not how else None
         if away:
             await self._show(ident, said)
             line = f"{await self.page.goto(away)} (the link opens a new tab; opened here instead)"
+        elif how == "right":
+            line = await self._watched(press, shown or element, facts)
         elif role in CHOICES or facts.get("type") in ("checkbox", "radio"):
             line = await self._choosing(press, shown or element, url)
         elif kind == "watch":
             line = await self._watched(press, shown or element, facts)
         else:
+            if times > 1:
+                said += SAID[self.lang]["times"].format(n=times)
             line = await press()
+            # The same control pressed again (`times`, a stepper or a calendar's arrow), found again where the page
+            # drew it anew; none once a press failed or the page went elsewhere.
+            pressed = 1
+            while pressed < times and line.startswith("[ok]") and "navigated to" not in line:
+                again = await press(again=True)
+                if not again.startswith("[ok]"):
+                    line += f"; press {pressed + 1} did not work: {clip(again, 120)}"
+                    break
+                pressed += 1
+            if times > 1:
+                line += f"; pressed {pressed} times"
         if seen:
             line += await self._changed(seen["target"], seen, line)
         return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "step": step, "said": said}
@@ -1362,19 +1373,52 @@ class Hands:
         line = await (self._watched(press, str(facts.get("text") or element), facts) if kind == "watch" else press())
         return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "said": said}
 
-    async def _type(self, ident: int, text: str, enter: bool, element: str) -> dict:
+    async def _drag(self, action: dict) -> dict:
+        """One control dragged onto another, each by its id and name or by the words it shows (`text`, `to_text`):
+        pressed, moved and let go (pageops.drag), watched as a bare submission's press is, so a page that saves the
+        move asks on a card first."""
+        ends = []
+        for ident, words, element in ((action.get("id"), action.get("text"), action.get("element")),
+                                      (action.get("to"), action.get("to_text"), action.get("target"))):
+            if isinstance(ident, str) and not ident.strip().isdigit():
+                ident, words = None, words or ident
+            if ident in (None, ""):
+                found = await self.page.locate(str(words)) if str(words or "").strip() else None
+                if found is None:
+                    return {"status": "missing", "line": f"[missing] nothing on the page shows "
+                                                         f"{clip(str(words or ''), 60)!r}; look again"}
+                ends.append((found, str(element or words)))
+                continue
+            fresh = await self._fresh(int(ident))
+            if fresh is None:
+                return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
+            role, name = self.page.last.get(fresh, ("", ""))
+            other = self._other(fresh, str(element or ""), role, name, await self.page.facts(fresh))
+            if other:
+                return {"status": "failed", "line": other}
+            ends.append((fresh, name or str(element or "")))
+        (start, start_name), (end, end_name) = ends
+        said = self._said({"do": "drag", "target": end_name}, start_name)
+        await self._show(start, said)
+        before = await self._seen(None)
+        line = await self._watched(lambda: self.page.drag(start, end), said, await self.page.facts(start))
+        return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
+                "line": line + await self._changed(None, before, line)}
+
+    async def _type(self, ident: int, text: str, enter: bool, element: str, append: bool = False) -> dict:
         fresh = await self._fresh(ident)
         if fresh is None:
             return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
         ident = fresh
         role, name = self.page.last.get(ident, ("", ""))
         url = await self._url()
-        step = {"path": _shape(url), "role": role, "name": name, "method": "type", "text": text}
+        # A stored way replaces what a field holds; adding to it is not kept.
+        step = None if append else {"path": _shape(url), "role": role, "name": name, "method": "type", "text": text}
         said = self._said({"do": "type", "text": text}, name or element)
         if await self.page.secret(ident):
             # Theirs to type: the field gets the focus, and the page goes to them as for a form that wants it.
             try:
-                await self.page.cdp("DOM.focus", backendNodeId=ident)
+                await self.page.focus(ident)
             except Exception:
                 pass
             return {"status": "refused", "line": f"[handover] {self.page.describe(ident)} is a secret field, never "
@@ -1390,12 +1434,16 @@ class Hands:
             earlier = next((t for t in self.typed if t["node"] == ident and not t["out"]), None)
             before = earlier["before"] if earlier else await self.page.value(ident)
             self.typed.append({"text": text.strip(), "field": clip(name or str(facts.get("label") or ""), 40),
-                               "site": gate.site_of(url), "node": ident, "before": before, "out": False})
+                               "site": gate.site_of(self.page.frame_url(ident) or url), "node": ident,
+                               "before": before, "out": False})
         if facts.get("tag") == "select":
             line = await self._choosing(lambda: self.page.type(ident, text), name or str(facts.get("label") or ""), url,
                                         text)
         else:
-            line = await self.page.type(ident, text)
+            line = await self.page.type(ident, text, append=append)
+            if append and self.typed and self.typed[-1]["node"] == ident:
+                # What the field shows now, so the run's end can tell it is still as typed and put it back.
+                self.typed[-1]["shows"] = (await self.page.value(ident)).strip()
         result = {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "step": step, "said": said}
         if not enter or result["status"] != "ok":
             return result
@@ -1403,24 +1451,30 @@ class Hands:
         kind, why = gate.classify("enter", name, role, facts, url)
         if kind and kind != "watch":
             outside = await self._outside(kind, why, ident, f"Enter in {name or 'the field'}", facts, url, element,
-                                          lambda: self.page.press("Enter"),
-                                          {**step, "method": "type", "enter": True})
+                                          lambda: self.page.press("Enter"), step and {**step, "enter": True})
             outside["line"] = f"{line}\n{outside['line']}"
             return {**outside, "said": said}
         entered = await (self._watched(lambda: self.page.press("Enter"), str((facts.get("form") or {}).get("button") or "")
                                        or f"Enter in {name or 'the field'}", facts)
                          if kind == "watch" else self.page.press("Enter"))
-        return {**result, "line": f"{line}\n{entered}", "step": {**step, "enter": True}}
+        return {**result, "line": f"{line}\n{entered}", "step": step and {**step, "enter": True}}
 
     async def _press(self, key: str) -> dict:
+        """A key or chord, as pageops.chord spells it, through the gate's chord rule: one ending in Enter or Space is
+        that key on the control with the focus, a shortcut is watched as a bare submission's press is, and the
+        clipboard is refused."""
         said = self._said({"do": "press", "key": key})
         ident = await self.page.active()
-        kind, facts = "", {}
-        if key in ("Enter", " ") and ident is not None:
+        facts = await self.page.facts(ident) if ident is not None else {}
+        mode, why = gate.chord(key, bool(facts.get("textEntry")))
+        if mode == "refuse":
+            return {"status": "failed", "line": f"[failed] press {key}: the clipboard is the person's own and is never "
+                                                f"used; nothing was pressed. Type the words instead"}
+        kind = "watch" if mode == "watch" else ""
+        if mode in ("enter", "click") and ident is not None:
             url = await self._url()
-            facts = await self.page.facts(ident)
             role, name = self.page.last.get(ident, (facts.get("role") or facts.get("tag") or "", ""))
-            kind, why = gate.classify("click" if key == " " else "enter", name, role, facts, url)
+            kind, why = gate.classify(mode, name, role, facts, url)
             if kind and kind != "watch":
                 async def press() -> str:
                     await self._show(ident, said)
@@ -1456,7 +1510,7 @@ class Hands:
             # typed again goes back out of the box, so nothing is left there to send by itself.
             for t in [t for t in self.typed if not t["out"] and _squeeze(t["text"]) == _squeeze(said)]:
                 try:
-                    await self.page.on_node(t["node"], RESTORE_JS, [t["text"], t["before"]])
+                    await self.page.on_node(t["node"], RESTORE_JS, [t.get("shows", t["text"]), t["before"]])
                 except Exception:
                     logger.debug("[Agent] operate: a field typed into twice was gone before it could be put back")
                 self.typed.remove(t)
@@ -1513,8 +1567,10 @@ class Hands:
                         "line": "[changed] the page changed since the card; nothing was pressed, look again"}
         seen_before = await self._count(said)
         # What the person let out goes out: this press's own site's requests, a post once one carries the card's
-        # words (a page that swaps them as the button goes down sends nothing).
-        self._pressing = {"site": site, "said": said, "matched": False, "aside": [], "kind": kind}
+        # words (a page that swaps them as the button goes down sends nothing). A press in a frame from another site
+        # sends to that frame's site.
+        self._pressing = {"site": gate.site_of(self.page.frame_url(ident) or url), "said": said, "matched": False,
+                          "aside": [], "kind": kind}
         try:
             line = await press()
             await asyncio.sleep(PRESS_TAIL_S)
@@ -1586,11 +1642,11 @@ class Remote:
     async def begin(self, task: str) -> dict:
         return await asyncio.to_thread(self._post, "begin", 30, task=task)
 
-    async def look(self) -> dict:
-        return await asyncio.to_thread(self._post, "look", CARD_S + 60)
+    async def look(self, most: int = STATE_MAX) -> dict:
+        return await asyncio.to_thread(self._post, "look", CARD_S + 60, most=most)
 
-    async def picture(self, areas: list[dict]) -> dict:
-        return await asyncio.to_thread(self._post, "picture", 60, areas=areas)
+    async def picture(self) -> dict:
+        return await asyncio.to_thread(self._post, "picture", 60)
 
     async def act(self, action: dict) -> dict:
         return await asyncio.to_thread(self._post, "act", 2 * CARD_S + PROOF_S + 90, action=action)
@@ -1602,9 +1658,23 @@ class Remote:
         await asyncio.to_thread(self._post, "end", 10, status=status, note=note)
 
 
-def parse(answer: str) -> tuple[str, list[dict], str]:
-    """The model's note, actions and what it kept from the page; ("", [], "") when the answer is not the asked
-    JSON."""
+def budget(able: Optional[dict]) -> dict:
+    """What a run may take, from the model as the app's check measured it (abilities.record: whether it called a
+    tool by itself, the context window its host states), never from its name: model calls before the person is
+    asked whether to go on, actions, actions in one reply, characters of the page a call carries, tokens of an
+    answer. No record: the least able model's."""
+    able = able or {}
+    own = able.get("tools") == "yes"
+    context = int(able.get("context") or 0)
+    calls = CALLS_MOST if own else CALLS_MAX
+    return {"calls": calls, "actions": 2 * calls + 1, "at_once": ACTIONS_AT_ONCE * (2 if own else 1),
+            "page": min(STATE_MOST, max(STATE_MAX, context // 8)),
+            "answer": ANSWER_MOST if context >= ROOMY else ANSWER_LEAST}
+
+
+def parse(answer: str, at_once: int = ACTIONS_AT_ONCE) -> tuple[str, list[dict], str]:
+    """The model's note, actions (at most `at_once`) and what it kept from the page; ("", [], "") when the answer
+    is not the asked JSON."""
     from ..textproc import strip_json_fences
     try:
         value = json.loads(strip_json_fences(str(answer or "")))
@@ -1619,7 +1689,7 @@ def parse(answer: str) -> tuple[str, list[dict], str]:
     actions = value.get("actions")
     if actions is None and value.get("do"):
         actions = [value]
-    actions = [a for a in actions or [] if isinstance(a, dict) and a.get("do")][:ACTIONS_AT_ONCE]
+    actions = [a for a in actions or [] if isinstance(a, dict) and a.get("do")][:at_once]
     return (" ".join(str(value.get("note") or "").split())[:120], actions,
             " ".join(str(value.get("keep") or "").split())[:300])
 
@@ -1684,37 +1754,46 @@ async def _judge(ask_model, task: str, said: str, history: list[str], result: st
     return " ".join(str(verdict.get("missing") or "").split())[:200] or "[not done]"
 
 
-def _signature(action: dict, url: str) -> str:
-    """The same action on the same page, for seeing a loop."""
+def _signature(action: dict, page: str) -> str:
+    """The same action on the same page as shown, for seeing a loop: a stepper pressed while its count goes up is
+    not one."""
     point = [round(float(action[k]) / 10) for k in ("x", "y") if isinstance(action.get(k), (int, float))]
     return json.dumps([action.get("do"), action.get("id"), action.get("text") if action.get("do") != "type" else
-                       action.get("id"), action.get("until"), action.get("mark"), point, _shape(url)],
-                      ensure_ascii=False)
+                       action.get("id"), action.get("until"), point, hash(page)], ensure_ascii=False)
 
 
 async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, task: str, *,
               runtime: Optional[Path] = None, before: Optional[list[str]] = None,
               on_step: Callable[[str], None] = lambda note: None,
-              sees: Callable[[], bool] = lambda: False, said: str = "") -> dict:
+              sees: Callable[[], bool] = lambda: False, said: str = "", able: Optional[dict] = None) -> dict:
     """Do `task` in the pane. Returns {"status", "result", "steps", "calls", "kind", "outside", "proof"}: status
-    is done, failed, declined, handover (a wall, a secret field, a page it cannot work), asked (a question for the
-    person), paused (the person took the page), stopped, or cap. Done is never the model's word alone: `proof`
+    is done, failed, declined, handover (a wall, a secret field, a page it cannot work, nothing moving), asked (a
+    question for the person), paused (the person took the page), stopped, or cap (the ceiling of `budget(able)`
+    reached with the task unfinished: the result is what is left, and the person says 继续 to go on with a fresh
+    ceiling). `able` is the model's record from the app's check (abilities.record). Done is never the model's word alone: `proof`
     says what bore it out, "press" (something went out on the person's yes and nothing typed is left unsent),
     "page" (the words it gave in `expect` show on the page) or "judge" (one more model call over the steps and
     the page, asked only when neither holds); a done the judge found wanting and that then came again with
     nothing new ends as failed, with what is missing. `before` carries the steps of the run this
-    one goes on from (the person said 继续). `sees()` says the model takes pictures: a drawn page is then
-    shown to it as a marked picture instead of being handed back. `said` is the person's own message the task
-    came from: the chat model's task line is often a part of it or a rewording, so the loop sees both."""
+    one goes on from (the person said 继续). `sees()` says the model takes pictures: it may then ask for the
+    page's picture, and a drawn page is shown to it as one instead of being handed back. `said` is the person's
+    own message the task came from: the chat model's task line is often a part of it or a rewording, so the loop
+    sees both."""
     from ..roam import fence_pages
     said = clip(" ".join(re.sub(r"[\x00-\x1f]", " ", str(said or "")).split()), 400)
+    limits = budget(able)
+    rules = RULES.replace("{at_once}", str(limits["at_once"]))
     history: list[str] = list(before or [])
     # What the model kept from pages it has left, for a task that needs two pages.
     kept: list[str] = []
     found = ""
     steps: list[str] = []
     done_steps: list[dict] = []
-    calls = actions_used = stuck = 0
+    # Calls after which nothing moved, running; what the last look showed; the last step's note (at the ceiling,
+    # what is left); a picture asked for, for the next look.
+    calls = actions_used = idle = 0
+    shown_last: Optional[tuple] = None
+    note, pictured = "", False
     seen: dict[str, int] = {}
     outside = pending = nudged = False
     # A done whose `expect` the page did not show (told once), and what the judge of a done found missing.
@@ -1740,7 +1819,7 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
 
     async def looked() -> dict:
         nonlocal outside
-        look = await hands.look()
+        look = await hands.look(limits["page"])
         read.append(str(look.get("state") or ""))
         if look.get("held"):
             steps.append(look["held"])
@@ -1775,14 +1854,23 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
             continue
         if look.get("wall"):
             return await end(finish("handover", f"the page shows a {look['wall']} wall ({look.get('evidence', '')})"))
-        picture = None
-        if look.get("controls", 99) < FEW_CONTROLS and look.get("drawn"):
-            if not (sees() and hasattr(hands, "picture")):
-                return await end(finish("handover", "the page has almost nothing to work with (a canvas, a map or "
-                                                    "a game)"))
-            picture = await hands.picture(look.get("areas") or [])
-        if calls >= CALLS_MAX or actions_used >= ACTIONS_MAX:
-            return await end(finish("cap", f"stopped after {calls} model calls"))
+        seeing = sees() and hasattr(hands, "picture")
+        drawn = look.get("controls", 99) < FEW_CONTROLS and look.get("drawn")
+        if drawn and not seeing:
+            return await end(finish("handover", "the page has almost nothing to work with (a canvas, a map or "
+                                                "a game)"))
+        picture = await hands.picture() if seeing and (drawn or pictured) else None
+        pictured = False
+        # Progress: the address, the page (its marks of what is new aside), what was kept or found, a picture.
+        now = (look.get("url"), re.sub(r"(?m)^\*", "", str(look.get("state") or "")), tuple(kept), found,
+               picture is not None)
+        idle = idle + 1 if now == shown_last else 0
+        shown_last = now
+        if idle >= STUCK_AFTER:
+            return await end(finish("handover", "nothing changed three times running"))
+        if calls >= limits["calls"] or actions_used >= limits["actions"]:
+            # The ceiling: the person is asked whether to go on, told what is left.
+            return await end(finish("cap", note))
         prompt = (f"Task: {task}\n"
                   + (f"The person's own message, which the task is for: {said}\n"
                      if said and fold(said).strip() != fold(task).strip() else "")
@@ -1794,21 +1882,25 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
                      if kept else "")
                   + ("Found on the page:\n" + fence_pages(found) + "\n" if found else "")
                   + "The page now:\n" + fence_pages(look["state"])
-                  + (f"\nThe picture is {picture['size'][0]}x{picture['size'][1]} pixels, with {picture['marks']} "
-                     f"marks." if picture else "")
+                  + (f"\nThe picture is {picture['size'][0]}x{picture['size'][1]} pixels." if picture else "")
+                  + ("\n[note] This is the last step before the person is asked whether to go on: in `note`, say in "
+                     "a short sentence what is left of the task." if calls + 1 == limits["calls"] else "")
                   + "\nReply with one JSON object.")
         found = ""
         calls += 1
         if picture:
-            answer = await ask_model(RULES + SEEING, [{"role": "user", "content": [
+            answer = await ask_model(rules + ASK_PICTURE + SEEING, [{"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{picture['picture']}"}}]}])
             if not sees():
-                # The endpoint would not take the picture after all: the page goes back to the person.
-                return await end(finish("handover", "the page is drawn and this model takes no pictures"))
+                # The endpoint would not take the picture after all: a drawn page goes back to the person.
+                if drawn:
+                    return await end(finish("handover", "the page is drawn and this model takes no pictures"))
+                answer = await ask_model(rules, [{"role": "user", "content": prompt}])
         else:
-            answer = await ask_model(RULES, [{"role": "user", "content": prompt}])
-        note, planned, keep = parse(answer)
+            answer = await ask_model(rules + (ASK_PICTURE if seeing else ""), [{"role": "user", "content": prompt}])
+        said_now, planned, keep = parse(answer, limits["at_once"])
+        note = said_now or note
         if keep and keep not in kept:
             kept = (kept + [keep])[-HISTORY_SHOWN:]
         if not planned:
@@ -1817,11 +1909,11 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
             if look.get("status") != "ok":
                 return await end(ended(look))
             continue
-        if note:
-            on_step(note)
+        if said_now:
+            on_step(said_now)
         if hasattr(hands, "step"):
             # What this reply's actions are for, shown over them beside the page (none: the last one's goes).
-            await hands.step(len(steps) + 1, note)
+            await hands.step(len(steps) + 1, said_now)
         for n, action in enumerate(planned):
             do = action.get("do")
             if do == "done" and pending and not nudged and action.get("success") is not False:
@@ -1832,7 +1924,7 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
                 break
             if do == "done":
                 success = action.get("success") is not False
-                result = " ".join(str(action.get("result") or "").split())[:600]
+                result = " ".join(str(action.get("result") or "").split())[:RESULT_MAX]
                 expect = " ".join(str(action.get("expect") or "").split())[:120]
                 proof = "press" if outside and not pending else ""
                 if success and not proof:
@@ -1873,7 +1965,13 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
                 return await end(finish("asked", question))
             if do == "look":
                 break
-            mark = _signature(action, look.get("url", ""))
+            if do == "picture":
+                # The next look comes with the page's picture, for a model that takes pictures.
+                pictured = seeing
+                if not seeing:
+                    history.append("[failed] this model takes no pictures: work from the page's lines")
+                break
+            mark = _signature(action, now[1])
             seen[mark] = seen.get(mark, 0) + 1
             if seen[mark] >= REPEATS_MAX:
                 return await end(finish("handover", "the same action did not work again and again"))
@@ -1922,13 +2020,10 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
                 return await end(finish("done", "", proof="press"))
             if result.get("step") and status == "ok":
                 done_steps.append(result["step"])
-            stuck = stuck + 1 if line.endswith("no change") else 0
-            if stuck >= STUCK_AFTER:
-                return await end(finish("handover", "nothing changed three times running"))
             # The rest of a reply waits for a fresh look once the page has moved on, or anything went out.
             if ("navigated to" in line or status != "ok" or result.get("outside") or "[held]" in line
-                    or do in ("scroll", "hover", "wait", "find", "back", "navigate")
-                    or action.get("x") is not None or action.get("mark") is not None
+                    or do in ("scroll", "hover", "wait", "find", "back", "navigate", "drag")
+                    or action.get("x") is not None or action.get("double") or action.get("button") == "right"
                     or (do == "click" and n + 1 < len(planned) and planned[n + 1].get("do") == "click")):
                 break
         look = await looked()

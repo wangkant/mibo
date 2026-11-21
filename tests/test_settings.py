@@ -32,7 +32,7 @@ FULL_ENV = {
     "LLM_FALLBACK_THINKING": "true",
     "LLM_RATE_WINDOW_S": "13", "LLM_RATE_THRESHOLD": "14", "LLM_FALLBACK_DURATION_S": "15",
     "LLM_RATE_LIMIT_COOLDOWN_S": "16",
-    "VISION_MODEL": "v-model", "VISION_API_KEY": "vk", "TAVILY_API_KEY": " tav ",
+    "VISION_MODEL": "v-model", "VISION_API_KEY": "vk",
     "VISION_BASE_URL": "https://vision.example/v4/", "AGENT_LANG": " ZH ",
 }
 

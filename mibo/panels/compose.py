@@ -26,7 +26,7 @@ from pathlib import Path
 from fastapi import Request
 
 from .. import browsed, today
-from ..roam import LIMIT, WEB
+from ..roam import LIMIT, WALKS_OFF, WEB
 
 ERRORS: frozenset[str] = frozenset({"compose_unavailable", "compose_invalid"})
 # The pages offered under "recent", and how long a screenshot may wait for the person's drag or click.
@@ -255,8 +255,10 @@ def mount(app, workspace, body) -> None:
             "clipboard": clipboard_kind() if os.name == "nt" else "",
             "browser": windows and getattr(window, "pane", None) is not None,
             "computer": computer(),
-            # A lookup is offered only where a walk can leave for it.
+            # A lookup is offered only where a walk can leave for it; else the entry says why not (walks
+            # switched off, no browser or no driver).
             "walks": walker is not None and walker.settings.roam_enabled and not walker.available(),
+            "walkWhy": (walker.available() or ("" if walker.settings.roam_enabled else WALKS_OFF)) if walker else "",
         }
 
     @app.get("/api/compose")

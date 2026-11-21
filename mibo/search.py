@@ -6,13 +6,19 @@ import json
 import logging
 import re
 import time
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import httpx
+from keyring.errors import KeyringError
+
 from . import lookup_need
 from . import mcp_offer
+from . import paths
 from . import recommend
+from . import secretstore
 from . import today
 from .llm import purpose
 from .storage import atomic_write_text
@@ -31,6 +37,54 @@ _DDG_REGIONS = {"zh": "cn-zh", "zh-TW": "tw-tzh", "en": "us-en", "ja": "jp-jp", 
 # Its "auto" draws a few at random, and half the draws found nothing (measured
 # 2026-11-19: 3 of 6 queries, against 4 of 6 for these).
 _DDG_BACKENDS = "yahoo, startpage, mojeek, duckduckgo"
+
+# The search API the person brought (Settings › 外出, panels/walks.py), kept in the system's credential store as
+# {"api": "brave" | "tavily", "key": "..."}. Without one the keyless engines above answer.
+SEARCH_KEY = "web_search"
+_TAG = re.compile(r"<[^>]+>")
+
+
+async def _brave(client: httpx.AsyncClient, key: str, query: str, count: int) -> list[dict]:
+    answer = await client.get("https://api.search.brave.com/res/v1/web/search", params={"q": query, "count": count},
+                              headers={"X-Subscription-Token": key, "Accept": "application/json"})
+    answer.raise_for_status()
+    # Brave marks the matched words in its snippets with <strong>.
+    return [{"title": r.get("title"), "url": r.get("url"), "snippet": unescape(_TAG.sub("", r.get("description") or ""))}
+            for r in (answer.json().get("web") or {}).get("results") or []]
+
+
+async def _tavily(client: httpx.AsyncClient, key: str, query: str, count: int) -> list[dict]:
+    answer = await client.post("https://api.tavily.com/search", headers={"Authorization": f"Bearer {key}"},
+                               json={"query": query, "search_depth": "basic", "max_results": count})
+    answer.raise_for_status()
+    return [{"title": r.get("title"), "url": r.get("url"), "snippet": r.get("content")}
+            for r in answer.json().get("results") or []]
+
+
+SEARCH_APIS = {"brave": _brave, "tavily": _tavily}
+
+
+def search_api(home) -> tuple[str, str]:
+    """The search API the person brought and its key, or ("", "") for the keyless engines; a credential store
+    the system does not have (a Linux desktop without a Secret Service) counts as none."""
+    try:
+        kept = json.loads(secretstore.get(home, SEARCH_KEY) or "{}")
+    except (KeyringError, ValueError):
+        return "", ""
+    return (kept["api"], kept["key"]) if kept.get("api") in SEARCH_APIS and kept.get("key") else ("", "")
+
+
+async def key_taken(api: str, key: str) -> bool:
+    """Whether the service takes the key, by one search of one result: False only when it says no."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            await SEARCH_APIS[api](client, key, "weather", 1)
+    except httpx.HTTPStatusError as e:
+        return e.response.status_code not in (400, 401, 403, 422)
+    except httpx.HTTPError:
+        # Unreachable now: the key is kept, and a failing search falls back to the keyless engines.
+        return True
+    return True
 
 # The reply model's own tools in the owner's chat (`_reply_with_tools`).
 CHAT_TOOLS = [
@@ -373,7 +427,8 @@ _ERRAND_SAID = {
     "asked": "it needs something from them",
     "paused": "they took over the page, so it paused; they can say 继续 to go on",
     "stopped": "they stopped it themselves (停止 or Esc), and you stopped as they asked",
-    "cap": "too many steps, so it stopped",
+    "cap": "it reached its step limit with the task unfinished (the result says what is left) and waits: ask "
+           "them whether to go on; on 继续, call it again with go_on true",
     "no_page": "nothing is open in the app's browser: they need to open the site, or give where to start",
     "no_app": "the app window with its browser is not open",
     "off": "they turned off your reading this site while they are on it; say so, do not read it another way",
@@ -385,14 +440,14 @@ _ERRAND_TOLD = {
     "zh": {"done": "已完成。", "failed": "未能完成。", "declined": "未获得你的确认，未发送任何内容。",
            "handover": "需要你在网页上操作。完成后请点击「继续」。", "asked": "需要你补充信息后才能继续。",
            "paused": "你已接管网页。需要继续时请点击「继续」。", "stopped": "已按你的要求停止。",
-           "cap": "步骤过多，已在此停止。",
+           "cap": "已达到本次操作的步骤上限，任务尚未完成。{left}是否继续？",
            "no_page": "内置浏览器中没有打开的网页。", "no_app": "应用窗口未打开，无法操作网页。",
            "off": "你已关闭此网站的「浏览时读取」，无法在此网页操作。可在「设置 › 连接」中开启。"},
     "en": {"done": "Done.", "failed": "It did not work out.", "declined": "No yes from you, so nothing was sent.",
            "handover": "The page needs you. When you are done there, press Go on.",
            "asked": "It needs more from you before it can go on.",
            "paused": "The page is yours now. To have it carry on, press Go on.", "stopped": "Stopped as you asked.",
-           "cap": "Too many steps: it stopped here.",
+           "cap": "This run reached its step limit before the task was done. {left}Go on?",
            "no_page": "No page is open in the built-in browser.", "no_app": "The app window is not open, so the page cannot be worked on.",
            "off": "Reading this site while you browse it is off, so nothing can be done in this page. "
                   "Settings › Connections turns it on."},
@@ -453,43 +508,28 @@ class _PageText(HTMLParser):
 
 class WebSearch:
     async def _search_rows(self, query: str, max_results: int = 6) -> list[dict]:
-        """Up to `max_results` results as {"title", "url", "snippet"}: Tavily
-        if a key is set, else keyless DuckDuckGo in the chat language's
-        region; [] on any failure."""
-        if self.tavily_key:
-            results, body = await self._web_search_tavily(query, max_results), "content"
-        else:
-            results, body = await self._web_search_ddg(query, max_results), "body"
+        """Up to `max_results` results as {"title", "url", "snippet"}: from the search API the person brought
+        (Brave Search or Tavily), else, or when it answers nothing, from keyless DuckDuckGo in the chat
+        language's region; [] on any failure."""
+        api, key = await asyncio.to_thread(search_api, paths.ROOT)
+        results = []
+        if api:
+            try:
+                async with self._http(timeout=20) as client:
+                    results = await SEARCH_APIS[api](client, key, query, max_results)
+            except Exception as e:
+                logger.warning("[Agent] %s search failed (%d-char query): %s", api, len(query), e)
+        if not results:
+            results = [{"title": r.get("title"), "url": r.get("href"), "snippet": r.get("body")}
+                       for r in await self._web_search_ddg(query, max_results)]
         rows = []
         for r in results[:max_results]:
             title = " ".join(str(r.get("title") or "").split())
-            snippet = " ".join(str(r.get(body) or "").split())
-            url = str(r.get("url") or r.get("href") or "").strip()
+            snippet = " ".join(str(r.get("snippet") or "").split())
+            url = str(r.get("url") or "").strip()
             if title or snippet:
                 rows.append({"title": title[:200], "url": url[:2000], "snippet": snippet[:400]})
         return rows
-
-    async def _web_search_tavily(self, query: str, max_results: int) -> list:
-        """Tavily's results, or [] on any failure."""
-        try:
-            async with self._http(timeout=20) as client:
-                resp = await client.post(
-                    "https://api.tavily.com/search",
-                    json={
-                        "api_key": self.tavily_key,
-                        "query": query,
-                        "search_depth": "basic",
-                        "max_results": max_results,
-                        "include_answer": False,
-                    },
-                )
-            if resp.status_code != 200:
-                logger.warning("[Agent] Tavily HTTP %d: %s", resp.status_code, resp.text[:200])
-                return []
-            return resp.json().get("results", []) or []
-        except Exception as e:
-            logger.warning("[Agent] Tavily search failed (%d-char query): %s", len(query), e)
-            return []
 
     async def _web_search_ddg(self, query: str, max_results: int) -> list:
         """DuckDuckGo's (ddgs) results, or [] on any failure. Its engines often answer nothing at random
@@ -813,6 +853,11 @@ class WebSearch:
             lookups.away_s, lookups.away_since = lookups.away(), None
         result = outcome["result"] if outcome["status"] in ("done", "failed", "asked") else ""
         told = _ERRAND_TOLD["zh" if (getattr(self, "chat_lang", "") or "zh").startswith("zh") else "en"]
+        if outcome["status"] == "cap":
+            # At the step limit: what is left, in the model's words, and the question whether to go on.
+            left = outcome["result"].strip()
+            gap = "" if told is _ERRAND_TOLD["zh"] else " "
+            return json.dumps({"reply": told["cap"].format(left=f"{left}{gap}" if left else "")}, ensure_ascii=False)
         return json.dumps({"reply": result if result and not result.startswith("[") else
                            told.get(outcome["status"], told["failed"])}, ensure_ascii=False)
 
@@ -852,9 +897,14 @@ class WebSearch:
             return {"status": "off", "result": "", "steps": []}
         lookups.doing("operate", task[:80])
 
+        from . import abilities
+        # The model as the app's check measured it: the run's ceiling, page and answer room (operate.budget).
+        able = abilities.record(today.runtime_of(self), self._endpoint_for(self.llm_dm_model)[0], self.llm_dm_model)
+
         async def ask_model(system: str, messages: list[dict]) -> str:
             with purpose("operate"):
-                return await self._call_llm(system, messages, self.llm_dm_model, max_tokens=900,
+                return await self._call_llm(system, messages, self.llm_dm_model,
+                                            max_tokens=operate.budget(able)["answer"],
                                             disable_thinking=True, temperature=0.2,
                                             json_object=True)
 
@@ -873,7 +923,7 @@ class WebSearch:
         try:
             outcome = await operate.run(ask_model, Pane(), task, runtime=today.runtime_of(self), before=before,
                                         on_step=lambda note: lookups.doing("operate", note),
-                                        sees=self._shows_pictures, said=lookups.said)
+                                        sees=self._shows_pictures, said=lookups.said, able=able)
         finally:
             if outcome["status"] == "failed" and not outcome["result"]:
                 # Stopped from the chat: the pane hears it now, not at the end of a step that never comes.

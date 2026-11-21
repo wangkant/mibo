@@ -5,7 +5,7 @@
 // paSetup.part(key, make) before app.js mounts the page; make(kit) returns
 // {node, show}, built the first time the section opens, show() each time.
 (() => {
-  const ORDER = ["character", "model", "connect", "language", "recs", "memory", "privacy", "shell", "programs", "abilities", "schedule", "device", "about"];
+  const ORDER = ["character", "model", "connect", "language", "recs", "walks", "memory", "privacy", "shell", "programs", "abilities", "schedule", "device", "about"];
   // Older names for a place in Settings, as ctx.go, the first run and older links say them.
   const ALIASES = {
     figure: "character",
@@ -37,6 +37,7 @@
     connect: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
     language: "M4 5.5h9M8.5 3.5v2M6 5.5c.8 3.2 3 5.7 6 7M11 5.5c-.8 3.6-3.4 6.4-6.5 7.5M12.5 20.5l4-9.5 4 9.5M14 17h5",
     recs: "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z",
+    walks: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM15.6 8.4l-2.2 5-5 2.2 2.2-5z",
     memory: "M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.3A3 3 0 0 0 9 17.5a2.5 2.5 0 0 0 3 2V5.5a2.5 2.5 0 0 0-3-1zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.3 3 3 0 0 1-4.5 4.7 2.5 2.5 0 0 1-3 2",
     privacy: "M12 3.5l7 2.8v5.2c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.3z",
     device: "M4.5 5h15a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 20h6M12 16.5V20",

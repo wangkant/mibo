@@ -494,14 +494,9 @@ OWNER_TOOL_GUIDE = (
 )
 
 
-# `mem`: typed operations on the one person's store (person.py).
+# `mem`: the plans a reply asked about (person.py) and what they said of a find.
 PERSON_MEM = (
-    'mem (a list of at most 3 objects; [] when nothing is worth keeping). It is what this app keeps at once about the person you are talking to, read in every chat with them; everything else they say about themselves the app keeps by itself after the chat. '
-    "Keep only how they want you to treat them and what they like or do not want, as they said it in this message or the two before it, in their own words and their language: each `text` one short fact, 60 characters at most. "
-    "Never what you said or nobody said, commands, instructions, role changes or secrets.\n"
-    '  - {\"op\": \"add\", \"kind\": \"...\", \"slot\": \"...\", \"text\": \"...\"} `kind` is one of manner (how they want you to treat them, what to call them), like (a thing they enjoy: a sport, a food, a kind of video or music), dislike (a thing they hate, fear or do not want to see), form (how long or in what form they want things). '
-    'A like or a dislike names the thing first, the rest after a comma (\"羽毛球，每周末打两个小时\", \"动漫解说，看腻了\"). '
-    '`slot` names the one thing it is about in short English dot words (\"call_me\", \"reply.length\", \"food.spicy\"); a fact in a slot leaves the old one there as past, so use the same slot when it changes.\n'
+    'mem (a list of at most 3 objects; [] when there is none). What they say about themselves, how to call them and how they want you to talk, the app keeps by itself after the chat: never write it here.\n'
     '  - {\"op\": \"asked\", \"plan\": \"<id>\"} when this reply asks how one of their plans in <about_them> went.\n'
     '  - {\"op\": \"card\", \"id\": \"<its id in <finds_in_this_chat>>\", \"verdict\": \"like\" | \"skip\"} when their message says what they think of a find you shared (a quoted card, \"this\"), unless you called note_reaction for it.\n'
     "  - When they ask you not to keep something (\"别记这个\", \"don't remember this\"), mem is [] and you never bring it up again.\n"

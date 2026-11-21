@@ -1,9 +1,17 @@
 """Running a command that was read and allowed.
 
-Every command runs in a fresh Windows PowerShell with no profile, not
+Every command runs in a Windows PowerShell of its own with no profile, not
 elevated, in a granted folder, with an environment rebuilt from a short list
 (none of the app's keys and tokens), a time limit, and its whole process tree
 in a job object that is ended on stop or time out. Output is capped.
+
+That PowerShell is started ahead and waits with the preamble loaded (`Spare`),
+as terminals and agents keep a warm shell: the command is piped in when it
+comes and another one is started to wait for the next. A command so begins at
+once instead of after PowerShell's own start, and since each still has its own
+process, nothing one command leaves (variables, location, environment, loaded
+types, a program it started) reaches the next or is ended by the next one's
+time out.
 
 Remove-Item, by any of its aliases, is a function of the preamble's that moves
 what it is given to the Recycle Bin and says each path it moved, so a delete
@@ -63,15 +71,9 @@ WRAP = ("& {{\n{command}\n}} 2>&1 | ForEach-Object {{ if ($_ -is [System.Managem
 # Remove-Item as the Recycle Bin: a function comes before the cmdlet, and the aliases rm, del, ri and rd reach it
 # too. Each item goes to the bin by Windows' own SHFileOperation with undo, silent and without an error dialog (as
 # files.recycle does; FileSystem.DeleteFile would show one on screen for a file in use), a link is removed as
-# itself, and each path moved is written to $__bin for the turn's list of changes (checkpoint.py).
-BIN = r"""function Remove-Item {
-  [CmdletBinding()]
-  param([Parameter(Position = 0, ValueFromPipeline = $true)][string[]]$Path,
-        [Parameter(ValueFromPipelineByPropertyName = $true)][Alias('PSPath', 'LP')][string[]]$LiteralPath,
-        [string]$Filter, [string[]]$Include, [string[]]$Exclude, [switch]$Recurse, [switch]$Force)
-  begin {
-    if (-not ('Mibo.Bin' -as [type])) {
-      Add-Type -Namespace Mibo -Name Bin -MemberDefinition @'
+# itself, and each path moved is written to $__bin for the turn's list of changes (checkpoint.py). The type is
+# compiled while the PowerShell waits, so a delete does not wait for it.
+BIN = r"""Add-Type -Namespace Mibo -Name Bin -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 public struct Op { public IntPtr hwnd; public uint wFunc; public string pFrom; public string pTo; public ushort fFlags;
   public bool fAnyOperationsAborted; public IntPtr hNameMappings; public string lpszProgressTitle; }
@@ -79,8 +81,11 @@ public struct Op { public IntPtr hwnd; public uint wFunc; public string pFrom; p
 public static bool Recycle(string path) { var op = new Op(); op.wFunc = 3; op.pFrom = path + "\0\0";
   op.fFlags = 0x0004 | 0x0010 | 0x0040 | 0x0400; return SHFileOperationW(ref op) == 0 && !op.fAnyOperationsAborted; }
 '@
-    }
-  }
+function Remove-Item {
+  [CmdletBinding()]
+  param([Parameter(Position = 0, ValueFromPipeline = $true)][string[]]$Path,
+        [Parameter(ValueFromPipelineByPropertyName = $true)][Alias('PSPath', 'LP')][string[]]$LiteralPath,
+        [string]$Filter, [string[]]$Include, [string[]]$Exclude, [switch]$Recurse, [switch]$Force)
   process {
     $more = @{ Force = $Force }
     foreach ($key in 'Filter', 'Include', 'Exclude') { if ($PSBoundParameters[$key]) { $more[$key] = $PSBoundParameters[$key] } }
@@ -101,6 +106,10 @@ public static bool Recycle(string path) { var op = new Op(); op.wFunc = 3; op.pF
   }
 }
 """
+# What the waiting PowerShell does with a command: one line, the command's script in UTF-8 and base64, run in the
+# top scope as -EncodedCommand runs a script. No line (the app went away) ends it.
+WAIT = ("$__line = [Console]::In.ReadLine()\nif (-not $__line) { exit }\n"
+        ". ([ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($__line))))\n")
 # Error records as Windows PowerShell writes them to a redirected stderr (CLIXML).
 CLIXML_ERROR = re.compile(r'<S S="(?:Error|warning)">(.*?)</S>', re.DOTALL)
 
@@ -145,6 +154,51 @@ class _Job:
     def close(self) -> None:
         import ctypes
         self.k32.CloseHandle(ctypes.c_void_p(self.handle))
+
+
+class Spare:
+    """The PowerShell waiting for the next command, in its own job object from the start."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.waiting: tuple[subprocess.Popen, _Job] | None = None
+
+    @staticmethod
+    def _start() -> tuple[subprocess.Popen, _Job]:
+        encoded = base64.b64encode((PREAMBLE + BIN + WAIT).encode("utf-16-le")).decode("ascii")
+        # It waits in Windows' own folder, so it holds no granted folder open.
+        process = subprocess.Popen(
+            [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+            cwd=os.environ.get("SystemRoot") or None, env=environment(), stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return process, _Job(process)
+
+    def warm(self) -> None:
+        """One is waiting from now on, started if none is."""
+        with self.lock:
+            if self.waiting is None or self.waiting[0].poll() is not None:
+                self.waiting = self._start()
+
+    def take(self) -> tuple[subprocess.Popen, _Job]:
+        """The one waiting (or a new one when none is), and another started to wait in its place."""
+        with self.lock:
+            taken, self.waiting = self.waiting, self._start()
+        if taken is not None and taken[0].poll() is None:
+            return taken
+        if taken is not None:
+            taken[1].close()
+        return self._start()
+
+    def close(self) -> None:
+        """Ends the one waiting: the app is closing."""
+        with self.lock:
+            if self.waiting is not None:
+                self.waiting[1].end()
+                self.waiting[1].close()
+                self.waiting = None
+
+
+SPARE = Spare()
 
 
 def _line(raw: bytes) -> str:
@@ -200,14 +254,16 @@ def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threadin
     `recycled` lists what Remove-Item moved to the Recycle Bin."""
     handle, bin_log = tempfile.mkstemp(prefix="mibo-bin-", suffix=".txt")
     os.close(handle)
-    script = PREAMBLE + "$__bin = '" + bin_log.replace("'", "''") + "'\n" + BIN + WRAP.format(command=command)
-    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    quoted = "'" + cwd.replace("'", "''") + "'"
+    # It moves into `cwd` first, and runs nothing anywhere else when that is gone.
+    script = ("$__bin = '" + bin_log.replace("'", "''") + "'\n"
+              f"try {{ Set-Location -LiteralPath {quoted} -ErrorAction Stop }} catch {{ $__err.WriteLine($_); exit 1 }}\n"
+              f"[Environment]::CurrentDirectory = {quoted}\n" + WRAP.format(command=command))
+    process, job = SPARE.take()
     started = time.monotonic()
-    process = subprocess.Popen(
-        [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-        cwd=cwd, env=environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    job = _Job(process)
+    # One line, then stdin is closed: what the command reads from stdin ends there, as it did with no stdin.
+    process.stdin.write(base64.b64encode(script.encode("utf-8")) + b"\n")
+    process.stdin.close()
     kept = _Kept()
     err: list[bytes] = []
 

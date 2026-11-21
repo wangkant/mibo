@@ -174,7 +174,6 @@ class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
         self.vision_model = s.vision_model
         self.vision_api_key = s.vision_api_key
         self.vision_base_url = s.vision_base_url
-        self.tavily_key = s.tavily_key
         self.embedding_model = s.embedding_model
         self.embedding_base_url = s.embedding_base_url
         self.embedding_api_key = s.embedding_api_key

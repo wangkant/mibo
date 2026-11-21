@@ -160,6 +160,9 @@ window.paPlus = (() => {
       // Its result comes into the main chat, so it is asked there.
       if (configured && env.main && facts.walks)
         ask.push(entry(I.compass, say("wonder"), () => (close(), startWonder()), { hint: say("wonderHint") }));
+      // A walk cannot leave: the entry says why and opens Settings › 外出.
+      else if (configured && env.main && say("walkWhy")[facts.walkWhy])
+        ask.push(entry(I.compass, say("wonder"), () => (close(), ctx.go("setup/walks")), { hint: say("walkWhy")[facts.walkWhy] }));
       ask.push(entry(I.memory, say("memory"), () => (close(), ctx.go("setup/memory"))));
       return [
         [say("add"), add],

@@ -5,7 +5,8 @@ The tool shapes are the ones coding agents converged on (Claude Code, Codex CLI,
 file with line numbers and a range, write a new one, edit by exact replacement, list and glob, search text, run
 a command in a working folder that carries over between steps, and a plan the model writes and ticks off. The
 model writes the call; the app's page reads and judges it, runs it, asks the person on a card or refuses
-(panel.py); a file tool is judged as the command that does the same thing, so it gets no gate of its own. What
+(panel.py); a file tool is judged by its paths through the same gate, as a command doing it would be. A command
+is read once: the reading behind the waiting row's words (/api/shell/read) is the one judged (/api/shell/do). What
 comes back is the outcome and the capped output, fenced as data, never an instruction. The waiting row and the
 step log under the reply say in the app's own written words what is done.
 """

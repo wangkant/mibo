@@ -1575,6 +1575,113 @@
   margin-top: var(--pa-s1);
 }
 
+/* ---- Going out: the record, one fold a walk; its pages and lists unfold under its line. */
+.setup-walks-entries {
+  display: flex;
+  flex-direction: column;
+}
+.setup-walks-entry {
+  padding: var(--pa-s3) 0;
+  border-top: 1px solid var(--pa-line);
+}
+.setup-walks-entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.setup-walks-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  list-style: none;
+  cursor: pointer;
+}
+.setup-walks-head::-webkit-details-marker {
+  display: none;
+}
+.setup-walks-head:focus-visible {
+  outline: var(--pa-focus);
+  outline-offset: 2px;
+}
+.setup-walks-head .setup-fold-chevron {
+  flex: none;
+  align-self: center;
+  color: var(--pa-faint);
+}
+.setup-walks-entry[open] .setup-fold-chevron {
+  transform: rotate(90deg);
+}
+.setup-walks-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--pa-s3);
+}
+.setup-walks-time {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.setup-walks-topic {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-md);
+  overflow-wrap: anywhere;
+}
+.setup-walks-sums,
+.setup-walks-missed,
+.setup-walks-note {
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-sm);
+}
+.setup-walks-sums {
+  flex: none;
+}
+.setup-walks-missed {
+  margin: var(--pa-s1) 0 0;
+  padding-left: 22px;
+}
+.setup-walks-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s3);
+  margin: var(--pa-s3) 0 0 22px;
+}
+.setup-walks-part[hidden] {
+  display: none;
+}
+.setup-walks-part-title {
+  margin: 0 0 var(--pa-s1);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  font-weight: 600;
+}
+.setup-walks-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--pa-s2);
+  margin: 2px 0;
+}
+.setup-walks-site {
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+}
+.setup-walks-page {
+  min-width: 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+/* A search API's own mark before its name. */
+.setup-walks-mark {
+  display: inline-flex;
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+.setup-walks-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* ---- While the page loads: two quiet blocks where the section will be. */
 .setup-loading {
   display: flex;

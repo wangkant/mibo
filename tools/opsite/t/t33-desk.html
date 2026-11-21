@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>团队工作台</title>
+<style>
+body { margin: 0; font: 14px/1.5 system-ui, "Microsoft YaHei", sans-serif; color: #222; background: #f4f5f7; }
+main { max-width: 980px; margin: 16px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 14px; }
+section { background: #fff; border: 1px solid #e3e5e8; border-radius: 8px; padding: 12px 14px; }
+h2 { font-size: 15px; margin: 0 0 8px; }
+textarea { width: 100%; box-sizing: border-box; height: 56px; font: inherit; }
+.bubbles p { margin: 4px 0; padding: 4px 8px; background: #eef6ee; border-radius: 6px; }
+.hint { color: #888; font-size: 12px; }
+#draft { border: 1px solid #ccc; border-radius: 4px; padding: 6px 8px; min-height: 40px; outline: none; }
+table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid #e3e5e8; padding: 4px 8px; text-align: left; }
+td.v { cursor: cell; } td input { width: 80px; font: inherit; }
+.file { padding: 6px 8px; border-radius: 4px; cursor: default; outline: none; } .file.sel { background: #e7effa; }
+.menu { position: fixed; background: #fff; border: 1px solid #ccc; box-shadow: 0 2px 8px #0002; border-radius: 4px; }
+.menu div { padding: 4px 16px; cursor: pointer; } .menu div:hover { background: #f0f0f0; }
+.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.col { background: #f7f8fa; border-radius: 6px; padding: 6px; min-height: 90px; }
+.col h3 { font-size: 13px; margin: 0 0 6px; color: #666; }
+.card { background: #fff; border: 1px solid #dfe1e5; border-radius: 4px; padding: 4px 8px; margin-bottom: 6px; cursor: grab; }
+.rank div { padding: 6px 8px; margin-bottom: 4px; background: #f7f8fa; border-radius: 4px; cursor: grab; user-select: none; }
+.rank div.lift { background: #dde8f7; }
+</style></head>
+<body><main>
+<section>
+  <h2>团队群聊</h2>
+  <div class="bubbles" id="bubbles"></div>
+  <textarea id="chat" aria-label="群消息" placeholder="输入消息"></textarea>
+  <div class="hint">Ctrl+Enter 发送，Enter 换行</div>
+  <button id="like">点赞</button> <span id="likes">0</span>
+</section>
+<section>
+  <h2>周报草稿</h2>
+  <div id="draft" role="textbox" aria-label="周报草稿" contenteditable="true">本周完成：登录页改版</div>
+  <p><button id="keep">保存草稿</button> <span id="kept"></span></p>
+</section>
+<section>
+  <h2>预算表</h2>
+  <div class="hint">双击金额可修改</div>
+  <table><tr><th>项目</th><th>金额</th></tr>
+    <tr><td>差旅</td><td class="v" data-row="差旅">1200</td></tr>
+    <tr><td>设备</td><td class="v" data-row="设备">3400</td></tr></table>
+</section>
+<section>
+  <h2>文件</h2>
+  <div class="hint">右键单击文件可打开菜单；选中后按 Delete 删除</div>
+  <div id="files"><div class="file" tabindex="0">合同.pdf</div><div class="file" tabindex="0">报价单.xlsx</div></div>
+</section>
+<section>
+  <h2>看板</h2>
+  <div class="board">
+    <div class="col" data-col="待办"><h3>待办</h3><div class="card" draggable="true">写周报</div><div class="card" draggable="true">订会议室</div></div>
+    <div class="col" data-col="进行中"><h3>进行中</h3></div>
+    <div class="col" data-col="已完成"><h3>已完成</h3></div>
+  </div>
+</section>
+<section>
+  <h2>优先级</h2>
+  <div class="rank" id="rank"><div>甲项</div><div>乙项</div><div>丙项</div></div>
+  <h2 style="margin-top:12px">导出</h2>
+  <button id="make">生成报表</button> <span id="made"></span>
+</section>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+// Chat: Ctrl+Enter sends, Enter keeps its new line.
+const chat = document.getElementById("chat");
+chat.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || !chat.value.trim()) return;
+  e.preventDefault();
+  post("/api/send", { to: "团队群", text: chat.value.trim() });
+  const p = document.createElement("p"); p.textContent = chat.value.trim();
+  document.getElementById("bubbles").append(p); chat.value = "";
+});
+let likes = 0;
+document.getElementById("like").onclick = () => {
+  likes += 1; document.getElementById("likes").textContent = likes; post("/api/like", { n: likes });
+};
+// Draft: saved as it stands.
+document.getElementById("keep").onclick = async () => {
+  await post("/api/draft", { text: document.getElementById("draft").innerText.trim() });
+  document.getElementById("kept").textContent = "已保存";
+};
+// Budget: a double click opens the cell for editing; Enter saves it.
+for (const td of document.querySelectorAll("td.v")) {
+  td.addEventListener("dblclick", () => {
+    if (td.querySelector("input")) return;
+    const input = document.createElement("input");
+    input.value = td.textContent; input.setAttribute("aria-label", td.dataset.row + "金额");
+    td.textContent = ""; td.append(input); input.focus();
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      post("/api/cell", { row: td.dataset.row, value: input.value });
+      td.textContent = input.value;
+    });
+  });
+}
+// Files: a menu of the page's own on a right click; Delete removes the selected file.
+let menu = null;
+function drop(file) { post("/api/delete", { file: file.textContent }); file.remove(); }
+for (const file of document.querySelectorAll(".file")) {
+  file.addEventListener("click", () => {
+    document.querySelectorAll(".file").forEach((f) => f.classList.remove("sel"));
+    file.classList.add("sel"); file.focus();
+  });
+  file.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (menu) menu.remove();
+    menu = document.createElement("div"); menu.className = "menu"; menu.setAttribute("role", "menu");
+    menu.style.left = e.clientX + "px"; menu.style.top = e.clientY + "px";
+    for (const [name, act] of [["重命名", () => {}], ["删除", () => drop(file)]]) {
+      const item = document.createElement("div"); item.textContent = name; item.setAttribute("role", "menuitem");
+      item.onclick = () => { act(); menu.remove(); menu = null; };
+      menu.append(item);
+    }
+    document.body.append(menu);
+  });
+}
+document.addEventListener("keydown", (e) => {
+  const file = document.querySelector(".file.sel");
+  if (e.key === "Delete" && file && document.activeElement === file) drop(file);
+});
+// Board: cards move by the browser's own drag and drop.
+let dragged = null;
+for (const card of document.querySelectorAll(".card")) {
+  card.addEventListener("dragstart", (e) => { dragged = card; e.dataTransfer.setData("text/plain", card.textContent); });
+}
+for (const col of document.querySelectorAll(".col")) {
+  col.addEventListener("dragover", (e) => e.preventDefault());
+  col.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const name = e.dataTransfer.getData("text/plain");
+    const card = dragged && dragged.textContent === name ? dragged : null;
+    if (!card) return;
+    col.append(card);
+    post("/api/move", { card: name, to: col.dataset.col });
+  });
+}
+// Priorities: reordered with the mouse, as list libraries do without the browser's drag and drop.
+const rank = document.getElementById("rank");
+let lifted = null;
+rank.addEventListener("mousedown", (e) => { if (e.target.parentElement === rank) { lifted = e.target; lifted.classList.add("lift"); } });
+document.addEventListener("mousemove", (e) => {
+  if (!lifted) return;
+  const over = document.elementFromPoint(e.clientX, e.clientY);
+  if (over && over.parentElement === rank && over !== lifted) {
+    const r = over.getBoundingClientRect();
+    rank.insertBefore(lifted, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+  }
+});
+document.addEventListener("mouseup", () => {
+  if (!lifted) return;
+  lifted.classList.remove("lift"); lifted = null;
+  post("/api/rank", { order: [...rank.children].map((d) => d.textContent) });
+});
+// Export: the report takes a few seconds.
+document.getElementById("make").onclick = () => {
+  const made = document.getElementById("made");
+  made.textContent = "正在生成…";
+  setTimeout(() => { made.textContent = "报表已生成"; }, 4000);
+};
+</script>
+</body></html>

@@ -36,6 +36,8 @@ TURN = re.compile(r"[\w-]{1,64}")
 LOG_OUT = 1500
 # Items looked at in the granted folders when finding a file the model named badly.
 FIND_MOST = 20000
+# Seconds the reading /api/shell/read made stays good for the /api/shell/do that follows it.
+READ_KEPT_S = 5.0
 
 
 def _error(code: str, status: int = 400) -> JSONResponse:
@@ -57,6 +59,8 @@ class Shell:
         # Each turn's changes to files, which the person can take back (checkpoint.py); the command running now.
         self.checkpoints = checkpoint.Checkpoints(self.home)
         self.running: dict | None = None
+        # (command, folder, when, reading) of the last /api/shell/read, which the /api/shell/do after it takes.
+        self.kept_read: tuple | None = None
 
     def turn_on(self, conversation: str) -> bool:
         return self.cards.turn_on(conversation)
@@ -133,19 +137,32 @@ class Shell:
             self.last = place
         return {"status": "on", "folder": place, "read_only": answer == "read"}
 
-    async def judged(self, command: str, conversation: str, folder: str, card: dict | None = None) -> tuple:
+    def take_read(self, command: str, cwd: str) -> reading.Reading | None:
+        """The reading /api/shell/read made of this command in this folder a moment ago, taken once."""
+        kept, self.kept_read = self.kept_read, None
+        if kept and kept[:2] == (command, cwd) and time.monotonic() - kept[2] < READ_KEPT_S:
+            return kept[3]
+        return None
+
+    async def judged(self, command: str, conversation: str, folder: str, card: dict | None = None,
+                     job: dict | None = None) -> tuple:
         """Reads and judges `command` in `folder`, asks for a folder and for the press a card needs: (outcome,
-        context), the outcome None when it may run now. `card` gives a file tool's own title and lines."""
+        context), the outcome None when it may run now. A file tool's `job` is judged by its own acts (files.acts),
+        `command` being its call; `card` gives its own title and lines."""
         cwd, ask_first = self.cwd_for(folder)
         if not cwd:
             return {"status": "bad_folder"}, {}
+
+        def read_now() -> reading.Reading:
+            return reading.Reading(command, cwd, files.acts(job, cwd), []) if job else reading.read(command, cwd)
+
         asked_for: set[str] = set()
         for _ in range(4):
             read_, write = None, False
             if ask_first:
                 folder_to_grant = ask_first
             else:
-                read_ = await asyncio.to_thread(reading.read, command, cwd)
+                read_ = (None if job else self.take_read(command, cwd)) or await asyncio.to_thread(read_now)
                 verdict = await asyncio.to_thread(reading.judge, read_, self.grants)
                 if verdict.action != "folder":
                     break
@@ -220,7 +237,7 @@ class Shell:
                 return {"status": status, "said": asked_said,
                         "asked": {lang: asked[lang]["lines"] for lang in ("zh", "en")}}, context
             # What the card showed must still be what runs.
-            again = await asyncio.to_thread(lambda: reading.judge(reading.read(command, cwd), self.grants))
+            again = await asyncio.to_thread(lambda: reading.judge(read_now(), self.grants))
             if again.action != "ask" or (
                     sorted(d["path"] for d in again.deletes) != sorted(d["path"] for d in verdict.deletes)
                     or [d["files"] for d in again.deletes] != [d["files"] for d in verdict.deletes]
@@ -295,8 +312,8 @@ class Shell:
         return found[0] if len(found) == 1 else ""
 
     async def file(self, op: str, args: dict, conversation: str, folder: str, turn: str) -> dict:
-        """One file tool: made ready and checked here, judged as its equivalent command (the same folder card,
-        card and refusal as that command), then done in Python (files.py)."""
+        """One file tool: made ready and checked here, judged by its paths (files.acts: the same folder card, card
+        and refusal as a command doing it), then done in Python (files.py)."""
         not_now = self.ready(conversation)
         if not_now:
             return not_now
@@ -314,8 +331,8 @@ class Shell:
                 return {"status": "error", "message": str(e)}
             if job.get("answer"):
                 return {"status": "done", "out": job["answer"], "said": {}, "cwd": base}
-            command = files.equivalent(job["op"], job)
-            outcome, context = await self.judged(command, conversation, folder, card=job.get("card"))
+            command = files.call(job)
+            outcome, context = await self.judged(command, conversation, folder, card=job.get("card"), job=job)
             if outcome:
                 return outcome
             kept = self.checkpoints.turn(turn)
@@ -478,6 +495,9 @@ def mount(app, workspace, body) -> None:
             app.state.shell = Shell(app, workspace)
         return app.state.shell
 
+    # The PowerShells kept for reading and for running commands end with the app.
+    app.state.closers += [running.SPARE.close, reading.PARSER.close]
+
     @app.get("/api/shell")
     async def shell_view():
         return await asyncio.to_thread(shell().view)
@@ -529,13 +549,17 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/shell/read")
     async def shell_read(request: Request):
-        """The plain words for a command before it is judged: the step log's line while it runs."""
+        """The plain words for a command before it is judged: the step log's line while it runs. The reading is kept
+        for the /api/shell/do that follows, and a PowerShell is made ready to run it meanwhile."""
         payload = await body(request)
         command = payload.get("command")
         if not isinstance(command, str) or not command.strip():
             return _error("generic")
-        cwd, _ = shell().cwd_for(str(payload.get("folder") or ""))
-        read_ = await asyncio.to_thread(reading.read, command, cwd or os.environ.get("USERPROFILE", ""))
+        if shell().grants.on():
+            await asyncio.to_thread(running.SPARE.warm)
+        cwd = shell().cwd_for(str(payload.get("folder") or ""))[0] or os.environ.get("USERPROFILE", "")
+        read_ = await asyncio.to_thread(reading.read, command, cwd)
+        shell().kept_read = (command, cwd, time.monotonic(), read_)
         return {lang: {"ing": words.summary(read_, lang, "ing"), "ed": words.summary(read_, lang, "ed")}
                 for lang in ("zh", "en")}
 

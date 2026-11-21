@@ -1,10 +1,14 @@
 """MiniWoB++ through Mibo's own hands: each task's page in a headless Chromium (Edge) tab, seen as pageops'
-numbered lines, worked by web/operate.run's prompt, reply form and caps, every action through gate.py. The
+numbered lines, worked by web/operate.run's prompt, reply form and budget, every action through gate.py. The
 confirmation card is answered "yes" by the bench and kept; the task's own reward says whether it was done.
 
     python -I tools/bench/miniwob/run.py --env <.env with LLM_API_KEY, LLM_BASE_URL> [--model deepseek/deepseek-v4-flash]
         [--out <folder>] [--tasks click-button,enter-text] [--seeds 0,1,2,3,4] [--workers 4] [--budget 0.38]
-        [--port 59260] [--data <miniwob html folder>]
+        [--port 59260] [--data <miniwob html folder>] [--tools no|yes]
+
+The run's budget (operate.budget) comes from the model as the app's check would record it: `--tools` is whether
+it called the check's tool by itself (default no: the least able model's ceiling), and the context window is the
+one the host's model list states (abilities._context).
 
 One episode: the task page fresh, Math.seedrandom(seed) (what the gym env's reset(seed) does), the task's timer
 lifted to ten minutes (an LLM step takes seconds; the raw reward has no time penalty), core.startEpisodeReal(),
@@ -69,7 +73,8 @@ def read_env(path: Path) -> dict:
 
 
 class Model:
-    """The operate call as search.py makes it: max_tokens 900, temperature 0.2, a JSON object, thinking off."""
+    """The operate call as search.py makes it: the answer's room from operate.budget (`answer`, the least by
+    default), temperature 0.2, a JSON object, thinking off."""
 
     def __init__(self, base: str, key: str, model: str, budget: float):
         import httpx
@@ -77,10 +82,11 @@ class Model:
         self.client = httpx.AsyncClient(timeout=120, trust_env=False)
         self.spent = 0.0
         self.reasoning = {"enabled": False}
+        self.answer = operate.ANSWER_LEAST
 
     async def ask(self, system: str, messages: list[dict], log: list) -> str:
         payload = {"model": self.model, "messages": [{"role": "system", "content": system}, *messages],
-                   "max_tokens": 900, "temperature": 0.2, "response_format": {"type": "json_object"},
+                   "max_tokens": self.answer, "temperature": 0.2, "response_format": {"type": "json_object"},
                    "usage": {"include": True}}
         thinking_off(payload, self.base, False)
         began = time.monotonic()
@@ -129,10 +135,10 @@ class BenchHands(operate.Hands):
         except Exception:
             return False
 
-    async def look(self) -> dict:
+    async def look(self, most: int = operate.STATE_MAX) -> dict:
         if await self.ended():
             return {"status": "ended"}
-        look = await super().look()
+        look = await super().look(most)
         self.looks.append(str(look.get("state") or ""))
         return look
 
@@ -142,7 +148,8 @@ class BenchHands(operate.Hands):
         return await super().act(action)
 
 
-async def episode(page, site: str, name: str, seed: int, model: Model, allowed: gate.Allowed) -> tuple[dict, dict]:
+async def episode(page, site: str, name: str, seed: int, model: Model, allowed: gate.Allowed,
+                  able: dict) -> tuple[dict, dict]:
     tab = PlaywrightTab(page)
     await tab.goto(f"{site}/miniwob/{name}.html")
     await page.wait_for_function("() => document.readyState === 'complete' && window.core && core.cover_div")
@@ -177,7 +184,7 @@ async def episode(page, site: str, name: str, seed: int, model: Model, allowed: 
 
     began = time.monotonic()
     try:
-        outcome = await asyncio.wait_for(operate.run(ask_model, hands, task), timeout=EPISODE_S)
+        outcome = await asyncio.wait_for(operate.run(ask_model, hands, task, able=able), timeout=EPISODE_S)
     except asyncio.TimeoutError:
         outcome = {"status": "timeout", "result": "", "steps": []}
     except Exception as exc:
@@ -210,12 +217,19 @@ async def main(argv: list[str]) -> int:
     parser.add_argument("--budget", type=float, default=0.38, help="dollars; no new episode past it")
     parser.add_argument("--port", type=int, default=59260)
     parser.add_argument("--data", default=str(DATA))
+    parser.add_argument("--tools", choices=("no", "yes"), default="no",
+                        help="whether the app's check found the model calling a tool by itself")
     args = parser.parse_args(argv)
     env = read_env(Path(args.env))
+    from mibo import abilities
+    able = {"tools": args.tools, "context": await abilities._context(
+        env["LLM_BASE_URL"].rstrip("/") + "/chat/completions", "", args.model)}
+    print(f"budget {operate.budget(able)} from {able}", flush=True)
     slug = args.model.replace("/", "_").replace(":", "_")
     out = Path(args.out or REPO.parent / "ref" / "bench" / "miniwob" / slug).resolve()
     (out / "episodes").mkdir(parents=True, exist_ok=True)
-    names = [n for n, _ in TASKS if not args.tasks or n in args.tasks.split(",")]
+    # The forty, or the tasks named (others of MiniWoB++ too, such as the drag tasks).
+    names = args.tasks.split(",") if args.tasks else [n for n, _ in TASKS]
     seeds = [int(s) for s in args.seeds.split(",")]
     results = out / "results.jsonl"
     have = set()
@@ -228,6 +242,7 @@ async def main(argv: list[str]) -> int:
 
     server = serve(Path(args.data), args.port)
     model = Model(env["LLM_BASE_URL"], env["LLM_API_KEY"], args.model, args.budget)
+    model.answer = operate.budget(able)["answer"]
     allowed = gate.Allowed(out)
     queue: asyncio.Queue = asyncio.Queue()
     for item in todo:
@@ -249,7 +264,7 @@ async def main(argv: list[str]) -> int:
                 context = await browser.new_context(viewport={"width": 1000, "height": 700})
                 try:
                     row, detail = await episode(await context.new_page(), f"http://127.0.0.1:{args.port}", name,
-                                                seed, model, allowed)
+                                                seed, model, allowed, able)
                 except Exception as exc:
                     # The page failed to set up (a script that did not load): tried once more, then reported.
                     tries[(name, seed)] = tries.get((name, seed), 0) + 1

@@ -41,12 +41,12 @@ SENT_S = 30.0
 WALLS: dict[str, dict] = {}
 
 
-def ready(pane, core) -> None:
-    """The pane's WebView2 is up: saving and filling passwords on in the normal profile (off in private), and
+def ready(pane, core, private: bool) -> None:
+    """A tab's WebView2 is up: saving and filling passwords on in the normal profile (off in a private tab), and
     each page looked at for a sign-in once loaded."""
     settings = core.Settings
-    settings.IsPasswordAutosaveEnabled = not pane.private
-    settings.IsGeneralAutofillEnabled = not pane.private
+    settings.IsPasswordAutosaveEnabled = not private
+    settings.IsGeneralAutofillEnabled = not private
     state = {"at": 0.0, "asked": "", "asked_at": 0.0}
 
     def starting(sender, args) -> None:
@@ -55,14 +55,14 @@ def ready(pane, core) -> None:
             state.update(asked=str(args.Uri), asked_at=time.monotonic())
 
     def loaded(sender, args) -> None:
-        if pane.private:
+        if private:
             return
         state["at"] = time.monotonic()
         threading.Thread(target=_look, args=(pane, core, state["at"], state), name="mibo-signin",
                          daemon=True).start()
 
     def favicon(sender, args) -> None:
-        if not pane.private:
+        if not private:
             _keep_icon(pane, core)
     # .NET holds no reference to these.
     pane._sign_handlers = (starting, loaded, favicon)

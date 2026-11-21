@@ -1,21 +1,31 @@
 """The memory acceptance life, on a real model: one person's 60 turns over five
 days (23 to 29 Nov 2026), a restart, 20 recall questions in new chats on 30 Nov
 and 4 Dec, then a score of the store against the 33 things worth keeping and of
-the 20 answers.
+the 20 answers. The gate: at least 30 of 33 kept, at least 17 of 20 answered,
+and nothing wrong in either.
 
     python tools/memory_life.py <workdir> --env <file> [--model M] [--port P]
     python tools/memory_life.py <workdir> --stub [--port P]     (the stand-in model on 127.0.0.1:59299)
+    python tools/memory_life.py <workdir> --replay <done workdir> [--env <file> [--real-recall]]
     python tools/memory_life.py <workdir> --score               (score again, no model call)
+    add --life <file> for another life written the same way (tools/memory_life_move.py)
 
 <file> holds LLM_API_KEY and LLM_BASE_URL; only those two lines are copied into
 the fresh home's .env, and never printed. The home runs on its own movable clock
 (a sitecustomize in <workdir>/site) and folds are started through a control
-channel in that process. Output in <workdir>/out: life.jsonl, recall.jsonl,
-calls.jsonl (each model call's purpose and usage), person_day*.json and score.json.
+channel in that process. Every model call is recorded with its turn in
+out/rec.jsonl. --replay answers each call from such a recording instead: with
+no --env nothing is asked of a model (a check of the code that applies the
+answers); with --env the folds are asked of the real model (about half a cent a
+life) and, with --real-recall, the recall questions too.
+Output in <workdir>/out: life.jsonl, recall.jsonl, rec.jsonl, folds.jsonl (each
+fold's operations and what came of them), calls.jsonl (each real call's usage),
+person_day*.json and score.json.
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -27,6 +37,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 REPO = Path(__file__).resolve().parents[1]
@@ -102,22 +113,25 @@ DAYS = [
 # The morning after each day: the fold has run by then.
 NEXT = [(2026, 11, 24, 9, 0), (2026, 11, 25, 9, 0), (2026, 11, 26, 9, 0), (2026, 11, 28, 9, 0),
         (2026, 11, 30, 9, 0)]
+# The clock before the first turn, and when the app starts again for the recall.
+START = (2026, 11, 23, 19, 55)
+RESTART = (2026, 11, 30, 19, 55)
 
-# (when, chat, words, hit, wrong): a reply is a hit when `hit` matches it, wrong when `wrong` does.
+# ((month, day, hour), chat, words, hit, wrong): a reply is a hit when `hit` matches it, wrong when `wrong` does.
 NEG = r"(?<![不别別没沒非])"
+NOT_TOLD = r"没(?:跟我)?(?:说|提|讲|告诉)|不知道|没听你|不清楚|没聊过|没有提"
 PROBES = [
     ((11, 30, 20), "A", "我猫叫什么来着？", r"年糕", r"(?<!不是)狗"),
     ((11, 30, 20), "A", "周末吃啥好？给我推荐一下", r"辣|湘|川|火锅|麻辣",
      NEG + r"(?:芒果|香菜(?!.{0,3}(?:免|去掉|不要|别))|杨枝甘露|奶茶|牛奶)"),
-    ((11, 30, 20), "A", "我现在住哪个区你还记得吗", r"徐汇", r"(?<!不住)(?<!搬离)(?<!从)闵行(?!.{0,4}(?:搬|以前|之前))"),
+    ((11, 30, 20), "A", "我现在住哪个区你还记得吗", r"徐汇", r"(?<!不住)(?<!搬离)(?<!从)闵行(?!.{0,8}(?:搬|以前|之前|不住))"),
     ((11, 30, 20), "A", "我考试是哪天来着？", r"12月3|12-03|12/3|周四|星期四|礼拜四|3号",
      r"(?<!记成)(?<!不是)(?<!以为)(?:周三|星期三)|12月2|11月25|25号|2号"),
     ((11, 30, 20), "A", "你知道我叫什么吗", r"林晓|小晓", None),
     ((11, 30, 20), "A", "今晚想看个电影，有啥推荐", r"《", NEG + r"(?:恐怖片|惊悚片|闪灵|招魂|釜山行|午夜凶铃|咒怨)"),
-    ((11, 30, 20), "A", "我男朋友叫什么来着？", r"没(?:跟我)?(?:说|提|讲|告诉)|不知道|没听你|不清楚|没聊过|没有提", r"阿杰"),
+    ((11, 30, 20), "A", "我男朋友叫什么来着？", NOT_TOLD, r"阿杰"),
     ((11, 30, 20), "A", "我妈是哪里人你记得不", r"杭州", None),
-    ((11, 30, 20), "A", "我之前是不是挂过科？", r"没(?:跟我)?(?:说|提|讲|告诉)|不知道|没听你|不清楚|没聊过|没有提|不记得",
-     r"高数|数学"),
+    ((11, 30, 20), "A", "我之前是不是挂过科？", NOT_TOLD + r"|不记得", r"高数|数学"),
     ((11, 30, 20), "A", "帮我想想奶茶点什么", r"燕麦|乳糖|不耐|植物奶|椰奶|豆奶|零乳糖|果茶",
      NEG + r"(?:加奶|鲜奶|牛奶(?!.{0,3}(?:不|换))|芒果(?!.{0,6}(?:别|不|过敏|跳过))|杨枝甘露(?!.{0,4}(?:别|不)))"),
     ((12, 4, 9), "", "早呀", r"考", r"今天.{0,4}考试|明天.{0,4}考试|周末(?:快乐|愉快)"),
@@ -132,12 +146,84 @@ PROBES = [
     ((12, 4, 19), "B", "我在学什么外语", r"日语", None),
     ((12, 4, 19), "B", "我养的狗叫什么", r"猫", r"狗(?:狗)?叫年糕|年糕是.{0,3}狗"),
     ((12, 4, 19), "B", "我导师姓啥", r"周", None),
-    ((12, 4, 19), "B", "我最好的朋友叫什么", r"没(?:跟我)?(?:说|提|讲|告诉)|不知道|没听你|不清楚|没聊过|没有提",
-     r"小雅|阿杰"),
+    # Wrong: the ex they asked to forget, or a friend made up; naming 小雅 as someone they did mention is not.
+    ((12, 4, 19), "B", "我最好的朋友叫什么", NOT_TOLD, r"阿杰|(?:最好的朋友|好朋友|闺蜜)(?:就|应该|大概)?(?:是|叫)小雅"),
 ]
+# A state long over said as now (the tooth out on 11-27), in a reply on another subject.
+STALE = (r"智齿|拔牙|牙.{0,4}(?:肿|疼)|脸肿|消肿", r"牙|智齿")
+NEVER_KEPT = ("阿杰", "高数", "挂科")
+GATE = (30, 17)
 
-SITE = r'''"""Measurement shim: a movable clock (FAKECLOCK_FILE holds an offset in seconds) and a
-control channel (MEMCTL_DIR) that runs scripts on the character's loop and logs each model call."""
+
+def store_view(p: dict):
+    """(F, P, plan_dues) over a store: F(*patterns) when every pattern is in an active fact; P(pattern, due,
+    open_only) when a plan matches; plan_dues(pattern) the days of the open plans that match."""
+    facts = [f["text"] for f in p["facts"] if f.get("status", "active") == "active"]
+    plans = p["plans"]
+
+    def F(*pats) -> bool:
+        return all(any(re.search(pat, t) for t in facts) for pat in pats)
+
+    def P(pat, due=None, open_only=False) -> bool:
+        return any(re.search(pat, x["text"] + str(x.get("said") or "")) and (due is None or x.get("due") == due)
+                   and (not open_only or x.get("status", "open") in ("open", "asked")) for x in plans)
+
+    def plan_dues(pat) -> set:
+        return {x.get("due") for x in plans if re.search(pat, x["text"]) and x.get("status", "open") in ("open", "asked")}
+    return facts, F, P, plan_dues
+
+
+def checks(p: dict) -> list:
+    """(what, kept, wrong) for each of the 33 things."""
+    facts, F, P, plan_dues = store_view(p)
+    names = p.get("name") or {}
+    exam = r"考试|统计推断|期末"
+    trip = [x for x in p["plans"] if "成都" in x["text"]]
+    return [
+        ("name and nickname", (names.get("name") == "林晓" or F("林晓")) and (names.get("call_me") == "小晓" or F("小晓")), False),
+        ("ECNU, second year, statistics", F(r"华东师|华师大"), False),
+        ("lives in Xuhui", F("徐汇"), any(re.search(r"闵行", t) and not re.search(r"不住|搬|以前|之前|原来", t) for t in facts)),
+        ("cat 年糕", F("年糕"), False),
+        ("from Hangzhou, mother there", F("杭州"), False),
+        ("hates coriander", F("香菜"), False),
+        ("likes spicy, Hunan and Sichuan food", F(r"辣|湘菜|川菜"), False),
+        ("afraid of horror films", F("恐怖"), False),
+        ("lactose intolerant", F("乳糖"), False),
+        ("runs 5 km on Wednesdays", F(r"跑"), False),
+        ("birthday 12-10", P("生日", "2026-12-10") or F(r"生日.*(?:12月10|12-10)|(?:12月10|12-10).*生日"), False),
+        ("mother's visit Sat 11-28", P(r"妈", "2026-11-28") or F(r"11-28.*妈|妈.*11-28|妈.*(?:昨天|周六)来"), False),
+        ("wisdom tooth out 11-27", F("智齿") or P("智齿"), False),
+        ("PhD at HKU and NUS, deadline 12-15", F(r"港大|新加坡|新国立") and (P(r"", "2026-12-15") or F(r"12月15|12-15")), False),
+        ("ByteDance interview 12-01", P(r"面试|字节", "2026-12-01"), bool(plan_dues(r"面试|字节") - {"2026-12-01"})),
+        ("advisor Zhou, strict", F(r"周(?:老师|导)|导师.{0,4}周|姓周"), False),
+        ("recommenders Zhou and the homeroom teacher", F(r"推荐信|班主任"), False),
+        ("mango allergy", F("芒果"), False),
+        ("hates the cold", F("冷"), False),
+        ("learning Japanese for N2", F(r"日语|N2"), False),
+        ("favourite film 海街日记", F("海街"), False),
+        ("weekend barista job", F("咖啡"), False),
+        ("the mother's pickles", F(r"咸菜|腌"), False),
+        ("the cat's hairball and the vet", F(r"毛球|兽医"), False),
+        ("the exam is kept", P(exam) or F(exam), False),
+        ("trip to Chengdu, about 12-05..12-11, open", any(x.get("status", "open") in ("open", "asked")
+                                                          and "2026-12-01" <= x.get("due", "") <= "2026-12-11" for x in trip),
+         any(x.get("status") in ("done", "cancelled") for x in trip) and not any(
+             x.get("status", "open") in ("open", "asked") for x in trip)),
+        ("brother in 高二", F("高二"), any("高三" in t and not re.search(r"不是高三|不是.{0,3}高三", t) for t in facts)),
+        ("roommate 小雅", F("小雅"), False),
+        ("the exam moved to 12-03", P(exam, "2026-12-03", open_only=True),
+         bool(plan_dues(exam) - {"2026-12-03"}) or any(re.search(r"(?<!不是)周三.*考|考.*(?<!不是)周三", t) for t in facts)),
+        ("made up with 小雅", F(r"和好|阳台"), False),
+        ("陈绮贞", F(r"陈绮贞|旅行的意义"), False),
+        ("cooking and cat videos before sleep", F(r"做饭视频|猫咪视频|猫视频"), False),
+        ("sleeps at 1-2 am", F(r"(?:一两点|1-2点|凌晨).{0,4}睡|睡.{0,6}(?:一两点|1-2点|凌晨)"), False),
+    ]
+
+
+SITE = r'''"""Measurement shim: a movable clock (FAKECLOCK_FILE holds an offset in seconds), a control
+channel (MEMCTL_DIR) that runs scripts on the character's loop, and a recorder of each model call
+that can answer from an earlier recording instead (MEMREC_FROM; MEMREC_REAL names what still goes
+to the model: "memory" for the folds, "probe" for the recall questions)."""
 import os, threading, time as _time
 _clock = os.environ.get("FAKECLOCK_FILE")
 if _clock:
@@ -193,6 +279,24 @@ if _ctl:
             except Exception:
                 pass
         return agent, loop
+    def _write(name, row):
+        with (ctl / name).open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+    def _tag():
+        try:
+            return (ctl / "tag.txt").read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    class _Answer:
+        status_code = 200
+        headers = {}
+        def __init__(self, body):
+            self._body = body
+            self.text = json.dumps(body, ensure_ascii=False)
+        def json(self):
+            return self._body
+        def raise_for_status(self):
+            return None
     def _serve():
         agent = loop = None
         while agent is None or loop is None:
@@ -203,13 +307,54 @@ if _ctl:
         def count(model, resp):
             try:
                 body = resp.json()
-                with (ctl / "calls.jsonl").open("a", encoding="utf-8") as f:
-                    f.write(json.dumps({"t": _time.time(), "purpose": llm._call_purpose.get(), "model": model,
-                                        "usage": body.get("usage")}, ensure_ascii=False) + "\n")
+                _write("calls.jsonl", {"t": _time.time(), "purpose": llm._call_purpose.get(), "model": model,
+                                       "usage": body.get("usage")})
             except Exception:
                 pass
             return real_count(model, resp)
         agent._count_usage = count
+        # The recording to answer from: (tag, purpose) -> answers in their order.
+        book = {}
+        source = os.environ.get("MEMREC_FROM")
+        real = set(filter(None, os.environ.get("MEMREC_REAL", "").split(",")))
+        if source:
+            for line in Path(source).read_text(encoding="utf-8").splitlines():
+                row = json.loads(line)
+                if row.get("status") == 200:
+                    book.setdefault((row["tag"], row["purpose"]), []).append(row["body"])
+        used = {}
+        real_post = agent._post_chat
+        async def post(url, key, payload, *, timeout):
+            tag, why = _tag(), llm._call_purpose.get()
+            asked = payload.get("messages") or []
+            last = next((m.get("content") for m in reversed(asked) if m.get("role") == "user"), "")
+            row = {"tag": tag, "purpose": why, "model": payload.get("model"), "tools": bool(payload.get("tools")),
+                   "last": str(last)[:400]}
+            if why == "memory":
+                row["messages"] = asked
+            answers = book.get((tag, why))
+            if source and why not in real and not (tag.startswith("probe") and "probe" in real) and answers:
+                n = used.get((tag, why), 0)
+                used[(tag, why)] = n + 1
+                # Past the recorded ones: the last again.
+                body = answers[min(n, len(answers) - 1)]
+                _write("rec.jsonl", dict(row, status=200, body=body, replayed=True))
+                return _Answer(body)
+            resp = await real_post(url, key, payload, timeout=timeout)
+            try:
+                body = resp.json()
+            except Exception:
+                body = None
+            _write("rec.jsonl", dict(row, status=getattr(resp, "status_code", 0), body=body))
+            return resp
+        agent._post_chat = post
+        real_apply = agent._apply_person_fold
+        def apply(store, plan, lines, facts, plans, now):
+            asked = json.loads(json.dumps(plan, ensure_ascii=False, default=str))
+            done = real_apply(store, plan, lines, facts, plans, now)
+            _write("folds.jsonl", {"tag": _tag(), "plan": asked, "done": dict(done)})
+            return done
+        agent._apply_person_fold = apply
         (ctl / "ready").write_text("1")
         while True:
             (_real_sleep if _clock else _time.sleep)(0.3)
@@ -250,6 +395,7 @@ class Life:
         self.clock = work / "clock.txt"
         self.port = port
         self.proc = None
+        self.env = {}
 
     def set_clock(self, y, mo, d, h, mi=0):
         target = datetime(y, mo, d, h, mi, tzinfo=TZ).timestamp()
@@ -260,6 +406,9 @@ class Life:
             off = cur
         self.clock.write_text(str(off))
         time.sleep(0.6)
+
+    def tag(self, words: str):
+        (self.ctl / "tag.txt").write_text(words, encoding="utf-8")
 
     def now(self) -> float:
         return time.time() + float(self.clock.read_text() or 0)
@@ -280,7 +429,7 @@ class Life:
 
     def start(self):
         env = dict(os.environ, AGENT_HOME=str(self.home), PYTHONPATH=str(self.work / "site") + os.pathsep + str(REPO),
-                   FAKECLOCK_FILE=str(self.clock), MEMCTL_DIR=str(self.ctl), PYTHONUTF8="1")
+                   FAKECLOCK_FILE=str(self.clock), MEMCTL_DIR=str(self.ctl), PYTHONUTF8="1", **self.env)
         (self.ctl / "ready").unlink(missing_ok=True)
         (self.home / "runtime/desktop/welcome.json").unlink(missing_ok=True)
         log = open(self.out / "app.log", "ab")
@@ -371,28 +520,33 @@ def make_home(work: Path, port: int, model: str, env_file: Path | None):
     (home / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def live(work: Path, port: int):
+def live(life_spec, work: Path, port: int, env: dict):
     life = Life(work, port)
+    life.env = env
     out = life.out
-    life.set_clock(2026, 11, 23, 19, 55)
+    life.set_clock(*life_spec.START)
     life.start()
     try:
-        for d, ((y, mo, dd, h, mi), turns) in enumerate(DAYS):
+        for d, ((y, mo, dd, h, mi), turns) in enumerate(life_spec.DAYS):
             for k, text in enumerate(turns):
                 m = mi + 3 * k
                 life.set_clock(y, mo, dd, h + m // 60, m % 60)
+                life.tag(f"d{d + 1}.{k + 1}")
                 life.chat(text, log=out / "life.jsonl")
-            life.set_clock(*NEXT[d])
+            life.tag(f"fold{d + 1}")
+            life.set_clock(*life_spec.NEXT[d])
             print("fold:", json.dumps(life.run(FOLD), ensure_ascii=False)[:300], flush=True)
             (out / f"person_day{d + 1}.json").write_text(json.dumps(life.person(), ensure_ascii=False, indent=1),
                                                         encoding="utf-8")
         # Recall after a restart, in new chats: what the store carries, not what the chat shows.
         life.stop()
-        life.set_clock(2026, 11, 30, 19, 55)
+        life.set_clock(*life_spec.RESTART)
         life.start()
         chats = {}
-        for k, ((mo, dd, h), chat, words, _hit, _wrong) in enumerate(PROBES):
-            life.set_clock(2026, mo, dd, h, 2 * (k % 10))
+        year = life_spec.RESTART[0]
+        for k, ((mo, dd, h), chat, words, _hit, _wrong) in enumerate(life_spec.PROBES):
+            life.set_clock(year, mo, dd, h, 2 * (k % 10))
+            life.tag(f"probe{k}")
             if chat and chat not in chats:
                 chats[chat] = life.api("POST", "chats", {})[1]["id"]
             life.chat(words, chat=chats.get(chat, ""), log=out / "recall.jsonl", tag=str(k))
@@ -400,94 +554,39 @@ def live(work: Path, port: int):
                                              encoding="utf-8")
     finally:
         life.stop()
-        if (work / "ctl/calls.jsonl").exists():
-            shutil.copy(work / "ctl/calls.jsonl", out / "calls.jsonl")
+        for name in ("calls.jsonl", "rec.jsonl", "folds.jsonl"):
+            if (work / "ctl" / name).exists():
+                shutil.copy(work / "ctl" / name, out / name)
 
 
 # ---- the score ---------------------------------------------------------------
 
-def _active(p: dict) -> list[str]:
-    return [f["text"] for f in p["facts"] if f.get("status", "active") == "active"]
-
-
-def score_store(p: dict) -> dict:
-    facts = _active(p)
-    plans = p["plans"]
-    names = p.get("name") or {}
-
-    def F(*pats) -> bool:
-        return all(any(re.search(pat, t) for t in facts) for pat in pats)
-
-    def P(pat, due=None, open_only=False) -> bool:
-        return any(re.search(pat, x["text"] + str(x.get("said") or "")) and (due is None or x.get("due") == due)
-                   and (not open_only or x.get("status", "open") in ("open", "asked")) for x in plans)
-
-    def plan_dues(pat) -> set:
-        return {x.get("due") for x in plans if re.search(pat, x["text"]) and x.get("status", "open") in ("open", "asked")}
-
-    exam = r"考试|统计推断|期末"
-    trip = [x for x in plans if "成都" in x["text"]]
-    checks = [
-        ("name and nickname", (names.get("name") == "林晓" or F("林晓")) and (names.get("call_me") == "小晓" or F("小晓")), False),
-        ("ECNU, second year, statistics", F(r"华东师|华师大"), False),
-        ("lives in Xuhui", F("徐汇"), any(re.search(r"闵行", t) and not re.search(r"不住|搬|以前|之前|原来", t) for t in facts)),
-        ("cat 年糕", F("年糕"), False),
-        ("from Hangzhou, mother there", F("杭州"), False),
-        ("hates coriander", F("香菜"), False),
-        ("likes spicy, Hunan and Sichuan food", F(r"辣|湘菜|川菜"), False),
-        ("afraid of horror films", F("恐怖"), False),
-        ("lactose intolerant", F("乳糖"), False),
-        ("runs 5 km on Wednesdays", F(r"跑"), False),
-        ("birthday 12-10", P("生日", "2026-12-10") or F(r"生日.*(?:12月10|12-10)|(?:12月10|12-10).*生日"), False),
-        ("mother's visit Sat 11-28", P(r"妈", "2026-11-28") or F(r"11-28.*妈|妈.*11-28|妈.*(?:昨天|周六)来"), False),
-        ("wisdom tooth out 11-27", F("智齿") or P("智齿"), False),
-        ("PhD at HKU and NUS, deadline 12-15", F(r"港大|新加坡|新国立") and (P(r"", "2026-12-15") or F(r"12月15|12-15")), False),
-        ("ByteDance interview 12-01", P(r"面试|字节", "2026-12-01"), bool(plan_dues(r"面试|字节") - {"2026-12-01"})),
-        ("advisor Zhou, strict", F(r"周(?:老师|导)|导师.{0,4}周|姓周"), False),
-        ("recommenders Zhou and the homeroom teacher", F(r"推荐信|班主任"), False),
-        ("mango allergy", F("芒果"), False),
-        ("hates the cold", F("冷"), False),
-        ("learning Japanese for N2", F(r"日语|N2"), False),
-        ("favourite film 海街日记", F("海街"), False),
-        ("weekend barista job", F("咖啡"), False),
-        ("the mother's pickles", F(r"咸菜|腌"), False),
-        ("the cat's hairball and the vet", F(r"毛球|兽医"), False),
-        ("the exam is kept", P(exam) or F(exam), False),
-        ("trip to Chengdu, about 12-05..12-11, open", any(x.get("status", "open") in ("open", "asked")
-                                                          and "2026-12-01" <= x.get("due", "") <= "2026-12-11" for x in trip),
-         any(x.get("status") in ("done", "cancelled") for x in trip) and not any(
-             x.get("status", "open") in ("open", "asked") for x in trip)),
-        ("brother in 高二", F("高二"), any("高三" in t and not re.search(r"不是高三|不是.{0,3}高三", t) for t in facts)),
-        ("roommate 小雅", F("小雅"), False),
-        ("the exam moved to 12-03", P(exam, "2026-12-03", open_only=True),
-         bool(plan_dues(exam) - {"2026-12-03"}) or any(re.search(r"(?<!不是)周三.*考|考.*(?<!不是)周三", t) for t in facts)),
-        ("made up with 小雅", F(r"和好|阳台"), False),
-        ("陈绮贞", F(r"陈绮贞|旅行的意义"), False),
-        ("cooking and cat videos before sleep", F(r"做饭视频|猫咪视频|猫视频"), False),
-        ("sleeps at 1-2 am", F(r"(?:一两点|1-2点|凌晨).{0,4}睡|睡.{0,6}(?:一两点|1-2点|凌晨)"), False),
-    ]
-    right = sum(ok and not bad for _n, ok, bad in checks)
-    wrong = sum(bad for _n, _ok, bad in checks)
+def score_store(life_spec, p: dict) -> dict:
+    items = life_spec.checks(p)
+    right = sum(ok and not bad for _n, ok, bad in items)
+    wrong = sum(bool(bad) for _n, _ok, bad in items)
+    facts = store_view(p)[0]
     blob = json.dumps({k: p[k] for k in ("facts", "plans", "talk", "name")}, ensure_ascii=False)
     stale = [t for t in facts if re.search(r"今天|昨天|前天|今晚|昨晚|刚才|today|yesterday", t)]
-    return {"right": right, "wrong": wrong, "missing": len(checks) - right - wrong,
-            "items": {n: ("wrong" if bad else "right" if ok else "missing") for n, ok, bad in checks},
-            "never_kept_held": [w for w in ("阿杰", "高数", "挂科") if w in blob],
+    return {"right": right, "wrong": wrong, "missing": len(items) - right - wrong, "of": len(items),
+            "items": {n: ("wrong" if bad else "right" if ok else "missing") for n, ok, bad in items},
+            "never_kept_held": [w for w in life_spec.NEVER_KEPT if w in blob],
             "active_facts": len(facts), "day_words_in_active_facts": stale,
             "written_by": {s: sum(1 for f in p["facts"] if f.get("src") == s) for s in
                            sorted({str(f.get("src")) for f in p["facts"]})}}
 
 
-def score_recall(rows: list[dict]) -> dict:
-    # A state long over said as now: the tooth out on 11-27 brought up in a reply on another subject.
-    out = {"hit": 0, "wrong": 0, "miss": 0, "items": [], "tooth_brought_up": {}}
+def score_recall(life_spec, rows: list[dict]) -> dict:
+    out = {"hit": 0, "wrong": 0, "miss": 0, "of": len(life_spec.PROBES), "items": [], "stale_brought_up": {}}
+    stale, about = life_spec.STALE
     for rec in rows:
         k = int(rec["tag"])
-        when, _chat, words, hit, wrong = PROBES[k]
-        reply = str(rec.get("reply") or "")
-        if re.search(r"智齿|拔牙|牙.{0,4}(?:肿|疼)|脸肿|消肿", reply) and not re.search(r"牙|智齿", words):
+        when, _chat, words, hit, wrong = life_spec.PROBES[k]
+        # "12 月 15 号" as "12月15号": some models space digits from the words around them.
+        reply = re.sub(r"(?<=\d) +(?=[一-鿿])|(?<=[一-鿿]) +(?=\d)", "", str(rec.get("reply") or ""))
+        if stale and re.search(stale, reply) and not re.search(about, words):
             day = f"{when[0]:02}-{when[1]:02}"
-            out["tooth_brought_up"][day] = out["tooth_brought_up"].get(day, 0) + 1
+            out["stale_brought_up"][day] = out["stale_brought_up"].get(day, 0) + 1
         # Not a match its sentence steers away from before it ("别往恐怖片上点", "别点杨枝甘露，有芒果").
         bad = bool(wrong) and any(not re.search(r"[不别別没沒非免忌]", re.split(r"[。！？!?\n]", reply[:m.start()])[-1])
                                   for m in re.finditer(wrong, reply))
@@ -498,12 +597,16 @@ def score_recall(rows: list[dict]) -> dict:
     return out
 
 
-def score(work: Path) -> dict:
+def score(life_spec, work: Path) -> dict:
     out = work / "out"
-    result = {"store": score_store(json.loads((out / "person_day5.json").read_text(encoding="utf-8")))}
+    last = out / f"person_day{len(life_spec.DAYS)}.json"
+    result = {"store": score_store(life_spec, json.loads(last.read_text(encoding="utf-8")))}
     if (out / "recall.jsonl").exists():
         rows = [json.loads(l) for l in (out / "recall.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-        result["recall"] = score_recall(rows)
+        result["recall"] = score_recall(life_spec, rows)
+        s, r = result["store"], result["recall"]
+        result["gate"] = s["right"] >= life_spec.GATE[0] and r["hit"] >= life_spec.GATE[1] \
+            and s["wrong"] == 0 and r["wrong"] == 0
     if (out / "calls.jsonl").exists():
         calls = [json.loads(l) for l in (out / "calls.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
         by = {}
@@ -519,26 +622,53 @@ def score(work: Path) -> dict:
     return result
 
 
+def this_life():
+    names = ("DAYS", "NEXT", "START", "RESTART", "PROBES", "STALE", "NEVER_KEPT", "GATE", "checks")
+    return SimpleNamespace(**{n: globals()[n] for n in names})
+
+
+def load_life(path: Path | None):
+    if path is None:
+        return this_life()
+    spec = importlib.util.spec_from_file_location("life_" + path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("work", type=Path)
     ap.add_argument("--env", type=Path)
     ap.add_argument("--stub", action="store_true")
+    ap.add_argument("--replay", type=Path, help="a done workdir whose out/rec.jsonl answers the calls")
+    ap.add_argument("--real-recall", action="store_true")
     ap.add_argument("--score", action="store_true")
+    ap.add_argument("--life", type=Path)
     ap.add_argument("--model", default="deepseek/deepseek-v4.1-flash")
-    ap.add_argument("--port", type=int, default=59505)
+    ap.add_argument("--port", type=int, default=59600)
     args = ap.parse_args()
     work = args.work.resolve()
+    life_spec = load_life(args.life)
     if not args.score:
-        if not (args.env or args.stub):
-            ap.error("--env <file> or --stub")
-        make_home(work, args.port, "stub" if args.stub else args.model, None if args.stub else args.env)
-        live(work, args.port)
-    result = score(work)
+        if not (args.env or args.stub or args.replay):
+            ap.error("--env <file>, --stub or --replay <workdir>")
+        env = {}
+        if args.replay:
+            # Read before make_home clears a workdir that is the same one.
+            recording = (args.replay.resolve() / "out/rec.jsonl").read_text(encoding="utf-8")
+        make_home(work, args.port, "stub" if args.stub else args.model, args.env)
+        if args.replay:
+            (work / "from.jsonl").write_text(recording, encoding="utf-8")
+            env["MEMREC_FROM"] = str(work / "from.jsonl")
+            env["MEMREC_REAL"] = ",".join(["memory"] * bool(args.env) + ["probe"] * args.real_recall)
+        live(life_spec, work, args.port, env)
+    result = score(life_spec, work)
     print(json.dumps({k: v for k, v in result.items() if k != "recall"}, ensure_ascii=False, indent=1))
     if "recall" in result:
         r = result["recall"]
-        print("recall: hit", r["hit"], "wrong", r["wrong"], "miss", r["miss"], "tooth", r["tooth_brought_up"])
+        print("recall: hit", r["hit"], "wrong", r["wrong"], "miss", r["miss"], "stale", r["stale_brought_up"],
+              "gate", result["gate"])
         for item in r["items"]:
             print(f" {item['k']:2} {item['verdict']:5} {item['said']} => {item['reply'][:120]!r}")
     return 0

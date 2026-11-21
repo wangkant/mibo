@@ -134,9 +134,7 @@ _TURN_CONTEXT_OPEN = (
 )
 # The closing line's second half: the protocol's `mem`, asked for at the turn.
 _PERSON_MEM_TAIL = (
-    " In mem, an operation when their message says how they want you to treat or call them, or what they "
-    "like or do not want or in what form, and <about_them> does not show it yet; [] otherwise. When it says "
-    "what they think of a find you shared, also its card operation."
+    " In mem, the card operation when their message says what they think of a find you shared; [] otherwise."
 )
 
 

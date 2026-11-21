@@ -25,8 +25,7 @@
     page: '<rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="M3.5 9h17" />',
     sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />',
     muted: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M16 9.5l5 5M21 9.5l-5 5" />',
-    // The private toggle while it is off: an open eye. On, it is the struck eye below, with the word beside it.
-    eye: '<path d="M2.5 12C3.5 9.5 7 5 12 5s8.5 4.5 9.5 7c-1 2.5-4.5 7-9.5 7s-8.5-4.5-9.5-7z" /><circle cx="12" cy="12" r="3" />',
+    // A new private tab: the struck eye.
     private: '<path d="M3 3l18 18" /><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c5 0 8.5 4.5 9.5 7a13 13 0 0 1-2.6 3.8M6.6 6.6C4.4 8 3 10.2 2.5 12c1 2.5 4.5 7 9.5 7 1.9 0 3.6-.6 5-1.5" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />',
     // A step's mark: done, failed, stopped or cancelled.
     done: '<path d="M5 12.5l4.5 4.5L19 7.5" />',
@@ -54,7 +53,7 @@
   const PAGE_WIDE = 1280;
   const PAGE_LEAST = 720;
   // The ends after which the page is the person's until they say to go on (browser.THEIRS).
-  const THEIRS = ["handover", "asked", "paused"];
+  const THEIRS = ["handover", "asked", "paused", "cap"];
 
   const HEADERS = { "Content-Type": "application/json", "X-Mibo-Setup-Token": token,
     "X-Mibo-Window": frameKey };
@@ -240,7 +239,7 @@
       const action = name === "reload" && pane.classList.contains("loading") ? "stop" : name;
       if (action === "minimize") return hide();
       if (action === "beside") return toggleBeside();
-      if (action === "close" || action === "system") shut();
+      if (action === "close") shut();
       post("browser/do", { action });
     });
     buttons[name] = node;
@@ -251,17 +250,10 @@
     node.title = say(name);
     node.setAttribute("aria-label", say(name));
   }
-  // Off: an open eye. On: the struck eye and the word, in the accent, and the address field tinted,
-  // so nobody has to guess which it is.
+  // The private button opens a private tab beside the others (browsetabs.js marks it); while one is in front the
+  // address field is tinted.
   function drawPrivate(on) {
-    const node = buttons.private;
-    node.classList.toggle("on", on);
-    node.classList.toggle("browse-text", on);
-    node.setAttribute("aria-pressed", String(on));
-    node.innerHTML = svg(on ? "private" : "eye");
-    if (on) node.append(el("span", "", say("privateTag")));
-    node.title = say(on ? "privateOn" : "private");
-    node.setAttribute("aria-label", node.title);
+    icon(buttons.private, "private");
     pane.classList.toggle("private", on);
   }
   // 100% / 适应宽度: the site at its own size, or fitted to the pane's width (browser.py); its zoom shown a
@@ -298,6 +290,7 @@
   strip.addEventListener("click", () => setBeside(true));
   body.append(frame);
   pane.append(bar, body, strip);
+  const drawTabs = window.paBrowseTabs(pane, bar, post);
   // The suggestions lie over the page and over a chat laid on it.
   stage.append(pane, suggest);
 
@@ -351,7 +344,7 @@
       return op.card ? "waiting" : "acting";
     }
     if (op.end === "done") return "done";
-    if (["failed", "cap"].includes(op.end)) return "failed";
+    if (op.end === "failed") return "failed";
     if (THEIRS.includes(op.end)) return "theirs";
     return "stopped";
   }
@@ -475,10 +468,11 @@
       return said.replace("{field}", field || "");
     }
     const said = words.ends[op.end] || words.ends.failed;
-    // The character's own one sentence of how it went, where it wrote one for the person.
+    // The character's own one sentence of how it went, where it wrote one for the person; at the step limit,
+    // what is left.
     const note = String(op.note || "").trim();
-    if (op.end === "asked" || (["done", "failed"].includes(op.end) && note && !note.startsWith("["))) {
-      return op.end === "asked" ? `${said}${note}` : note;
+    if (["asked", "cap"].includes(op.end) || (["done", "failed"].includes(op.end) && note && !note.startsWith("["))) {
+      return ["asked", "cap"].includes(op.end) ? `${said}${note}` : note;
     }
     return said;
   }
@@ -527,7 +521,7 @@
       // 继续: the page is theirs for a moment and they say when they are done (not where the page cannot be
       // worked, nor where it asked something: their answer is typed in the chat's box).
       if (op.end !== "asked" && op.why !== "drawn" && op.why !== "empty") {
-        const text = op.end === "paused" ? words.goOnPaused : words.goOn;
+        const text = ["paused", "cap"].includes(op.end) ? words.goOnPaused : words.goOn;
         buttons.push(footButton("pa-btn pa-btn-primary pa-btn-sm", text, () => goOn(text)));
       }
     }
@@ -733,7 +727,7 @@
   function words() {
     for (const name of ["back", "forward", "system", "minimize", "close"]) icon(buttons[name], name);
     buttons.beside.innerHTML = svg("beside");
-    drawPrivate(buttons.private.classList.contains("on"));
+    drawPrivate(pane.classList.contains("private"));
     drawFit(fitButton.getAttribute("aria-pressed") === "true");
     icon(buttons.reload, pane.classList.contains("loading") ? "stop" : "reload");
     address.setAttribute("aria-label", say("address"));
@@ -791,7 +785,7 @@
     if ("url" in state) page = { url: state.url, title: state.title || "" };
     if ("private" in state) {
       // A private page stays out of the chat until the person puts it in.
-      if (state.open || state.private !== buttons.private.classList.contains("on")) context = !state.private;
+      if (state.open || state.private !== pane.classList.contains("private")) context = !state.private;
       drawPrivate(state.private);
     }
     if (state.open) {
@@ -822,6 +816,7 @@
       }
     }
     if ("operating" in state) showOp(state.operating);
+    drawTabs(state);
     words();
   };
   // The sidebar while a page is in front: Settings needs the stage, so the page goes behind its chip; a chat,

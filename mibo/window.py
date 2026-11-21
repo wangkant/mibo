@@ -980,11 +980,11 @@ class AppWindow:
         self._browser.room(wide, scale)
         return True
 
-    def browse_do(self, action: str) -> bool:
-        """A button of the pane's bar (browser.ACTIONS); False with no pane."""
+    def browse_do(self, action: str, tab: int = 0) -> bool:
+        """A button of the pane's bar or its tab strip (browser.ACTIONS; `tab` names the tab); False with no pane."""
         if self._browser is None:
             return False
-        self._browser.do(action)
+        self._browser.do(action, tab)
         return True
 
     def _watch_main_scale(self) -> None:

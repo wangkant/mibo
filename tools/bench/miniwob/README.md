@@ -1,8 +1,9 @@
 # MiniWoB++ bench for the browser hands
 
 Forty small web tasks from MiniWoB++, each worked the way Mibo works a page: pageops' numbered lines from the
-accessibility tree, `web/operate.run`'s prompt, reply form and caps (12 model calls, 25 actions, three unchanged
-steps hand the page back), every action sorted by `gate.py`. The page is a headless Chromium tab (Playwright
+accessibility tree, `web/operate.run`'s prompt, reply form and budget (`operate.budget`: 12 model calls for the
+least able model, 40 with `--tools yes`; three calls in which nothing moved hand the page back), every action
+sorted by `gate.py`. The page is a headless Chromium tab (Playwright
 over the installed Edge, `channel="msedge"`: no window, no browser download). The card the gate raises is answered
 "yes" by the bench and kept. The task's own reward decides success: done, raw reward 1.0.
 
@@ -29,17 +30,18 @@ python -I tools/bench/miniwob/run.py --env <.env with LLM_API_KEY and LLM_BASE_U
 python -I tools/bench/miniwob/report.py <folder>
 ```
 
-Another model is one flag: `--model <openrouter id>`. Other flags: `--tasks a,b` (a subset), `--seeds 0,1,2,3,4`
+Another model is one flag: `--model <openrouter id>`. Other flags: `--tasks a,b` (a subset, or other MiniWoB++ tasks such as drag-items), `--seeds 0,1,2,3,4`
 (default), `--workers 4`, `--budget 0.38` (dollars from OpenRouter's usage.cost; no new episode past it),
-`--port`, `--data <miniwob html folder>`. Without `--out` the run goes to `../ref/bench/miniwob/<model>`. A rerun into the same folder skips the episodes already in
+`--port`, `--data <miniwob html folder>`, `--tools no|yes` (whether the app's check found the model calling a tool
+by itself; the context window is read from the host's model list). Without `--out` the run goes to `../ref/bench/miniwob/<model>`. A rerun into the same folder skips the episodes already in
 `results.jsonl`. Each episode's pages, model answers and cards go to `<folder>/episodes/`; the key is never
 printed or written. Python: the `.venv-web-platforms` interpreter (playwright, httpx).
 
 One episode: the task page fresh in its own browser context, `Math.seedrandom(seed)` (what the gym env's
 `reset(seed=...)` does), the task's timer lifted to ten minutes (a model step takes seconds; the raw reward has no
 time penalty), `core.startEpisodeReal()`, then `operate.run` with the task's words (`core.getUtterance()`). It ends
-when the task's reward fires or `operate.run` stops. The model call is search.py's: max_tokens 900, temperature
-0.2, a JSON object, thinking off.
+when the task's reward fires or `operate.run` stops. The model call is search.py's: max_tokens from
+`operate.budget`, temperature 0.2, a JSON object, thinking off.
 
 `report.py` sorts failures by a first guess from how each ended; `<folder>/causes.json`
 (`{"task-seed": [cause, why]}`) holds the causes read by hand and overrides the guess.

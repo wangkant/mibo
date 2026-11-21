@@ -127,8 +127,8 @@ CASES = [
     ("Get-Content \".\\a.txt\" -Stream hidden", "run"),
 ]
 
-# The file tools, judged as the command each stands for (files.equivalent): {f} the granted folder, {h} the app's
-# home, {e} a folder not granted. (tool, its job as panel.py makes it, expected action)
+# The file tools, judged by their paths (files.acts): {f} the granted folder, {h} the app's home, {e} a folder not
+# granted. (tool, its job as panel.py makes it, expected action)
 FILE_CASES = [
     ("read", {"path": "{f}\\a.txt"}, "run"),
     ("read", {"path": "{h}\\.env"}, "refuse"),
@@ -191,11 +191,18 @@ def main() -> int:
         assert grants.add(str(files)) == "", grants.add(str(files))
     wrong = 0
     places = {"f": str(files), "h": str(home), "e": str(scratch / "elsewhere")}
-    tools = [(files_tool.equivalent(op, _filled(job, places)), expected) for op, job, expected in FILE_CASES]
+    # The fields panel.py adds to a job, with the defaults the cases leave out.
+    tools = [({"op": op, "recursive": False, "copy": False, "kind": "write", **_filled(job, places),
+               "folder": os.path.dirname(_filled(job, places).get("path", ""))}, expected)
+             for op, job, expected in FILE_CASES]
     for command, expected in CASES + tools:
         if "--run" in sys.argv:
             fixture()
-        r = reading.read(command, str(files))
+        if isinstance(command, dict):
+            job, command = command, files_tool.call(command)
+            r = reading.Reading(command, str(files), files_tool.acts(job, str(files)), [])
+        else:
+            r = reading.read(command, str(files))
         v = reading.judge(r, grants)
         kinds = ",".join(sorted({a.kind for a in r.acts})) or "-"
         mark = "  " if v.action == expected else "!!"
