@@ -1,6 +1,8 @@
 # Mibo
 
-Un compañero de escritorio: un personaje conversa con usted, le recuerda, le recomienda una cosa cada vez y actúa en su nombre en la web, en otros programas y en sus archivos. Se ejecuta en su equipo con el servicio de modelos que usted elija, y toda acción con efectos fuera de la aplicación pasa una revisión o espera su aprobación.
+**Un compañero de IA que vive en su escritorio: le acompaña y además resuelve tareas.**
+
+Un personaje con aspecto y carácter propios conversa con usted, le recuerda y le trae, una cada vez, cosas que merecen su tiempo. No se queda en la conversación: navega por la web, maneja los programas de su equipo, trabaja con sus archivos y comandos, usa habilidades y conectores MCP, y ejecuta tareas programadas. Se ejecuta en su equipo con el servicio de modelos que usted elija. Las acciones se revisan automáticamente y una tarjeta le pregunta solo cuando hace falta su decisión; los pagos, las eliminaciones y los cambios de cuenta siempre la requieren.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versión](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@ Un compañero de escritorio: un personaje conversa con usted, le recuerda, le re
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · **Español** · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## Funciones
 
@@ -27,7 +29,7 @@ Un compañero de escritorio: un personaje conversa con usted, le recuerda, le re
 
 ## Personajes
 
-<p align="center"><img src="characters.svg" alt="Mibo · Dragona Blanca · Pez Gordo · Señorita" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · Dragona Blanca · Pez Gordo · Señorita" width="100%"></p>
 
 <p align="center">Mibo · Dragona Blanca · Pez Gordo · Señorita</p>
 

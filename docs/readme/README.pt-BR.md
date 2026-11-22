@@ -1,6 +1,8 @@
 # Mibo
 
-Um companheiro de área de trabalho: um personagem conversa com você, lembra de você, recomenda uma coisa de cada vez e age por você na web, em outros programas e nos seus arquivos. Ele roda no seu computador com o serviço de modelos que você escolher, e toda ação com efeito fora do aplicativo passa por uma revisão ou aguarda a sua aprovação.
+**Um companheiro de IA que vive na sua área de trabalho: faz companhia e resolve tarefas.**
+
+Um personagem com aparência e personalidade próprias conversa com você, lembra de você e traz, uma de cada vez, coisas que valem o seu tempo. Ele vai além da conversa: navega na web, opera os programas do seu computador, trabalha com seus arquivos e comandos, usa habilidades e conectores MCP e executa tarefas agendadas. Ele roda no seu computador com o serviço de modelos que você escolher. As ações são revisadas automaticamente, e um cartão só pergunta quando a decisão é sua; pagamentos, exclusões e alterações de conta sempre pedem confirmação.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versão](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@ Um companheiro de área de trabalho: um personagem conversa com você, lembra de
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · **Português (Brasil)** · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## Recursos
 
@@ -27,7 +29,7 @@ Um companheiro de área de trabalho: um personagem conversa com você, lembra de
 
 ## Personagens
 
-<p align="center"><img src="characters.svg" alt="Mibo · Dragoa Branca · Peixão · Senhorita" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · Dragoa Branca · Peixão · Senhorita" width="100%"></p>
 
 <p align="center">Mibo · Dragoa Branca · Peixão · Senhorita</p>
 

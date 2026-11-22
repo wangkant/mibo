@@ -1,6 +1,8 @@
 # Mibo
 
-デスクトップコンパニオンアプリです。ひとりのキャラクターが会話し、利用者のことを記憶し、一度にひとつずつおすすめを届け、ウェブ、他のプログラム、ファイルで利用者に代わって操作します。利用者のコンピューター上で、利用者が選んだモデルサービスを使って動作し、アプリの外に影響する操作はすべて審査を通るか、利用者の承認を待ってから実行されます。
+**デスクトップに住む AI コンパニオン。そばにいて、用事もこなします。**
+
+独自の姿と性格を持つキャラクターが会話し、利用者のことを記憶し、見る価値のあるものを一度にひとつ届けます。会話だけではありません。ウェブを閲覧し、コンピューター上の他のプログラムを操作し、ファイルとコマンドを扱い、スキルと MCP コネクタを使い、予定されたタスクを実行します。利用者のコンピューター上で、利用者が選んだモデルサービスを使って動作します。操作は自動で審査され、利用者の判断が必要なときだけ確認カードが表示されます。支払い、削除、アカウントの変更は必ず確認を求めます。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![リリース](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **日本語** · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## 機能
 
@@ -27,7 +29,7 @@
 
 ## キャラクター
 
-<p align="center"><img src="characters.svg" alt="Mibo · 白竜 · おさかな · お嬢様" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · 白竜 · おさかな · お嬢様" width="100%"></p>
 
 <p align="center">Mibo · 白竜 · おさかな · お嬢様</p>
 

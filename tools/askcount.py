@@ -4,7 +4,7 @@ hub (mcp_hub.py) on a small stand-in server whose tools carry the provider's rea
 
     python tools/askcount.py [--out <folder>] [--tree <folder holding mibo>] [--only shell,mcp]
 
-Each errand is run under each way of answering the card: `once` (本次允许, every card), `chat` (本次对话内允许 where
+Each errand is run under each way of answering the card: `once` (允许, every card), `chat` (本次对话内允许 where
 the card offers it, else once) and `always` (始终允许 where offered, else once), in the one acting mode, automatic
 review. A push and an install are answered no. One line per run with the cards per conversation, the reviewer's
 calls and what each step came to; <out>/askcount.json keeps them. --tree measures another copy of the code (a snapshot

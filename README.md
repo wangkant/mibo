@@ -1,6 +1,8 @@
 # Mibo
 
-A desktop companion: one character talks with you, remembers you, recommends one thing at a time, and acts for you on the web, in other programs and in your files. It runs on your computer with a model service you choose, and every action with an effect outside the app passes a review or waits for your approval.
+**An AI companion that lives on your desktop, keeps you company and gets things done.**
+
+A character with its own look and personality talks with you, remembers you and brings you one thing worth your time. It does more than chat: it browses the web, operates the programs on your computer, works with your files and commands, uses skills and MCP connectors, and runs tasks on a schedule. It runs on your computer with a model service you choose. Actions are reviewed automatically, and a card asks you only when one needs your decision; paying, deleting and account changes always do.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@ A desktop companion: one character talks with you, remembers you, recommends one
 
 **English** · [简体中文](README.zh-CN.md) · [繁體中文](docs/readme/README.zh-TW.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Deutsch](docs/readme/README.de.md) · [Português (Brasil)](docs/readme/README.pt-BR.md) · [Русский](docs/readme/README.ru.md)
 
-<p align="center"><img src="https://raw.githubusercontent.com/wangkant/mibo/main/docs/readme/mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/wangkant/mibo/main/docs/readme/mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## What it does
 
@@ -27,7 +29,7 @@ A desktop companion: one character talks with you, remembers you, recommends one
 
 ## Characters
 
-<p align="center"><img src="https://raw.githubusercontent.com/wangkant/mibo/main/docs/readme/characters.svg" alt="Mibo · White Dragon · Big Fish · Milady" width="100%"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/wangkant/mibo/main/docs/readme/characters.webp" alt="Mibo · White Dragon · Big Fish · Milady" width="100%"></p>
 
 <p align="center">Mibo · White Dragon · Big Fish · Milady</p>
 

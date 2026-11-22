@@ -1,6 +1,6 @@
 "use strict";
 // What a site asks of the person, under the pane's bar at the page's top left, as browsers ask: the camera, the
-// microphone, the location and the rest (本次允许 / 始终允许 / 不允许), a link that would start a program of this
+// microphone, the location and the rest (允许 / 始终允许 / 不允许), a link that would start a program of this
 // computer (打开 / 取消), and a popup the page opened by itself, which was stopped (打开 / 关闭). It has the asking
 // cards' one look. browser.py keeps what each tab asked and tells the first of the tab in front; nothing a site asks
 // is granted but by a press here. browse.js mounts it and hands it what it is told.

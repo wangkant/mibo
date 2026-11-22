@@ -1,6 +1,8 @@
 # Mibo
 
-桌面伙伴应用：一个角色与你对话、记住你、每次推荐一项内容，并代你在网页、其他程序和文件中执行操作。应用在本机运行，使用你选择的模型服务；凡对应用之外产生影响的操作，均须通过审查或经你确认。
+**住在桌面上的 AI 伙伴：既能陪伴，也能办事。**
+
+角色有自己的形象和性格，与你对话、记住你、每次为你挑选一项值得看的内容。它不止于聊天：能浏览网页、操作电脑上的其他程序、处理文件和命令、使用技能和 MCP 连接器，并按时执行任务。应用在本机运行，使用你选择的模型服务。操作自动经过审查，仅在需要你决定时才显示确认卡；付款、删除和账户变更始终须经你确认。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![版本](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@
 
 [English](README.md) · **简体中文** · [繁體中文](docs/readme/README.zh-TW.md) · [日本語](docs/readme/README.ja.md) · [한국어](docs/readme/README.ko.md) · [Español](docs/readme/README.es.md) · [Français](docs/readme/README.fr.md) · [Deutsch](docs/readme/README.de.md) · [Português (Brasil)](docs/readme/README.pt-BR.md) · [Русский](docs/readme/README.ru.md)
 
-<p align="center"><img src="docs/readme/mibo-zh.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="docs/readme/mibo-zh.svg" alt="Mibo" width="84%"></p>
 
 ## 功能
 
@@ -27,7 +29,7 @@
 
 ## 角色
 
-<p align="center"><img src="docs/readme/characters.svg" alt="Mibo · 白龙 · 大肥鱼 · 大小姐" width="100%"></p>
+<p align="center"><img src="docs/readme/characters.webp" alt="Mibo · 白龙 · 大肥鱼 · 大小姐" width="100%"></p>
 
 <p align="center">Mibo · 白龙 · 大肥鱼 · 大小姐</p>
 

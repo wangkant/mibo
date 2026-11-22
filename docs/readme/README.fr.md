@@ -1,6 +1,8 @@
 # Mibo
 
-Un compagnon de bureau : un personnage converse avec vous, se souvient de vous, vous recommande une chose à la fois et agit pour vous sur le web, dans d'autres programmes et dans vos fichiers. Il s'exécute sur votre ordinateur avec le service de modèles de votre choix, et toute action ayant un effet hors de l'application passe une vérification ou attend votre accord.
+**Un compagnon IA qui vit sur votre bureau : il vous tient compagnie et agit pour vous.**
+
+Un personnage doté d'une apparence et d'un caractère propres converse avec vous, se souvient de vous et vous apporte, une à la fois, des choses qui méritent votre temps. Il ne se limite pas à la conversation : il navigue sur le web, utilise les programmes de votre ordinateur, travaille avec vos fichiers et vos commandes, emploie des compétences et des connecteurs MCP, et exécute des tâches planifiées. Il s'exécute sur votre ordinateur avec le service de modèles de votre choix. Les actions sont vérifiées automatiquement, et une carte ne vous sollicite que lorsqu'une décision vous revient ; les paiements, les suppressions et les modifications de compte la demandent toujours.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@ Un compagnon de bureau : un personnage converse avec vous, se souvient de vous, 
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · **Français** · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## Fonctionnalités
 
@@ -27,7 +29,7 @@ Un compagnon de bureau : un personnage converse avec vous, se souvient de vous, 
 
 ## Personnages
 
-<p align="center"><img src="characters.svg" alt="Mibo · Dragonne Blanche · Gros Poisson · Mademoiselle" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · Dragonne Blanche · Gros Poisson · Mademoiselle" width="100%"></p>
 
 <p align="center">Mibo · Dragonne Blanche · Gros Poisson · Mademoiselle</p>
 

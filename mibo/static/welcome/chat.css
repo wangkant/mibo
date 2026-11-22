@@ -1574,10 +1574,10 @@ button.find-why:hover,
 /* A card asking the person before something with an effect outside happens in the browser (chat.js showCard). */
 .op-card {
   margin: 10px 0 6px;
-  padding: 16px;
+  padding: 18px;
   max-width: 440px;
   border: 1px solid var(--pa-line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--pa-surface);
   box-shadow: var(--pa-shadow-1);
   color: var(--pa-text);
@@ -1585,23 +1585,23 @@ button.find-why:hover,
 }
 .op-card-head {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin: 0 0 12px;
+  gap: 10px;
+  align-items: center;
+  margin: 0 0 14px;
 }
 .op-card-icon {
   flex: none;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: var(--pa-accent-soft);
   color: var(--pa-accent-ink);
 }
 .op-card-icon .i {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 .op-card-words {
   min-width: 0;
@@ -1675,7 +1675,7 @@ button.find-why:hover,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 /* Answered: the buttons give way to one line saying what was decided. */
 .op-card.answered .op-card-buttons {
@@ -1736,20 +1736,41 @@ button.find-why:hover,
 }
 /* A card before a command runs on this computer (chat.js showShellCard). */
 .shell-card-lines {
-  margin: 0 0 8px;
-  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
 }
 .shell-card-lines li {
-  margin: 2px 0;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--pa-sunken);
   overflow-wrap: anywhere;
 }
-.shell-card-command {
-  margin: 0 0 8px;
+/* Where it runs and the command itself: small print under the steps. */
+.shell-card .op-card-facts {
+  margin: 0 0 2px;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.shell-card .op-card-facts dt {
+  color: inherit;
+}
+.shell-card .op-card-facts dd {
   color: var(--pa-muted);
+}
+.shell-card-command {
+  margin: 0;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
 }
 .shell-card-command summary {
   cursor: pointer;
   width: fit-content;
+}
+.shell-card-command summary:hover {
+  color: var(--pa-muted);
 }
 .shell-card-command pre {
   margin: 4px 0 0;

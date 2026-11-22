@@ -20,7 +20,7 @@ from pathlib import Path
 REPO = "https://github.com/wangkant/mibo"
 IDENTIFIER = "wangkant.Mibo"
 PUBLISHER = "Qiankang Wang"
-SHORT = "A desktop companion that talks with you, remembers you and acts for you, with your own model"
+SHORT = "An AI companion on your desktop that talks with you, remembers you and acts for you"
 LICENSE = "Apache-2.0"
 UNSIGNED = ("Mibo is not signed yet. The first time, right-click mibo.app and choose Open, or allow it in "
             "System Settings > Privacy & Security.")

@@ -403,7 +403,7 @@
   }
   // The card for something with an effect outside (web/gate.py): its act as the question, then only what
   // matters, each once; the control it presses is ringed on the page itself. A send, a comment, a like or follow
-  // and a post answer 本次允许 / 始终允许 / 不允许; paying, deleting and account changes only 确认 / 取消, every
+  // and a post answer 允许 / 始终允许 / 不允许; paying, deleting and account changes only 确认 / 取消, every
   // time. Drawn once per card.
   function drawCard(card) {
     if ((card?.id || "") === shownCard) return;

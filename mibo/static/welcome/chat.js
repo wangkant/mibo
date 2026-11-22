@@ -1648,7 +1648,7 @@ window.paChat = (() => {
       node.dataset.id = card.id;
       node.append(folder ? cardHead(I.folder, said.title, card.folder)
         : own ? cardHead(card.feature === "programs" ? I.window : I.terminal, said.title)
-        : cardHead(I.terminal, said.title, say("shellAsk")));
+        : cardHead(I.terminal, said.title));
       // Why the automatic review did not pass it, in one line (shell/panel.py).
       if (said.review) node.append(el("p", "op-card-why", said.review));
       const lines = el("ul", "shell-card-lines");

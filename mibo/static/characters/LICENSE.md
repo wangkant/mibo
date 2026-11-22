@@ -12,5 +12,5 @@ same licence.
 | `chatgpt.webp` | The GPT dragon girl (GPT 娘) | The white dragon design by ZipZipPipe. Redrawn; not their artwork. |
 | `claude.webp` | The Claude lady (Claude 娘) | A community design whose first artist is not known. Redrawn. |
 
-The picture `docs/readme/characters.svg` in the repository shows the three figures beside Mibo. It is under the
+The picture `docs/readme/characters.webp` in the repository shows the three figures beside Mibo. It is under the
 same licence as the portraits.

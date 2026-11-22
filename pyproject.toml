@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mibo"
 version = "0.1.0"
-description = "A desktop companion: one character that talks with you, remembers you, recommends one thing at a time, and acts for you on the web, in other programs and in your files, each effect reviewed or approved by you first."
+description = "An AI companion that lives on your desktop: a character that talks with you, remembers you, and acts for you on the web, in other programs and in your files, asking only when an action needs your decision."
 readme = "README.md"
 requires-python = ">=3.10"
 # Code taken from MIT and BSD projects keeps their licence (NOTICE), and the three

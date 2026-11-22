@@ -1,6 +1,8 @@
 # Mibo
 
-Ein Desktop-Begleiter: Eine Figur unterhält sich mit Ihnen, merkt sich, was Sie betrifft, empfiehlt jeweils eine Sache und handelt für Sie im Web, in anderen Programmen und in Ihren Dateien. Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl; jede Aktion mit Wirkung außerhalb der App durchläuft eine Prüfung oder wartet auf Ihre Zustimmung.
+**Ein KI-Begleiter, der auf Ihrem Desktop lebt: Er leistet Ihnen Gesellschaft und erledigt Aufgaben.**
+
+Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen, merkt sich, was Sie betrifft, und bringt Ihnen jeweils eine Sache, die Ihre Zeit wert ist. Sie kann mehr als plaudern: Sie surft im Web, bedient die Programme auf Ihrem Computer, arbeitet mit Ihren Dateien und Befehlen, nutzt Skills und MCP-Connectoren und führt geplante Aufgaben aus. Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Aktionen werden automatisch geprüft, und eine Karte fragt Sie nur, wenn Ihre Entscheidung nötig ist; Zahlungen, Löschungen und Kontoänderungen erfordern sie immer.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@ Ein Desktop-Begleiter: Eine Figur unterhält sich mit Ihnen, merkt sich, was Sie
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · **Deutsch** · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## Funktionen
 
@@ -27,7 +29,7 @@ Ein Desktop-Begleiter: Eine Figur unterhält sich mit Ihnen, merkt sich, was Sie
 
 ## Charaktere
 
-<p align="center"><img src="characters.svg" alt="Mibo · Weiße Drachin · Dicker Fisch · Mylady" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · Weiße Drachin · Dicker Fisch · Mylady" width="100%"></p>
 
 <p align="center">Mibo · Weiße Drachin · Dicker Fisch · Mylady</p>
 

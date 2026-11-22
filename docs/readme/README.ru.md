@@ -1,6 +1,8 @@
 # Mibo
 
-Компаньон для рабочего стола: один персонаж общается с вами, помнит вас, рекомендует по одной вещи за раз и действует за вас в интернете, в других программах и в ваших файлах. Он работает на вашем компьютере с выбранным вами сервисом моделей, а любое действие с последствиями за пределами приложения проходит проверку или ждёт вашего подтверждения.
+**ИИ-компаньон, который живёт на рабочем столе: составляет компанию и выполняет дела.**
+
+Персонаж со своим обликом и характером общается с вами, помнит вас и приносит по одной вещи, достойной вашего времени. Он не только беседует: просматривает веб-страницы, управляет программами на компьютере, работает с файлами и командами, использует навыки и MCP-коннекторы и выполняет задачи по расписанию. Он работает на вашем компьютере с выбранным вами сервисом моделей. Действия проверяются автоматически, а карточка с вопросом появляется, только когда нужно ваше решение; оплата, удаление и изменения учётной записи всегда требуют подтверждения.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Версия](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · **Русский**
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## Возможности
 
@@ -27,7 +29,7 @@
 
 ## Персонажи
 
-<p align="center"><img src="characters.svg" alt="Mibo · Белая Драконица · Большая Рыба · Барышня" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · Белая Драконица · Большая Рыба · Барышня" width="100%"></p>
 
 <p align="center">Mibo · Белая Драконица · Большая Рыба · Барышня</p>
 

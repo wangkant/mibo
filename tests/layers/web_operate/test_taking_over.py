@@ -1,6 +1,6 @@
 """While the character works a page in the pane (mibo/browser.py), the person's own input on that page pauses the
 errand, and input on the app's own page laid over it (the chat, a card, the bar) never does: a press counts where
-the pointer is, keys where the keyboard focus is. (2026-11-21: a real press on 本次允许 in the chat over the page
+the pointer is, keys where the keyboard focus is. (2026-11-21: a real press on 允许 in the chat over the page
 answered the card and then ended the errand as taken over: the page still held the focus, and by the time the
 watch looked the card was gone and the chat no longer lay over the page.)"""
 from __future__ import annotations

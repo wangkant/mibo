@@ -1,6 +1,8 @@
 # Mibo
 
-桌面夥伴應用程式：一個角色與你對話、記住你、每次推薦一項內容，並代你在網頁、其他程式和檔案中執行操作。應用程式在本機執行，使用你選擇的模型服務；凡對應用程式之外產生影響的操作，均須通過審查或經你確認。
+**住在桌面上的 AI 夥伴：既能陪伴，也能辦事。**
+
+角色有自己的形象和性格，與你對話、記住你、每次為你挑選一項值得看的內容。它不止於聊天：能瀏覽網頁、操作電腦上的其他程式、處理檔案和命令、使用技能和 MCP 連接器，並按時執行任務。應用程式在本機執行，使用你選擇的模型服務。操作自動經過審查，僅在需要你決定時才顯示確認卡片；付款、刪除和帳號變更一律須經你確認。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![版本](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · **繁體中文** · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## 功能
 
@@ -27,7 +29,7 @@
 
 ## 角色
 
-<p align="center"><img src="characters.svg" alt="Mibo · 白龍 · 大肥魚 · 大小姐" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · 白龍 · 大肥魚 · 大小姐" width="100%"></p>
 
 <p align="center">Mibo · 白龍 · 大肥魚 · 大小姐</p>
 

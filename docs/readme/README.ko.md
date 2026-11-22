@@ -1,6 +1,8 @@
 # Mibo
 
-데스크톱 컴패니언 앱입니다. 한 캐릭터가 사용자와 대화하고, 사용자를 기억하고, 한 번에 하나씩 추천하며, 웹과 다른 프로그램, 파일에서 사용자를 대신해 작업합니다. 사용자의 컴퓨터에서 사용자가 고른 모델 서비스로 실행되며, 앱 밖에 영향을 주는 작업은 모두 검토를 통과하거나 사용자의 승인을 받은 뒤에 실행됩니다.
+**데스크톱에 사는 AI 컴패니언. 곁에 있어 주고, 일도 처리합니다.**
+
+고유한 모습과 성격을 지닌 캐릭터가 사용자와 대화하고, 사용자를 기억하며, 볼 만한 것을 한 번에 하나씩 전합니다. 대화에 그치지 않습니다. 웹을 탐색하고, 컴퓨터의 다른 프로그램을 조작하고, 파일과 명령을 다루고, 스킬과 MCP 커넥터를 사용하며, 예약된 작업을 실행합니다. 사용자의 컴퓨터에서 사용자가 고른 모델 서비스로 실행됩니다. 작업은 자동으로 검토되며, 사용자의 결정이 필요할 때만 확인 카드가 나타납니다. 결제, 삭제, 계정 변경은 항상 확인을 받습니다.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![릴리스](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -8,7 +10,7 @@
 
 [English](../../README.md) · [简体中文](../../README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · **한국어** · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md)
 
-<p align="center"><img src="mibo-en.svg" alt="Mibo" width="100%"></p>
+<p align="center"><img src="mibo-en.svg" alt="Mibo" width="84%"></p>
 
 ## 기능
 
@@ -27,7 +29,7 @@
 
 ## 캐릭터
 
-<p align="center"><img src="characters.svg" alt="Mibo · 백룡 · 뚱보 물고기 · 아가씨" width="100%"></p>
+<p align="center"><img src="characters.webp" alt="Mibo · 백룡 · 뚱보 물고기 · 아가씨" width="100%"></p>
 
 <p align="center">Mibo · 백룡 · 뚱보 물고기 · 아가씨</p>
 

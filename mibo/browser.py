@@ -25,7 +25,7 @@ right-click menu adds 问 Mibo over a selection (the text goes into the chat's b
 send or not) and, on a link, a new tab or the system browser.
 
 What a site asks of the person is said on a strip under the bar (browsestrip.js), for the tab in front: the camera,
-the microphone, the location and the rest (本次允许, 始终允许, 不允许, as browsers ask), a link to a program of this
+the microphone, the location and the rest (允许, 始终允许, 不允许, as browsers ask), a link to a program of this
 computer (mailto:, weixin:), which is never started by the site, and a popup the page opened by itself, which was
 stopped. A tab behind keeps what it asks until it comes to the front. While the character operates nothing is asked
 and everything is refused. Only a refusal is saved in the profile (the browser then refuses by itself); an
@@ -1034,7 +1034,7 @@ class Pane:
         tab.once.clear()
 
     def _answer(self, ident: int, how: str) -> None:
-        """The person's press on the strip: "once" (本次允许, 打开), "always" (始终允许) or "no" (不允许, 取消, ×). A
+        """The person's press on the strip: "once" (允许, 打开), "always" (始终允许) or "no" (不允许, 取消, ×). A
         refusal is saved in the profile, so the browser refuses by itself from then on; an allowance is kept here
         (always) or for this page (once). Nothing is allowed while the character operates."""
         from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State

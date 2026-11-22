@@ -1546,11 +1546,11 @@ def selfcheck(places: Path) -> int:
     home = places / "home"
     downloads = places / "Downloads"
     answers = [("E21", True, f"将 2 项移到回收站 需要确认的本机操作 将「微信安装包.exe」移到回收站 位置 {downloads} "
-                             f"要运行的命令 本次允许 不允许"),
+                             f"要运行的命令 允许 不允许"),
                ("E25", True, f"启动本机程序：tiny 命令 {sys.executable} {places / 'bin' / 'tiny_server.py'} 工作文件夹 "
                              f"{home / 'runtime' / 'mcp' / 'tiny'} 允许 不允许"),
-               ("E25", True, "启动本机程序 · python · tiny_server.py 本次允许 始终允许 不允许"),
-               ("E21", False, "将 2 项移到回收站 位置 C:\\Users\\someone\\Downloads 本次允许 不允许")]
+               ("E25", True, "启动本机程序 · python · tiny_server.py 允许 始终允许 不允许"),
+               ("E21", False, "将 2 项移到回收站 位置 C:\\Users\\someone\\Downloads 允许 不允许")]
     for rid, want, text in answers:
         got = Bench.answer(SimpleNamespace(places=places, home=home), BY_ID[rid], text)
         bad += got != want
