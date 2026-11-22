@@ -49,6 +49,8 @@ A new release installs the same way, over the old one. Uninstalling keeps the da
 | | |
 |---|---|
 | **Windows, portable** | Download `mibo-0.1.0-windows-x64.zip`, unzip it anywhere and run `mibo.exe`. It is not code-signed either. |
+| **Scoop** (Windows) | Run `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`, then `scoop install mibo`. |
+| **Homebrew** (macOS, Apple silicon) | Run `brew install --cask wangkant/mibo/mibo`. |
 | **With Python** (3.10–3.14, any system) | Run `pipx install "mibo[app,web]"` or `uv tool install "mibo[app,web]"`, then `mibo`. |
 
 ### From source (Linux and development)

@@ -49,6 +49,8 @@ Las versiones nuevas se instalan igual, sobre la anterior. Al desinstalar se con
 | | |
 |---|---|
 | **Windows, versión portátil** | Descargue `mibo-0.1.0-windows-x64.zip`, descomprímalo en cualquier carpeta y ejecute `mibo.exe`. Tampoco está firmado. |
+| **Scoop** (Windows) | Ejecute `scoop bucket add mibo https://github.com/wangkant/scoop-mibo` y, a continuación, `scoop install mibo`. |
+| **Homebrew** (macOS, Apple silicon) | Ejecute `brew install --cask wangkant/mibo/mibo`. |
 | **Con Python** (3.10–3.14, cualquier sistema) | Ejecute `pipx install "mibo[app,web]"` o `uv tool install "mibo[app,web]"` y, a continuación, `mibo`. |
 
 ### Desde el código fuente (Linux y desarrollo)

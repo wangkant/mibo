@@ -49,6 +49,8 @@
 | | |
 |---|---|
 | **Windows 포터블 버전** | `mibo-0.1.0-windows-x64.zip`을 내려받아 원하는 위치에 압축을 풀고 `mibo.exe`를 실행합니다. 이 파일도 코드 서명되어 있지 않습니다. |
+| **Scoop**(Windows) | `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`를 실행한 다음 `scoop install mibo`를 실행합니다. |
+| **Homebrew**(macOS, Apple 실리콘) | `brew install --cask wangkant/mibo/mibo`를 실행합니다. |
 | **Python으로 설치**(3.10–3.14, 모든 시스템) | `pipx install "mibo[app,web]"` 또는 `uv tool install "mibo[app,web]"`를 실행한 다음 `mibo`를 실행합니다. |
 
 ### 소스에서 실행(Linux와 개발)

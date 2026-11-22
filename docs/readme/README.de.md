@@ -49,6 +49,8 @@ Eine neue Version wird auf dieselbe Weise über die alte installiert. Beim Deins
 | | |
 |---|---|
 | **Windows, portable Version** | Laden Sie `mibo-0.1.0-windows-x64.zip` herunter, entpacken Sie die Datei an einem beliebigen Ort und starten Sie `mibo.exe`. Auch diese Datei ist nicht signiert. |
+| **Scoop** (Windows) | Führen Sie `scoop bucket add mibo https://github.com/wangkant/scoop-mibo` und anschließend `scoop install mibo` aus. |
+| **Homebrew** (macOS, Apple Silicon) | Führen Sie `brew install --cask wangkant/mibo/mibo` aus. |
 | **Mit Python** (3.10–3.14, jedes System) | Führen Sie `pipx install "mibo[app,web]"` oder `uv tool install "mibo[app,web]"` aus und starten Sie anschließend `mibo`. |
 
 ### Aus dem Quellcode (Linux und Entwicklung)

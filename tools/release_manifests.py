@@ -75,25 +75,25 @@ end
 
 
 def winget(version: str, digest: str) -> dict[str, str]:
-    """winget-pkgs' three files (schema 1.6.0): the version, the installer and the default locale."""
+    """winget-pkgs' three files (schema 1.10.0): the version, the installer and the default locale."""
     head = f"PackageIdentifier: {IDENTIFIER}\nPackageVersion: {version}\n"
     return {
         f"{IDENTIFIER}.yaml": (
-            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json\n"
-            f"{head}DefaultLocale: en-US\nManifestType: version\nManifestVersion: 1.6.0\n"),
+            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json\n"
+            f"{head}DefaultLocale: en-US\nManifestType: version\nManifestVersion: 1.10.0\n"),
         f"{IDENTIFIER}.installer.yaml": (
-            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json\n"
+            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json\n"
             f"{head}InstallerType: inno\nScope: user\nInstallModes:\n- interactive\n- silent\n- silentWithProgress\n"
             "UpgradeBehavior: install\nInstallers:\n- Architecture: x64\n"
             f"  InstallerUrl: {REPO}/releases/download/v{version}/mibo-{version}-setup.exe\n"
-            f"  InstallerSha256: {digest.upper()}\nManifestType: installer\nManifestVersion: 1.6.0\n"),
+            f"  InstallerSha256: {digest.upper()}\nManifestType: installer\nManifestVersion: 1.10.0\n"),
         f"{IDENTIFIER}.locale.en-US.yaml": (
-            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json\n"
+            "# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json\n"
             f"{head}PackageLocale: en-US\nPublisher: {PUBLISHER}\nPublisherUrl: https://github.com/wangkant\n"
             f"PublisherSupportUrl: {REPO}/issues\nPackageName: Mibo\nPackageUrl: {REPO}\nLicense: {LICENSE}\n"
             f"LicenseUrl: {REPO}/blob/main/LICENSE\nShortDescription: {SHORT}\nMoniker: mibo\nTags:\n- ai\n"
             f"- assistant\n- companion\n- desktop\nReleaseNotesUrl: {REPO}/releases/tag/v{version}\n"
-            "ManifestType: defaultLocale\nManifestVersion: 1.6.0\n"),
+            "ManifestType: defaultLocale\nManifestVersion: 1.10.0\n"),
     }
 
 

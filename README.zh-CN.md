@@ -49,6 +49,8 @@
 | | |
 |---|---|
 | **Windows 免安装版** | 下载 `mibo-0.1.0-windows-x64.zip`，解压到任意位置后运行 `mibo.exe`。该文件同样未经代码签名。 |
+| **Scoop**（Windows） | 运行 `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`，然后运行 `scoop install mibo`。 |
+| **Homebrew**（macOS，Apple 芯片） | 运行 `brew install --cask wangkant/mibo/mibo`。 |
 | **通过 Python 安装**（3.10–3.14，任意系统） | 运行 `pipx install "mibo[app,web]"` 或 `uv tool install "mibo[app,web]"`，然后运行 `mibo`。 |
 
 ### 从源码运行（Linux 与开发）
