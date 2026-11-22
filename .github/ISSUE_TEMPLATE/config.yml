@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Documentation
     url: https://github.com/wangkant/mibo#readme
-    about: The README, with the quick start and what each part does.
+    about: The README, with installation, the first start and what each part does.
   - name: Report a security vulnerability
     url: https://github.com/wangkant/mibo/security/advisories/new
     about: Report it privately, not in a public issue. See SECURITY.md.

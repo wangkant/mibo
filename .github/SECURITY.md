@@ -30,13 +30,13 @@ A way around any of the following is a vulnerability:
 
 | Destination | What is sent | When |
 |---|---|---|
-| The model service the person chose | Chat messages, relevant memory, and the text or pictures of pages and files used for a reply | Each model call |
+| The model service the person chose | Chat messages, relevant memory, the text or pictures of pages and files used for a reply, and the steps the reviewer judges | Each model call |
 | Fallback, vision and embedding endpoints | Parts of the same | Only when set in Settings or `settings.json` |
 | Websites and public feeds | Ordinary page requests: signed out on walks, with the person's session in the built-in browser | When a page is read or operated |
-| Tavily, or DuckDuckGo without a Tavily key | A short search query | When a reply needs a search |
+| Brave or Tavily with the person's key; without one, the keyless engines ddgs asks (Yahoo, Startpage, Mojeek, DuckDuckGo) | A short search query | When a reply needs a search |
 | GitHub (`api.github.com`) | A request for the latest release; it carries only the version number | At most once a day; `UPDATE_CHECK_ENABLED=false` turns it off |
 | GitHub, npm, PyPI, the MCP Registry | Catalog and version lookups | When the skill or connector market is opened, at most once a day |
-| The skill's host; nodejs.org or GitHub for Node.js and uv | Downloads | When the person installs a skill or a connector that needs them |
+| The skill's host; nodejs.org or GitHub for Node.js and uv, or their public mirrors | Downloads | When the person installs a skill or a connector that needs them |
 | MCP servers the person added | What the character passes to their tools | When a tool is used |
 
 | Kept | Where |

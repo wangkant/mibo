@@ -40,8 +40,6 @@ Code taken from other projects, under the licences they were released with:
   on a retry ladder until a timeout) follow Playwright's actionability rules
   (microsoft/playwright, `injectedScript.ts` and `dom.ts`): Apache License,
   Version 2.0 (see LICENSE), Copyright (c) Microsoft Corporation.
-- Some guidance sentences in `mibo/web/operate.py` are copied from
-  DeepSeek's dsh: MIT License, Copyright (c) 2026 DeepSeek.
 - `mibo/desk/uia.py` follows the drop rule for nameless groups and
   the RuntimeId handles of dsh's cua-windows (`AccessibilityText.cs`,
   `Accessibility.cs`): MIT License, Copyright (c) 2026 DeepSeek.
@@ -62,15 +60,18 @@ Code taken from other projects, under the licences they were released with:
   of older results, and the outcome-unknown result of a call stopped in
   flight. `tests/harness/model.py` answers from scripts as dsh's
   llm-mock-server does. MIT License, Copyright (c) 2026 DeepSeek.
+- `mibo/context.py` and the compaction in `mibo/dm.py` follow dsh's
+  compaction-basic (the window less the answer's reserve and a headroom, a
+  tail of whole turns), token-meter (the last call's usage as the anchor),
+  spill-policy and tool-result pruner, and the request of its summarizer:
+  MIT License, Copyright (c) 2026 DeepSeek.
 - `.github/workflows/xplat.yml` and `tools/xplat/wsl_run.sh` start the
   virtual screen, the session bus and the AT-SPI daemons as xa11y's
   setup-a11y action does (`action.yml`, `apt-packages.txt`), and headless
   sway as xa11y's `scripts/run_wayland_portal.sh` does: MIT License,
   Copyright (c) 2026 xa11y.
 - `tools/xplat/grant_tcc.sh` is xa11y's `scripts/grant_macos_tcc.sh` with a
-  list of services: MIT License, Copyright (c) 2025 Stephen Crowe. The screen,
-  D-Bus and AT-SPI start in `.github/workflows/xplat-cua.yml` follows the
-  xa11y/setup-a11y action: MIT License, Copyright (c) 2026 xa11y.
+  list of services: MIT License, Copyright (c) 2025 Stephen Crowe.
 - `mibo/modelcatalog.json` is a trimmed snapshot of the models.dev catalogue
   (anomalyco/models.dev, `https://models.dev/api.json`; its date and sha256 are in
   the file): MIT License, Copyright (c) 2025 models.dev.

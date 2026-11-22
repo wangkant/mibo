@@ -1,8 +1,11 @@
 name: Release
 
-# A v* tag must sit on main and pass the test suite; the Windows installer and the
-# macOS app are then built and published as the GitHub Release of the tag. A manual
-# run from a branch only builds the apps and uploads them as workflow artifacts.
+# A v* tag must sit on main and pass the test suite. It then builds once: the sdist and
+# the wheel, the Windows installer and its folder as a zip, and the macOS app in a disk
+# image. Each built app is installed and started on its runner before anything is
+# published. The wheel then goes to PyPI (trusted publishing) and the GitHub Release of
+# the tag is created with every file. A manual run from a branch only builds, tries and
+# uploads the files as workflow artifacts; run it from a tag to release.
 on:
   push:
     tags: ["v*"]
@@ -16,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -45,6 +48,24 @@ jobs:
         run: |
           mkdir -p notes
           python tools/release_notes.py "$GITHUB_REF_NAME" --out notes/release-notes.md
+      - name: Build the sdist and the wheel
+        run: |
+          python -m pip install "build>=1.2,<2" "twine>=6,<8"
+          python -m build
+          python -m twine check --strict dist/*
+      - name: Install the wheel and start it before anything is published
+        run: |
+          python -m venv "$RUNNER_TEMP/wheelenv"
+          "$RUNNER_TEMP/wheelenv/bin/python" -m pip install --quiet dist/*.whl
+          VERSION=$("$RUNNER_TEMP/wheelenv/bin/python" -c "import mibo; print(mibo.__version__)")
+          python tools/package_smoke.py --mibo "$RUNNER_TEMP/wheelenv/bin/mibo" --version "$VERSION"
+          python tools/welcome_smoke.py --mibo "$RUNNER_TEMP/wheelenv/bin/mibo"
+      - name: Upload the distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
       - name: Upload the release notes
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -55,10 +76,11 @@ jobs:
 
   windows-installer:
     # The app frozen by PyInstaller and wrapped by Inno Setup: packaging/windows/build.ps1,
-    # which installs Inno Setup (winget, else Chocolatey) when the runner has none.
-    needs: test
+    # which installs Inno Setup (winget, else Chocolatey) when the runner has none. The
+    # frozen folder also goes out as a zip, for a person who would rather not install.
+    needs: build
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,11 +93,40 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: ./packaging/windows/build.ps1
-      - name: Upload the installer
+      - name: Put the frozen folder in a zip
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          Compress-Archive -Path packaging/windows/dist/mibo -DestinationPath "dist/mibo-$version-windows-x64.zip"
+      - name: Install it without a window, as a person's double click would, and start it
+        # The installed program keeps the key it is given in this runner's own credential store.
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $where = Join-Path $env:RUNNER_TEMP "installed"
+          $setup = Start-Process -FilePath "dist/mibo-$version-setup.exe" -Wait -PassThru -ArgumentList `
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$where`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`""
+          if ($setup.ExitCode) { Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 40; throw "the installer ended with $($setup.ExitCode)" }
+          python -m pip install --quiet keyring python-dotenv
+          python tools/package_smoke.py --mibo "$where\mibo.exe" --version $version
+          if ($LASTEXITCODE) { throw "the installed program did not say its version" }
+          python tools/welcome_smoke.py --mibo "$where\mibo.exe" --own-store
+          if ($LASTEXITCODE) { throw "the installed program did not start, chat and exit" }
+      - name: Start the copy in the zip
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $where = Join-Path $env:RUNNER_TEMP "unzipped"
+          Expand-Archive -Path "dist/mibo-$version-windows-x64.zip" -DestinationPath $where
+          python tools/package_smoke.py --mibo "$where\mibo\mibo.exe" --version $version
+          if ($LASTEXITCODE) { throw "the unzipped program did not say its version" }
+      - name: Upload the installer and the zip
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-installer
-          path: dist/mibo-*-setup.exe
+          path: |
+            dist/mibo-*-setup.exe
+            dist/mibo-*-windows-x64.zip
           if-no-files-found: error
 
   macos-app:
@@ -87,9 +138,9 @@ jobs:
     # --timestamp` over the .app, then `xcrun notarytool submit --wait` with an
     # App Store Connect API key (or an Apple ID and app-specific password) as
     # secrets, and `xcrun stapler staple` on the .app and the .dmg.
-    needs: test
+    needs: build
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,6 +168,17 @@ jobs:
           ln -s /Applications "$RUNNER_TEMP/dmg/Applications"
           hdiutil create -volname Mibo -srcfolder "$RUNNER_TEMP/dmg" -ov -format UDZO \
             "dist/mibo-$VERSION-macos-arm64.dmg"
+      - name: Open the disk image, copy the app out as a person drags it, and start it
+        # The app keeps the key it is given in this runner's own keychain.
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+          hdiutil attach "dist/mibo-$VERSION-macos-arm64.dmg" -nobrowse -mountpoint "$RUNNER_TEMP/volume"
+          mkdir -p "$RUNNER_TEMP/Applications"
+          cp -R "$RUNNER_TEMP/volume/mibo.app" "$RUNNER_TEMP/Applications/"
+          hdiutil detach "$RUNNER_TEMP/volume"
+          python -m pip install --quiet keyring python-dotenv
+          python tools/package_smoke.py --mibo "$RUNNER_TEMP/Applications/mibo.app/Contents/MacOS/mibo" --version "$VERSION"
+          python tools/welcome_smoke.py --mibo "$RUNNER_TEMP/Applications/mibo.app/Contents/MacOS/mibo" --own-store
       - name: Upload the disk image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -124,19 +186,43 @@ jobs:
           path: dist/mibo-*-macos-arm64.dmg
           if-no-files-found: error
 
+  pypi:
+    # Not before both apps are built and started: a version on PyPI has a GitHub Release with them.
+    needs: [build, windows-installer, macos-app]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mibo/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
   github-release:
-    needs: [test, windows-installer, macos-app]
+    needs: [build, pypi, windows-installer, macos-app]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
       - name: Download the release notes
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-notes
           path: notes/
-      - name: Download the Windows installer
+      - name: Download the Windows installer and zip
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: windows-installer
@@ -146,12 +232,17 @@ jobs:
         with:
           name: macos-app
           path: apps/
-      - name: Create the GitHub Release with the apps
+      - name: Write the files' SHA-256 beside them
+        run: |
+          (cd apps && sha256sum *) > SHA256SUMS.txt
+          (cd dist && sha256sum *) >> SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create the GitHub Release with the sdist, the wheel and the apps
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" apps/* \
+          gh release create "$GITHUB_REF_NAME" dist/* apps/* SHA256SUMS.txt \
             --verify-tag \
             --title "Mibo ${GITHUB_REF_NAME#v}" \
             --notes-file notes/release-notes.md

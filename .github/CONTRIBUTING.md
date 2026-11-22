@@ -25,7 +25,7 @@ The suite stubs the model and needs no key. The ruff line catches dead and undef
 
 | Workflow | Runs |
 |---|---|
-| `ci.yml` | The suite on Linux x64 (Python 3.10–3.14), Linux arm64 and macOS (3.12) and Windows (3.12 and 3.14), with `--durations=25`; a browser test that skips fails there (`MIBO_REQUIRE_BROWSER=1`). Builds the wheel and sdist on Linux, Windows and macOS, installs each into a clean venv and runs the two smoke scripts. Each job stops at 15 minutes. These jobs gate a push |
+| `ci.yml` | The suite on Linux x64 (Python 3.10–3.14), Linux arm64 and macOS (3.12) and Windows (3.12 and 3.14), with `--durations=25`; a browser test that skips fails there (`MIBO_REQUIRE_BROWSER=1`). Builds the wheel and sdist on Linux, Windows and macOS, installs each into a clean venv and runs the two smoke scripts. The suite's jobs stop at 25 minutes (30 on Windows), the package jobs at 15. These jobs gate a push |
 | `window.yml` | Opens the app window on Linux, macOS and Windows with a stand-in model (`tools/window_smoke.py`) |
 | `sandbox.yml` | The checks that need a real window, pointer or keys (`tools/sandbox/`), each system on a hosted runner of its own; reports, does not gate |
 | `xplat.yml` | The cross-system checks of `tools/xplat/` on Windows, macOS, Linux X11 and Linux Wayland: bash reading, the Electron pane and Cua Driver; reports, does not gate |
@@ -48,12 +48,13 @@ python tools/welcome_smoke.py --mibo /tmp/smoke-env/bin/mibo
 
 ### Real-model benches
 
-The scripts under `tools/` that call a real model (`tools/everyday.py`, `tools/review_score.py`, `tools/memory_life.py`, `tools/recsim/` and the rest) run only on your own computer, by hand, never in CI. Give each run a scratch home of its own (`mibo --home DIR`, or `AGENT_HOME=DIR`) whose `settings.json` holds `LLM_BASE_URL` and `LLM_MODEL`, with `LLM_API_KEY` in the environment or typed into that file (the app moves it to the credential store at start); never commit a key. Pass `--budget` where a script takes one. `tools/sandbox/everyday.py` reads its key from `SANDBOX_MODEL_KEY` and reports itself as not run without one.
+The scripts under `tools/` that call a real model (`tools/everyday.py`, `tools/review_score.py`, `tools/memory_life.py`, `tools/recsim/` and the rest) run only on your own computer, by hand, never in CI. Give each run a scratch home of its own made by `tools/scratchhome.py`: its `settings.json` holds `LLM_BASE_URL` and `LLM_MODEL`, the key reaches the app only through its environment (`LLM_API_KEY`), never through a file of the home or this computer's credential store, and the person's folders are stood in by an empty one beside the home (`MIBO_USER_DIRS`). `python tools/scratchhome.py check DIR` lists what a run left behind. Never commit a key. Pass `--budget` where a script takes one. `tools/sandbox/everyday.py` reads its key from `SANDBOX_MODEL_KEY` and reports itself as not run without one.
 
 ### Tests
 
-- A test is a module-level `test_*` function in `tests/test_*.py`; pytest is the only test dependency.
-- Tests never write the repository's real state. Use the `tmp` fixture (`tests/conftest.py`) and `isolated_agent(tmp, ...)` (`tests/helpers.py`), a real `Agent` whose state lives under `tmp`.
+- The suite is grouped by what it guards: `tests/floors/` (safety floors, each test listed in `tests/floors/manifest.json` and marked `floor`), `tests/layers/` (one layer through whole turns: chat, commands, programs, pages, MCP, skills, memory, recommendations), `tests/parts/` (single parts), and `tests/interface/` (the local page and its scripts against a real app in a headless browser). A test is a module-level `test_*` function; pytest is the only test dependency.
+- Every test gets a home of its own in the temporary folder, no network past this computer and no real credential store (`tests/conftest.py`). The shared offline harness in `tests/harness/` gives the fixtures `model` (a scripted model), `app` (the app with its token), `turn` (a whole turn) and `site` / `web` (stand-in sites); `isolated_agent(tmp, ...)` in `tests/helpers.py` is a real `Agent` whose state lives under `tmp`.
+- Markers: `browser` (headless Chromium through Playwright), `window` (a real display, pointer or keys; runs only in the sandbox), `slow` and `floor`.
 - Nothing Windows-only runs at import time or in a test without a stand-in: the same suite runs on Linux.
 
 ## Code layout
@@ -63,18 +64,18 @@ Paths are under `mibo/` unless noted.
 | Area | Where |
 |---|---|
 | App, window and Settings | `cli.py`, `welcome.py` (local page, token, API), `window.py`, `static/welcome/`, `panels/` (one module per Settings section) |
-| Character and chat | `agent.py`, `character.py`, `dm.py`, `turns.py`, `prompt.py`, `prompts.py`, `llm.py`, `endpoints.py`, `abilities.py` (what the model can do, measured by probes), `modelcatalog.py` (what the bundled models.dev snapshot lists for it) |
+| Character and chat | `agent.py`, `character.py`, `dm.py`, `turns.py`, `prompt.py`, `prompts.py`, `loop.py` (one turn of tool calls), `catalog.py` (the tools offered), `context.py` (the context budget and compaction), `llm.py`, `transport.py` (every model call, on the OpenAI SDK), `endpoints.py`, `abilities.py` (what the model can do, measured by probes), `modelcatalog.py` (what the bundled models.dev snapshot lists for it) |
 | Memory | `person.py`, `consolidate.py`, `memory.py`, `memstore.py`, `chatlog.py`, `pastchats.py`, `retrieval.py`, `ranking.py`, `embeddings.py` |
 | Recommendations and walks | `recommend.py`, `taste.py`, `pacing.py`, `roam.py`, `library.py`, `today.py`, `sources/` |
-| Web and built-in browser | `web/`, `browser.py`, `browsed.py`, `signwatch.py`, `installed_browser.py`, `search.py`, `ingestion.py` |
+| Web and built-in browser | `web/`, `browser.py`, `browsed.py`, `signwatch.py`, `installed_browser.py`, `search.py`, `ingestion.py`; `surface.py`, `places.py` and `resolve.py` (open, look and act on pages, windows and files) |
 | Other programs (Windows) | `desk/` (UI Automation), `see/` (by screenshot, where no structure can be read) |
 | Commands and files | `shell/` |
-| Approval | `cardwait.py`, `review.py`, `turnon.py`, and the `gate.py` / `grants.py` of `web/`, `desk/` and `shell/` |
+| Approval | `acting.py` (the acting mode and what always asks), `review.py`, `cardwait.py`, `turnon.py`, `web/gate.py`, `desk/gate.py` and `desk/grants.py`, `shell/read.py`, `shell/bashread.py` and `shell/grants.py`, `mcp_tools.py` |
 | Skills and MCP | `skills/`, `mcp_*.py`, `runtimes.py`, `secretstore.py` |
 | Scheduled tasks | `schedule.py`, `schedule_tool.py` |
 | Desktop figure | `petchat.py`, `petoff.py`, `petshot.py`, `remarks.py`, `activity.py`, `quiet.py` |
 | Languages | `i18n.py`, `locales/`, `langs.py`, `chatlangs/`, `timewords.py` |
-| Home, settings and storage | `home.py`, `paths.py`, `settings.py`, `config_env.py`, `setup_wizard.py`, `storage.py` |
+| Home, settings and storage | `home.py`, `paths.py`, `settings.py`, `config_env.py`, `settingsfile.py` (`settings.json`), `secretstore.py` (the credential store), `db.py` (`runtime/mibo.db`), `setup_wizard.py`, `storage.py` |
 | Packaging | `packaging/windows/` (repository root) |
 | Scripts | `tools/` (repository root): measurements and checks, not shipped |
 
@@ -84,7 +85,7 @@ To add a setting, add it to `AgentSettings` in `settings.py`, read it with the `
 
 The interface ships in ten languages: English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português (Brasil) and Русский.
 
-- Catalogs: `mibo/locales/<code>.json`, in i18next's JSON layout. `tools/locale_gaps.py` lists what a catalog lacks; `tests/test_locales.py` fails on a gap.
+- Catalogs: `mibo/locales/<code>.json`, in i18next's JSON layout. `tools/locale_gaps.py` lists what a catalog lacks; `tests/parts/catalogs/test_locales.py` fails on a gap.
 - Chinese interface text is written, formal Chinese. `tools/copy_check.py` lists spoken forms; a line that is the character's or the person's own words carries a `copy: voice` comment.
 - Documents: `README.md`, `README.zh-CN.md`, `docs/readme/README.<code>.md` and `docs/DISCLAIMER[.<code>].md`. English is the source; a change of fact goes into every translation.
 
@@ -98,7 +99,7 @@ The interface ships in ten languages: English, 简体中文, 繁體中文, 日�
 
 ## Releasing
 
-A release is a tag on `main`, built into the Windows installer and published as a GitHub Release. There is no PyPI package. Only the maintainer cuts a release.
+A release is a tag on `main`, built into the Windows installer and the macOS disk image and published as a GitHub Release. There is no PyPI package. Only the maintainer cuts a release.
 
 1. Set the version in `pyproject.toml` and `mibo/__init__.py`; a test fails if they differ.
 2. Refresh the model catalogue with `python tools/modelcatalog.py`: it downloads models.dev's `api.json`, keeps the services the provider list in Settings offers, and writes `mibo/modelcatalog.json` with the day and sha256. Commit it if it changed; the line it prints names the Settings services the catalogue does not hold.

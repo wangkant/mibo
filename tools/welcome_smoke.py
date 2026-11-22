@@ -1,5 +1,7 @@
 """Run the installed welcome page, save a key, chat, and exit, using only localhost. The key the page saves is held in
-the app's memory (tools/scratchhome.py's credential store), never in this computer's."""
+the app's memory (tools/scratchhome.py's credential store), never in this computer's. --own-store is for a frozen
+program (the installer's, the disk image's), which cannot load that stand-in: it keeps the made-up key in the
+system's own store, so that flag is for a build runner, not a person's computer."""
 from __future__ import annotations
 
 import argparse
@@ -24,11 +26,13 @@ from package_smoke import FakeModel, REPLY, _env
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mibo", required=True)
+    parser.add_argument("--own-store", action="store_true",
+                        help="a frozen program: the key goes to this system's own credential store")
     args = parser.parse_args(argv)
     model = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)
     threading.Thread(target=model.serve_forever, daemon=True).start()
     process = None
-    env = {**_env(), **scratchhome.store()}
+    env = _env() if args.own_store else {**_env(), **scratchhome.store()}
     try:
         with tempfile.TemporaryDirectory(prefix="mibo-welcome-") as temporary:
             command = [shutil.which(args.mibo) or os.path.abspath(args.mibo), "--home", str(Path(temporary) / "home"),

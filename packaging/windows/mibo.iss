@@ -68,13 +68,13 @@ Source: "dist\mibo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cre
 Name: "{code:DataHome}"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{userprograms}\mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "mibo"
-Name: "{userdesktop}\mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "mibo"; Tasks: desktopicon
+Name: "{userprograms}\Mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "Mibo"
+Name: "{userdesktop}\Mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "Mibo"; Tasks: desktopicon
 ; At sign-in it stays behind its notification-area icon, as the app's own setting makes it.
-Name: "{userstartup}\mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"" --background"; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "mibo"; Tasks: startup
+Name: "{userstartup}\Mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"" --background"; WorkingDir: "{code:DataHome}"; IconFilename: "{app}\_internal\mibo\static\app.ico"; Comment: "Mibo"; Tasks: startup
 
 [Run]
-Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; Description: "{cm:LaunchProgram,mibo}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; Description: "{cm:LaunchProgram,Mibo}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 { The home the app uses with no --home: AGENT_HOME, else ~\mibo,

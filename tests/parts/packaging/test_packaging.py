@@ -162,9 +162,9 @@ def test_release_notes_come_from_the_changelog_section_of_the_tag() -> None:
 def test_a_release_is_made_only_from_a_tested_commit_on_main() -> None:
     text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
     jobs = yaml.safe_load(text)["jobs"]
-    test = "\n".join(step.get("run", "") for step in jobs["test"]["steps"])
+    test = "\n".join(step.get("run", "") for step in jobs["build"]["steps"])
     assert "origin main" in test
-    assert test.index("merge-base --is-ancestor") < test.index("python -m pytest")
+    assert test.index("merge-base --is-ancestor") < test.index("python -m pytest") < test.index("python -m build")
 
     def waits_for(name: str) -> set[str]:
         needs = jobs[name].get("needs") or []
@@ -172,7 +172,13 @@ def test_a_release_is_made_only_from_a_tested_commit_on_main() -> None:
         return direct.union(*(waits_for(job) for job in direct))
 
     # Every other job waits for the tests, and the release waits for every app.
-    assert [name for name in jobs if name != "test" and "test" not in waits_for(name)] == []
+    assert [name for name in jobs if name != "build" and "build" not in waits_for(name)] == []
     assert set(jobs) - {"github-release"} <= waits_for("github-release")
-    # Nothing goes to PyPI.
-    assert not re.search(r"pypi-publish|twine upload", text)
+    # Each app is started on its runner before anything is published.
+    for app in ("windows-installer", "macos-app"):
+        assert "welcome_smoke.py" in "\n".join(step.get("run", "") for step in jobs[app]["steps"])
+    # PyPI gets the wheel from a tag only, after both apps, by trusted publishing: no token is named anywhere.
+    assert {"windows-installer", "macos-app"} <= waits_for("pypi")
+    assert jobs["pypi"]["if"] == "startsWith(github.ref, 'refs/tags/v')" == jobs["github-release"]["if"]
+    assert jobs["pypi"]["permissions"] == {"id-token": "write"}
+    assert not re.search(r"secrets\.|twine upload|password:", text)

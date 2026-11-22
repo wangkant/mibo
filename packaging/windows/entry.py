@@ -13,8 +13,8 @@ def main() -> int:
         return 0
     from mibo import cli
 
-    # Opened from its icon or Finder with no command: the app.
-    if not any(word in cli.COMMANDS for word in args):
+    # Opened from its icon or Finder with no command: the app. Asked its version or its help, it answers that.
+    if not any(word in cli.COMMANDS for word in args) and not {"--version", "--help", "-h"} & set(args):
         args = ["start", *args]
     return cli.main(args)
 

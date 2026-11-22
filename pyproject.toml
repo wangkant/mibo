@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mibo"
 version = "0.1.0"
-description = "A companion on your desktop: one character that talks with you, remembers you, brings you one thing worth your time, and acts for you on the web, in programs and in files, behind cards you approve."
+description = "A desktop companion: one character that talks with you, remembers you, recommends one thing at a time, and acts for you on the web, in other programs and in your files, each effect reviewed or approved by you first."
 readme = "README.md"
 requires-python = ">=3.10"
 # Code taken from MIT and BSD projects keeps their licence (NOTICE), and the three
@@ -19,11 +19,16 @@ keywords = [
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Environment :: Console",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications :: Qt",
     "Framework :: FastAPI",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
@@ -102,6 +107,7 @@ mibo = "mibo.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/wangkant/mibo"
+Download = "https://github.com/wangkant/mibo/releases/latest"
 Issues = "https://github.com/wangkant/mibo/issues"
 Changelog = "https://github.com/wangkant/mibo/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/wangkant/mibo#readme"
