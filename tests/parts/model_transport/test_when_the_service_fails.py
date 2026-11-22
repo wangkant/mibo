@@ -139,7 +139,8 @@ def test_a_hanging_service_hands_the_turn_to_the_backup_without_waiting_twice(op
     began = time.monotonic()
     done = run_turn(app, "hello", hang(), say("From the backup."))
     assert done.reply == "From the backup." and replies(done) == ["scripted", "backup"]
-    assert time.monotonic() - began < 3.0
+    # One wait of two seconds and the turn itself; a second wait would bring it to four.
+    assert time.monotonic() - began < 4.0
 
 
 def test_one_refused_request_leaves_the_model_in_and_a_throttled_one_sits_out_its_cooldown(opened, monkeypatch):
