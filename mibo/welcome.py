@@ -764,6 +764,12 @@ class Workspace:
         room, said, ended = self._replying
         said["stopping"] = why if why in ("stopped", "timeout") else "stopped"
         stopped = self.character.stop(room.conversation)
+        # Pressed before the reply has reached its model call, there is nothing to cancel yet: it is asked again
+        # until there is, or until the reply has ended.
+        until = time.monotonic() + 10
+        while not stopped and not ended.is_set() and time.monotonic() < until:
+            await asyncio.sleep(0.05)
+            stopped = self.character.stop(room.conversation)
         if stopped:
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(ended.wait(), 10)

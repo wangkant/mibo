@@ -16,7 +16,7 @@ from PIL import Image
 from harness.model import call, fail, hang, say, tokens
 from harness.page import measured
 from harness.turn import run_turn
-from mibo import acting, loop
+from mibo import acting, character, loop
 from mibo.review import Verdict
 from mibo.shell import tool as shell_tool
 from mibo.shell.grants import Grants
@@ -261,6 +261,27 @@ def test_a_stop_ends_the_turn_with_what_was_said_and_done(app, how):
     result = done["result"]
     assert result.reply == "Let me plan it first.\n\n" + loop.STOPPED_LINE["en"]
     assert [s["tool"] for s in result.trace] == ["plan"]
+
+
+def test_a_stop_pressed_before_the_reply_can_be_stopped_is_asked_again(app, monkeypatch):
+    # The window between a message arriving and its model call beginning: the first ask finds nothing to cancel.
+    real, asks = character.Character.stop, []
+
+    def early(self, conversation):
+        asks.append(conversation)
+        return real(self, conversation) if len(asks) > 1 else False
+
+    monkeypatch.setattr(character.Character, "stop", early)
+    worker = threading.Thread(target=lambda: run_turn(app, "Plan the weekend", hang()), daemon=True)
+    worker.start()
+    for _ in range(200):
+        if app.model.asked():
+            break
+        time.sleep(0.05)
+    assert app.post("/api/chat/stop", {"why": "stopped"}).json() == {"stopped": True}
+    worker.join(30)
+    assert len(asks) == 2 and not worker.is_alive()
+    assert app.get("/api/chat/doing").json()["busy"] is False
 
 
 @pytest.mark.parametrize("arguments,error", [
