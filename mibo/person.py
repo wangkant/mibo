@@ -64,8 +64,6 @@ ALWAYS_KINDS = ("manner", "health", "dislike", "form", "who")
 #: A fact is grounded when this share of its characters (CJK) or words
 #: occurs in what the person said.
 GROUND_SHARE = 0.6
-#: ...and this share of them when its quote is word for word in the line it comes from.
-QUOTED_SHARE = 0.5
 #: A new fact without a slot replaces an old one whose words it carries.
 SAME_FACT = 0.6
 #: New words that overlap a forgotten thing this much are refused.
@@ -231,8 +229,8 @@ def _same_stem(a: str, b: str) -> bool:
     return n >= max(4, min(len(a), len(b)) - 2)
 
 
-def grounded(text: str, sources: str, share: float = GROUND_SHARE) -> bool:
-    """Is `text` made of the words in `sources`: `share` of its content characters and words, a word also in
+def grounded(text: str, sources: str) -> bool:
+    """Is `text` made of the words in `sources`: GROUND_SHARE of its content characters and words, a word also in
     another form of it, and for CJK at least one pair of characters in a row."""
     units = _units(text)
     if not units:
@@ -243,7 +241,7 @@ def grounded(text: str, sources: str, share: float = GROUND_SHARE) -> bool:
     def found(u: str) -> bool:
         return u in hay or (len(u) >= 5 and not u.isdigit() and not _CJK.match(u)
                             and any(_same_stem(u, w) for w in words))
-    if sum(1 for u in units if found(u)) / len(units) < share:
+    if sum(1 for u in units if found(u)) / len(units) < GROUND_SHARE:
         return False
     run = [c for c in str(text).lower() if _CJK.match(c)]
     pairs = {a + b for a, b in zip(run, run[1:])}

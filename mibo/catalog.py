@@ -85,6 +85,8 @@ async def _mcp(agent, called: dict, args: dict, lookups) -> str:
 
 MODULES = (
     Module("web", lambda: search.TOOLS + [connect.TOOL], _web),
+    # search_past_chats next: the prompt's rules never name it, so even a small window sends it.
+    Module("chats", lambda: [pastchats.TOOL], _chats),
     # bring_find and react: the person's finds in the chat (findtool.py).
     Module("web", lambda: findtool.TOOLS, _finds),
     # open and look: pages, windows, files and folders by one name (surface.py). Opening what the person named
@@ -93,7 +95,6 @@ MODULES = (
     Module("computer", lambda: shell_tool.TOOLS, _shell, "computer", frozenset({shell_tool.PLAN_TOOL["function"]["name"]})),
     Module("program", lambda: desk_tool.OFFERED, _desk, "programs"),
     Module("skill", lambda: [skill_tool.TOOL], _skill),
-    Module("chats", lambda: [pastchats.TOOL], _chats),
     Module("schedule", _schedule_tools, _schedule),
     # find_tools and use_tool: the deferred app tools and the MCP servers' tools.
     Module("mcp", _loader, _mcp),

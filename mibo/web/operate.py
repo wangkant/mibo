@@ -353,6 +353,18 @@ def _summary(request: dict) -> dict:
             "values": short, "body_chars": len(body)}
 
 
+def _strictness(judged: dict) -> int:
+    """How strictly a press is held, for the strictest of what it is a press on to decide: a floor kind (order,
+    delete, account, grant), then a press in another site's frame, then outward, watch and free."""
+    from .. import acting
+    kind = judged["kind"]
+    if kind in acting.HARD:
+        return 4
+    if judged["why"] == gate.FRAME_WHY:
+        return 3
+    return 2 if kind not in ("", "watch") else 1 if kind == "watch" else 0
+
+
 def _reading(kind: str, does: str) -> str:
     """The card's word for an act: the reviewer's reading of an outward act, else the gate's own ("press" for an
     outward act nothing read)."""
@@ -1367,10 +1379,10 @@ class Hands:
 
     async def _click(self, ident: int, element: str, times: int = 1, how: str = "",
                      at: Optional[tuple[float, float]] = None) -> dict:
-        """A click; `how` "double" or "right"; `at` a point from its top left to press it at (judged as the control
-        itself is). A double click on a control with an effect outside would press it twice and is refused; a
-        right click presses nothing but opens the page's menu, so what it sends is watched as a bare submission's
-        press is."""
+        """A click; `how` "double" or "right"; `at` a point from its top left to press it at; judged by the strictest
+        of what it is a press on (_pressed). A double click on a control with an effect outside would press it twice
+        and is refused; a right click presses nothing but opens the page's menu, so what it sends is watched as a
+        bare submission's press is."""
         fresh = await self._fresh(ident)
         if fresh is None:
             return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
@@ -1381,7 +1393,12 @@ class Hands:
         if other:
             return {"status": "failed", "line": other}
         url = await self._url()
-        kind, why = await self._judged(ident, role, name, facts, url)
+        try:
+            judged = await self._pressed(ident, *(at or (None, None)), url)
+        except RuntimeError as error:
+            return {"status": "failed", "line": f"[failed] click {self.page.describe(ident)}: {clip(str(error), 160)}; "
+                                                f"look again"}
+        kind, why = judged["kind"], judged["why"]
         if how == "right":
             kind, why, times = "watch", "a right click opens the page's own menu", 1
         elif how == "double" and kind and kind != "watch":
@@ -1421,15 +1438,20 @@ class Hands:
             here = self.page.describe(target)
             return line.replace(here, here + more, 1)
         if kind and kind != "watch":
-            if await self.page.alive(ident):
-                # A press that cannot land (covered, hidden, turned off) is not put to the person on a card.
+            if not at and await self.page.alive(ident):
+                # A press that cannot land (covered, hidden, turned off) is not put to the person on a card; a point
+                # was checked as it was judged.
                 try:
-                    await (self.page.at(ident, *at) if at else self.page._point(ident))
+                    await self.page._point(ident)
                 except RuntimeError as error:
                     self.tell(said)
                     return {"status": "failed", "said": said,
                             "line": f"[failed] click {self.page.describe(ident)}: {clip(str(error), 160)}; look again"}
-            result = await self._outside(kind, why, ident, shown, facts, url, element, press)
+            # The card names what decided: a control under the point, or the clickable a part is of.
+            on = judged["facts"]
+            button = shown if (judged["id"], judged["name"]) == (ident, name) else (
+                judged["name"] or on.get("text") or on.get("label") or shown)
+            result = await self._outside(kind, why, judged["id"], button, on, url, element, press)
             if result.get("outside"):
                 result["line"] += await self._changed(seen["target"], seen, result["line"])
             return {**result, "said": said}
@@ -1515,13 +1537,10 @@ class Hands:
             self._watching = None
         return line
 
-    async def _judged(self, ident: Optional[int], role: str, name: str, facts: dict, url: str) -> tuple[str, str]:
-        """The gate's kind for a press on a control the last look lists, by the control itself: its role, its name
+    async def _judged(self, ident: int, role: str, name: str, facts: dict, url: str) -> tuple[str, str]:
+        """The gate's kind for a press on one control the last look lists, by the control itself: its role, its name
         and its facts. A drawn part is judged by its own name and label, never by the colour and shape words the
-        look gives the model, and one with none that hears a press asks as a press nothing reads; so does a press
-        on nothing the look lists (`ident` None: a frame from another site)."""
-        if ident is None:
-            return "outward", "a press where the look lists nothing (a frame from another site), which nothing reads"
+        look gives the model, and one with none that hears a press asks as a press nothing reads."""
         if role in DRAWN:
             kind, why = gate.classify("click", "", role, facts, url)
             if not kind and not (facts.get("label") or facts.get("tip")) and await self.page.handled(ident):
@@ -1529,42 +1548,64 @@ class Hands:
             return kind, why
         return gate.classify("click", "" if role == "text" and facts.get("text") else name, role, facts, url)
 
-    async def _pressed_on(self, ident: Optional[int], x: Optional[float], y: Optional[float]) -> tuple[
-            Optional[int], int, dict, str, str]:
-        """What a press goes down on, for the gate: an id is that control, the point (x, y from its top left) only
-        where on it; a bare point of the view is the control there as the last look lists it (pageops.listed_at),
-        or None. (the control, the element pressed, its facts, its role and name); raises why the point cannot
-        land."""
-        if ident is not None:
-            if x is not None:
-                await self.page.at(ident, x, y)
-            role, name = self.page.last.get(ident, ("", ""))
-            return ident, ident, await self.page.facts(ident), role, name
-        p = await self.page.at(None, x, y)
-        listed, hit = await self.page.listed_at(p["x"], p["y"])
-        if hit is None:
-            raise RuntimeError("nothing is there to press")
-        role, name = self.page.last.get(listed, ("", "")) if listed else ("", "")
-        return listed, hit, await self.page.facts(listed or hit), role, name
+    async def _pressed(self, ident: Optional[int], x: Optional[float], y: Optional[float], url: str,
+                       release: bool = False) -> dict:
+        """What a press is judged by: the strictest of everything it could be a press on. That is the ref, and with
+        a point (x, y from the ref's top left, or of the view with no ref; a drag's release always has one) every
+        control the last look lists from the element there up to the body (pageops.under), a drawn part with the
+        control it is drawn in; a part of a split clickable brings the clickable round it. A point in another
+        site's frame is held for the card (gate.FRAME_WHY); one on nothing listed asks as a press nothing reads when
+        something there hears a press, and is free when nothing does. {"id", "facts", "role", "name", "kind",
+        "why"} of the one that decides (_strictness); raises why the point cannot land."""
+        listed = [] if ident is None else [ident]
+        found = []
+        if x is not None or release:
+            p = await self.page.at(ident, x, y, press=not release)
+            hit, frame, path = await self.page.under(p["x"], p["y"])
+            if hit is None:
+                raise RuntimeError("nothing is there to press")
+            if frame:
+                found.append({"id": hit, "facts": await self.page.facts(hit), "role": "", "name": "",
+                              "kind": "outward", "why": gate.FRAME_WHY})
+            elif not path:
+                heard = await self.page.handled(hit)
+                found.append({"id": hit, "facts": await self.page.facts(hit), "role": "", "name": "",
+                              "kind": "outward" if heard else "",
+                              "why": "a press on what the look does not list, which answers a press" if heard
+                              else "nothing there answers a press"})
+            listed = path + [i for i in listed if i not in path]
+        for i in listed:
+            role, name = self.page.last.get(i, ("", ""))
+            facts = await self.page.facts(i)
+            kind, why = await self._judged(i, role, name, facts, url)
+            found.append({"id": i, "facts": facts, "role": role, "name": name, "kind": kind, "why": why})
+            if i in self.page.outer:
+                # A part of a clickable split into parts: the press is the clickable's too, by its words and facts.
+                whole = await self.page.facts(self.page.outer[i])
+                kind, why = gate.classify("click", "", "clickable", whole, url)
+                found.append({"id": i, "facts": facts, "role": role, "name": whole.get("text") or name,
+                              "kind": kind, "why": f"a part of a clickable: {why}"})
+        return max(found, key=_strictness)
 
     async def _click_point(self, x: float, y: float, element: str) -> dict:
-        """A click on a point of the view as a picture shows it, through the gate as a click on the control the last
-        look lists there."""
+        """A click on a point of the view as a picture shows it, judged by the strictest of what it is a press on
+        (_pressed)."""
+        url = await self._url()
         try:
-            listed, hit, facts, role, name = await self._pressed_on(None, x, y)
+            judged = await self._pressed(None, x, y, url)
         except RuntimeError as error:
             return {"status": "failed", "line": f"[failed] click at {round(x)},{round(y)}: {clip(str(error), 200)}; "
                                                 f"nothing was pressed"}
-        url = await self._url()
-        kind, why = await self._judged(listed, role, name, facts, url)
+        kind, why, facts, role, name = (judged[k] for k in ("kind", "why", "facts", "role", "name"))
         said = self._said({"do": "click"}, (name if role not in DRAWN else "") or facts.get("text") or element)
 
         async def press() -> str:
             self.tell(said)
             return await self.page.click_point(x, y)
         if kind and kind != "watch":
-            return {**await self._outside(kind, why, listed or hit, facts.get("text") or facts.get("label") or "",
-                                          facts, url, "", press), "said": said}
+            return {**await self._outside(kind, why, judged["id"], (name if role not in DRAWN else "")
+                                          or facts.get("text") or facts.get("label") or "", facts, url, "", press),
+                    "said": said}
         before = await self._seen(None)
         line = await self._watched(press, str(facts.get("text") or element), facts,
                                    PRESS_TAIL_S if kind == "watch" else HEAR_S)
@@ -1612,18 +1653,22 @@ class Hands:
         route =[p for p in action.get("route") or [] if isinstance(p, (list, tuple)) and len(p) == 2
                  and all(isinstance(v, (int, float)) for v in p)][:ROUTE_MAX]
         said = self._said({"do": "drag", "target": end_name}, start_name)
+        url = await self._url()
         try:
-            listed, hit, facts, role, name = await self._pressed_on(start.get("id"), start.get("x"), start.get("y"))
+            # Judged at the press and at the release alike, the strictest of the two deciding.
+            judged = max([await self._pressed(start.get("id"), start.get("x"), start.get("y"), url),
+                          await self._pressed(end.get("id"), end.get("x"), end.get("y"), url, release=True)],
+                         key=_strictness)
         except RuntimeError as error:
             return {"status": "failed", "line": f"[failed] drag: {clip(str(error), 200)}; nothing was pressed"}
-        url = await self._url()
-        kind, why = await self._judged(listed, role, name, facts, url)
+        kind, why, facts = judged["kind"], judged["why"], judged["facts"]
 
         async def press() -> str:
             self.tell(said)
             return await self.page.drag(start, end, route)
         if kind and kind != "watch":
-            return {**await self._outside(kind, why, listed or hit, facts.get("text") or facts.get("label")
+            return {**await self._outside(kind, why, judged["id"], (judged["name"] if judged["role"] not in DRAWN
+                                                                     else "") or facts.get("text") or facts.get("label")
                                           or start_name, facts, url, "", press), "said": said}
         before = await self._seen(None)
         line = await self._watched(press, said, facts)
@@ -1793,7 +1838,7 @@ class Hands:
         # box beside the button: the reviewer and code's floor (an address or number they never gave) see it all.
         typed = [f"{t['field']}: {t['text']}" for t in self.typed if not t["out"] and t["site"] == site
                  and _squeeze(t["text"]) not in _squeeze(card["text"])]
-        # Enter in another site's frame is the floor: the card, never the reviewer.
+        # A press or Enter in another site's frame is the floor: the card, never the reviewer.
         decision, passed, does = ("kept", "", "") if kept else ("ask", "", "") if (
             skipped or why == gate.FRAME_WHY) else await self._decided(
             kind, site, {"target": [card["to"]] if card["to"] else [],

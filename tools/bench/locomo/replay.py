@@ -31,6 +31,7 @@ The rule, stated with every result (README.md):
   off (memory off in Settings > Memory and no chat record from the start, the same feed: the floor; give it its own
   --out).
   --resume starts a fed home again and asks the questions its answers file does not hold yet (after a budget cut).
+  --ks names the questions to ask by their index, in place of --every (the same sample before and after a change).
 
 Every model call goes through tools/everyday.py's Meter, which refuses calls past --budget dollars; the key is read
 from --keys (LLM_API_KEY and LLM_BASE_URL), never printed, and reaches the app only through its environment
@@ -230,7 +231,8 @@ def feed(run: Run, sample: dict, log: Path) -> None:
               flush=True)
 
 
-def ask(run: Run, sample: dict, mode: str, every: int, meter: Meter, budget: float, out: Path) -> int:
+def ask(run: Run, sample: dict, mode: str, every: int, meter: Meter, budget: float, out: Path,
+        ks: frozenset = frozenset()) -> int:
     conv = sample["conversation"]
     run.at(asked_on(conv))
     run.tag("hold")
@@ -238,8 +240,9 @@ def ask(run: Run, sample: dict, mode: str, every: int, meter: Meter, budget: flo
     done = {json.loads(line)["k"] for line in out.read_text(encoding="utf-8").splitlines()} if out.exists() else set()
     asked = 0
     for k, qa in enumerate(sample["qa"]):
+        chosen = k in ks if ks else not k % every
         # Memory off is the floor of what needs an old session: only those are asked.
-        if qa["category"] not in CATS or k % every or k in done or (mode == "off" and not old(qa, conv)):
+        if qa["category"] not in CATS or not chosen or k in done or (mode == "off" and not old(qa, conv)):
             continue
         if meter.spent >= budget:
             print(f"  budget reached at question {k}", flush=True)
@@ -299,7 +302,8 @@ def one(sample: dict, args, meter: Meter, base: str, key: str) -> dict:
         if fresh:
             feed(run, sample, run.out / "feed.jsonl")
         name = {"real": "answers.jsonl", "oracle": "answers_oracle.jsonl", "off": "answers_off.jsonl"}[args.mode]
-        asked = ask(run, sample, args.mode, args.every, meter, args.budget, run.out / name)
+        ks = frozenset(int(k) for k in args.ks.split(",") if k)
+        asked = ask(run, sample, args.mode, args.every, meter, args.budget, run.out / name, ks)
         (run.out / "person_end.json").write_text(
             json.dumps(run.person(), ensure_ascii=False, indent=1), encoding="utf-8")
     finally:
@@ -326,6 +330,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mode", choices=("real", "oracle", "off"), default="real")
     ap.add_argument("--resume", action="store_true", help="ask the questions not yet answered, on the fed home")
     ap.add_argument("--every", type=int, default=1, help="every Nth question by its index")
+    ap.add_argument("--ks", default="", help="question indexes, comma separated, in place of --every")
     ap.add_argument("--budget", type=float, default=0.60)
     ap.add_argument("--port", type=int, default=61480, help="the app; the meter takes the next")
     ap.add_argument("--model", default="deepseek/deepseek-v4.1-flash")

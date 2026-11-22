@@ -193,8 +193,8 @@ SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "t
                       ["密码", "口令", "密碼", "パスワード", "비밀번호"])
 # A name with no letters in it: a count, a sign, nothing.
 NO_WORDS = re.compile(r"^[\W\d_]*$")
-# Enter in another site's frame sends what nothing here can see: the floor, a card every time.
-FRAME_WHY = "Enter in a frame from another site, whose box the app cannot see"
+# A press or Enter in another site's frame does what nothing here can see: the floor, a card every time.
+FRAME_WHY = "a press or Enter in a frame from another site, whose controls the app cannot see"
 
 # Readings, ours: what an outward act's words suggest, a hint for the reviewer and the card's wording. A class that
 # says like, for an icon whose only words are a count.

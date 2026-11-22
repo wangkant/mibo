@@ -17,8 +17,8 @@ NAME = "search_past_chats"
 TOOL = {"type": "function", "function": {
     "name": NAME,
     "description": (
-        "Search all your earlier chats with them in this app: when they ask about something you talked about "
-        "before (\"that book we talked about last month\", \"上个月聊的那本书\", \"el restaurante que te dije\") or "
+        "Search all your earlier chats with them in this app: when they ask about what either of you said "
+        "before (\"that book we talked about last month\", \"上个月聊的那本书\", \"el sueño que me contaste\"), or "
         "refer to a talk you cannot see above. Lines come with their dates and chats. Never guess what was said "
         "instead of searching."),
     "parameters": {"type": "object", "properties": {

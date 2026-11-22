@@ -399,7 +399,7 @@ TEXT_JS = r"""function(most) {
   const cell = (c) => (c.innerText || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '/');
   // The words that name a field, as its accessible name takes them.
   const named = (x) => [x.getAttribute('aria-label'), x.getAttribute('placeholder'), x.title,
-    ...(x.getAttribute('aria-labelledby') || '').split(/\s+/).map((i) => i && document.getElementById(i)).map((l) => l && l.innerText),
+    ...(x.getAttribute('aria-labelledby') || '').split(/\s+/).map((i) => i && x.getRootNode().getElementById(i)).map((l) => l && l.innerText),
     ...[...(x.labels || [])].map((l) => l.innerText)].filter(Boolean).join(' ');
   const walk = (n) => {
     if (size > most) return;
@@ -1588,8 +1588,9 @@ class Page:
                 tag, b = tag_of(i), shown(i)
                 if not b or tag not in ("SVG", "CANVAS") or b[2] < 40 or b[3] < 40 or control(i) or holds_control(i):
                     continue
+                # Inside another drawing or a control (a button whose face is a drawing): that one's line stands.
                 a = up_of(i)
-                while a >= 0 and tag_of(a) != "SVG":
+                while a >= 0 and tag_of(a) != "SVG" and not control(a):
                     a = up_of(a)
                 if a >= 0:
                     continue
@@ -2017,8 +2018,8 @@ class Page:
         await self._in(session, "DOM.focus", backendNodeId=local)
 
     async def facts(self, ident: int) -> dict:
-        """FACTS_JS of an element; a part of a clickable shown on its own carries the clickable's class, test id and
-        id too, as the press is the clickable's."""
+        """FACTS_JS of an element; a part of a clickable shown on its own carries the clickable's class too, as the
+        press is the clickable's."""
         facts = await self.on_node(ident, FACTS_JS) or {}
         if ident in self.outer:
             whole = await self.on_node(self.outer[ident], FACTS_JS) or {}
@@ -2036,27 +2037,33 @@ class Page:
         return [p["value"]["objectId"] for p in sorted((p for p in props["result"] if p["name"].isdigit()),
                                                        key=lambda p: int(p["name"]))]
 
-    async def listed_at(self, x: float, y: float) -> tuple[int | None, int | None]:
-        """What a press at a point of the view goes down on, as the last look names it: the nearest element at or
-        over the one there that the look lists (a button, a link, a clickable, a drawn part), and the element
-        there. None for the first when the point is in a frame from another site or on nothing the look lists."""
+    async def under(self, x: float, y: float) -> tuple[int | None, bool, list[int]]:
+        """What a press at a point of the view goes down on: the element there (None on nothing), whether it is in a
+        frame from another site, and every element the last look lists from it up to its document's body, out
+        through shadow roots, the nearest first."""
         hit = (await self.cdp("DOM.getNodeForLocation", x=int(x), y=int(y), includeUserAgentShadowDOM=False)
                ).get("backendNodeId")
         if not hit:
-            return None, None
+            return None, False, []
         if (await self.cdp("DOM.describeNode", backendNodeId=hit))["node"].get("nodeName") in ("IFRAME", "FRAME",
                                                                                                  "OBJECT", "EMBED"):
             # Its document is not this one's: a frame from another site.
-            return None, hit
+            return hit, True, []
+        # A browser that keeps another site's frame in the page's own process answers with the element inside it:
+        # the same press, so the same answer, by whose document the element is in.
+        if await self._call_on("", hit, "function(){return this.ownerDocument.location.origin}") != await self._evaluate(
+                "() => location.origin"):
+            return hit, True, []
         group = "pa-up"
+        listed = []
         try:
             for obj in await self._up("", hit, group):
                 local = (await self.cdp("DOM.describeNode", objectId=obj))["node"].get("backendNodeId")
                 if local in self.last:
-                    return local, hit
+                    listed.append(local)
         finally:
             await self.cdp("Runtime.releaseObjectGroup", objectGroup=group)
-        return None, hit
+        return hit, False, listed
 
     async def handled(self, ident: int) -> bool:
         """Whether a press on the element is heard: a click, pointer, mouse or touch listener on it or on an element

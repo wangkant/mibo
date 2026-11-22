@@ -4,9 +4,11 @@ A judge-model call reads the page chats' new lines with the facts and plans
 already kept, once the talk has gone quiet for a few minutes (or after many
 lines, or once a day), and answers with what to add or end, the plans, the
 summary and the topics. Nothing is overwritten: a new value leaves the old
-fact as past. The request is in the language their lines are in, its examples
-too, and asks for the words of theirs each fact comes from; an answer in another
-language is asked for once more in theirs. Each operation is checked on its own
+fact as past. The request is in the language most of their letters are in (none
+named for a language outside the ten), its examples too, and asks for the words
+of theirs each fact comes from; an answer in another language is asked for once
+more in theirs while the day's calls allow, and the first answer stays wherever
+the second is not said. Each operation is checked on its own
 against the line of theirs that holds its quote (else the lines it cites) and
 fails closed; an unusable answer changes nothing and is tried again later."""
 from __future__ import annotations
@@ -17,6 +19,7 @@ import logging
 import re
 import string
 import time
+import unicodedata
 from collections import Counter
 from datetime import datetime
 from typing import Callable, Optional
@@ -78,7 +81,7 @@ _PERSON_AGAIN = string.Template(
     "own words, each quote copied exactly from their line: one JSON object of the same shape holding only them.")
 # Per chat language: its name, a kept fact and its corrected value, a fact with a day word, a like, the quote of
 # that like, and day words of plans. A language outside these gets the English ones and no name.
-_EXAMPLES = {
+EXAMPLES = {
     "en": ("English", "Teller at a bank in Boston", "Account manager at a bank in Boston",
            "Had a wisdom tooth pulled today", "Badminton, two hours every weekend",
            "I play badminton for two hours every weekend", ("next Wednesday", "early December", "tomorrow")),
@@ -106,25 +109,102 @@ _EXAMPLES = {
            "Сегодня удалили зуб мудрости", "Бадминтон, по два часа каждые выходные",
            "каждые выходные играю в бадминтон по два часа", ("в следующую среду", "в начале декабря", "завтра")),
 }
-# The letters a language detected by its script must show; the Latin-script ones need their common words.
-_SCRIPT = {"zh": "[一-鿿]", "zh-TW": "[一-鿿]", "ja": "[ぁ-ヿ]", "ko": "[가-힣]", "ru": "[Ѐ-ӿ]"}
+_HAN = re.compile(r"[㐀-䶿一-鿿]")
+_KANA = re.compile(r"[ぁ-ゖァ-ヺー]")
 _LETTERS = re.compile(r"[^\W\d_]+")
+# A CJK or Hangul character weighs about as much as three letters of an alphabet.
+_WIDE = 3
+# The script their letters are in leads with this share of their lines' votes (one a line, split by its letters
+# when no script has two thirds of them); Han with kana is Japanese when kana is this share of both.
+_LEAD = 0.6
+_KANA_SHARE = 0.1
+# Letters none of the ten languages writes (Romanian, Vietnamese, Polish, Czech, Turkish, Nordic; Ukrainian,
+# Belarusian, Serbian, Macedonian): in two words, or this share of a script's words, they mean a language
+# outside the ten (one place name does not).
+_LATIN_TEN = frozenset("abcdefghijklmnopqrstuvwxyzàáâãäçèéêëíîïñóôõöúûüÿœß")
+_CYRILLIC_NOT_RU = frozenset("іїєґўђјљњћџѓќѕ")
+_FOREIGN_SHARE = 0.2
+# Russian against its closest neighbour in the same letters, by common words and letters as chatlangs counts
+# them; Italian beside the five Latin-script ones. A language outside the ten that wins means none of them.
+_RIVALS = {
+    "ru": (frozenset({"я", "ты", "мы", "вы", "он", "она", "они", "что", "это", "как", "мне", "меня", "тебя", "очень",
+                      "уже", "есть", "был", "была", "было", "будет", "сегодня", "завтра", "привет", "спасибо",
+                      "хорошо", "только", "ещё", "еще", "тоже", "сейчас", "когда", "потому", "у", "работаю", "живу",
+                      "люблю", "хочу", "могу"}), "ыэё"),
+    "bg": (frozenset({"съм", "си", "сме", "сте", "са", "ще", "като", "аз", "тя", "той", "ние", "вие", "това", "тази",
+                      "този", "има", "няма", "беше", "днес", "утре", "здравей", "благодаря", "ми", "се", "е"}), "ъ"),
+    "it": (frozenset({"il", "di", "che", "è", "sono", "per", "non", "molto", "mio", "mia", "gli", "della", "anche",
+                      "ho", "questo", "perché", "oggi", "domani", "io", "lui", "lei", "ed", "ma", "sempre", "ciao",
+                      "grazie", "ancora"}), "ìò"),
+}
+
+
+def _script(ch: str) -> str:
+    if _HAN.match(ch) or _KANA.match(ch):
+        return "cjk"
+    if "가" <= ch <= "힣" or "ㄱ" <= ch <= "ㆎ":
+        return "hangul"
+    if not ch.isalpha():
+        return ""
+    if "Ѐ" <= ch <= "ӿ":
+        return "cyrillic"
+    return "latin" if unicodedata.name(ch, "").startswith("LATIN") else "other"
+
+
+def _leader(lower: str, specs: dict) -> str:
+    """The language whose common words and letters `lower` shows most, two at least and twice the next one's."""
+    words = _LETTERS.findall(lower)
+    scores = sorted(((sum(w in stop for w in words) + 2 * sum(lower.count(ch) for ch in letters), code)
+                     for code, (stop, letters) in specs.items()), reverse=True)
+    (best, top), (second, _) = scores[0], scores[1]
+    return top if best >= 2 and best >= 2 * second else ""
 
 
 def _their_lang(texts: list, default: str) -> str:
-    """The chat language their lines are in, or "" when they are in another one or nothing says which."""
+    """The chat language their lines are in, or "" when they are in another one or nothing leads."""
+    votes, voters = Counter(), 0
+    for line in texts:
+        weights = Counter()
+        for ch in line:
+            script = _script(ch)
+            if script:
+                weights[script] += _WIDE if script in ("cjk", "hangul") else 1
+        if weights:
+            voters += 1
+            total = sum(weights.values())
+            top, most = weights.most_common(1)[0]
+            # A line mostly in one script votes for it whole; a mixed one splits its vote.
+            for script, n in ([(top, total)] if most >= total * 2 / 3 else weights.items()):
+                votes[script] += n / total
+    if not voters:
+        return ""
+    script, share = votes.most_common(1)[0]
+    if share < _LEAD * voters:
+        return ""
     text = "\n".join(texts)
-    code = chatlangs.detect(text, default)
-    if code in _SCRIPT:
-        return code if re.search(_SCRIPT[code], text) else ""
-    # A Latin-script language by its common words and letters, as detect counts them: two at least, and more
-    # than any other has.
     lower = text.lower()
-    words = _LETTERS.findall(lower)
-    scores = sorted(((sum(w in s.stopwords for w in words) + 2 * sum(lower.count(ch) for ch in s.letters), c)
-                     for c, s in chatlangs.SPECS.items() if c not in _SCRIPT), reverse=True)
-    (best, top), (second, _) = scores[0], scores[1]
-    return top if best >= 2 and best > second else ""
+    if script == "cjk":
+        han, kana = len(_HAN.findall(text)), len(_KANA.findall(text))
+        if kana >= 2 and kana >= _KANA_SHARE * (han + kana):
+            return "ja"
+        # Simplified or Traditional by the characters the two write differently.
+        return chatlangs.detect("".join(_HAN.findall(text)), default)
+    if script == "hangul":
+        return "ko"
+    if script not in ("cyrillic", "latin"):
+        return ""
+    words = [w for w in _LETTERS.findall(lower) if _script(w[0]) == script]
+    foreign = sum(any(ch in _CYRILLIC_NOT_RU if script == "cyrillic" else _script(ch) == "latin" and ch not in _LATIN_TEN
+                      for ch in w) for w in words)
+    if foreign >= 2 or foreign >= _FOREIGN_SHARE * len(words):
+        return ""
+    if script == "cyrillic":
+        specs = {code: _RIVALS[code] for code in ("ru", "bg")}
+    else:
+        specs = {code: (s.stopwords, s.letters) for code, s in chatlangs.SPECS.items() if s.stopwords}
+        specs["it"] = _RIVALS["it"]
+    code = _leader(lower, specs)
+    return code if code in chatlangs.SPECS else ""
 
 
 def _off(text, lang: str) -> bool:
@@ -134,8 +214,8 @@ def _off(text, lang: str) -> bool:
 
 
 def _person_prompt(lang: str) -> str:
-    name, kept, changed, today, like, quote, when = _EXAMPLES.get(lang) or _EXAMPLES["en"]
-    if lang in _EXAMPLES:
+    name, kept, changed, today, like, quote, when = EXAMPLES.get(lang) or EXAMPLES["en"]
+    if lang in EXAMPLES:
         rule = (f"their lines are in {name}. Write every text, when, summary and topic in {name}, in their own "
                 f"words, whatever language the examples or the kept facts are in.")
     else:
@@ -155,15 +235,25 @@ def _off_items(plan: dict, lang: str) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
-def _merged(plan: dict, again: dict, lang: str) -> dict:
-    """`plan` with what was asked again in their language in place of what was not; what is still not stays."""
+def _merged(plan: dict, again: dict, off: dict, lang: str) -> dict:
+    """`plan` with what was asked again (`off`, in turn) in their language: a fact or plan asked again is tried
+    first and the one it stands for after it, when it is not said (`instead`); a topic asked again goes before the
+    one it stands for. Grounding chooses, so a true fact is never lost to a re-asked one that is not."""
     plan = dict(plan)
     for key in ("facts", "plans", "topics"):
-        new = [x for x in again.get(key) or [] if (isinstance(x, dict) and x.get("text") or isinstance(x, str))
-               and not _off(x.get("text") if isinstance(x, dict) else x, lang)]
-        if new:
-            plan[key] = [x for x in plan.get(key) or []
-                         if not _off(x.get("text") if isinstance(x, dict) else x, lang)] + new
+        asked = off.get(key) or []
+        new = [x for x in again.get(key) or [] if isinstance(x, dict) and x.get("text") or isinstance(x, str)]
+        pairs = {id(old): rep for old, rep in zip(asked, new)}
+        out = []
+        for x in plan.get(key) or []:
+            rep = pairs.get(id(x))
+            if rep is None:
+                out.append(x)
+            elif isinstance(rep, dict) and isinstance(x, dict):
+                out.append(dict(rep, instead=x))
+            else:
+                out += [rep, x]
+        plan[key] = out + new[len(asked):]
     if plan.get("summary") and _off(plan["summary"], lang) and not _off(again.get("summary"), lang) \
             and isinstance(again.get("summary"), str) and again["summary"].strip():
         plan["summary"] = again["summary"]
@@ -345,15 +435,17 @@ class Consolidation:
                                reason, fold["why"], max(0, int((next_at - time.time()) // 60)))
                 return
             off = _off_items(plan, lang)
-            if off:
-                # Once more for what came back in another language, rather than refusing it line by line.
+            # Once more for what came back in another language, rather than refusing it line by line; a call like
+            # any other, so not past the day's cap.
+            if off and not budget.allowed(PERSON_KEY, time.time(), int(self.settings.memory_calls_per_day),
+                                          min_gap_s=0.0):
                 asked += [{"role": "assistant", "content": raw}, {"role": "user", "content": _PERSON_AGAIN.substitute(
-                    language=_EXAMPLES[lang][0], items=json.dumps(off, ensure_ascii=False))}]
+                    language=EXAMPLES[lang][0], items=json.dumps(off, ensure_ascii=False))}]
                 try:
                     budget.record_call(PERSON_KEY, time.time())
                     _raw, again = await ask()
                     if isinstance(again, dict):
-                        plan = _merged(plan, again, lang)
+                        plan = _merged(plan, again, off, lang)
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
@@ -384,15 +476,19 @@ class Consolidation:
         dated by the last of them, its day words written as dates; a fact their
         line denies becomes past; plan days worked out in code from their words
         and the day of the line that said them. Each refusal is counted with its
-        reason."""
+        reason; a re-asked op that is not said gives way to the one it stands for."""
         from . import person
         done = Counter()
         tz = self._prompt_tz()
         mine = [r for r in lines.values() if not self._own_line(r)]
         lang = _their_lang([r["text"] for r in mine], self.chat_lang)
         langs = tuple(dict.fromkeys(c for c in (lang, self.chat_lang) if c))
+        todo: list = []
 
-        def refuse(why: str) -> None:
+        def refuse(why: str, op: Optional[dict] = None) -> None:
+            if op is not None and isinstance(op.get("instead"), dict):
+                todo.append(op["instead"])
+                return
             done["refused"] += 1
             done[f"refused.{why}"] += 1
 
@@ -441,7 +537,9 @@ class Consolidation:
                     add.update(kind=row.get("kind", "other"), slot=row.get("slot", ""), changes=row)
                     end["op"] = "changed"
                     break
-        for op in ops:
+        todo[:] = reversed(ops)
+        while todo:
+            op = todo.pop()
             # An object with words and no op is an add: a weak model leaves the op out.
             kind, row = str(op.get("op") or ("add" if op.get("text") else "")), facts.get(str(op.get("id") or ""))
             said = theirs(op)
@@ -457,25 +555,23 @@ class Consolidation:
             elif kind == "add":
                 text = text_of(op)
                 if not text:
-                    refuse("rule")
+                    refuse("rule", op)
                     continue
                 slot = person.slot_key(op.get("slot"))
                 kept = "\n".join(f["text"] for f in store.facts() if slot and person.slot_key(f.get("slot")) == slot)
 
-                def says(s: str, share: float = person.GROUND_SHARE) -> bool:
+                def says(s: str) -> bool:
                     # Their line says it, or its new part beside what still holds of the fact it changes.
                     return person._share(text, s) > 0 and bool(
-                        person.said_part(text, lambda t: person.grounded(t, f"{s}\n{kept}", share)))
-                # A line holding its quote may say it in other words; without one, its words must be theirs.
+                        person.said_part(text, lambda t: person.grounded(t, f"{s}\n{kept}")))
+                # The line holding its quote when it says it, else a line of theirs that does.
                 held = quoted(op)
-                loose = bool(held) and says("\n".join(r["text"] for r in held), person.QUOTED_SHARE)
-                share = person.QUOTED_SHARE if loose else person.GROUND_SHARE
-                src = held if loose else source(op, says)
+                src = held if held and says("\n".join(r["text"] for r in held)) else source(op, says)
                 if not src:
-                    refuse(unsaid(text, held or cited(op)))
+                    refuse(unsaid(text, held or cited(op)), op)
                     continue
                 said = "\n".join(r["text"] for r in src)
-                text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}", share))
+                text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}"))
                 if not store.keeps(str(op.get("kind") or ""), text):
                     refuse("kept")
                     continue
@@ -497,9 +593,9 @@ class Consolidation:
                         store.end_fact(f, now, "replaced")
                 self._tell_profile([put], now)
                 done["add"] += 1
-        for op in (plan.get("plans") or [])[:PERSON_FOLD_OPS]:
-            if not isinstance(op, dict):
-                continue
+        todo[:] = reversed([op for op in (plan.get("plans") or [])[:PERSON_FOLD_OPS] if isinstance(op, dict)])
+        while todo:
+            op = todo.pop()
             kind, row = str(op.get("op") or ("add" if op.get("text") else "")), plans.get(str(op.get("id") or ""))
             if kind in ("done", "cancel") and row is not None:
                 # Only on lines of theirs about it, as for an ended fact; and done only from its day on.
@@ -513,14 +609,12 @@ class Consolidation:
                 text = text_of(op) if kind == "add" else (row or {}).get("text", "")
                 when = str(op.get("when") or "")
                 if not text or not store.keeps("", text):
-                    refuse("rule")
+                    refuse("rule", op)
                     continue
-                # Said in other words on the line holding its quote, else in their words on any of their lines
-                # here ("博士申请文书截止" from "申请博士" and "文书…DDL").
+                # In their words on any of their lines here ("博士申请文书截止" from "申请博士" and "文书…DDL").
                 held = quoted(op) if kind == "add" else []
-                if kind == "add" and not (held and person.grounded(text, held[0]["text"], person.QUOTED_SHARE)) \
-                        and not person.grounded(text, "\n".join(r["text"] for r in mine)):
-                    refuse(unsaid(text, held or cited(op)))
+                if kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in mine)):
+                    refuse(unsaid(text, held or cited(op)), op)
                     continue
                 # The day's words in the line holding its quote or the cited lines, else in a line of theirs about
                 # the plan that has them.
@@ -528,7 +622,7 @@ class Consolidation:
                 found = next(((line, words) for group in groups for line, words in _said_when(group, when)
                               if timewords.resolve_future(words, _t(line), tz, langs)), None)
                 if found is None:
-                    refuse("when")
+                    refuse("when", op)
                     continue
                 said, words = found
                 due = timewords.resolve_future(words, _t(said), tz, langs)

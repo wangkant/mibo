@@ -3,12 +3,14 @@ Playwright MCP, Playwright and Stagehand take them: a drag from a ref or a point
 route points; a point from a ref's top left (Playwright's click position); text selected by what it says; keys
 by Playwright's names and the short ones; a clickable bar of short parts read as one control a part; a control
 with no words named by its picture, its id or its class; a drawing given with its shapes and a row of colour
-boxes with their colours, each with a ref; a text area's text whole. Every press still goes through the gate,
-judged by the control the person would see pressed: a click or a drag at a point of a ref as that ref, a bare
-point as the control the look lists there and a point in another site's frame as a press nothing reads, a part of
-a clickable with what the clickable is, a drawn part by its own name and never by its colour; a point outside the
-view presses nothing, a secret field's text is never selected, and a text area that holds a code is hidden in the
-look and in a read.
+boxes with their colours, each with a ref; a text area's text whole. Every press still goes through the gate: one
+that carries a point (a click at a point, a drag's press and its release) is judged by the strictest of what it
+could be a press on (the ref, every control listed from the element there up to the body, the clickable a part is
+of), a point in another site's frame is held for the card whatever the reviewer says, and one on nothing listed
+is free unless something there hears a press; a drawn part is judged by its own name and never by its colour, and
+a drawing that is a control's face by that control; a point outside the view presses nothing, a secret field's
+text is never selected, and a text area that holds a code is hidden in the look and in a read, in a frame or a
+shadow root too.
 
 The pages are the operating benchmark's (tools/opsite P1-P4) and the tests' own, served by the stand-in site to
 headless Chromium; the steps are scripted as the act tool gives them, the cards answered by the test."""
@@ -22,7 +24,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mibo import installed_browser
+from mibo import installed_browser, review
 from mibo.web import gate, operate, pageops
 from mibo.web.tabs import PaneTab
 
@@ -52,15 +54,21 @@ def on(pane, site, tmp_path):
     loop = asyncio.new_event_loop()
     opened = []
 
-    def open_(path: str, no: tuple = ()):
+    def open_(path: str, no: tuple = (), passes: bool = False):
         cards: list[dict] = []
+        reviews: list[dict] = []
 
         async def ask(card: dict) -> dict:
             cards.append(card)
             return {"yes": card["kind"] not in no, "never": False}
+
+        async def review_(action: dict) -> review.Verdict:
+            # `passes`: a stand-in reviewer that says go to whatever it is asked.
+            reviews.append(action)
+            return review.Verdict("go", "stand-in", "review")
         tab = pane.open_tab(site.url + path)
         hands = operate.Hands(PaneTab(pane, tab), ask=ask, allowed=gate.Allowed(tmp_path / "allow"),
-                              attended=lambda: True)
+                              attended=lambda: True, review=review_ if passes else None)
         opened.append(hands)
 
         def look() -> str:
@@ -79,7 +87,7 @@ def on(pane, site, tmp_path):
             while not (verdict := site.serve.tasks.check(task, site.state()))["ok"] and time.monotonic() - began < wait:
                 time.sleep(0.1)
             return verdict
-        return SimpleNamespace(hands=hands, cards=cards, look=look, steps=steps, ref=ref, check=check,
+        return SimpleNamespace(hands=hands, cards=cards, reviews=reviews, look=look, steps=steps, ref=ref, check=check,
                                page=lambda js: pane.cdp("Runtime.evaluate", {"expression": js, "returnByValue": True},
                                                         tab=tab)["result"].get("value"))
     yield open_
@@ -344,6 +352,128 @@ def test_a_text_area_that_holds_a_code_is_hidden_in_the_look_and_in_a_read(on, s
     read = got["texts"][0]["text"]
     assert "plain words here" in state and "plain words here" in read
     assert not re.search(r"482913|771234", state + read), (state, read)
+
+
+@pytest.mark.browser
+def test_a_text_area_labelled_as_a_code_in_a_frame_or_a_shadow_root_is_hidden_too(on, site):
+    site.put("/coded", '<!doctype html><meta charset="utf-8"><span id="lab">Verification code</span>'
+                       '<textarea aria-labelledby="lab">482913</textarea>')
+    site.put("/codes2", '<!doctype html><meta charset="utf-8"><title>c</title><p>Codes</p>'
+                        '<iframe src="/coded" width="300" height="120"></iframe><div id="host"></div>'
+                        '<textarea id="note">plain words here</textarea><script>'
+                        'host.attachShadow({mode: "open"}).innerHTML = \'<span id="lab2">Verification code</span>'
+                        '<textarea aria-labelledby="lab2">771234</textarea>\';</script>')
+    p = on("/codes2")
+    state = p.look()
+    read = p.steps({"do": "read", "question": "what is on the page"})["texts"][0]["text"]
+    assert "plain words here" in state and "plain words here" in read
+    assert not re.search(r"482913|771234", state + read), (state, read)
+
+
+# Presses that carry a point, each judged by the strictest of what it could be a press on: a Delete button inside a
+# clickable row, a Buy button whose face is a drawing, the price part of a split Subscribe control, a Pay button in
+# another site's frame, a bin a drag lets go on, blank page and a paragraph that hears a click. Each press is heard
+# by the site as GET /hit?<what>.
+STRICT = """<!doctype html><meta charset="utf-8"><title>s</title>
+<style>.row{cursor:pointer;display:flex;gap:16px;width:360px;padding:6px}
+.cta{cursor:pointer;display:flex;gap:8px}</style>
+<div class="row msg" id="row" onclick="hit('open')"><span>From Bob - Hello</span><button id="del"
+ aria-label="Delete message" onclick="event.stopPropagation(); hit('del')">×</button></div>
+<button id="buy" aria-label="Buy" onclick="hit('buy')"><svg width="48" height="48"><rect id="face" x="4" y="4"
+ width="40" height="40" fill="#2e7d32"/></svg></button>
+<div class="cta" onclick="hit('sub')"><span>Subscribe</span><span>$9.99/mo</span></div>
+<p><button id="photo">Photo 1</button> <button id="bin" aria-label="Delete">🗑</button></p>
+<p id="note" onclick="hit('note')">A note on the page</p>
+<iframe id="away" src="AWAY/pay" width="200" height="80"></iframe>
+<div style="height:400px"></div>
+<script>function hit(w) { fetch('/hit?' + w); }
+let held = false;
+photo.addEventListener('mousedown', (e) => { held = true; e.preventDefault(); });
+bin.addEventListener('mouseup', () => { if (held) hit('dropped'); held = false; });</script>"""
+PAY = """<!doctype html><meta charset="utf-8"><button style="width:180px;height:60px"
+ onclick="fetch('/hit?pay')">Pay $20</button>"""
+
+
+@pytest.fixture
+def strict(on, site):
+    """`strict(passes)`: the page open with every card said no to; `passes` a reviewer that says go."""
+    site.put("/strict", STRICT.replace("AWAY", site.url.replace("127.0.0.1", "localhost")))
+    site.put("/pay", PAY)
+
+    def open_(passes: bool = False):
+        p = on("/strict", no=gate.KINDS, passes=passes)
+        p.look()
+        return p
+    return open_
+
+
+def box(p, element: str) -> dict:
+    return json.loads(p.page(f"JSON.stringify({element}.getBoundingClientRect())"))
+
+
+@pytest.mark.browser
+def test_a_point_of_a_rows_ref_on_a_delete_button_in_it_asks_as_delete(strict, site):
+    p = strict()
+    row, button = box(p, "row"), box(p, "del")
+    got = p.steps({"do": "click", "ref": p.ref(r"clickable \"From Bob"), "x": button["x"] - row["x"] + 4,
+                   "y": button["y"] - row["y"] + 4})
+    assert got["status"] == "declined" and p.cards[-1]["kind"] == "delete", got["lines"]
+    time.sleep(0.5)
+    assert hits(site) == []
+
+
+@pytest.mark.browser
+def test_a_point_on_the_drawing_that_is_a_buy_buttons_face_asks_as_order(strict, site):
+    p = strict()
+    # The button stands for the drawing that is its face: the look gives the drawing no shapes of its own.
+    assert "#2e7d32" not in p.look()
+    face = box(p, "face")
+    got = p.steps({"do": "click", "x": face["x"] + 20, "y": face["y"] + 20})
+    assert got["status"] == "declined" and p.cards[-1]["kind"] == "order", got["lines"]
+    time.sleep(0.5)
+    assert hits(site) == []
+
+
+@pytest.mark.browser
+def test_the_price_part_of_a_split_subscribe_control_asks_as_order(strict, site):
+    p = strict()
+    got = p.steps({"do": "click", "ref": p.ref(r'clickable "\$9\.99/mo"')})
+    assert got["status"] == "declined" and p.cards[-1]["kind"] == "order", got["lines"]
+    time.sleep(0.5)
+    assert hits(site) == []
+
+
+@pytest.mark.browser
+def test_a_point_in_another_sites_frame_is_held_for_the_card_even_when_the_reviewer_says_go(strict, site):
+    p = strict(passes=True)
+    frame = box(p, "away")
+    got = p.steps({"do": "click", "x": frame["x"] + 90, "y": frame["y"] + 30})
+    assert got["status"] == "declined" and p.cards and p.cards[-1]["why"] == gate.FRAME_WHY, got["lines"]
+    assert p.reviews == []
+    time.sleep(0.5)
+    assert hits(site) == []
+
+
+@pytest.mark.browser
+def test_a_drag_let_go_on_a_delete_control_asks_as_delete(strict, site):
+    p = strict()
+    got = p.steps({"do": "drag", "ref": p.ref(r'button "Photo 1"'), "to": p.ref(r'button "Delete"')})
+    assert got["status"] == "declined" and p.cards[-1]["kind"] == "delete", got["lines"]
+    time.sleep(0.5)
+    assert hits(site) == []
+
+
+@pytest.mark.browser
+def test_a_point_on_blank_page_is_free_and_one_on_an_unlisted_element_that_hears_a_click_asks(strict, site):
+    p = strict()
+    blank = box(p, "away")
+    got = p.steps({"do": "click", "x": blank["x"] + 300, "y": blank["y"] + 200})
+    assert got["status"] == "ok" and p.cards == [], got["lines"]
+    note = box(p, "note")
+    got = p.steps({"do": "click", "x": note["x"] + 10, "y": note["y"] + note["height"] / 2})
+    assert got["status"] == "declined" and p.cards[-1]["kind"] == "press", got["lines"]
+    time.sleep(0.5)
+    assert hits(site) == []
 
 
 @pytest.mark.browser

@@ -34,9 +34,9 @@ def test_a_search_in_their_own_words_finds_a_past_line_in_each_of_the_ten_langua
     assert {code: line for code, (line, _q) in SAID.items() if line not in found[code]} == {}
 
 
-def test_the_search_tool_shows_its_examples_in_several_languages(app):
-    done = run_turn(app, "hi", say("hi"))
-    tool = next(t["function"] for t in done.asked()[0]["tools"] if t["function"]["name"] == pastchats.NAME)
+def test_the_search_tool_shows_its_examples_in_several_languages():
+    # The tool as the catalogue holds it: a system with more tools may offer it by find_tools, not up front.
+    tool = pastchats.TOOL["function"]
     words = [tool["description"], *(p["description"] for p in tool["parameters"]["properties"].values())]
     examples = [e for w in words for e in re.findall(r'"([^"]+)"', w)]
     shown = {chatlangs.detect(e, "") for e in examples}
