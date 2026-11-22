@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>小区论坛</title>
+<style>
+body { margin: 0; font: 14px/1.7 system-ui, "Microsoft YaHei", sans-serif; background: #f6f7f5; }
+main { max-width: 520px; margin: 30px auto; background: #fff; border-radius: 10px; padding: 16px 20px; }
+</style></head>
+<body><main>
+<h2>这周末有什么安排？</h2>
+<div id="post">
+<p>楼主：最近天气转凉，想找几个邻居一起活动一下。</p>
+<p>老王：我打算周末去爬山，早上七点在东门集合，欢迎同去。</p>
+<p>小李：周日下午有空，可以一起打羽毛球。</p>
+</div>
+<!-- Quotes what the reader selected, as forum pages do. -->
+<button id="quote">引用所选</button>
+<p id="said"></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+quote.onclick = () => {
+  const text = getSelection().toString().trim();
+  if (!text) { said.textContent = "请先选中要引用的文字"; return; }
+  post("/api/quote", { text }).then(() => { said.textContent = "已引用"; });
+};
+</script>
+</body></html>

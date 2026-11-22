@@ -70,6 +70,10 @@ logger = logging.getLogger("mibo.web")
 
 # Presses of one control in one click (`times`): a stepper's +, a calendar's next-month arrow.
 TIMES_MAX = 24
+# Points a drag passes through on its way (a circle drawn, a path traced), at most.
+ROUTE_MAX = 40
+# The roles a look gives drawn parts (pageops drawn_lines), whose words are colours and shapes, never a name.
+DRAWN = ("shape", "box", "drawing")
 # Steps one act call takes (the reply model's act tool).
 STEPS_MAX = 8
 # How long after an action a request it set off is waited for; after a confirmed press, how long its own
@@ -200,7 +204,7 @@ SAID = {
            "chose": "网页将保存刚才的选择", "leave": "网页提示：离开此网页后，未保存的内容可能会丢失。",
            "double": "双击「{name}」", "right": "右键单击「{name}」", "drag": "将「{name}」拖到「{to}」",
            "shows": "等待「{text}」出现", "gone": "等待「{text}」消失", "read": "读取网页内容：{text}",
-           "more": "加载更多网页内容：{text}"},
+           "more": "加载更多网页内容：{text}", "select": "选中「{name}」中的文字{text}"},
     "en": {"click": "Click “{name}”", "type": "Type “{text}” into “{name}”", "press": "Press {key}",
            "hover": "Point at “{name}”", "down": "Scroll down", "up": "Scroll up", "in": " in “{name}”",
            "until": " until “{text}” shows", "navigate": "Open {host}", "back": "Go back",
@@ -210,7 +214,8 @@ SAID = {
            "leave": "The page warns that what is not saved may be lost if you leave it.",
            "double": "Double-click “{name}”", "right": "Right-click “{name}”", "drag": "Drag “{name}” onto “{to}”",
            "shows": "Wait for “{text}” to show", "gone": "Wait for “{text}” to go",
-           "read": "Read the page: {text}", "more": "Load more of the page: {text}"},
+           "read": "Read the page: {text}", "more": "Load more of the page: {text}",
+           "select": "Select the text{text} in “{name}”"},
 }
 # Requests the page makes while the character operates that are paused and looked at: navigations, and the kinds
 # that can send or change something. Images, scripts, styles, fonts and media load untouched until something is
@@ -1126,6 +1131,10 @@ class Hands:
             return say["find"].format(text=clip(str(action.get("text") or ""), 30))
         if do == "read":
             return say["more" if action.get("more") else "read"].format(text=clip(str(action.get("question") or ""), 30))
+        if do == "select":
+            words = clip(" ".join(str(action.get("text") or "").split()), 30)
+            return say["select"].format(name=clip(" ".join(str(name or action.get("element") or "").split()), 30),
+                                        text=(f"「{words}」" if self.lang == "zh" else f" “{words}”") if words else "")
         return ""
 
     async def act(self, action: dict) -> dict:
@@ -1175,25 +1184,29 @@ class Hands:
         if "id" in action and action["id"] in (None, ""):
             # {"id": null, "text": "保存"}: the words are the target.
             action = {k: v for k, v in action.items() if k != "id"}
-        if do in ("click", "type", "hover") and "id" not in action:
-            if do in ("click", "hover") and str(action.get("text") or "").strip():
+        point = isinstance(action.get("x"), (int, float)) and isinstance(action.get("y"), (int, float))
+        if do in ("click", "type", "hover", "select") and "id" not in action:
+            if do in ("click", "hover", "select") and str(action.get("text") or "").strip():
                 # Something shown with no id, by the words it shows.
                 found = await self.page.locate(str(action["text"])) or await self.page.seek(str(action["text"]))
                 if found is None:
                     return {"status": "missing", "line": f"[missing] nothing on the page shows "
                                                          f"{clip(str(action['text']), 60)!r}; look again"}
                 action = {**action, "id": found, "element": action.get("element") or action["text"]}
-            elif not (do == "click" and isinstance(action.get("x"), (int, float))
-                      and isinstance(action.get("y"), (int, float))):
+            elif not (do in ("click", "hover") and point):
                 return {"status": "failed", "line": f"[failed] {do} needs a ref from the latest look"}
         try:
             if do == "click" and "id" not in action:
                 return await self._click_point(float(action["x"]), float(action["y"]), str(action.get("element") or ""))
+            if do == "select":
+                return await self._select(int(action["id"]), str(action.get("text") or ""),
+                                          str(action.get("element") or ""))
             if do == "click":
                 times = int(action["times"]) if str(action.get("times", "")).isdigit() else 1
                 how = "double" if action.get("double") is True else "right" if action.get("button") == "right" else ""
                 return await self._click(int(action["id"]), str(action.get("element") or ""),
-                                         max(1, min(times, TIMES_MAX)), how)
+                                         max(1, min(times, TIMES_MAX)), how,
+                                         (float(action["x"]), float(action["y"])) if point else None)
             if do == "type":
                 return await self._type(int(action["id"]), str(action.get("text") or ""),
                                         action.get("enter") is True, str(action.get("element") or ""),
@@ -1201,13 +1214,14 @@ class Hands:
             if do == "drag":
                 return await self._drag(action)
             if do == "hover":
-                ident = await self._fresh(int(action["id"]))
-                if ident is None:
+                ident = await self._fresh(int(action["id"])) if "id" in action else None
+                if "id" in action and ident is None:
                     return {"status": "failed", "line": f"[failed] [{action['id']}] is not on the page now; look again"}
-                said = self._said(action, self.page.last.get(ident, ("", ""))[1])
+                said = self._said(action, self.page.last.get(ident, ("", ""))[1] or SAID[self.lang]["point"])
                 self.tell(said)
                 before = await self._seen(ident)
-                line = await self.page.hover(ident)
+                line = await (self.page.hover(ident, float(action["x"]), float(action["y"])) if point
+                              else self.page.hover(ident))
                 # A menu opened by a style alone changes nothing the page counts: what came up says it opened.
                 return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
                         "line": line + await self._changed(ident, before, line, CAME_UP_HOVER)}
@@ -1351,10 +1365,12 @@ class Hands:
                    f"Those words are shown with no id ({quote(clip(best, 60))}): click or hover them by their text")
                 + "; look again")
 
-    async def _click(self, ident: int, element: str, times: int = 1, how: str = "") -> dict:
-        """A click; `how` "double" or "right". A double click on a control with an effect outside would press it
-        twice and is refused; a right click presses nothing but opens the page's menu, so what it sends is watched
-        as a bare submission's press is."""
+    async def _click(self, ident: int, element: str, times: int = 1, how: str = "",
+                     at: Optional[tuple[float, float]] = None) -> dict:
+        """A click; `how` "double" or "right"; `at` a point from its top left to press it at (judged as the control
+        itself is). A double click on a control with an effect outside would press it twice and is refused; a
+        right click presses nothing but opens the page's menu, so what it sends is watched as a bare submission's
+        press is."""
         fresh = await self._fresh(ident)
         if fresh is None:
             return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
@@ -1365,7 +1381,7 @@ class Hands:
         if other:
             return {"status": "failed", "line": other}
         url = await self._url()
-        kind, why = gate.classify("click", "" if role == "text" and facts.get("text") else name, role, facts, url)
+        kind, why = await self._judged(ident, role, name, facts, url)
         if how == "right":
             kind, why, times = "watch", "a right click opens the page's own menu", 1
         elif how == "double" and kind and kind != "watch":
@@ -1396,19 +1412,19 @@ class Hands:
             if not again:
                 self.tell(said)
                 seen.update(await self._seen(target), target=target)
-            if not how and (target != ident or not await self.page.alive(target)):
+            if not how and not at and (target != ident or not await self.page.alive(target)):
                 # The page keeps drawing this control anew: found and pressed in one step, never by a point
                 # another row may have moved under.
                 line = await self.page.click_again(target)
             else:
-                line = await self.page.click(target, how)
+                line = await self.page.click(target, how, *(at or (None, None)))
             here = self.page.describe(target)
             return line.replace(here, here + more, 1)
         if kind and kind != "watch":
             if await self.page.alive(ident):
                 # A press that cannot land (covered, hidden, turned off) is not put to the person on a card.
                 try:
-                    await self.page._point(ident)
+                    await (self.page.at(ident, *at) if at else self.page._point(ident))
                 except RuntimeError as error:
                     self.tell(said)
                     return {"status": "failed", "said": said,
@@ -1499,40 +1515,87 @@ class Hands:
             self._watching = None
         return line
 
+    async def _judged(self, ident: Optional[int], role: str, name: str, facts: dict, url: str) -> tuple[str, str]:
+        """The gate's kind for a press on a control the last look lists, by the control itself: its role, its name
+        and its facts. A drawn part is judged by its own name and label, never by the colour and shape words the
+        look gives the model, and one with none that hears a press asks as a press nothing reads; so does a press
+        on nothing the look lists (`ident` None: a frame from another site)."""
+        if ident is None:
+            return "outward", "a press where the look lists nothing (a frame from another site), which nothing reads"
+        if role in DRAWN:
+            kind, why = gate.classify("click", "", role, facts, url)
+            if not kind and not (facts.get("label") or facts.get("tip")) and await self.page.handled(ident):
+                return "outward", "a drawn part with no name that answers a press"
+            return kind, why
+        return gate.classify("click", "" if role == "text" and facts.get("text") else name, role, facts, url)
+
+    async def _pressed_on(self, ident: Optional[int], x: Optional[float], y: Optional[float]) -> tuple[
+            Optional[int], int, dict, str, str]:
+        """What a press goes down on, for the gate: an id is that control, the point (x, y from its top left) only
+        where on it; a bare point of the view is the control there as the last look lists it (pageops.listed_at),
+        or None. (the control, the element pressed, its facts, its role and name); raises why the point cannot
+        land."""
+        if ident is not None:
+            if x is not None:
+                await self.page.at(ident, x, y)
+            role, name = self.page.last.get(ident, ("", ""))
+            return ident, ident, await self.page.facts(ident), role, name
+        p = await self.page.at(None, x, y)
+        listed, hit = await self.page.listed_at(p["x"], p["y"])
+        if hit is None:
+            raise RuntimeError("nothing is there to press")
+        role, name = self.page.last.get(listed, ("", "")) if listed else ("", "")
+        return listed, hit, await self.page.facts(listed or hit), role, name
+
     async def _click_point(self, x: float, y: float, element: str) -> dict:
-        """A click on a point of a drawn page (from a picture), through the gate like any other."""
-        node = await self.page.cdp("DOM.getNodeForLocation", x=int(x), y=int(y), includeUserAgentShadowDOM=False)
-        ident = node.get("backendNodeId")
-        facts = await self.page.facts(ident) if ident else {}
+        """A click on a point of the view as a picture shows it, through the gate as a click on the control the last
+        look lists there."""
+        try:
+            listed, hit, facts, role, name = await self._pressed_on(None, x, y)
+        except RuntimeError as error:
+            return {"status": "failed", "line": f"[failed] click at {round(x)},{round(y)}: {clip(str(error), 200)}; "
+                                                f"nothing was pressed"}
         url = await self._url()
-        kind, why = gate.classify("click", "", str(facts.get("role") or facts.get("tag") or ""), facts, url)
-        said = self._said({"do": "click"}, element if ident is None or not facts.get("text") else facts["text"])
+        kind, why = await self._judged(listed, role, name, facts, url)
+        said = self._said({"do": "click"}, (name if role not in DRAWN else "") or facts.get("text") or element)
 
         async def press() -> str:
             self.tell(said)
             return await self.page.click_point(x, y)
-        if kind and kind != "watch" and ident:
-            return {**await self._outside(kind, why, ident, facts.get("text") or facts.get("label") or "", facts, url,
-                                          "", press), "said": said}
+        if kind and kind != "watch":
+            return {**await self._outside(kind, why, listed or hit, facts.get("text") or facts.get("label") or "",
+                                          facts, url, "", press), "said": said}
+        before = await self._seen(None)
         line = await self._watched(press, str(facts.get("text") or element), facts,
                                    PRESS_TAIL_S if kind == "watch" else HEAR_S)
-        return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line, "said": said}
+        return {"status": "ok" if line.startswith("[ok]") else "failed", "line": line + await self._changed(
+            None, before, line), "said": said}
 
     async def _drag(self, action: dict) -> dict:
-        """One control dragged onto another, each by its id and name or by the words it shows (`text`, `to_text`):
-        pressed, moved and let go (pageops.drag), watched as a bare submission's press is, so a page that saves the
-        move asks on a card first."""
+        """A drag as Playwright and Stagehand take one: from a control (its id or the words it shows, `text`) or a
+        point (x, y: from the control's top left, or of the view) to another control (`to`, `to_text`) or point
+        (to_x, to_y), through `route` points on the way (pageops.drag). Its press is judged as a click on what it
+        goes down on would be, so a drag that starts on a send button asks first; any other is watched as a bare
+        submission's press is, so a page that saves the move asks on a card first."""
         ends = []
-        for ident, words, element in ((action.get("id"), action.get("text"), action.get("element")),
-                                      (action.get("to"), action.get("to_text"), action.get("target"))):
+        for ident, words, element, x, y in (
+                (action.get("id"), action.get("text"), action.get("element"), action.get("x"), action.get("y")),
+                (action.get("to"), action.get("to_text"), action.get("target"), action.get("to_x"), action.get("to_y"))):
             if isinstance(ident, str) and not ident.strip().isdigit():
                 ident, words = None, words or ident
-            if ident in (None, ""):
-                found = await self.page.locate(str(words)) if str(words or "").strip() else None
+            at = {"x": float(x), "y": float(y)} if isinstance(x, (int, float)) and isinstance(y, (int, float)) else {}
+            if ident in (None, "") and str(words or "").strip():
+                found = await self.page.locate(str(words))
                 if found is None:
                     return {"status": "missing", "line": f"[missing] nothing on the page shows "
                                                          f"{clip(str(words or ''), 60)!r}; look again"}
-                ends.append((found, str(element or words)))
+                ends.append(({"id": found, **at}, str(element or words)))
+                continue
+            if ident in (None, ""):
+                if not at:
+                    return {"status": "failed", "line": "[failed] drag needs each end as a ref, the words it shows, "
+                                                        "or a point x, y (to_x, to_y)"}
+                ends.append((at, SAID[self.lang]["point"]))
                 continue
             fresh = await self._fresh(int(ident))
             if fresh is None:
@@ -1541,12 +1604,43 @@ class Hands:
             other = self._other(fresh, str(element or ""), role, name, await self.page.facts(fresh))
             if other:
                 return {"status": "failed", "line": other}
-            ends.append((fresh, name or str(element or "")))
+            ends.append(({"id": fresh, **at}, name or str(element or "")))
         (start, start_name), (end, end_name) = ends
+        if "id" not in end and "id" in start and "x" in start:
+            # to_x, to_y with no `to` are measured as x, y are: a line drawn across one drawing.
+            end, end_name = {**end, "id": start["id"]}, start_name
+        route =[p for p in action.get("route") or [] if isinstance(p, (list, tuple)) and len(p) == 2
+                 and all(isinstance(v, (int, float)) for v in p)][:ROUTE_MAX]
         said = self._said({"do": "drag", "target": end_name}, start_name)
+        try:
+            listed, hit, facts, role, name = await self._pressed_on(start.get("id"), start.get("x"), start.get("y"))
+        except RuntimeError as error:
+            return {"status": "failed", "line": f"[failed] drag: {clip(str(error), 200)}; nothing was pressed"}
+        url = await self._url()
+        kind, why = await self._judged(listed, role, name, facts, url)
+
+        async def press() -> str:
+            self.tell(said)
+            return await self.page.drag(start, end, route)
+        if kind and kind != "watch":
+            return {**await self._outside(kind, why, listed or hit, facts.get("text") or facts.get("label")
+                                          or start_name, facts, url, "", press), "said": said}
+        before = await self._seen(None)
+        line = await self._watched(press, said, facts)
+        return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
+                "line": line + await self._changed(None, before, line)}
+
+    async def _select(self, ident: int, words: str, element: str) -> dict:
+        """Text selected in a control or a block of text (pageops.select_text), for a page that acts on what is
+        selected; it presses nothing and nothing reaches the clipboard."""
+        fresh = await self._fresh(ident)
+        if fresh is None:
+            return {"status": "failed", "line": f"[failed] [{ident}] is not on the latest page; look again"}
+        role, name = self.page.last.get(fresh, ("", ""))
+        said = self._said({"do": "select", "text": words}, name or element)
         self.tell(said)
         before = await self._seen(None)
-        line = await self._watched(lambda: self.page.drag(start, end), said, await self.page.facts(start))
+        line = await self.page.select_text(fresh, words)
         return {"status": "ok" if line.startswith("[ok]") else "failed", "said": said,
                 "line": line + await self._changed(None, before, line)}
 
@@ -1892,14 +1986,15 @@ async def look_at(page: Page, most: int, *, ref: Optional[int] = None, interacti
     return found
 
 
-VERBS = ("click", "type", "select_option", "key", "hover", "drag", "scroll_to", "wait_for", "upload_file", "go",
-         "back", "read")
+VERBS = ("click", "type", "select_option", "key", "hover", "drag", "select_text", "scroll_to", "wait_for",
+         "upload_file", "go", "back", "read")
 
 
 def action_of(step: dict) -> dict:
     """One step of the act tool (its converged verbs, Playwright's and the browser agents' names) as the Hands
-    action it is: click {ref | text | x,y, double, right}, type {ref, text, submit, add}, select_option {ref,
-    values}, key {keys}, hover {ref}, drag {ref, to}, scroll_to {ref?, text?, up}, wait_for {text | gone},
+    action it is: click {ref | text | x,y, ref with x,y from its top left, double, right}, type {ref, text,
+    submit, add}, select_option {ref, values}, key {keys}, hover {ref | text | x,y}, drag {ref | text | x,y, to |
+    to_text | to_x,to_y, route}, select_text {ref, text?}, scroll_to {ref?, text?, up}, wait_for {text | gone},
     upload_file {ref, file: the file chooser it opens is given that path}, go {url}, back, read {question,
     look_for?, section?}. Every step keeps its "what" line. ValueError for a verb it does not know."""
     verb = step.get("do")
@@ -1928,10 +2023,17 @@ def action_of(step: dict) -> dict:
         return {**took, "do": "type", "text": ", ".join(str(v) for v in values if v is not None)}
     if verb == "key":
         return {**took, "do": "press", "key": str(step.get("keys") or "")}
+    point = {key: step[key] for key in ("x", "y") if isinstance(step.get(key), (int, float))}
     if verb == "hover":
-        return {**took, "do": "hover"}
+        return {**took, "do": "hover", **point, **({"text": str(step["text"])} if step.get("text") else {})}
     if verb == "drag":
-        return {**took, "do": "drag", "to": step.get("to")}
+        return {**took, "do": "drag", "to": step.get("to"), **point,
+                **{key: step[key] for key in ("to_x", "to_y") if isinstance(step.get(key), (int, float))},
+                **({"text": str(step["text"])} if step.get("text") else {}),
+                **({"to_text": str(step["to_text"])} if step.get("to_text") else {}),
+                **({"route": step["route"]} if isinstance(step.get("route"), list) else {})}
+    if verb == "select_text":
+        return {**took, "do": "select", "text": str(step.get("text") or "")}
     if verb == "scroll_to":
         return {**took, "do": "scroll", "direction": "up" if step.get("up") is True else "down",
                 "until": str(step.get("text") or "")}

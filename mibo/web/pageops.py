@@ -46,6 +46,7 @@ import difflib
 import json
 import math
 import re
+import sys
 import time
 from typing import Any
 from urllib.parse import urlsplit
@@ -64,6 +65,8 @@ SET_BY_VALUE = {"date": "YYYY-MM-DD", "time": "HH:MM, 24-hour", "datetime-local"
                 "month": "YYYY-MM", "week": "YYYY-Www", "color": "#rrggbb", "range": "a number"}
 # How much of a field's value and how many of a list's options a line shows.
 VALUE_MAX = 400
+# A text area's text is shown whole up to this many characters: it is there to be read or typed again.
+AREA_MAX = 3000
 OPTIONS_MAX = 40
 CONTEXT_LOSS = re.compile(r"Execution context was destroyed|Cannot find context|Cannot find default execution "
                           r"context|Inspected target navigated|Target closed|No frame")
@@ -86,7 +89,8 @@ SECRET_LABEL = re.compile(r"password|passcode|passwd|\b(?:card|cc|acct)[\s._-]?(
                           re.I)
 SECRET_AUTOCOMPLETE = re.compile(r"^(?:cc-.*|one-time-code|current-password|new-password)$", re.I)
 SECRET_SELECTOR = ("input[type=password],input[autocomplete^=cc-],input[autocomplete=one-time-code],"
-                   "input[autocomplete=current-password],input[autocomplete=new-password]")
+                   "input[autocomplete=current-password],input[autocomplete=new-password],textarea[autocomplete^=cc-],"
+                   "textarea[autocomplete=one-time-code]")
 # A pointer cursor on these says nothing new: the tree already names them, or they hold the page.
 POINTER_SKIP = {"A", "BUTTON", "INPUT", "SELECT", "TEXTAREA", "LABEL", "OPTION", "SUMMARY", "HTML", "BODY", "IFRAME",
                 "VIDEO", "AUDIO", "CANVAS"}
@@ -114,12 +118,32 @@ ACTION_WAITS = (0.0, 0.02, 0.1, 0.1, 0.5)
 NOT_YET = re.compile(r"Target (hidden|disabled|covered|outside viewport|not stable)")
 # Keys a press may name; a chord holds them with modifiers, by Playwright's names and the usual short ones, as
 # CDP's mask (Alt 1, Control 2, Meta 4, Shift 8); one letter, digit or sign is a key too.
-KEYS = {"Enter": 13, "Escape": 27, "Tab": 9, "Backspace": 8, "Delete": 46, "ArrowDown": 40, "ArrowUp": 38,
-        "ArrowLeft": 37, "ArrowRight": 39, "PageDown": 34, "PageUp": 33, "Home": 36, "End": 35, " ": 32}
-KEY_NAMES = {**{k.lower(): k for k in KEYS}, "space": " ", "esc": "Escape", "del": "Delete", "return": "Enter"}
-MODIFIERS = {"alt": ("Alt", 1), "control": ("Control", 2), "ctrl": ("Control", 2), "meta": ("Meta", 4),
-             "cmd": ("Meta", 4), "command": ("Meta", 4), "shift": ("Shift", 8)}
-SIGNS = {"/": 191, ".": 190, ",": 188, "-": 189, "=": 187, ";": 186, "'": 222, "[": 219, "]": 221}
+KEYS = {"Enter": 13, "Escape": 27, "Tab": 9, "Backspace": 8, "Delete": 46, "Insert": 45, "ArrowDown": 40,
+        "ArrowUp": 38, "ArrowLeft": 37, "ArrowRight": 39, "PageDown": 34, "PageUp": 33, "Home": 36, "End": 35, " ": 32,
+        **{f"F{n}": 111 + n for n in range(1, 13)}}
+SIGNS = {"/": 191, ".": 190, ",": 188, "-": 189, "=": 187, ";": 186, "'": 222, "[": 219, "]": 221, "`": 192,
+         "\\": 220}
+# Playwright's names (keyboard.press: ArrowLeft, KeyA, Digit1, Backquote, Space), the short ones people and models
+# write (Left, Down, Esc, PgDn, Ins) and the signs by their code names.
+KEY_NAMES = {**{k.lower(): k for k in KEYS}, "space": " ", "esc": "Escape", "del": "Delete", "return": "Enter",
+             "ins": "Insert", "left": "ArrowLeft", "right": "ArrowRight", "up": "ArrowUp", "down": "ArrowDown",
+             "pgup": "PageUp", "pgdn": "PageDown", "pagedn": "PageDown", "backquote": "`", "minus": "-",
+             "equal": "=", "backslash": "\\", "bracketleft": "[", "bracketright": "]", "semicolon": ";",
+             "quote": "'", "comma": ",", "period": ".", "slash": "/",
+             **{f"key{c}": c for c in "abcdefghijklmnopqrstuvwxyz"}, **{f"digit{n}": str(n) for n in range(10)}}
+MODIFIERS = {"alt": ("Alt", 1), "option": ("Alt", 1), "control": ("Control", 2), "ctrl": ("Control", 2),
+             "meta": ("Meta", 4), "cmd": ("Meta", 4), "command": ("Meta", 4), "shift": ("Shift", 8),
+             # Playwright's ControlOrMeta: Meta on a Mac, Control elsewhere.
+             "controlormeta": ("Meta", 4) if sys.platform == "darwin" else ("Control", 2)}
+# Parts of a clickable given their own ids: at most this many side by side, each of at most this many characters.
+PARTS_MAX = 8
+PART_WORDS = 24
+# What an svg draws that gets a line and an id, at most SHAPES_MAX a drawing; drawn things in one look at most.
+SHAPES = {"circle", "ellipse", "rect", "polygon", "polyline", "path", "line", "text", "image"}
+SHAPES_MAX = 30
+DRAWN_MAX = 60
+# A knob or an icon is at most this wide and high, in pixels.
+SMALL = 48
 # The ids in a frame from another site: the frame's number in the page times this, plus the id in its own process.
 FRAME_IDS = 10_000_000
 # Frames the person fills in themselves, beside browsed.secret's sign-in and payment addresses: card fields of the
@@ -161,6 +185,29 @@ def chord(keys: str) -> tuple[str, int, str]:
     mods = dict(MODIFIERS[p.lower()] for p in held)
     named = [m for m in ("Control", "Alt", "Meta", "Shift") if m in mods]
     return "+".join(named + ["Space" if key == " " else key]), sum(mods[m] for m in named), key
+
+
+def colour(css: str) -> str:
+    """A computed colour ("rgb(128, 128, 128)") as a person names it, with its hex: "grey #808080"; "" for none or
+    one that cannot be seen."""
+    found = re.match(r"rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?", css or "")
+    if not found or (found.group(4) and float(found.group(4).rstrip("%")) == 0):
+        return ""
+    r, g, b = (min(255, round(float(v))) for v in found.groups()[:3])
+    hi, lo = max(r, g, b) / 255, min(r, g, b) / 255
+    light, chroma = (hi + lo) / 2, hi - lo
+    if chroma < 0.12:
+        name = "black" if light < 0.15 else "white" if light > 0.9 else "grey"
+    else:
+        top = max(r, g, b)
+        hue = (60 * (((g - b) / 255 / chroma) % 6) if top == r else 60 * ((b - r) / 255 / chroma + 2) if top == g
+               else 60 * ((r - g) / 255 / chroma + 4))
+        name = next(n for edge, n in ((15, "red"), (40, "orange"), (65, "yellow"), (165, "green"), (195, "cyan"),
+                                      (255, "blue"), (285, "purple"), (330, "magenta"), (345, "pink"), (361, "red"))
+                    if hue < edge)
+        if name in ("orange", "red") and light < 0.45 and chroma < 0.6:
+            name = "brown"
+    return f"{name} #{r:02x}{g:02x}{b:02x}"
 
 
 def quote(s: str) -> str:
@@ -344,16 +391,29 @@ SCREEN_JS = r"""() => {
 # out, and so are the site's navigation and footer (nav, footer and their ARIA roles), as Readability and
 # trafilatura drop them. With `this` an element, only what is in it.
 TEXT_JS = r"""function(most) {
+  const secretWords = new RegExp(""" + json.dumps(SECRET_LABEL.pattern) + r""", 'i');
   const root = this && this.nodeType === 1 ? this : document.body;
   const out = [];
   let line = [], size = 0;
   const end = () => { const t = line.join(' ').replace(/\s+/g, ' ').trim(); if (t) { out.push(t); size += t.length; } line = []; };
   const cell = (c) => (c.innerText || '').replace(/\s+/g, ' ').trim().replace(/\|/g, '/');
+  // The words that name a field, as its accessible name takes them.
+  const named = (x) => [x.getAttribute('aria-label'), x.getAttribute('placeholder'), x.title,
+    ...(x.getAttribute('aria-labelledby') || '').split(/\s+/).map((i) => i && document.getElementById(i)).map((l) => l && l.innerText),
+    ...[...(x.labels || [])].map((l) => l.innerText)].filter(Boolean).join(' ');
   const walk = (n) => {
     if (size > most) return;
     if (n.nodeType === 3) { if (n.textContent.trim()) line.push(n.textContent); return; }
     if (n.nodeType !== 1) return;
     const tag = n.tagName;
+    // What a text area holds is its text, whole (a field's value is on its line of the state), unless the look
+    // hides it as secret: by its autocomplete, or by the words that name it.
+    if (tag === 'TEXTAREA' && n.value.trim() && n.checkVisibility() && !secretWords.test(named(n)) &&
+        !/^(cc-|one-time-code|current-password|new-password)/i.test(n.getAttribute('autocomplete') || '')) {
+      end();
+      for (const t of n.value.split('\n')) if (t.trim()) { out.push(t.trim()); size += t.length; }
+      return;
+    }
     if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'INPUT', 'TEXTAREA', 'SELECT', 'svg'].includes(tag)) return;
     if (tag === 'SLOT') { const given = n.assignedNodes({flatten: true}); for (const c of given.length ? given : n.childNodes) walk(c); return; }
     if (!n.checkVisibility({checkVisibilityCSS: true})) return;
@@ -437,6 +497,83 @@ PLACE_JS = r"""function() {
   for (let up = 0; up < 5 && e.parentElement && e.parentElement !== document.body
        && !words(e.previousElementSibling) && !words(e.nextElementSibling); up++) e = e.parentElement;
   return {before: words(e.previousElementSibling), after: words(e.nextElementSibling)};
+}"""
+
+# Playwright's hit check for a click at a position: what the point {x, y} from the element's top left falls on is the
+# element or a part of it (a shape of a drawing, the knob of a track).
+HIT_JS = r"""function(at) {
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  const r = e.getBoundingClientRect();
+  const hit = e.getRootNode().elementFromPoint(r.x + at.x, r.y + at.y);
+  return {on: !!hit && (hit === e || e.contains(hit)), hit: hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') : ''};
+}"""
+
+# An element and the elements over it, out through shadow roots, up to its document's body: where a press there is
+# heard, and what a look lists of it.
+UP_JS = r"""function() {
+  const out = [];
+  let e = this.nodeType === 1 ? this : (this.parentElement || (this.parentNode && this.parentNode.host));
+  while (e && out.length < 30 && e !== e.ownerDocument.body && e !== e.ownerDocument.documentElement) {
+    out.push(e);
+    e = e.parentElement || (e.parentNode instanceof ShadowRoot ? e.parentNode.host : null);
+  }
+  return out;
+}"""
+# The listeners that hear a press.
+PRESS_EVENTS = re.compile(r"^(?:click|dblclick|auxclick|mouse(?:down|up)|pointer(?:down|up)|touch(?:start|end))$")
+
+# Playwright's selectText, with the words to select inside the element (spaces and case loosely): a field's text by
+# setSelectionRange, else a Range over the text it shows. The text selected, or null when the words are not there.
+SELECT_TEXT_JS = r"""function(want) {
+  const e = this.nodeType === Node.ELEMENT_NODE ? this : this.parentElement;
+  const squash = (s) => s.replace(/\s+/g, ' ').trim();
+  const find = (flat, w) => { let i = flat.indexOf(w); if (i < 0) i = flat.toLowerCase().indexOf(w.toLowerCase()); return i; };
+  want = squash(want || '');
+  if (typeof e.setSelectionRange === 'function' && typeof e.value === 'string') {
+    e.focus();
+    let a = 0, b = e.value.length;
+    if (want) {
+      // Each character of the squashed value, at its place in the value.
+      const at = [];
+      let flat = '';
+      for (let i = 0; i < e.value.length; i++) {
+        const c = /\s/.test(e.value[i]) ? ' ' : e.value[i];
+        if (c === ' ' && (flat.endsWith(' ') || !flat)) continue;
+        flat += c; at.push(i);
+      }
+      const i = find(flat, want);
+      if (i < 0) return null;
+      a = at[i]; b = at[i + want.length - 1] + 1;
+    }
+    e.setSelectionRange(a, b);
+    return e.value.slice(a, b);
+  }
+  const walk = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+  const at = [];
+  let flat = '';
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    if (!n.parentElement || !n.parentElement.checkVisibility()) continue;
+    for (let i = 0; i < n.data.length; i++) {
+      const c = /\s/.test(n.data[i]) ? ' ' : n.data[i];
+      if (c === ' ' && (flat.endsWith(' ') || !flat)) continue;
+      flat += c; at.push([n, i]);
+    }
+  }
+  if (flat.endsWith(' ')) { flat = flat.slice(0, -1); at.pop(); }
+  if (!at.length) return null;
+  let a = 0, b = flat.length - 1;
+  if (want) {
+    const i = find(flat, want);
+    if (i < 0) return null;
+    a = i; b = i + want.length - 1;
+  }
+  const r = document.createRange();
+  r.setStart(at[a][0], at[a][1]);
+  r.setEnd(at[b][0], at[b][1] + 1);
+  const s = getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+  return s.toString();
 }"""
 
 POINT_JS = r"""function(editableCover) {
@@ -902,6 +1039,8 @@ class Page:
         # Role and name of every id in the last print, and which of them are secret.
         self.last: dict[int, tuple[str, str]] = {}
         self.secrets: set[int] = set()
+        # A part of a clickable shown as a control of its own -> the clickable round it.
+        self.outer: dict[int, int] = {}
         self.interactive = 0
         # The text line before each id (digits out: a live count moves), the print before this one, and every
         # line of the last print before it was cut (for `grep`).
@@ -1211,7 +1350,8 @@ class Page:
             try:
                 doc["layout"] = await self._layout(doc["session"])
             except Exception:
-                doc["layout"] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}}
+                doc["layout"] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}, "drawn": {},
+                                 "small": {}, "area": {}, "outer": {}}
             try:
                 doc["visible"] = await self.visible_text(doc["session"])
             except Exception:
@@ -1224,13 +1364,18 @@ class Page:
 
     async def _layout(self, session: str = "") -> dict:
         """From one DOM snapshot: elements shown as clickable that the tree names no control (a pointer cursor,
-        the outermost of its kind), boxes that scroll by themselves with how far down they are, the words a
-        control with no name keeps (its tooltip, else its icon's and its class's words), the type of each date,
-        time, colour or range field, and the frames shown. Keys are backendNodeIds."""
+        the outermost of its kind; short parts side by side inside it, as Reply and Forward in one bar, each a
+        clickable of its own, as Playwright MCP gives every part of a clickable its ref), boxes that scroll by
+        themselves with how far down they are, the words a control with no name keeps (its tooltip, else what
+        names its icon, its id's and its class's words), the type of each date, time, colour or range field, the
+        frames shown, and what is drawn (`drawn`: an svg with its shapes, a canvas, rows of colour boxes with no
+        words). Keys are backendNodeIds."""
         snap = await self._in(session, "DOMSnapshot.captureSnapshot",
-                              computedStyles=["cursor", "overflow-y", "visibility"], includeDOMRects=True)
+                              computedStyles=["cursor", "overflow-y", "visibility", "content", "background-image",
+                                              "background-color", "fill", "stroke"], includeDOMRects=True)
         strings = snap.get("strings") or []
-        out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}}
+        out: dict[str, dict] = {"click": {}, "scroll": {}, "hint": {}, "type": {}, "frame": {}, "y": {}, "drawn": {},
+                                "small": {}, "area": {}, "outer": {}}
 
         def text(i: int) -> str:
             return strings[i] if isinstance(i, int) and 0 <= i < len(strings) else ""
@@ -1238,40 +1383,93 @@ class Page:
         def readable(w: str) -> bool:
             """Words a person could read ("like-btn", "icon-share"), not machine ones ("css-1x2y3z")."""
             return len(w) > 2 and not re.search(r"\d\D*\d|^[a-z]{1,4}-(?=[a-z]*\d)[a-z0-9]{5,}$|__", w, re.I)
+
+        def picture_name(css: str) -> str:
+            """The file name of a CSS image (content: url(send.png), a background image); "" for none."""
+            found = re.search(r"url\(\s*['\"]?([^'\")]+)", css or "")
+            if not found or found.group(1).startswith("data:"):
+                return ""
+            return re.sub(r"\.\w+$", "", found.group(1).split("?")[0].rstrip("/").rsplit("/", 1)[-1])
         for doc in snap.get("documents") or []:
             nodes, layout = doc.get("nodes") or {}, doc.get("layout") or {}
             parent, backend = nodes.get("parentIndex") or [], nodes.get("backendNodeId") or []
             names, kinds = nodes.get("nodeName") or [], nodes.get("nodeType") or []
+            values = nodes.get("nodeValue") or []
             attrs = nodes.get("attributes") or []
             inner = set((nodes.get("contentDocumentIndex") or {}).get("index") or [])
-            # What an icon is called in its drawing (svg <use href="#icon-trash">, an image's file name, data-icon),
-            # given to the elements up to four over it; "" for a drawing with no such word.
+            style: dict[int, list] = {}
+            box: dict[int, int] = {}
+            for k, i in enumerate(layout.get("nodeIndex") or []):
+                style[i] = [text(v) for v in (layout.get("styles") or [[]])[k]] + [""] * 8
+                box[i] = k
+            bounds = layout.get("bounds") or []
+
+            def up_of(i: int) -> int:
+                return parent[i] if 0 <= i < len(parent) else -1
+
+            def tag_of(i: int) -> str:
+                return text(names[i]).upper() if 0 <= i < len(names) else ""
+
+            def attrs_of(i: int) -> dict:
+                pairs = attrs[i] if i < len(attrs) else []
+                return {text(pairs[j]).lower(): text(pairs[j + 1]) for j in range(0, len(pairs) - 1, 2)}
+
+            def shown(i: int) -> list | None:
+                """The element's box [x, y, w, h] in the document when it is drawn, else None."""
+                k = box.get(i)
+                b = bounds[k] if k is not None and k < len(bounds) else None
+                return b if b and len(b) == 4 and b[2] > 0 and b[3] > 0 and style[i][2] != "hidden" else None
+            # The characters of words under each node, its element children, and the words of each svg <text> and
+            # <title>. Children come after their parent, so one walk back up sums them.
+            words = [0] * len(names)
+            kids: dict[int, list[int]] = {}
+            said: dict[int, str] = {}
+            for i in range(len(names) - 1, -1, -1):
+                if i < len(kinds) and kinds[i] == 3:
+                    t = norm(text(values[i]) if i < len(values) else "")
+                    words[i] = len(t)
+                    a = up_of(i)
+                    for _ in range(3):
+                        if a < 0:
+                            break
+                        if tag_of(a) in ("TEXT", "TITLE"):
+                            said[a] = norm(f"{t} {said.get(a, '')}")
+                            break
+                        a = up_of(a)
+                a = up_of(i)
+                if a >= 0 and tag_of(i) not in ("STYLE", "SCRIPT"):
+                    # A title names its parent (an svg icon) and is not words it shows.
+                    words[a] += words[i] if tag_of(i) != "TITLE" else 0
+                    if i < len(kinds) and kinds[i] == 1:
+                        kids.setdefault(a, []).insert(0, i)
+            # What an icon is called (data-icon, svg <use href="#icon-trash">, an svg's <title>, an image's alt or
+            # file name, a CSS image's file name), given to the elements up to four over it; "" for a drawing with
+            # no such word.
             icon: dict[int, str] = {}
             for i in range(len(names)):
-                tag = text(names[i]).upper()
-                pairs = attrs[i] if i < len(attrs) else []
-                found = {text(pairs[j]).lower(): text(pairs[j + 1]) for j in range(0, len(pairs) - 1, 2)}
+                tag = tag_of(i)
+                found = attrs_of(i)
                 word = found.get("data-icon", "")
                 if not word and tag == "USE":
                     word = (found.get("href") or found.get("xlink:href") or "").rsplit("#", 1)[-1]
-                if not word and tag == "IMG" and not found.get("src", "").startswith("data:"):
-                    word = re.sub(r"\.\w+$", "", found.get("src", "").split("?")[0].rstrip("/").rsplit("/", 1)[-1])
-                if not word and tag not in ("SVG", "IMG", "I"):
+                if not word and tag == "SVG":
+                    word = next((said.get(c, "") for c in kids.get(i, []) if tag_of(c) == "TITLE"), "")
+                if not word and tag == "IMG":
+                    word = found.get("alt", "") or picture_name(f"url({found.get('src', '')})")
+                painted = picture_name(style[i][3]) or picture_name(style[i][4]) if i in style and not words[i] else ""
+                if not word:
+                    word = painted
+                if not word and tag not in ("SVG", "IMG", "I") and not painted:
                     continue
-                word = word if readable(word) else ""
+                # A file or id word must read as words; a title or alt is the page's own words.
+                word = word if readable(word) or (tag in ("SVG", "IMG") and " " in word) else ""
                 a = i
                 for _ in range(5):
                     if a < 0:
                         break
                     if not icon.get(a):
                         icon[a] = word
-                    a = parent[a] if a < len(parent) else -1
-            style: dict[int, list] = {}
-            box: dict[int, int] = {}
-            for k, i in enumerate(layout.get("nodeIndex") or []):
-                style[i] = [text(v) for v in (layout.get("styles") or [[]])[k]]
-                box[i] = k
-            bounds = layout.get("bounds") or []
+                    a = up_of(a)
             if doc is (snap.get("documents") or [None])[0]:
                 # Where each node of the page itself stands down the document, text included, for the state to
                 # show what is on the screen when the page is too long for one look.
@@ -1283,45 +1481,146 @@ class Page:
             def styled(i: int) -> int:
                 """The nearest node at or over i that has a layout, or -1."""
                 while i >= 0 and i not in style:
-                    i = parent[i] if i < len(parent) else -1
+                    i = up_of(i)
                 return i
+            # Each element under a pointer cursor: the outermost element of that cursor it sits in.
+            outer: dict[int, int] = {}
             for i, k in box.items():
                 if i >= len(kinds) or kinds[i] != 1:
                     continue
-                cursor, overflow, seen = (style[i] + ["", "", ""])[:3]
+                cursor, overflow, seen = style[i][:3]
                 b = bounds[k] if k < len(bounds) else [0, 0, 0, 0]
                 if seen == "hidden" or not (b[2] > 0 and b[3] > 0):
                     continue
-                name = text(names[i]).upper()
+                name = tag_of(i)
                 if cursor == "pointer" and name not in POINTER_SKIP:
-                    up = styled(parent[i]) if i < len(parent) else -1
+                    up = styled(up_of(i))
                     if up < 0 or style[up][0] != "pointer":
                         out["click"][backend[i]] = True
+                        outer[i] = i
+                    elif up in outer:
+                        outer[i] = outer[up]
                 if overflow in ("auto", "scroll", "overlay") and k < len(scrolls) and k < len(clients):
-                    whole, shown = scrolls[k], clients[k]
-                    if len(whole) == 4 and len(shown) == 4 and shown[3] > 40 and whole[3] > shown[3] + 8:
-                        down = whole[1] / max(1.0, whole[3] - shown[3])
+                    whole, inside = scrolls[k], clients[k]
+                    if len(whole) == 4 and len(inside) == 4 and inside[3] > 40 and whole[3] > inside[3] + 8:
+                        down = whole[1] / max(1.0, whole[3] - inside[3])
                         out["scroll"][backend[i]] = ("at the top" if down < 0.02 else "at the end" if down > 0.98
                                                      else f"{round(down * 100)}% down")
-                pairs = attrs[i] if i < len(attrs) else []
-                found = {text(pairs[j]): text(pairs[j + 1]) for j in range(0, len(pairs) - 1, 2)}
+                found = attrs_of(i)
                 if name == "INPUT" and found.get("type", "").lower() in SET_BY_VALUE:
                     out["type"][backend[i]] = found["type"].lower()
                 if name == "SELECT" and "multiple" in found:
                     out["type"][backend[i]] = "multiple"
+                if name == "TEXTAREA":
+                    out["area"][backend[i]] = True
                 if name in ("IFRAME", "FRAME") and b[2] >= 20 and b[3] >= 20 and i not in inner:
                     # A frame shown whose document this snapshot does not hold: from another site, in its own process.
                     out["frame"][backend[i]] = urlsplit(found.get("src", "")).hostname or "?"
                 hint = next((found[a] for a in HINT_ATTRS if found.get(a, "").strip()), "")
                 if not hint:
-                    words = [icon.get(i, ""), *(w for w in re.split(r"\s+", found.get("class", "")) if readable(w))]
-                    hint = " ".join([w for w in dict.fromkeys(words) if w][:3]) or ("icon" if i in icon else "")
+                    # What names its icon, then the words of its id and of its class (browser-use shows a control's
+                    # id and class to the model), each only when it adds a word.
+                    ident = found.get("id", "")
+                    chunks = [icon.get(i, ""), " ".join(re.split(r"[-_]+|(?<=[a-z])(?=[A-Z])", ident))
+                              if readable(ident) else "",
+                              *(w for w in re.split(r"\s+", found.get("class", "")) if readable(w))]
+                    had: set[str] = set()
+                    kept = []
+                    for chunk in chunks:
+                        chunk = " ".join(w for w in chunk.split() if w.lower() not in had)
+                        mine = set(re.split(r"[\s_-]+", chunk.lower())) - {""}
+                        if mine and not mine <= had:
+                            kept.append(chunk)
+                            had |= mine
+                    hint = " ".join(kept[:3]) or ("icon" if i in icon else "")
                 if re.search(r"(^|\s)(on|active|is-active|is-on|liked|starred|selected|checked|pressed|faved)(\s|$)",
                              found.get("class", "")):
                     # An icon's own state, shown only by its class (a star filled in).
                     hint = f"{hint} · on".strip(" ·")
                 if hint:
                     out["hint"][backend[i]] = norm(hint)[:40]
+                if b[2] <= SMALL and b[3] <= SMALL:
+                    # Small enough to be a knob or an icon: one with no name is still shown when it can be focused.
+                    out["small"][backend[i]] = True
+            # Short parts side by side under a pointer cursor (Reply and Forward in one bar, a star and a bin on a
+            # row): each a clickable of its own, which keeps what the clickable round it is (`outer`: its class, test
+            # id and id reach the gate). The clickable round them stays when it shows more than they do. An icon
+            # beside its one label is one control.
+            for i, top in outer.items():
+                parts = [c for c in kids.get(i, []) if shown(c) and tag_of(c) not in POINTER_SKIP
+                         and (words[c] or c in icon)]
+                if not 2 <= len(parts) <= PARTS_MAX or any(words[c] > PART_WORDS for c in parts):
+                    continue
+                if sum(1 for c in parts if words[c]) == 1:
+                    continue
+                boxes = [shown(c) for c in parts]
+                if not all(min(p[1] + p[3], q[1] + q[3]) - max(p[1], q[1]) >= 0.5 * min(p[3], q[3])
+                           and (p[0] + p[2] <= q[0] + 1 or q[0] + q[2] <= p[0] + 1) for p, q in zip(boxes, boxes[1:])):
+                    continue
+                for c in parts:
+                    out["click"][backend[c]] = True
+                    out["outer"][backend[c]] = backend[top]
+                if words[top] == sum(words[c] for c in parts):
+                    out["click"].pop(backend[top], None)
+            if doc is not (snap.get("documents") or [None])[0]:
+                continue
+
+            def control(i: int) -> bool:
+                """The element is a control by its own markup: a link, a field, a button, a control's role or a place
+                in the tab order."""
+                found = attrs_of(i)
+                return (tag_of(i) in ("BUTTON", "INPUT", "SELECT", "TEXTAREA") or (tag_of(i) == "A" and (
+                    "href" in found or "xlink:href" in found)) or found.get("role", "") in CONTROLS
+                        or "tabindex" in found)
+
+            def holds_control(i: int) -> bool:
+                stack = list(kids.get(i, []))
+                while stack:
+                    c = stack.pop()
+                    if control(c):
+                        return True
+                    stack += kids.get(c, [])
+                return False
+            # Drawings in the document itself: an svg with its shapes (their centres from its top left), a canvas.
+            # One that is a control or holds one keeps the lines the tree gives it, with their names.
+            drawn = out["drawn"]
+            for i in box:
+                tag, b = tag_of(i), shown(i)
+                if not b or tag not in ("SVG", "CANVAS") or b[2] < 40 or b[3] < 40 or control(i) or holds_control(i):
+                    continue
+                a = up_of(i)
+                while a >= 0 and tag_of(a) != "SVG":
+                    a = up_of(a)
+                if a >= 0:
+                    continue
+                shapes = []
+                stack = list(kids.get(i, [])) if tag == "SVG" else []
+                while stack and len(shapes) < SHAPES_MAX:
+                    c = stack.pop(0)
+                    kind, s = tag_of(c).lower(), shown(c)
+                    if kind in ("g", "a", "svg", "switch"):
+                        stack[:0] = kids.get(c, [])
+                        continue
+                    if kind not in SHAPES or not s:
+                        continue
+                    paint = style[c][6] if style[c][6] not in ("", "none") and "url(" not in style[c][6] else style[c][7]
+                    shapes.append({"id": backend[c], "kind": kind, "colour": colour(paint), "words": said.get(c, ""),
+                                   "x": s[0] + s[2] / 2 - b[0], "y": s[1] + s[3] / 2 - b[1], "w": s[2], "h": s[3]})
+                drawn[backend[i]] = {"kind": tag.lower(), "w": b[2], "h": b[3], "y": b[1], "shapes": shapes}
+            # Rows of colour boxes with no words (swatches, tiles picked by their colour): two or more of a size.
+            for i, children in kids.items():
+                tiles = [c for c in children if shown(c) and not words[c] and not kids.get(c) and c not in icon
+                         and not control(c) and tag_of(c) not in POINTER_SKIP
+                         and tag_of(c) not in ("IMG", "CANVAS", "SVG")
+                         and colour(style[c][5]) and 6 <= shown(c)[2] <= 200 and 6 <= shown(c)[3] <= 200]
+                if len(tiles) < 2 or len(drawn) >= DRAWN_MAX:
+                    continue
+                sizes = [shown(c)[2] * shown(c)[3] for c in tiles]
+                if max(sizes) > 2 * min(sizes):
+                    continue
+                for c in tiles:
+                    s = shown(c)
+                    drawn[backend[c]] = {"kind": "box", "colour": colour(style[c][5]), "w": s[2], "h": s[3], "y": s[1]}
         return out
 
     async def state(self, max: int = STATE_MAX) -> str:
@@ -1348,6 +1647,7 @@ class Page:
         previous = self.last
         self.before = (self.last, self.near)
         self.last, self.secrets, self.interactive, self.near, self.values = {}, set(), 0, {}, {}
+        self.outer = {}
         self.spans, self.cut = {}, []
         self.looks += 1
         lines = Lines()
@@ -1364,11 +1664,51 @@ class Page:
             here = " ".join(text) if text else next((x for x in reversed(lines) if not x.startswith(("[", "*["))), "")
             return re.sub(r"[\d\s.,:%+-]+", " ", here).strip()[-60:]
 
+        def drawn_lines(doc: dict, base: int, start: int) -> None:
+            """What the document draws, each put in by where it stands down the page (after `start`, its first
+            line): a drawing with its name and size, then its shapes, each with its colour and centre from the
+            drawing's top left, so a point given from there lands; a colour box with its colour, name and size. Each
+            has an id. The colour and shape words are the model's; the gate judges a drawn part by its own name."""
+            for local, item in sorted(doc["layout"]["drawn"].items(), key=lambda kv: kv[1]["y"]):
+                ident = base + local
+                new = "*" if previous and ident not in previous else ""
+                size = f"{round(item['w'])}x{round(item['h'])}"
+                name = item.get("name", "")
+                named = f" {quote(clip(name, 60))}" if name else ""
+                if item["kind"] == "box":
+                    self.last[ident] = ("box", name or item["colour"].split(" ")[0])
+                    block = [f"{new}[{ident}] box {item['colour']}{named} {size}"]
+                else:
+                    self.last[ident] = ("drawing", name or item["kind"])
+                    block = [f"{new}[{ident}] drawing {item['kind']}{named} {size}: a picture shows it; give a point in "
+                             f"it as x,y from its top left with this ref"]
+                    for shape in item["shapes"]:
+                        sid = base + shape["id"]
+                        self.last[sid] = ("shape", " ".join(x for x in (shape["kind"], shape["words"],
+                                                                        shape["colour"].split(" ")[0]) if x))
+                        self.near[sid] = ""
+                        block.append(("*" if previous and sid not in previous else "") + f"[{sid}] {shape['kind']}"
+                                     + (f" {quote(clip(shape['words'], 60))}" if shape["words"] else "")
+                                     + (f" {shape['colour']}" if shape["colour"] else "")
+                                     + f" {round(shape['w'])}x{round(shape['h'])}, its centre at"
+                                     f" {round(shape['x'])},{round(shape['y'])} of [{ident}]")
+                self.near[ident] = ""
+                at = next((i for i in range(start, len(lines)) if lines.at[i] is not None and lines.at[i] > item["y"]),
+                          len(lines))
+                was, lines.y = lines.y, item["y"]
+                for k, line in enumerate(block):
+                    lines.insert(at + k, line)
+                lines.y = was
+                n = len(block)
+                self.spans = {k: (a + n * (a >= at), b + n * (b > at)) for k, (a, b) in self.spans.items()}
+                self.spans[ident] = (at, at + n)
+
         def emit(doc: dict) -> None:
             """The lines of one document, the page's or a frame's from another site, its ids numbered by its frame."""
             base = doc["k"] * FRAME_IDS
             visible, secret, layout = doc["visible"], doc["secret"], doc["layout"]
             clickable, scrollable, hints, types = layout["click"], layout["scroll"], layout["hint"], layout["type"]
+            self.outer.update({base + part: base + whole for part, whole in layout["outer"].items()})
             here = urlsplit(doc["url"]).hostname
             away = {k: host for k, host in layout["frame"].items() if host != here}
             for frame in doc["frames"]:
@@ -1425,6 +1765,11 @@ class Page:
                 ident = base + local if local else local
                 if not base and local in tops:
                     lines.y = tops[local]
+                if local in doc["layout"]["drawn"]:
+                    # Drawn: its lines go in by where it stands (drawn_lines), with the name the tree gives it; its own
+                    # tree is not read.
+                    doc["layout"]["drawn"][local]["name"] = name
+                    return
                 if role in CELLS and text:
                     # The cells of a table's row stay apart, so its columns can be compared.
                     text.append("|")
@@ -1486,8 +1831,10 @@ class Page:
                     for c in kids:
                         walk(by_id.get(c), fold(name))
                     return
+                # A slider's knob or an icon with no name that takes the focus is shown by its hint.
                 focusable = (prop(n, "focusable") and role != "RootWebArea"
-                             and (name or val(n.get("value")) or prop(n, "editable")))
+                             and (name or val(n.get("value")) or prop(n, "editable")
+                                  or (local in doc["layout"]["small"] and hints.get(local))))
                 if not ident or not (role in CONTROLS or role in NATIVE_INPUTS or focusable):
                     if role not in BLOCKS:
                         for c in kids:
@@ -1541,7 +1888,8 @@ class Page:
                 if is_secret:
                     self.secrets.add(ident)
                     value = SECRET_MASK if value else ""
-                elif len(value) > VALUE_MAX:
+                most = AREA_MAX if local in doc["layout"]["area"] else VALUE_MAX
+                if not is_secret and len(value) > most:
                     self.values[ident] = value
                 more = f" | … {len(options) - OPTIONS_MAX} more" if len(options) > OPTIONS_MAX else ""
                 lines.append(("*" if previous and ident not in previous else "") + f"[{ident}] {shown}"
@@ -1549,7 +1897,7 @@ class Page:
                              + (f' "{clip(name, 150)}"' if name else "")
                              + (f" {{{hint}}}" if hint and fold(hint) != fold(name) else "")
                              + (f" ({form})" if form else "")
-                             + (f" = {quote(clip(value, VALUE_MAX))}" if value else "")
+                             + (f" = {quote(clip(value, most))}" if value else "")
                              + (" " + " ".join(states) if states else "")
                              + ("  options: " + " | ".join(options[:OPTIONS_MAX]) + more if options else ""))
                 if popup or role in NATIVE_INPUTS or is_secret:
@@ -1561,6 +1909,8 @@ class Page:
 
             walk(frame["nodes"][0] if frame["nodes"] else None, "")
             flush()
+            if not frame["url"]:
+                drawn_lines(doc, base, start)
             if frame["url"] and len(lines) > start:
                 lines.insert(start, f"--- frame {frame['url']} ---")
                 self.spans = {k: (a + (a >= start), b + (b > start)) for k, (a, b) in self.spans.items()}
@@ -1667,7 +2017,60 @@ class Page:
         await self._in(session, "DOM.focus", backendNodeId=local)
 
     async def facts(self, ident: int) -> dict:
-        return await self.on_node(ident, FACTS_JS) or {}
+        """FACTS_JS of an element; a part of a clickable shown on its own carries the clickable's class, test id and
+        id too, as the press is the clickable's."""
+        facts = await self.on_node(ident, FACTS_JS) or {}
+        if ident in self.outer:
+            whole = await self.on_node(self.outer[ident], FACTS_JS) or {}
+            facts["classes"] = f"{facts.get('classes', '')} {whole.get('classes', '')}".strip()
+        return facts
+
+    async def _up(self, session: str, local: int, group: str) -> list[str]:
+        """Remote objects of an element and the elements over it, out through shadow roots, up to its document's
+        body (not crossing into the frame that holds it), at most 30; released with `group`."""
+        obj = (await self._in(session, "DOM.resolveNode", backendNodeId=local, objectGroup=group))["object"]
+        chain = await self._in(session, "Runtime.callFunctionOn", objectId=obj["objectId"], objectGroup=group,
+                               functionDeclaration=UP_JS, returnByValue=False)
+        props = await self._in(session, "Runtime.getProperties", objectId=chain["result"]["objectId"],
+                               ownProperties=True)
+        return [p["value"]["objectId"] for p in sorted((p for p in props["result"] if p["name"].isdigit()),
+                                                       key=lambda p: int(p["name"]))]
+
+    async def listed_at(self, x: float, y: float) -> tuple[int | None, int | None]:
+        """What a press at a point of the view goes down on, as the last look names it: the nearest element at or
+        over the one there that the look lists (a button, a link, a clickable, a drawn part), and the element
+        there. None for the first when the point is in a frame from another site or on nothing the look lists."""
+        hit = (await self.cdp("DOM.getNodeForLocation", x=int(x), y=int(y), includeUserAgentShadowDOM=False)
+               ).get("backendNodeId")
+        if not hit:
+            return None, None
+        if (await self.cdp("DOM.describeNode", backendNodeId=hit))["node"].get("nodeName") in ("IFRAME", "FRAME",
+                                                                                                 "OBJECT", "EMBED"):
+            # Its document is not this one's: a frame from another site.
+            return None, hit
+        group = "pa-up"
+        try:
+            for obj in await self._up("", hit, group):
+                local = (await self.cdp("DOM.describeNode", objectId=obj))["node"].get("backendNodeId")
+                if local in self.last:
+                    return local, hit
+        finally:
+            await self.cdp("Runtime.releaseObjectGroup", objectGroup=group)
+        return None, hit
+
+    async def handled(self, ident: int) -> bool:
+        """Whether a press on the element is heard: a click, pointer, mouse or touch listener on it or on an element
+        over it below the body (DOMDebugger.getEventListeners, as browser-use finds controls by their listeners)."""
+        session, local = self._node(ident)
+        group = "pa-heard"
+        try:
+            for obj in await self._up(session, local, group):
+                listeners = (await self._in(session, "DOMDebugger.getEventListeners", objectId=obj))["listeners"]
+                if any(PRESS_EVENTS.match(heard["type"]) for heard in listeners):
+                    return True
+        finally:
+            await self._in(session, "Runtime.releaseObjectGroup", objectGroup=group)
+        return False
 
     async def value(self, ident: int) -> str:
         return str(await self.on_node(ident, VALUE_JS) or "")
@@ -1926,9 +2329,15 @@ class Page:
             return f"page changed; the address is now {after['url']}"
         return "page changed" if after["n"] != before["n"] else "no change"
 
-    async def click(self, ident: int, how: str = "") -> str:
-        """A click; `how` "double" for a double click, "right" for the right button (the page's own menu)."""
+    async def click(self, ident: int, how: str = "", x: float | None = None, y: float | None = None) -> str:
+        """A click; `how` "double" for a double click, "right" for the right button (the page's own menu); with x, y
+        that far from the element's top left (Playwright's click position, checked as `at` does)."""
         async def body() -> str:
+            if x is not None:
+                p = await self.at(ident, x, y)
+                await self._click_at(p["x"], p["y"], 0, "right" if how == "right" else "left",
+                                     2 if how == "double" else 1)
+                return f" at {round(x)},{round(y)} from its top left"
             try:
                 p = await self._point(ident)
             except Exception:
@@ -1947,12 +2356,63 @@ class Page:
             return ""
         return await self._act(f"{how} click".strip(), ident, body)
 
+    async def at(self, ident: int | None, x: float | None = None, y: float | None = None, press: bool = True) -> dict:
+        """A point for the pointer in the top page's view, as Playwright takes one: an id alone is its centre after
+        the actionability checks (_point); an id with x, y is that far from its top left (Playwright's click
+        `position`), scrolled into view; x, y alone are a point of the view as a picture of it shows. A point the
+        button goes down on (`press`), given from an id, must fall on that element or a part of it. {"x", "y"};
+        raises why it cannot land."""
+        if ident is not None and x is None and press:
+            return await self._point(ident)
+        if ident is not None and x is None:
+            # Where something is let go: its middle, whatever is drawn over it (a frame with no fill).
+            b = await self.box(ident)
+            x, y = b["w"] / 2, b["h"] / 2
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (x, y)):
+            raise RuntimeError("a point needs x and y as numbers")
+        if ident is not None:
+            session, local = self._node(ident)
+            try:
+                await self._in(session, "DOM.scrollIntoViewIfNeeded", backendNodeId=local,
+                               rect={"x": x, "y": y, "width": 1, "height": 1})
+            except Exception:
+                pass
+            if press:
+                hit = await self.on_node(ident, HIT_JS, {"x": x, "y": y})
+                if not hit["on"]:
+                    raise RuntimeError(f"Target covered: {round(x)},{round(y)} from the top left of "
+                                       f"{self.describe(ident)} falls on {hit['hit'] or 'nothing'}")
+            b = await self.box(ident)
+            x, y = b["x"] + x, b["y"] + y
+        view = (await self.cdp("Page.getLayoutMetrics")).get("cssVisualViewport") or {}
+        wide, high = float(view.get("clientWidth") or 0), float(view.get("clientHeight") or 0)
+        if not (0 <= x < wide and 0 <= y < high):
+            raise RuntimeError(f"{round(x)},{round(y)} is outside the view, which is {round(wide)}x{round(high)}: "
+                               f"give the point from the top left of a ref, which is scrolled to, or scroll first")
+        return {"x": x, "y": y}
+
     async def click_point(self, x: float, y: float) -> str:
-        """A click on a point of the page as shown (a canvas has no parts to name)."""
+        """A click on a point of the view as a picture shows it (a canvas has no parts to name)."""
         async def body() -> str:
-            await self._click_at(x, y)
+            p = await self.at(None, x, y)
+            await self._click_at(p["x"], p["y"])
             return f" at {round(x)},{round(y)}"
         return await self._act("click", None, body)
+
+    async def select_text(self, ident: int, words: str = "") -> str:
+        """Playwright's selectText: the element's text selected, or only `words` in it; never in a secret field
+        (Refused). Nothing goes to the clipboard."""
+        if await self.secret(ident):
+            raise Refused(f"[refused] {self.describe(ident)} is a secret field (password, payment or code): "
+                          f"it is for the person to fill")
+
+        async def body() -> str:
+            await self._point(ident, True)
+            got = await self.on_node(ident, SELECT_TEXT_JS, words)
+            if got is None:
+                raise RuntimeError(f"it does not show {quote(clip(words, 60))}")
+            return f" = {quote(clip(got, 80))}" + (f" ({len(got)} characters)" if len(got) > 80 else "")
+        return await self._act("select", ident, body)
 
     async def type(self, ident: int, text: str, enter: bool = False, append: bool = False) -> str:
         """Replace the field's text with `text` (with `append`, add it at the end of what the field holds): a list's
@@ -2097,12 +2557,14 @@ class Page:
             return " down" if down else " up"
         return await self._act("scroll", ident, body)
 
-    async def hover(self, ident: int) -> str:
-        """The pointer over the element and left there: a menu that opens on hover opens."""
+    async def hover(self, ident: int | None, x: float | None = None, y: float | None = None) -> str:
+        """The pointer over the element (or a point, as `at` takes one) and left there: a menu that opens on hover
+        opens."""
         async def body() -> str:
-            p = await self._point(ident)
+            # A ref alone is waited for as a click's target is (its centre after the actionability checks).
+            p = await self.at(ident, x, y, press=x is None)
             await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=p["x"], y=p["y"])
-            return ""
+            return "" if x is None else f" at {round(x)},{round(y)}" + (" from its top left" if ident is not None else "")
         return await self._act("hover", ident, body)
 
     async def wait(self, until: str = "", gone: str = "") -> str:
@@ -2125,36 +2587,58 @@ class Page:
                     f"{'it shows' if until else 'gone'} after {time.monotonic() - began:.1f} s")
         return await self._act("wait", None, body)
 
-    async def drag(self, ident: int, to: int) -> str:
-        """The pointer pressed on `ident`, moved onto `to` and let go, as Playwright drags: a drag the page starts
-        with the browser's own drag and drop is caught (Input.setInterceptDrags) and dropped there, any other
-        follows the mouse. It lets go a quarter past the middle of `to`, so in a list it takes `to`'s place; the
-        line says where it now sits."""
+    async def drag(self, start: dict, end: dict, route: list | None = None) -> str:
+        """The button pressed at `start`, moved and let go at `end`, as Playwright drags (mouse down, moves, up)
+        and Stagehand's dragAndDrop takes a route. Each end is {"id"} (its centre), {"id", "x", "y"} (that far
+        from its top left) or {"x", "y"} (a point of the view); an end given as an id alone is let go a quarter
+        past its middle along the way, so in a list the dragged item takes its place. `route`: [x, y] points
+        passed through on the way, from where `start`'s are; else DRAG_STEPS moves along the line, so a list or a
+        slider that follows the mouse sees it go by. A drag the page starts with the browser's own drag and drop
+        is caught (Input.setInterceptDrags) and dropped there. The line says where a dragged item now sits."""
         if not self._drag_heard:
             await self.tab.events("Input.dragIntercepted", lambda params: setattr(self, "_dragged", params["data"]))
             self._drag_heard = True
+        ident, to = start.get("id"), end.get("id")
+
+        def said(at: dict) -> str:
+            point = f"{round(at['x'])},{round(at['y'])}" if at.get("x") is not None else ""
+            if at.get("id") is None:
+                return f"the point {point}"
+            return self.describe(at["id"]) + (f" at {point} from its top left" if point else "")
 
         async def body() -> str:
             # Both ends in view before the button goes down.
-            await self._point(ident)
-            b = await self._point(to)
-            a = await self._point(ident)
-            box = await self.box(to)
+            await self.at(ident, start.get("x"), start.get("y"))
+            b = await self.at(to, end.get("x"), end.get("y"), press=False)
+            a = await self.at(ident, start.get("x"), start.get("y"))
+            if to is not None and end.get("x") is None:
+                # Past the middle along the way it goes: above it when going up, left of it when going left.
+                box = await self.box(to)
+                dx, dy = b["x"] - a["x"], b["y"] - a["y"]
+                b = ({"x": b["x"], "y": b["y"] + math.copysign(box["h"] / 4, dy)} if abs(dy) >= abs(dx) else
+                     {"x": b["x"] + math.copysign(box["w"] / 4, dx), "y": b["y"]})
+            if route:
+                # Where the route's points are measured from: the start's element, else the view.
+                base = await self.box(ident) if ident is not None else {"x": 0.0, "y": 0.0}
+                path = [{"x": base["x"] + float(p[0]), "y": base["y"] + float(p[1])} for p in route] + [b]
+            else:
+                path = [{"x": a["x"] + (b["x"] - a["x"]) * n / DRAG_STEPS, "y": a["y"] + (b["y"] - a["y"]) * n / DRAG_STEPS}
+                        for n in range(1, DRAG_STEPS + 1)]
+            # Where the dragged element stands among its own and on the page, to say after where it went; a drag from
+            # a point in it (a line drawn on a canvas) moves something inside it, which this cannot tell.
+            whole = ident is not None and start.get("x") is None
             try:
-                was = await self.on_node(ident, PLACE_JS)
+                was = await self.on_node(ident, PLACE_JS) if whole else None
+                stood = await self.box(ident) if whole else None
             except Exception:
-                was = None
+                was = stood = None
             await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=a["x"], y=a["y"])
             await self.cdp("Input.dispatchMouseEvent", type="mousePressed", x=a["x"], y=a["y"], button="left",
-                           clickCount=1)
-            # Past the middle along the way it goes: above it when going up, left of it when going left.
-            dx, dy = b["x"] - a["x"], b["y"] - a["y"]
-            end = ({"x": b["x"], "y": b["y"] + math.copysign(box["h"] / 4, dy)} if abs(dy) >= abs(dx) else
-                   {"x": b["x"] + math.copysign(box["w"] / 4, dx), "y": b["y"]})
+                           buttons=1, clickCount=1)
             self._dragged = None
             await self.cdp("Input.setInterceptDrags", enabled=True)
             try:
-                first = {"x": a["x"] + (end["x"] - a["x"]) / DRAG_STEPS, "y": a["y"] + (end["y"] - a["y"]) / DRAG_STEPS}
+                first = path[0]
                 await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=first["x"], y=first["y"], button="left",
                                buttons=1)
                 await asyncio.sleep(0.2)
@@ -2163,27 +2647,32 @@ class Page:
             data, self._dragged = self._dragged, None
             if data is not None:
                 await self.cdp("Input.dispatchDragEvent", type="dragEnter", x=first["x"], y=first["y"], data=data)
-            for n in range(2, DRAG_STEPS + 1):
-                x, y = a["x"] + (end["x"] - a["x"]) * n / DRAG_STEPS, a["y"] + (end["y"] - a["y"]) * n / DRAG_STEPS
+            for p in path[1:]:
                 if data is not None:
-                    await self.cdp("Input.dispatchDragEvent", type="dragOver", x=x, y=y, data=data)
+                    await self.cdp("Input.dispatchDragEvent", type="dragOver", x=p["x"], y=p["y"], data=data)
                 else:
-                    await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=x, y=y, button="left", buttons=1)
+                    await self.cdp("Input.dispatchMouseEvent", type="mouseMoved", x=p["x"], y=p["y"], button="left",
+                                   buttons=1)
                     await asyncio.sleep(0.03)
             if data is not None:
-                await self.cdp("Input.dispatchDragEvent", type="drop", x=end["x"], y=end["y"], data=data)
+                await self.cdp("Input.dispatchDragEvent", type="drop", x=b["x"], y=b["y"], data=data)
             else:
-                await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=end["x"], y=end["y"], button="left",
+                await self.cdp("Input.dispatchMouseEvent", type="mouseReleased", x=b["x"], y=b["y"], button="left",
                                clickCount=1)
             await asyncio.sleep(0.2)
             try:
-                now = await self.on_node(ident, PLACE_JS)
+                now = await self.on_node(ident, PLACE_JS) if was is not None else None
+                stands = await self.box(ident) if stood is not None else None
             except Exception:
-                now = None
-            where = ("" if now is None or was is None else "; it did not move" if now == was else
+                now = stands = None
+            dx, dy = (round(stands["x"] - stood["x"]), round(stands["y"] - stood["y"])) if stands else (0, 0)
+            where = ("" if now is None else
+                     f"; it moved {dx},{dy} on the page" if now == was and max(abs(dx), abs(dy)) > 2 else
+                     "; it did not move" if now == was else
                      f"; it now comes after {quote(now['before'])}" if now["before"] else
                      f"; it now comes first, before {quote(now['after'])}")
-            return f" onto {self.describe(to)}{where}"
+            return (f" from {said(start)}" if ident is None or start.get("x") is not None else "") + \
+                f" onto {said(end)}" + (f" through {len(route)} points" if route else "") + where
         return await self._act("drag", ident, body)
 
     async def goto(self, url: str) -> str:

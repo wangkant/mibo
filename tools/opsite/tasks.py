@@ -102,6 +102,16 @@ TASKS = [
      "ask": "看看我哪篇内容的阅读量最高，告诉我标题和阅读数", "cards": 0},
     {"id": "W5", "kind": "a profile whose numbers are in the first screen, above a feed with no end",
      "start": "/t/t41-profile.html", "ask": "看看我这个主页上显示的账号数据：昵称、关注数、粉丝数、获赞数", "cards": 0},
+    # The pointer: a slider of two divs, a bar whose halves are one clickable with an icon-only send, a drawing
+    # with colour boxes, and text a page quotes once selected.
+    {"id": "P1", "kind": "a slider drawn from divs, dragged by points", "start": "/t/t43-volume.html",
+     "ask": "把音量调到 70，然后保存", "cards": 1},
+    {"id": "P2", "kind": "Reply and Forward in one clickable bar, a send arrow with no words", "start": "/t/t44-mailbar.html",
+     "ask": "把这封邮件转发给 bob@example.com", "cards": 1},
+    {"id": "P3", "kind": "a drawing (svg) and colour boxes with no words", "start": "/t/t45-board.html",
+     "ask": "底色选灰色，把红色的圆点拖进方框里，然后点提交", "cards": 1},
+    {"id": "P4", "kind": "text the page quotes once it is selected", "start": "/t/t46-quote.html",
+     "ask": "把老王说的“周末去爬山”这几个字选中，然后点引用所选", "cards": 1},
 ]
 # Long pages on real sites a visitor reads signed out (tools/oploop.py only): the answer is in the reply.
 REAL = [
@@ -291,6 +301,13 @@ CHECKS.update({
     "C1": lambda s: (not _quiet(s), f"POSTs {_quiet(s)}"),
     "C2": lambda s: (not _quiet(s, "/api/reply") and [b.get("text") for b in _bodies(s, "/api/reply")] == ["谢谢支持，下周更新"],
                      f"replies {_bodies(s, '/api/reply')} others {_quiet(s, '/api/reply')}"),
+})
+CHECKS.update({
+    # The volume within 2 of 70: a drag lands on a pixel, two pixels a step.
+    "P1": lambda s: _one(s, "/api/volume", lambda b: (abs(int(b.get("value", -9)) - 70) <= 2, "")),
+    "P2": lambda s: _one(s, "/api/forward", lambda b: _has(b, to="bob@example.com")),
+    "P3": lambda s: _one(s, "/api/board", lambda b: _has(b, color="rgb(128, 128, 128)", red="True", blue="False")),
+    "P4": lambda s: _one(s, "/api/quote", lambda b: _has(b, text="周末去爬山")),
 })
 
 

@@ -13,8 +13,9 @@ changed since) (MIT, NOTICE).
                                     tokens of the next request: the anchor plus the ratio times what changed since
     Fit(plan, count, ratio, pictures)
                                     one turn's requests fitted before each is sent: a tool result held to its share
-                                    when it comes in (dsh spill-policy), then past the ceiling the older results and
-                                    the pictures tools returned cut once each (dsh compaction-tool-result-pruner)
+                                    when it comes in (dsh spill-policy) and never below a readable floor, then past
+                                    the ceiling the older results and the pictures tools returned cut small (dsh
+                                    compaction-tool-result-pruner), and cleared where the newest would not fit
     refused(caller, url, model, payload, least)
                                     an overflow refusal: the refused request counted at least what the window left
     tail_from(rows, tokens)         where a chat's verbatim tail starts once its older turns become one checkpoint
@@ -47,10 +48,14 @@ _STATED = re.compile(r"(?:context(?:[ _](?:length|window|size))?|maximum (?:inpu
 # One tool result at ingestion at most (dsh spill-policy's 12,500), and an older one once cut past the ceiling:
 # head and tail kept four to one, the characters left out counted where the cut is.
 RESULT_TOKENS, SMALL_TOKENS, HEAD_SHARE = 12_500, 1250, 0.8
-CUT_MARK = "\n\n[... {n} characters of this result left out ...]\n\n"
+CUT_MARK = ("\n\n[... {n} characters of this result left out to fit the model's window; to read them, ask for a "
+            "smaller part, such as a file's lines by offset and limit ...]\n\n")
 PICTURE_GONE = "[an older picture, removed to save room; look again if it is still needed]"
+RESULT_GONE = "[an older result, removed to save room; call the tool again if it is still needed]"
 # Past the ceiling T, older results are cut until the request is under this share of it.
 FIT_TO = 0.7
+# The least share of the small size a newest result is shown at; below it the request does not fit.
+LEAST = 0.25
 
 
 def window(rec: dict | None, setting: int = 0) -> tuple[int, str]:
@@ -232,18 +237,28 @@ def cut(text: str, tokens: float, mark: str = CUT_MARK) -> str:
 class Fit:
     """One turn's requests fitted to the budget `plan` before each is sent (context-design's fit ladder). A tool
     result is held to its share when it comes in: RESULT_TOKENS, or less when its round alone would pass the
-    ceiling T and shares FIT_TO of what is left under it. Past T, older results and the pictures tools returned
-    are cut once each, oldest first, to their small size until the request is under FIT_TO of T; the newest round
-    is left whole. `count(convo)` is the
-    request's tokens with `convo` as its conversation, `ratio` the endpoint's tokens per estimated one, and a user
-    message whose first words are `pictures` holds pictures a tool returned (the person's own are never cut)."""
+    ceiling T and shares FIT_TO of what is left under it, but never below a floor a model can read from (the small
+    size, shared among the round's results when they are many). Past T, older results and the pictures tools
+    returned give way first, oldest first, until the request is under FIT_TO of T: cut to their small size (dsh
+    compaction-tool-result-pruner), and where the newest round would still not fit at its floor, cleared to one
+    line (Claude Code's microcompact, opencode's prune), never one that came in at the small size or under it (a
+    card said no to, an error the model must keep seeing). `count(convo)` is the request's tokens with `convo` as its
+    conversation, `ratio` the endpoint's tokens per estimated one, and a user message whose first words are
+    `pictures` holds pictures a tool returned (the person's own are never cut)."""
 
     def __init__(self, plan: Budget, count, ratio: float, pictures: str) -> None:
         self.plan, self.count, self.ratio, self.pictures = plan, count, ratio, pictures
-        # Results already held to their share, and messages already cut, by identity.
-        self.seen: set[int] = set()
+        # The newest round's results as they came in, messages already cut, and messages cleared, by identity.
+        self.whole: dict[int, str] = {}
         self.cut: set[int] = set()
+        self.gone: set[int] = set()
+        # Whether each result of this turn came in at or below the small size (a card said no to, a refusal, an
+        # error): such a result is never cleared.
+        self.short: dict[int, bool] = {}
         self.rewrites = 0
+        # The newest round's floor in estimated tokens, and whether a result of this turn reached the model cut.
+        self.floor = plan.small / ratio
+        self.partial = False
 
     def _returned(self, message: dict) -> bool:
         content = message.get("content")
@@ -253,48 +268,114 @@ class Fit:
     def _shrink(self, message: dict) -> float:
         """Cut one result or one message of returned pictures to its small size; the estimated tokens saved."""
         before = message_tokens(message)
-        if message.get("role") == "tool":
-            message["content"] = cut(message["content"], self.plan.small)
-        else:
-            message["content"] = [{"type": "text", "text": PICTURE_GONE} if p.get("type") == "image_url" else p
-                                  for p in message["content"]]
+        message["content"] = (cut(message["content"], self.plan.small / self.ratio) if message.get("role") == "tool"
+                              else self._cleared(message)["content"])
         self.cut.add(id(message))
         return before - message_tokens(message)
+
+    def _cleared(self, message: dict) -> dict:
+        """An older result as one line, or its returned pictures as lines."""
+        if message.get("role") == "tool":
+            return {**message, "content": RESULT_GONE}
+        return {**message, "content": [{"type": "text", "text": PICTURE_GONE} if p.get("type") == "image_url" else p
+                                       for p in message["content"]]}
+
+    def _clear(self, message: dict) -> float:
+        """Clear one older result or message of returned pictures; the estimated tokens saved."""
+        before = message_tokens(message)
+        message["content"] = self._cleared(message)["content"]
+        self.gone.add(id(message))
+        self.cut.add(id(message))
+        return before - message_tokens(message)
+
+    def _newest(self, convo: list[dict]) -> tuple[int, list[dict]]:
+        """Where the newest round starts, and its results, each kept as it came in: until a request carries them
+        the model has not seen them, so a refit (after an overflow or a compaction) cuts them again from that."""
+        start = max((n for n, m in enumerate(convo) if m.get("tool_calls")), default=len(convo))
+        newest = [m for m in convo[start:] if m.get("role") == "tool"]
+        self.whole = {id(m): self.whole.get(id(m), m["content"]) for m in newest}
+        for m in newest:
+            self.short.setdefault(id(m), text_tokens(self.whole[id(m)]) <= self.plan.small / self.ratio)
+        return start, newest
+
+    def _clearable(self, message: dict) -> float:
+        """The estimated tokens clearing an older result or message of returned pictures would save; 0 for one that
+        came in short (a result from before this turn, as it is now) or that clearing would not make smaller."""
+        if id(message) in self.gone:
+            return 0.0
+        if message.get("role") == "tool" and (self.short[id(message)] if id(message) in self.short else (
+                id(message) not in self.cut and text_tokens(message["content"]) <= self.plan.small / self.ratio)):
+            return 0.0
+        return max(0.0, message_tokens(message) - message_tokens(self._cleared(message)))
 
     def __call__(self, convo: list[dict]) -> bool:
         """Fit `convo` in place for its next request; whether that request is within the input limit L."""
         plan, ratio = self.plan, self.ratio
-        start = max((n for n, m in enumerate(convo) if m.get("tool_calls")), default=len(convo))
-        fresh = [m for m in convo[start:] if m.get("role") == "tool" and id(m) not in self.seen]
+        start, fresh = self._newest(convo)
+        share = plan.result / ratio
         for message in fresh:
-            message["content"] = cut(message["content"], plan.result / ratio)
+            message["content"] = cut(self.whole[id(message)], share)
         total = self.count(convo)
+        older = [m for m in convo[:start] if m.get("role") == "tool" or self._returned(m)]
         if total > plan.ceiling:
-            for message in convo[:start]:
+            for message in older:
                 if total < FIT_TO * plan.ceiling:
                     break
-                if id(message) in self.cut or not (message.get("role") == "tool" or self._returned(message)):
+                if id(message) in self.cut:
                     continue
-                if message.get("role") == "tool" and text_tokens(message["content"]) <= plan.small:
+                if message.get("role") == "tool" and text_tokens(message["content"]) <= plan.small / ratio:
                     continue
                 total -= ratio * self._shrink(message)
                 self.rewrites += 1
+        # The newest round's floor: the small size each, or when the round is large a share of the room under L it
+        # could have with every older result it may clear cleared, FIT_TO of it for the estimate's error on new text;
+        # its short results take only what they hold, the others share the rest. Below LEAST of the small size it
+        # cannot be read and the request does not fit: the history is compacted, or the turn takes its last word.
+        room =plan.limit - total + ratio * (sum(map(self._clearable, older))
+                                             + sum(text_tokens(m["content"]) for m in fresh))
+        floor = plan.small
+        for n, message in enumerate(sorted(fresh, key=lambda m: text_tokens(m["content"]))):
+            each = FIT_TO * room / (len(fresh) - n)
+            if ratio * text_tokens(message["content"]) > min(plan.small, each):
+                floor = min(plan.small, each)
+                break
+            room -= ratio * text_tokens(message["content"])
+        floor /= ratio
+        readable = floor >= LEAST * plan.small / ratio
+        self.floor = floor = max(floor, LEAST * plan.small / ratio)
+        above = ratio * sum(max(0.0, text_tokens(m["content"]) - floor) for m in fresh)
+        if total - above > plan.ceiling:
+            # Even at its floor the newest round would pass T: older results are cleared to a line, oldest first; a
+            # short one (a card said no to, an error) stays as the model must keep seeing it.
+            for message in older:
+                if total - above < FIT_TO * plan.ceiling:
+                    break
+                if self._clearable(message):
+                    total -= ratio * self._clear(message)
+                    self.rewrites += 1
         if total > plan.ceiling and fresh:
-            # The newest round shares FIT_TO of what is left under T, a small result taking only what it needs: new
-            # text is where the estimate errs (a Chinese wiki page counted 1.36 times its estimate on DeepSeek).
+            # The newest round shares FIT_TO of what is left under T, a small result taking only what it needs and
+            # none less than its floor; each is cut once, from what came in: new text is where the estimate errs (a
+            # Chinese wiki page counted 1.36 times its estimate on DeepSeek).
             left = FIT_TO * ((plan.ceiling - total) / ratio + sum(text_tokens(m["content"]) for m in fresh))
             for n, message in enumerate(sorted(fresh, key=lambda m: len(m["content"]))):
-                message["content"] = cut(message["content"], max(0.0, left / (len(fresh) - n)))
+                message["content"] = cut(self.whole[id(message)], max(floor, min(share, left / (len(fresh) - n))))
                 left -= text_tokens(message["content"])
             total = self.count(convo)
-        self.seen.update(map(id, fresh))
-        return total <= plan.limit
+        self.partial = self.partial or any(m["content"] != self.whole[id(m)] for m in fresh)
+        return total <= plan.limit and readable
 
     def last(self, convo: list[dict]) -> None:
-        """For a turn's last call when its request cannot fit: every result and returned picture cut small."""
+        """For a turn's last call when its request cannot fit: the newest round's results at their floor, cut from
+        what came in, and every other result and returned picture cut small."""
+        _, newest = self._newest(convo)
+        for message in newest:
+            message["content"] = cut(self.whole[id(message)], self.floor)
+            self.cut.add(id(message))
         for message in convo:
             if id(message) not in self.cut and (message.get("role") == "tool" or self._returned(message)):
                 self._shrink(message)
+        self.partial = self.partial or any(m["content"] != self.whole[id(m)] for m in newest)
 
 
 # ------------------------------------------------------------- compaction --

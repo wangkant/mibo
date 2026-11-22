@@ -51,6 +51,10 @@ STOPPED = "Error: stopped by them"
 OUTCOME_UNKNOWN = ("Error: interrupted after this call may have been sent; its outcome is unknown. Do not assume it "
                    "succeeded or failed: check the result before doing it again.")
 ANSWER_NOW = "[Note from the app, not from them] Answer now from what was done; say what is left."
+# The last word when a result was too large for the window: the model saw only its start and end.
+PART_READ = ("[Note from the app, not from them] A result was too large to read whole: only its start and end are "
+             "above, with how much was left out between them. Answer now from that part, say that you read only "
+             "that part, and say what is left.")
 # The line above the trace of a reply they stopped.
 STOPPED_LINE = {"zh": "已按你的要求停止，以下为已完成的操作。", "en": "Stopped as you asked. What was done is below."}
 _TRACED = ("search", "read", "pick")
@@ -372,7 +376,8 @@ class ToolLoop:
         last call answers from what was done, without tools and with every result small."""
         logger.info("[Agent] turn past the model's input limit: answered from what was done")
         fit.last(convo)
-        return await self._plain_reply(system, convo + [{"role": "user", "content": ANSWER_NOW}], model)
+        note = PART_READ if fit.partial else ANSWER_NOW
+        return await self._plain_reply(system, convo + [{"role": "user", "content": note}], model)
 
     async def _round(self, message: dict, calls: list, convo: list, schemas: dict, made: dict,
                      lookups: ChatLookups) -> None:

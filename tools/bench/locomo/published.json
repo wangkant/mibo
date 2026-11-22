@@ -1,0 +1,40 @@
+{
+ "note": "Published LoCoMo numbers, as their sources give them, for setting beside a run of this bench. Category columns keep each source's own names. In locomo10.json the category numbers are 1 multi-hop, 2 temporal, 3 open-domain, 4 single-hop, 5 adversarial (task_eval/evaluation.py's rules; mem0ai/memory-benchmarks CATEGORY_NAMES); the paper lists the five in another order. Read 2026-11-21.",
+ "sources": [
+  {
+   "source": "Maharana et al., Evaluating Very Long-Term Conversational Memory of LLM Agents, ACL 2024 (arXiv 2402.17753), Table 2; static/paper/locomo.pdf at snap-research/locomo 3eb6f2c",
+   "setup": "The model reads the conversation itself (truncated to its window), asked for a short phrase in the conversation's words ('Use DATE of CONVERSATION' added to temporal questions). The paper's own conversations; the README calls locomo10 a subset of the 50 first released, so these rows may not be on the same ten.",
+   "metric": "F1 (paper's partial match)",
+   "rows": {
+    "human": {"single_hop": 95.1, "multi_hop": 85.8, "temporal": 92.6, "open_domain": 75.4, "adversarial": 89.4, "overall": 87.9},
+    "gpt-4-turbo, 128K, whole conversation": {"single_hop": 72.3, "multi_hop": 51.5, "temporal": 51.4, "open_domain": 38.5, "adversarial": 15.7, "overall": 51.6},
+    "claude-3-sonnet, 200K": {"single_hop": 70.7, "multi_hop": 38.1, "temporal": 26.9, "open_domain": 52.2, "adversarial": 2.5, "overall": 42.8},
+    "gpt-3.5-turbo, 16K": {"single_hop": 52.6, "multi_hop": 36.7, "temporal": 24.3, "open_domain": 24.0, "adversarial": 14.8, "overall": 35.9}
+   }
+  },
+  {
+   "source": "Chhikara et al., Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory (arXiv 2504.19413v1), Tables 1 and 2",
+   "setup": "All 10 conversations, categories 1-4; gpt-4o-mini answers from retrieved memories with an answer prompt asking for a short answer; J is gpt-4o-mini with the ACCURACY_PROMPT score.py uses, 10 runs averaged. Both speakers' facts are memories.",
+   "metric": "F1 / J",
+   "rows": {
+    "Mem0": {"single_hop": [38.72, 67.13], "multi_hop": [28.64, 51.15], "open_domain": [47.65, 72.93], "temporal": [48.93, 55.51], "overall_j": 66.88},
+    "Mem0 with graph": {"single_hop": [38.09, 65.71], "multi_hop": [24.32, 47.19], "open_domain": [49.27, 75.71], "temporal": [51.55, 58.13], "overall_j": 68.44},
+    "Zep (run by mem0)": {"single_hop": [35.74, 61.70], "multi_hop": [19.37, 41.35], "open_domain": [49.56, 76.60], "temporal": [42.00, 49.31], "overall_j": 65.99},
+    "LangMem": {"single_hop": [35.51, 62.23], "multi_hop": [26.04, 47.92], "open_domain": [40.91, 71.12], "temporal": [30.75, 23.43], "overall_j": 58.10},
+    "OpenAI ChatGPT memory": {"single_hop": [34.30, 63.79], "multi_hop": [20.09, 42.92], "open_domain": [39.31, 62.29], "temporal": [14.04, 21.71], "overall_j": 52.90},
+    "whole conversation in context": {"overall_j": 72.90},
+    "RAG, best (k=2, 256-token chunks)": {"overall_j": 60.97}
+   }
+  },
+  {
+   "source": "Vendor pages as read by the industry-benchmarks survey (work/mibo-migration/industry-benchmarks.json, 2026-11-21)",
+   "setup": "Self-reported, each with its own answerer, answer prompt and judge. mem0's current harness (mem0ai/memory-benchmarks, Apache-2.0) judges with partial credit, a 14-day date tolerance and gold-overriding evidence: far more lenient than the prompt above.",
+   "metric": "J (vendor's own)",
+   "rows": {"mem0 (mem0.ai/research, page dated 2026-11-17)": 92.5, "Zep": 94.7, "Letta, filesystem-only agent": 74.0}
+  }
+ ],
+ "caveats": [
+  "Penfield Labs' audit (2026-04-08) found 99 of the 1,540 category 1-4 gold answers wrong (6.4%) and the usual gpt-4o-mini judge accepting 62.8% of deliberately vague wrong answers.",
+  "Salesforce ConvoMem (arXiv 2511.10523) notes plain file operations reach about 74%."
+ ]
+}

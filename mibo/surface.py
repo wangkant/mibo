@@ -71,20 +71,28 @@ LOOK = {"type": "function", "function": {
         "picture": {"type": "boolean", "description": "true to see a picture too, when your model takes pictures"}},
         "required": []}}}
 _STEP = {"type": "object", "properties": {
-    "do": {"type": "string", "enum": ["click", "type", "select_option", "key", "hover", "drag", "scroll_to",
-                                      "wait_for", "upload_file", "go", "back", "read"]},
+    "do": {"type": "string", "enum": ["click", "type", "select_option", "key", "hover", "drag", "select_text",
+                                      "scroll_to", "wait_for", "upload_file", "go", "back", "read"]},
     "what": {"type": "string", "description": "what this step does, in a few words of their language: the card "
                                               "they may be asked on shows it"},
     "ref": {"type": "integer", "description": "the control's ref from the latest look"},
-    "text": {"type": "string", "description": "type: the text; click without a ref: the words it shows; "
+    "text": {"type": "string", "description": "type: the text; click, hover or drag without a ref: the words it "
+                                              "shows; select_text: the words to select (left out: all of it); "
                                               "scroll_to: scroll until these words show; wait_for: until they show"},
     "submit": {"type": "boolean", "description": "type: press Enter after"},
     "add": {"type": "boolean", "description": "type: add to what the field holds instead of replacing it"},
     "values": {"type": "array", "items": {"type": "string"}, "description": "select_option: the option or options"},
-    "keys": {"type": "string", "description": "key: such as Enter, Escape, Control+A"},
+    "keys": {"type": "string", "description": "key: as Playwright names keys, such as Enter, ArrowLeft, Control+A"},
     "double": {"type": "boolean"}, "right": {"type": "boolean"},
-    "x": {"type": "number"}, "y": {"type": "number"},
+    "x": {"type": "number", "description": "click, hover, drag: a point; with ref, from its top left (a drawing's "
+                                           "shapes give theirs), else on the picture"},
+    "y": {"type": "number"},
     "to": {"type": "integer", "description": "drag: the ref it is dropped on"},
+    "to_x": {"type": "number", "description": "drag: the point it is let go at, from to's top left, else "
+                                              "measured as x, y are"},
+    "to_y": {"type": "number"},
+    "route": {"type": "array", "items": {"type": "array", "items": {"type": "number"}},
+              "description": "drag: [x, y] points passed on the way (drawing a shape), measured as x, y are"},
     "up": {"type": "boolean", "description": "scroll_to: up instead of down"},
     "gone": {"type": "string", "description": "wait_for: until these words are gone"},
     "file": {"type": "string", "description": "upload_file: the full path of a file they named or a tool found"},
@@ -96,13 +104,15 @@ ACT = {"type": "function", "function": {
     "name": "act",
     "description": (
         "Do steps in a page place, by the refs of your latest look of it: click, type (submit presses Enter), "
-        "select_option, key, hover, drag, scroll_to, wait_for, upload_file (a full path they named or a tool "
+        "select_option, key, hover, drag (from a ref or a point to a ref or a point: sliders, sorting, drawing), "
+        "select_text, scroll_to, wait_for, upload_file (a full path they named or a tool "
         "found), go (an address), back, read (the page's whole text for a question). Each step answers in one "
         "line with what changed; after the steps you get what the app noticed (what a press sent, the address and "
         "title now, the page's own dialogs) and the page now, whose refs the next act takes. You decide whether "
         "the task is done. Sending, posting, submitting, uploading, ordering and deleting are checked by the app first and "
         "may wait for their press; a step it declined is not tried another way. Out of sight unless the place is "
-        "in front of them. Coordinates only from a picture a look returned."),
+        "in front of them. A point is taken from a ref's top left (a drawing lists its shapes with theirs) or from "
+        "a picture a look returned."),
     "parameters": {"type": "object", "properties": {
         "place": {"type": "string", "description": "the place id; left out for the page in front"},
         "steps": {"type": "array", "items": _STEP, "minItems": 1, "maxItems": 8}},

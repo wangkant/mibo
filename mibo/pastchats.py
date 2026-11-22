@@ -18,13 +18,16 @@ TOOL = {"type": "function", "function": {
     "name": NAME,
     "description": (
         "Search all your earlier chats with them in this app: when they ask about something you talked about "
-        "before (\"上个月聊的那本书\", \"我之前说的那家店叫什么\") or refer to a talk you cannot see above. Lines come "
-        "with their dates and chats. Never guess what was said instead of searching."),
+        "before (\"that book we talked about last month\", \"上个月聊的那本书\", \"el restaurante que te dije\") or "
+        "refer to a talk you cannot see above. Lines come with their dates and chats. Never guess what was said "
+        "instead of searching."),
     "parameters": {"type": "object", "properties": {
         "query": {"type": "string", "description": "a few words likely in those lines (a name, a title, a thing), "
-                                                   "spaced; empty to see what was said at `when`"},
-        "when": {"type": "string", "description": "their own time words for it (\"上个月\", \"三周前\", \"last week\"), "
-                                                  "empty when they named no time"}},
+                                                   "spaced, in the language the chats were written in, never "
+                                                   "translated; empty to see what was said at `when`"},
+        "when": {"type": "string", "description": "their own time words for it, as they said them (\"last week\", "
+                                                  "\"上个月\", \"il y a trois semaines\"), empty when they named no "
+                                                  "time"}},
         "required": []}}}
 # Lines a search hands the model, each with the other side's line beside it, and the length of each.
 HITS = 6

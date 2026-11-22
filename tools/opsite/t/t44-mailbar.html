@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>收件箱</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #f4f5f7; }
+main { max-width: 480px; margin: 30px auto; background: #fff; border-radius: 10px; padding: 16px 20px; }
+/* One bar under the mail, clickable as a whole; each half has its own handler, as many mail pages draw it. */
+.bar { text-align: center; cursor: pointer; border-top: 1px solid #ddd; padding: 6px; }
+.bar span { display: inline-block; width: 64px; }
+.bar .ic { height: 18px; width: 18px; margin: 0 auto; background: #c9d3e6; border-radius: 4px; }
+#pane { display: none; border-top: 1px solid #ddd; margin-top: 10px; padding-top: 8px; }
+#pane .head { height: 22px; }
+/* The send arrow: a picture drawn by CSS, no words, no label. */
+#send-forward { float: right; width: 20px; height: 20px; cursor: pointer;
+  background: url(/t/send.svg) center / 16px no-repeat, #e8eefb; border-radius: 4px; }
+#close-forward { float: left; width: 20px; height: 20px; cursor: pointer; background: #eee; border-radius: 4px; }
+</style></head>
+<body><main>
+<h3>周末的读书会</h3>
+<p>发件人：Ann</p>
+<p>大家好，周六下午三点在图书馆二楼，带上想分享的书。</p>
+<div class="bar"><span class="reply"><div class="ic"></div><div>回复</div></span><span class="forward"><div class="ic"></div><div>转发</div></span></div>
+<div id="pane">
+  <div class="head"><span id="close-forward"></span><span id="send-forward"></span></div>
+  <div><label>收件人：</label><input id="to" type="text"></div>
+  <div><label>主题：</label>Fwd: 周末的读书会</div>
+</div>
+<p id="said"></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+document.querySelector(".bar .reply").onclick = () => { said.textContent = "回复：尚未实现"; };
+document.querySelector(".bar .forward").onclick = () => { pane.style.display = "block"; };
+document.getElementById("close-forward").onclick = () => { pane.style.display = "none"; };
+document.getElementById("send-forward").onclick = () =>
+  post("/api/forward", { to: to.value, subject: "Fwd: 周末的读书会" }).then(() => { said.textContent = "已转发"; });
+</script>
+</body></html>

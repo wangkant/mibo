@@ -64,6 +64,8 @@ ALWAYS_KINDS = ("manner", "health", "dislike", "form", "who")
 #: A fact is grounded when this share of its characters (CJK) or words
 #: occurs in what the person said.
 GROUND_SHARE = 0.6
+#: ...and this share of them when its quote is word for word in the line it comes from.
+QUOTED_SHARE = 0.5
 #: A new fact without a slot replaces an old one whose words it carries.
 SAME_FACT = 0.6
 #: New words that overlap a forgotten thing this much are refused.
@@ -220,26 +222,68 @@ def _units(text: str) -> set[str]:
     return chars | words
 
 
-def grounded(text: str, sources: str) -> bool:
-    """Is `text` made of the words in `sources`: GROUND_SHARE of its content
-    characters and words, and for CJK at least one pair of characters in a row."""
+def _same_stem(a: str, b: str) -> bool:
+    """Two forms of one word: a shared start of four letters or more, all but the last two of the shorter
+    ("lives" and "live", "trabaja" and "trabajo", "работаю" and "работает")."""
+    n = 0
+    while n < min(len(a), len(b)) and a[n] == b[n]:
+        n += 1
+    return n >= max(4, min(len(a), len(b)) - 2)
+
+
+def grounded(text: str, sources: str, share: float = GROUND_SHARE) -> bool:
+    """Is `text` made of the words in `sources`: `share` of its content characters and words, a word also in
+    another form of it, and for CJK at least one pair of characters in a row."""
     units = _units(text)
     if not units:
         return False
     hay = str(sources or "").lower()
-    share = sum(1 for u in units if u in hay) / len(units)
-    if share < GROUND_SHARE:
+    words = {w for w in _WORD.findall(_CJK.sub(" ", hay)) if len(w) >= 4}
+
+    def found(u: str) -> bool:
+        return u in hay or (len(u) >= 5 and not u.isdigit() and not _CJK.match(u)
+                            and any(_same_stem(u, w) for w in words))
+    if sum(1 for u in units if found(u)) / len(units) < share:
         return False
     run = [c for c in str(text).lower() if _CJK.match(c)]
     pairs = {a + b for a, b in zip(run, run[1:])}
     return not pairs or any(p in hay for p in pairs)
 
 
+_ELLIPSIS = re.compile(r"\.{3,}|…+")
+
+
+def _plain(text: str) -> str:
+    """Words only: NFKC, case folded, punctuation and spacing made one space."""
+    return " ".join(re.sub(r"[\W_]+", " ", unicodedata.normalize("NFKC", str(text or "")).casefold()).split())
+
+
+def holds(line: str, quote: str) -> bool:
+    """`quote` is in `line` word for word, case, punctuation and spacing aside; a "..." in it may leave words out
+    between its pieces, which come in order. A quote with no content word holds nothing."""
+    pieces = [p for p in map(_plain, _ELLIPSIS.split(str(quote or ""))) if p]
+    if not pieces or not _units(" ".join(pieces)):
+        return False
+    hay, at = _plain(line), 0
+    for piece in pieces:
+        while True:
+            i = hay.find(piece, at)
+            if i < 0:
+                return False
+            at = i + 1
+            # A piece starts and ends on a word's edge, unless it is CJK, which has no spaces.
+            if ((i == 0 or hay[i - 1] == " " or _CJK.match(piece[0]))
+                    and (i + len(piece) == len(hay) or hay[i + len(piece)] == " " or _CJK.match(piece[-1]))):
+                at = i + len(piece)
+                break
+    return True
+
+
 def said_part(text: str, ok: Callable[[str], bool]) -> str:
     """`text` when `ok`; else its clauses that are ("住徐汇，咖啡店打工" from "搬到徐汇了": 住徐汇), "" for none."""
     if not text or ok(text):
         return text
-    return "，".join(p for p in re.split(r"\s*[，,；;]\s*", text) if p and ok(p))
+    return ("，" if _CJK.search(text) else ", ").join(p for p in re.split(r"\s*[，,；;]\s*", text) if p and ok(p))
 
 
 def _tokens(text: str) -> set[str]:

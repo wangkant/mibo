@@ -1,7 +1,11 @@
 """The fit of one turn's requests (mibo/context.py Fit, context-design.json's fit ladder): a tool result held to
-its share when it comes in, older results and the pictures tools returned cut once each past the ceiling, the
-newest round left whole, and a request that cannot fit said so."""
+its share when it comes in, older results and the pictures tools returned giving way past the ceiling, the newest
+round never cut below a floor the model can read from, and a request that cannot fit said so."""
 from __future__ import annotations
+
+import re
+
+import pytest
 
 from mibo import context
 
@@ -87,3 +91,77 @@ def test_a_request_that_cannot_fit_is_said_and_its_last_call_carries_every_resul
     assert not fit(convo)
     fit.last(convo)
     assert all(context.text_tokens(m["content"]) <= PLAN.small + 20 for m in convo if m.get("role") == "tool")
+
+
+def _readable(text: str) -> int:
+    # Characters of the result's own text: the cut's mark is in English.
+    return len(re.findall("[一-鿿]", text))
+
+
+# The design's fixed part at each window: the system prompt and the tools up front.
+@pytest.mark.parametrize("window, fixed", [(16384, 6600), (32768, 7800), (131072, 7800)],
+                         ids=["16k", "32k-assumed", "128k"])
+def test_read_after_read_of_large_results_the_newest_stays_readable_and_the_request_within_its_limit(
+        window, fixed):
+    plan = context.budget(window, fixed=fixed)
+    fit = context.Fit(plan, lambda c: fixed + _count(c), 1.0, PICTURES)
+    convo = [{"role": "user", "content": "一份一份地读"}]
+    for n in range(30):
+        convo += _calls(n, *(_han(10 * n + k, 15_000) for k in range(3)))
+        assert fit(convo)
+        assert fixed + _count(convo) <= plan.limit
+        # Each newest result shows at least its floor's worth of its own text, under one mark.
+        assert all(_readable(m["content"]) >= 300 and m["content"].count("characters of this result left out") <= 1
+                   for m in convo[-3:])
+
+
+def test_newest_results_refit_for_a_smaller_window_are_cut_once_from_what_came_in():
+    # A request refused past the window the endpoint then stated: the round it carried is fitted again, the model
+    # not having seen it.
+    text = _han(1, 40_000)
+    convo = [{"role": "user", "content": "读一下"}, *_calls(1, text)]
+    fit = _fit()
+    assert fit(convo)
+    fit.plan = context.budget(16384, fixed=6600)
+    fit.count = lambda c: 6600 + _count(c)
+    assert fit(convo) and 6600 + _count(convo) <= fit.plan.limit
+    kept = convo[-1]["content"]
+    head, rest = kept.split("\n\n[... ", 1)
+    tail = rest.split("...]\n\n", 1)[1]
+    assert text.startswith(head) and text.endswith(tail) and _readable(kept) >= 300
+    assert f"[... {len(text) - len(head) - len(tail)} characters of this result left out" in kept
+
+
+def test_a_short_result_such_as_a_card_said_no_to_stays_whole_while_older_results_give_way():
+    # The model must keep seeing that the person said no, or it asks them again; a line no longer than the one that
+    # would clear it saves nothing either.
+    plan = context.budget(16384, fixed=6600)
+    fit = context.Fit(plan, lambda c: round(6600 + 1.25 * _count(c)), 1.25, PICTURES)
+    declined = "[declined] the person said no to order (Buy now); nothing was pressed"
+    convo = [{"role": "user", "content": "买下来"}, *_calls(0, _han(0, 5000)), *_calls(1, declined)]
+    for n in range(2, 14):
+        convo += _calls(n, _han(n, 5000))
+        assert fit(convo)
+        assert declined in [m["content"] for m in convo if m.get("role") == "tool"], n
+    assert any(m["content"] == context.RESULT_GONE for m in convo)
+
+
+def test_many_short_results_beside_one_long_one_leave_the_long_one_its_room():
+    # One read and the calls past the round's limit, each answered by a one-line error: the short lines take only
+    # what they hold, so the read is not counted as unreadable.
+    plan = context.budget(16384, fixed=6600)
+    fit = context.Fit(plan, lambda c: 6600 + _count(c), 1.0, PICTURES)
+    convo = [{"role": "user", "content": "读一下"},
+             *_calls(1, _han(1, 30_000), *["Error: not run: at most 10 calls a round"] * 29)]
+    assert fit(convo)
+    assert _readable(convo[2]["content"]) >= 300 and 6600 + _count(convo) <= plan.limit
+
+
+def test_newest_results_that_cannot_be_read_beside_the_rest_are_said_not_to_fit_and_the_last_call_reads_part():
+    # Their message leaves the newest result less than the least it is shown at.
+    convo = [{"role": "user", "content": _han(0, 91_600)}, *_calls(1, _han(1, 20_000))]
+    fit = _fit()
+    assert not fit(convo)
+    fit.last(convo)
+    # The last call carries a part of the newest result, not a mark alone, and knows it is only a part.
+    assert _readable(convo[-1]["content"]) >= 300 and fit.partial

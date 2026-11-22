@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>贴纸板</title>
+<style>
+body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; background: #fafafa; }
+main { max-width: 420px; margin: 30px auto; background: #fff; border-radius: 10px; padding: 16px 20px; }
+#colors span { display: inline-block; width: 24px; height: 24px; margin: 4px; border: 2px solid #fff; border-radius: 4px; }
+#colors span.chosen { border-color: #333; }
+svg { border: 1px solid #ddd; display: block; margin: 10px 0; }
+</style></head>
+<body><main>
+<h2>贴纸板</h2>
+<p>底色：</p>
+<!-- Colour boxes with no words, picked by their colour. -->
+<div id="colors"><span style="background:#e53935"></span><span style="background:#808080"></span><span style="background:#1e88e5"></span><span style="background:#43a047"></span></div>
+<!-- A drawing: dots and a frame, dragged with the mouse. -->
+<svg id="board" width="240" height="140">
+  <rect id="frame" x="150" y="30" width="70" height="70" fill="none" stroke="#333" stroke-width="2"></rect>
+  <circle id="red" cx="40" cy="40" r="14" fill="#e53935"></circle>
+  <circle id="blue" cx="60" cy="100" r="14" fill="#1e88e5"></circle>
+</svg>
+<button id="done">提交</button>
+<p id="said"></p>
+</main>
+<script src="/t/kit.js"></script>
+<script>
+let color = "", moving = null;
+for (const box of document.querySelectorAll("#colors span")) {
+  box.onclick = () => {
+    for (const b of document.querySelectorAll("#colors span")) b.classList.remove("chosen");
+    box.classList.add("chosen");
+    color = getComputedStyle(box).backgroundColor;
+  };
+}
+const at = (e) => { const r = board.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+for (const dot of document.querySelectorAll("circle")) dot.addEventListener("mousedown", (e) => { moving = dot; e.preventDefault(); });
+document.addEventListener("mousemove", (e) => {
+  if (!moving) return;
+  const [x, y] = at(e);
+  moving.setAttribute("cx", x); moving.setAttribute("cy", y);
+});
+document.addEventListener("mouseup", () => { moving = null; });
+const inside = (dot) => { const x = +dot.getAttribute("cx"), y = +dot.getAttribute("cy"); return x > 150 && x < 220 && y > 30 && y < 100; };
+done.onclick = () => post("/api/board", { color, red: inside(red), blue: inside(blue) }).then(() => { said.textContent = "已提交"; });
+</script>
+</body></html>
