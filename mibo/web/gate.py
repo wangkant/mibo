@@ -151,7 +151,7 @@ BIND_OTHER = ["签署", "签约", "确认签署", "电子签名", "签名并提�
 # name names the person too (ban_member), so those words count there only with one of PEOPLE.
 TO_PEOPLE = ["block", "report", "mute"]
 # With the person named beside them, on a page or in a tool's name.
-TO_PEOPLE_NAMED = TO_PEOPLE + ["kick", "ban", "suspend"]
+TO_PEOPLE_NAMED = [*TO_PEOPLE, "kick", "ban", "suspend"]
 PEOPLE = ("user", "member", "account", "contact", "follower", "participant", "collaborator", "guest", "person")
 # A change verb with what it changes is a floor act: on a page the two side by side ("change email", "make public"),
 # in a tool's name anywhere in it (update_user_email, payouts.create).
@@ -168,7 +168,7 @@ PAIRS = (
                       "donation")),
     ("order", ("book", "reserve", "order", "rent"), ("flight", "hotel", "room", "table", "ticket", "seat",
                                                      "appointment", "trip", "car", "ride", "taxi", "meal")),
-    ("account", EDITS + ("enable", "disable", "turn on", "turn off", "require", "enforce", "configure", "enroll"),
+    ("account", (*EDITS, "enable", "disable", "turn on", "turn off", "require", "enforce", "configure", "enroll"),
      ("password", "two-factor", "two factor", "2fa", "mfa", "totp", "passkey", "security key", "sso", "recovery")),
     ("account", ("update", "change", "modify", "set", "reset", "disable", "enable", "deactivate", "suspend", "lock",
                  "unlock"), ("user", "account", "member")),
@@ -177,7 +177,7 @@ PAIRS = (
     ("account", ("create", "add", "rotate", "regenerate", "generate", "revoke"),
      ("ssh key", "api key", "access token", "deploy key", "gpg key", "personal access token")),
     ("account", TO_PEOPLE_NAMED, PEOPLE),
-    ("grant", EDITS + ("make", "assign", "give", "grant", "revoke", "transfer"),
+    ("grant", (*EDITS, "make", "assign", "give", "grant", "revoke", "transfer"),
      ("permission", "role", "access", "acl", "owner", "ownership", "collaborator", "admin", "visibility", "public")),
     ("grant", ("share", "unshare", "invite"), ("file", "folder", "document", "drive", "repo", "repository", "calendar",
                                                "user", "member", "people")),
@@ -243,6 +243,8 @@ def hands_over(text: str) -> bool:
         if (field and field.group(2).strip() and PRIVATE_LABELS.search(field.group(1))) or PRIVATE_VALUES.search(line):
             return True
     return False
+
+
 # What holds a secret: a tool named for one reads or changes the account's security (a page's secret fields are
 # pageops.secret's).
 SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "totp", "credential", "credentials",

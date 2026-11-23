@@ -22,7 +22,7 @@ import logging
 import re
 import warnings
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..ingestion import safe_fetch_url
 from . import read as reading
@@ -51,6 +51,7 @@ _LINK = re.compile(r"<a\b[^>]*>(.*?)</a>", re.S | re.I)
 _TAG = re.compile(r"<[^>]+>")
 _HEADING = re.compile(r"^#{1,6} ", re.M)
 _RULE = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$", re.M)
+_warming: set[asyncio.Task] = set()
 
 
 class _Head(HTMLParser):
@@ -159,8 +160,16 @@ def _page(content: bytes, content_type: str, url: str, wide: bool) -> tuple[str,
     return html, head(html, url)[0]["title"], main_text(html, wide)
 
 
-async def plain(agent: Any, url: str, wide: bool = False) -> tuple[int, str, str, str, str] | None:
-    """(status, html, title, main text, final address) of a plain fetch; None when it failed or may not be made
+class Fetched(NamedTuple):
+    status: int
+    html: str
+    title: str
+    text: str
+    url: str
+
+
+async def plain(agent: Any, url: str, wide: bool = False) -> Fetched | None:
+    """A plain fetch's status, page, title, main text and final address; None when it failed or may not be made
     (every redirect hop is checked to be public). `wide` takes more of the page, for a list."""
     from ..sources.base import HEADERS
     from .sites import TOKEN
@@ -174,7 +183,7 @@ async def plain(agent: Any, url: str, wide: bool = False) -> tuple[int, str, str
         return None
     html, title, text = await asyncio.to_thread(
         _page, result.content, str(result.headers.get("content-type") or ""), result.url, wide)
-    return result.status_code, html, title, text, result.url
+    return Fetched(result.status_code, html, title, text, result.url)
 
 
 async def _warm(roam: Any) -> None:
@@ -235,13 +244,17 @@ async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str,
     roam = getattr(agent, "roam", None)
     usable = roam is not None and not roam.available()
     if usable and roam.visitor.context is None:
-        asyncio.ensure_future(_warm(roam))
+        # Held until done: the loop keeps only a weak reference to a task.
+        task = asyncio.create_task(_warm(roam))
+        _warming.add(task)
+        task.add_done_callback(_warming.discard)
     fetched = await plain(agent, url, wants_list)
-    if fetched is not None and reading.wall_at(fetched[4]):
+    if fetched is not None and reading.wall_at(fetched.url):
         # Sent to a sign-in or a check: a browser is sent there too, and a wall is not got around.
         return None
-    why = "failed" if fetched is None else thin(fetched[0], fetched[1], fetched[3], wants_list)
-    kept = None if fetched is None or fetched[0] >= 400 or len(fetched[3]) < SHELL else fetched[2:]
+    why = "failed" if fetched is None else thin(fetched.status, fetched.html, fetched.text, wants_list)
+    kept = (None if fetched is None or fetched.status >= 400 or len(fetched.text) < SHELL
+            else (fetched.title, fetched.text, fetched.url))
     if not why or not usable:
         return kept
     try:

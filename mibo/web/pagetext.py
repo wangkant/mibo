@@ -114,6 +114,23 @@ def _sections(lines: list[str]) -> list[tuple[str, int, int]]:
     return out
 
 
+def _section_at(sections: list[tuple[str, int, int]], i: int) -> int:
+    """The number of the section line `i` stands in."""
+    return next(n for n, (_, start, end) in enumerate(sections) if start <= i < end)
+
+
+def _tables(lines: list[str]) -> list[tuple[int, int]]:
+    """(header line, rows under it) of each table."""
+    out = []
+    for i in range(len(lines) - 1):
+        if SEP.fullmatch(lines[i + 1]):
+            rows = 0
+            while i + 2 + rows < len(lines) and lines[i + 2 + rows].startswith("|"):
+                rows += 1
+            out.append((i, rows))
+    return out
+
+
 def _header(lines: list[str], i: int) -> int | None:
     """The header row of the table line `i` stands in, or None."""
     j = i
@@ -137,13 +154,8 @@ def outline(text: str, most: int) -> str:
             listed.append(f"§{n} {name[:60]} ({sum(len(x) + 1 for x in lines[start:end])} characters)")
         if len(sections) > SECTIONS_MAX:
             listed.append(f"... and {len(sections) - SECTIONS_MAX} more sections")
-    for i, line in enumerate(lines):
-        if i + 1 < len(lines) and SEP.fullmatch(lines[i + 1]):
-            rows = 0
-            while i + 2 + rows < len(lines) and lines[i + 2 + rows].startswith("|"):
-                rows += 1
-            where = next(n for n, (_, start, end) in enumerate(sections) if start <= i < end)
-            listed.append(f"A table in §{where}: {rows} rows; its columns: {line[:200]}")
+    for i, rows in _tables(lines):
+        listed.append(f"A table in §{_section_at(sections, i)}: {rows} rows; its columns: {lines[i][:200]}")
     top, size = [], 0
     room = min(TOP_CHARS, max(200, most // 3))
     for line in lines:
@@ -162,14 +174,7 @@ def size(text: str) -> str:
     """How much a page given whole holds, counted rather than left to a model: its lines, and the rows of each
     table under its header."""
     lines = text.split("\n")
-    rows = []
-    for i, line in enumerate(lines):
-        if i + 1 < len(lines) and SEP.fullmatch(lines[i + 1]):
-            n = 0
-            while i + 2 + n < len(lines) and lines[i + 2 + n].startswith("|"):
-                n += 1
-            rows.append(n)
-    return f"{len(lines)} lines" + "".join(f", with a table of {n} rows" for n in rows[:5])
+    return f"{len(lines)} lines" + "".join(f", with a table of {n} rows" for _, n in _tables(lines)[:5])
 
 
 def section(text: str, number: int) -> str:
@@ -226,7 +231,7 @@ def find(text: str, words: list[str], most: int) -> tuple[str, str]:
     for k in sorted(shown):
         if k != last + 1:
             # Where it stands: its line and its section, which can be asked for whole.
-            n = next(n for n, (_, start, end) in enumerate(sections) if start <= k < end)
+            n = _section_at(sections, k)
             out.append(f"... (line {k + 1}, in §{n} {sections[n][0][:40]})")
         out.append(lines[k])
         last = k
@@ -260,7 +265,7 @@ def give(text: str, question: str, budget: int, part: int = -1, look_for: str = 
             f"set look_for")
 
 
-def _field(answer: str, key: str) -> str:
+def _field(answer: str, key: str) -> str | int:
     from ..textproc import strip_json_fences
     try:
         value = json.loads(strip_json_fences(str(answer or "")))
@@ -275,6 +280,87 @@ def _field(answer: str, key: str) -> str:
     return " ".join(str(got or "").split())[:RESULT_MAX]
 
 
+class _Reading:
+    """One page read for one question: the calls made, the words the model saw and the notes of what was read."""
+
+    def __init__(self, ask_model: Callable[[str, list[dict]], Awaitable[str]], question: str, budget: int,
+                 part: int, look_for: str) -> None:
+        self.ask_model, self.question, self.budget = ask_model, question, budget
+        self.part, self.look_for = part, look_for
+        self.calls = 0
+        self.shown: list[str] = []
+        self.notes: list[str] = []
+        # Said with the page once its rest was loaded: nothing it holds is left out.
+        self.ended = ""
+
+    async def ask(self, system: str, words: str) -> str:
+        from ..roam import fence_pages
+        self.calls += 1
+        self.shown.append(words)
+        return await self.ask_model(system, [{"role": "user", "content": f"Question: {self.question}\n"
+                                              + fence_pages(words) + "\nReply with one JSON object."}])
+
+    async def read(self, page: str, goes_on: bool) -> tuple[str, str]:
+        """(answer, found) from `page`: in one call when it fits, else led by the question."""
+        budget, part = self.budget, self.part
+        if part >= 0 and section(page, part):
+            got = await self.ask(READ, f"Section §{part} of the page:\n" + section(page, part)[:_chars(page, budget)])
+            self.notes.append(f"section §{part} of the page")
+            return _field(got, "answer"), _field(got, "found")
+        if tokens(page) <= budget:
+            got = await self.ask(READ, ("The page may load or draw more as it scrolls. Answer partly only when the "
+                                        "page itself shows its list goes on past the rows given: a count it shows "
+                                        "larger than the rows given, a loading or load-more line.\n" if goes_on else "")
+                                 + self.ended + f"It is given in {size(page)}, counted.\nThe page:\n" + page)
+            return _field(got, "answer"), _field(got, "found")
+        return await self._led(page)
+
+    async def _led(self, page: str) -> tuple[str, str]:
+        """(answer, found) from a page too long for one call: its outline and the lines that match, then the
+        section or the other words the model asks for, ROUNDS times at most."""
+        budget = self.budget
+        lead = outline(page, _chars(page, int(budget * OUTLINE_SHARE)))
+        words = terms(self.question, self.look_for)
+        result, found = "", "no"
+        for _ in range(ROUNDS):
+            lines, hits = find(page, words, _chars(page, budget) - len(lead))
+            got = await self.ask(LEAD, f"{lead}\n\nLines that match ({hits}):\n{lines or '(none)'}")
+            result, found = _field(got, "answer") or result, _field(got, "found") or found
+            number, other = _field(got, "section"), _field(got, "look_for")
+            if found in ("yes", "partly"):
+                break
+            if isinstance(number, int) and section(page, number):
+                got = await self.ask(READ, f"Section §{number} of the page:\n"
+                                     + section(page, number)[:_chars(page, budget)])
+                result, found = _field(got, "answer") or result, _field(got, "found") or found
+                self.notes.append(f"its outline, the lines that match and section §{number}")
+                if found in ("yes", "partly"):
+                    break
+            if not other:
+                break
+            words = terms(other)
+        self.notes.append(f"its outline and the lines that match ({len(page)} characters in all, not read whole)")
+        return result, found
+
+    def said(self, page: str, loaded: int, goes_on: bool, found: str) -> str:
+        """What was read and what was left, for the reply never to claim a whole page it read a part of."""
+        whole = tokens(page) <= self.budget and self.part < 0
+        said = (("the whole page, loaded to its end, every row of its list read" if self.ended else
+                 "the whole page, every line its document holds read") + f": {size(page)}" if whole
+                else "; ".join(dict.fromkeys(self.notes)) or "a part of it")
+        if loaded:
+            said += f"; more of it loaded {loaded} time{'s' if loaded > 1 else ''}"
+        if goes_on and found != "yes":
+            said += "; the page goes on past what was read"
+        return said
+
+
+def _new_lines(page: str, now: str) -> list[str]:
+    """The lines of the document `now` that `page` does not hold yet."""
+    known = set(page.split("\n"))
+    return [line for line in clean(now).split("\n") if line not in known]
+
+
 async def answer(ask_model: Callable[[str, list[dict]], Awaitable[str]], question: str, text: str, budget: int, *,
                  more: Callable[[str], Awaitable[tuple[str, bool]]] | None = None, goes_on: bool = False,
                  look_for: str = "", part: int = -1) -> dict:
@@ -283,101 +369,44 @@ async def answer(ask_model: Callable[[str, list[dict]], Awaitable[str]], questio
     words after it and whether it goes on still; `goes_on` says it does now. `part` reads one section of the
     outline whole. Returns {"answer", "calls", "read": what was read and left, "text": the words the model saw,
     "sections": the outline's section names when it read a part}."""
-    from ..roam import fence_pages
-    asked = f"Question: {question}\n"
-    calls, shown, notes = 0, [], []
-    # Said with the page once its rest was loaded: nothing it holds is left out.
-    ended = ""
-
-    async def ask(system: str, words: str) -> str:
-        nonlocal calls
-        calls += 1
-        shown.append(words)
-        return await ask_model(system, [{"role": "user", "content": asked + fence_pages(words)
-                                         + "\nReply with one JSON object."}])
-
-    async def read(page: str) -> tuple[str, str]:
-        """(answer, found) from `page`: in one call when it fits, else led by the question."""
-        if part >= 0 and section(page, part):
-            got = await ask(READ, f"Section §{part} of the page:\n" + section(page, part)[:_chars(page, budget)])
-            notes.append(f"section §{part} of the page")
-            return _field(got, "answer"), _field(got, "found")
-        if tokens(page) <= budget:
-            got = await ask(READ, ("The page may load or draw more as it scrolls. Answer partly only when the page "
-                                   "itself shows its list goes on past the rows given: a count it shows larger than "
-                                   "the rows given, a loading or load-more line.\n" if goes_on else "")
-                            + ended + f"It is given in {size(page)}, counted.\nThe page:\n" + page)
-            return _field(got, "answer"), _field(got, "found")
-        lead = outline(page, _chars(page, int(budget * OUTLINE_SHARE)))
-        words = terms(question, look_for)
-        result, found = "", "no"
-        for _ in range(ROUNDS):
-            lines, hits = find(page, words, _chars(page, budget) - len(lead))
-            got = await ask(LEAD, f"{lead}\n\nLines that match ({hits}):\n{lines or '(none)'}")
-            result, found = _field(got, "answer") or result, _field(got, "found") or found
-            number, other = _field(got, "section"), _field(got, "look_for")
-            if found == "yes" or found == "partly":
-                break
-            if isinstance(number, int) and section(page, number):
-                got = await ask(READ, f"Section §{number} of the page:\n" + section(page, number)[:_chars(page, budget)])
-                result, found = _field(got, "answer") or result, _field(got, "found") or found
-                notes.append(f"its outline, the lines that match and section §{number}")
-                if found in ("yes", "partly"):
-                    break
-            if not other:
-                break
-            words = terms(other)
-        notes.append(f"its outline and the lines that match ({len(page)} characters in all, not read whole)")
-        return result, found
-
+    reading = _Reading(ask_model, question, budget, part, look_for)
     page = clean(text)
-    result, found = await read(page)
+    result, found = await reading.read(page, goes_on)
     loaded = 0
     # Not here yet and the page goes on: one more screen at a time, the question in hand, the new lines only.
     while found == "no" and goes_on and more is not None and loaded < LOAD_STEPS:
         now, goes_on = await more("step")
         loaded += 1
-        known = set(page.split("\n"))
-        new = "\n".join(line for line in clean(now).split("\n") if line not in known)
+        new = "\n".join(_new_lines(page, now))
         if not new:
             break
         page = page + "\n" + new
-        got = await ask(READ, "What the page held before had nothing for it. What it showed next:\n"
-                        + new[:_chars(new, budget)])
+        got = await reading.ask(READ, "What the page held before had nothing for it. What it showed next:\n"
+                                + new[:_chars(new, budget)])
         result, found = _field(got, "answer") or result, _field(got, "found") or found
     if found == "partly" and goes_on and more is not None:
         # A question over the whole list: the rest is loaded once and read again.
         now, goes_on = await more("all")
         loaded += 1
-        known = set(page.split("\n"))
-        grew = any(line not in known for line in clean(now).split("\n"))
-        page = clean(now) if grew else page
-        ended = ("The page was scrolled to its end and nothing more loaded: what is given is all it holds, every "
-                 "row of its list, though a count it shows may differ.\n")
-        notes.append("all of it, loaded to its end")
-        if tokens(page) > budget:
-            # Too long for one call, and the question is about all of it: the pieces, below.
-            found = "partly"
-        else:
-            # Read again knowing nothing is left out, whether or not the rest held new lines.
-            result, found = await read(page)
+        page = clean(now) if _new_lines(page, now) else page
+        reading.ended = ("The page was scrolled to its end and nothing more loaded: what is given is all it holds, "
+                         "every row of its list, though a count it shows may differ.\n")
+        reading.notes.append("all of it, loaded to its end")
+        # Too long for one call, and the question is about all of it: the pieces, below. Else read again knowing
+        # nothing is left out, whether or not the rest held new lines.
+        if tokens(page) <= budget:
+            result, found = await reading.read(page, goes_on)
             found = "yes" if found == "partly" else found
     if found == "partly" and tokens(page) > budget:
         # Too long for one call and the question needs all of it: the pieces, side by side.
-        result = await _pieces(ask, page, budget) or result
-        notes.append(f"all of it in {len(pieces(page, _chars(page, budget)))} pieces")
+        result = await _pieces(reading.ask, page, budget) or result
+        reading.notes.append(f"all of it in {len(pieces(page, _chars(page, budget)))} pieces")
         found = "yes"
     whole = tokens(page) <= budget and part < 0
-    said = (("the whole page, loaded to its end, every row of its list read" if ended else
-             "the whole page, every line its document holds read") + f": {size(page)}" if whole
-            else "; ".join(dict.fromkeys(notes)) or "a part of it")
-    if loaded:
-        said += f"; more of it loaded {loaded} time{'s' if loaded > 1 else ''}"
-    if goes_on and found != "yes":
-        said += "; the page goes on past what was read"
     sections = [] if whole else [name for name, _, _ in _sections(page.split("\n"))][:SECTIONS_MAX]
-    return {"answer": result or "no answer came back from the reading", "calls": calls, "read": said,
-            "text": "\n".join(shown), "sections": sections, "found": found}
+    return {"answer": result or "no answer came back from the reading", "calls": reading.calls,
+            "read": reading.said(page, loaded, goes_on, found), "text": "\n".join(reading.shown),
+            "sections": sections, "found": found}
 
 
 def pieces(text: str, size: int) -> list[str]:

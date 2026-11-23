@@ -136,11 +136,9 @@ class PlaywrightTab(Tab):
                                             timeout=int(timeout_s * 1000))
         except Exception as exc:
             raise TabError(" ".join(str(exc).split())[:300]) from None
-        try:
+        # A slow document is read as far as it got.
+        with contextlib.suppress(Exception):
             await self.page.wait_for_load_state("domcontentloaded", timeout=int(PARSED_S * 1000))
-        except Exception:
-            # A slow document is read as far as it got.
-            pass
         if response is None:
             return Answer(self.page.url)
         headers = response.headers

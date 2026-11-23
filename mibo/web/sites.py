@@ -81,6 +81,8 @@ _AGO = re.compile(r"(\d+)\s*(年|个月|個月|周|週|天|日|years?|months?|we
 _AGO_DAYS = {"年": 365, "year": 365, "个月": 30, "個月": 30, "month": 30, "周": 7, "週": 7, "week": 7,
              "天": 1, "日": 1, "day": 1}
 _DAY = re.compile(r"(20\d\d)[-/.年](\d{1,2})[-/.月](\d{1,2})")
+# The placeholder a search template names the words by (OpenSearch's, a SearchAction's).
+_WORDS_SLOT = re.compile(r"\{(searchTerms|search_term_string|search_term|query|q)\}")
 
 
 # ---------------------------------------------------------------- the store
@@ -373,7 +375,7 @@ def rested(runtime: Path, address_: str, now: float | None = None) -> bool:
     return bool(health.get("stale")) and now - health.get("stale_at", 0) < STALE_S
 
 
-def check(runtime: Path, key: str, intent: str, page: reading.Page, words: str = "") -> bool:
+def check(runtime: Path, key: str, page: reading.Page, words: str = "") -> bool:
     """One use checked and counted: same host after redirects, no wall, MIN_ROWS rows shaped like the
     host's items (any rows while no shape is known), and for a search the words seen."""
     shape = card(runtime, key)["shape"]
@@ -436,27 +438,32 @@ async def list_of(runtime: Path, tab: Tab, address_: str, intent: str, words: st
         entry = await learn(runtime, tab, key, intent, words)
         if entry is None:
             # Nothing learned counts as a failed use: after STALE_AFTER in a row the host rests.
-            check(runtime, key, intent, reading.Page(card(runtime, key)["home"]))
+            check(runtime, key, reading.Page(card(runtime, key)["home"]))
             return reading.Page(card(runtime, key)["home"], wall="unknown", evidence="no entry")
     page = await read_entry(runtime, tab, entry, words, screens=screens)
     if intent == "hot" and entry.get("kind") != "feed" and not page.wall:
         page = await _feed_first(runtime, tab, key, entry, page) or page
     said = words if intent == "search" else ""
-    if not check(runtime, key, intent, page, said) and page.wall in ("", "dead"):
+    if not check(runtime, key, page, said) and page.wall in ("", "dead"):
         logger.info("web: the %s entry of %s did not check out; learning it again", intent, key)
         entry = await learn(runtime, tab, key, intent, words, failed=address(entry, words))
         if entry is not None:
             page = await read_entry(runtime, tab, entry, words, screens=screens)
-            check(runtime, key, intent, page, said)
+            check(runtime, key, page, said)
     if intent == "hot":
         page.rows = [row for row in page.rows if fresh(row)]
     return page
 
 
+def _discovery(page: reading.Page) -> dict:
+    """Where reader.js found the site's search and hot lists declared."""
+    found = page.data.get("discovery")
+    return found if isinstance(found, dict) else {}
+
+
 def _feeds(page: reading.Page, key: str) -> list[str]:
     """The feeds a page declares on its own host, a comments feed left out."""
-    found = page.data.get("discovery") if isinstance(page.data.get("discovery"), dict) else {}
-    return [u for u in found.get("feeds") or [] if key_of(u) == key and "comment" not in u.lower()][:2]
+    return [u for u in _discovery(page).get("feeds") or [] if key_of(u) == key and "comment" not in u.lower()][:2]
 
 
 async def _feed_first(runtime: Path, tab: Tab, key: str, entry: dict, page: reading.Page) -> reading.Page | None:
@@ -495,7 +502,7 @@ async def learn(runtime: Path, tab: Tab, key: str, intent: str, words: str = "",
     page = await reading.read(tab, home, runtime=runtime, background=True)
     if page.wall and page.wall != "sign_in_overlay":
         return None
-    found = page.data.get("discovery") if isinstance(page.data.get("discovery"), dict) else {}
+    found = _discovery(page)
     if intent == "search":
         entry = await _search_rungs(runtime, tab, key, found, words)
     else:
@@ -508,20 +515,25 @@ async def learn(runtime: Path, tab: Tab, key: str, intent: str, words: str = "",
         if intent == "search":
             stored["search"] = entry
         else:
-            stored["hot"] = [entry] + [h for h in stored.get("hot") or [] if h.get("url") != entry["url"]][:2]
+            stored["hot"] = [entry, *[h for h in stored.get("hot") or [] if h.get("url") != entry["url"]][:2]]
         stored.setdefault("health", {}).update(fails=0, stale=False)
     _change(runtime, key, edit)
     logger.info("web: learned the %s entry of %s (%s)", intent, key, entry["how"])
     return entry
 
 
+def _origin(url: str) -> str:
+    """The scheme and host of an address, nothing after."""
+    return urlunsplit((*urlsplit(url)[:2], "", "", ""))
+
+
 def _template(raw: str, base: str) -> str:
     """A search address with {q} for the words: OpenSearch's {searchTerms} or a SearchAction's named
     placeholder becomes {q}, optional parameters ({name?}) are dropped."""
-    url = urlsplit(raw if "://" in raw else urlunsplit(urlsplit(base)[:2] + ("", "", "")) + raw)
+    url = urlsplit(raw if "://" in raw else _origin(base) + raw)
     query = [(k, v) for k, v in parse_qsl(url.query, keep_blank_values=True) if not re.fullmatch(r"\{[^}]*\?\}", v)]
-    path = re.sub(r"\{(searchTerms|search_term_string|search_term|query|q)\}", "{q}", url.path)
-    query = [(k, re.sub(r"\{(searchTerms|search_term_string|search_term|query|q)\}", "{q}", v)) for k, v in query]
+    path = _WORDS_SLOT.sub("{q}", url.path)
+    query = [(k, _WORDS_SLOT.sub("{q}", v)) for k, v in query]
     text = urlunsplit((url.scheme, url.netloc, path, urlencode(query, safe="{}"), ""))
     return text if "{q}" in text and not re.search(r"\{(?!q\})", text) else ""
 
@@ -580,7 +592,7 @@ async def _hot_rungs(runtime: Path, tab: Tab, key: str, home: reading.Page, foun
     if home.url != failed and home.kind == "list" and len(rows) >= HOT_ROWS:
         return {"url": home.url, "how": "home", "kind": "page", "rows": len(rows),
                 "shape": item_shape([r["link"] for r in rows], key)}
-    origin = urlunsplit(urlsplit(home.url)[:2] + ("", "", ""))
+    origin = _origin(home.url)
     from ..sources.custom import USUAL_PATHS
     for url in [origin + path for path in USUAL_PATHS[:3]]:
         if url == failed:

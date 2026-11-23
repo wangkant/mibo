@@ -28,7 +28,7 @@ TOOL = {"type": "function", "function": {
     "parameters": {"type": "object", "properties": {
         "site": {"type": "string", "description": "the site as they named it (\"抖音\", \"Gmail\") or its address"}},
         "required": ["site"]}}}
-# How often the tool asks how the sign-in stands, and for how long.
+# How often the tool asks how the sign-in stands (for signin.WAIT_S at most).
 LOOK_S = 2.0
 
 

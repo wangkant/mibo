@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -206,21 +207,9 @@ async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool, unt
         return Page(url, wall=found, evidence="address")
     status = 0
     if not here:
-        try:
-            answer = await tab.goto(url)
-        except TabError as exc:
-            return Page(url, wall="error", evidence=str(exc)[:EVIDENCE_MAX])
-        status = answer.status
-        final = answer.url or tab.url
-        found = wall_at(final)
-        if found:
-            return Page(final, wall=found, evidence="address", status=status)
-        if status in _GONE:
-            return Page(final, wall="dead", evidence=f"http {status}", status=status)
-        if status >= 400 and status not in _REFUSALS:
-            return Page(final, wall="error", evidence=f"http {status}", status=status)
-        if answer.kind and "html" not in answer.kind and "xml" not in answer.kind:
-            return Page(final, wall="error", evidence=f"not a page ({answer.kind[:40]})", status=status)
+        status, met = await _open(tab, url)
+        if met is not None:
+            return met
     await (quiet(tab, left(ITEM_S)) if item else settle(tab, left(SETTLE_S)))
     # An item page's article is read whatever lists sit beside it.
     opts = {"article": True} if item else {}
@@ -241,28 +230,54 @@ async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool, unt
     rows: dict = {}
     merge(rows, data.get("rows") or [])
     if data.get("kind") == "list" and kind not in STOPS:
-        for _ in range(screens):
-            if not left(SCROLL_PAUSE_S):
-                break
-            await tab.scroll(1)
-            await asyncio.sleep(left(SCROLL_PAUSE_S))
-            await settle(tab, left(AFTER_SCROLL_S))
-            try:
-                more = await run_reader(tab)
-            except Exception:
-                break
-            merge(rows, more.get("rows") or [])
-            more_kind, more_evidence = _wall(more)
-            if more_kind in STOPS:
-                # A wall that came up while scrolling ends the reading with what was seen before it.
-                kind, evidence = more_kind, more_evidence
-                break
+        kind, evidence = await _scroll(tab, rows, screens, left) or (kind, evidence)
     final = str(data.get("url") or tab.url)
     found = wall_at(final)
     if found:
         kind, evidence = found, "address"
     return Page(final, kind=str(data.get("kind") or ""), rows=list(rows.values()), data=data, wall=kind,
                 evidence=evidence, status=status)
+
+
+async def _open(tab: Tab, url: str) -> tuple[int, Page | None]:
+    """`url` opened in the tab: its HTTP status, and the wall its answer already shows (None when the page is
+    there to read)."""
+    try:
+        answer = await tab.goto(url)
+    except TabError as exc:
+        return 0, Page(url, wall="error", evidence=str(exc)[:EVIDENCE_MAX])
+    status = answer.status
+    final = answer.url or tab.url
+    found = wall_at(final)
+    if found:
+        return status, Page(final, wall=found, evidence="address", status=status)
+    if status in _GONE:
+        return status, Page(final, wall="dead", evidence=f"http {status}", status=status)
+    if status >= 400 and status not in _REFUSALS:
+        return status, Page(final, wall="error", evidence=f"http {status}", status=status)
+    if answer.kind and "html" not in answer.kind and "xml" not in answer.kind:
+        return status, Page(final, wall="error", evidence=f"not a page ({answer.kind[:40]})", status=status)
+    return status, None
+
+
+async def _scroll(tab: Tab, rows: dict, screens: int, left: Callable[[float], float]) -> tuple[str, str] | None:
+    """`screens` more screens of a list scrolled, their rows merged into `rows`, each wait cut by `left`; the wall
+    (kind, evidence) that came up while scrolling, which ends the reading with what was seen before it."""
+    for _ in range(screens):
+        if not left(SCROLL_PAUSE_S):
+            break
+        await tab.scroll(1)
+        await asyncio.sleep(left(SCROLL_PAUSE_S))
+        await settle(tab, left(AFTER_SCROLL_S))
+        try:
+            more = await run_reader(tab)
+        except Exception:
+            break
+        merge(rows, more.get("rows") or [])
+        wall = _wall(more)
+        if wall[0] in STOPS:
+            return wall
+    return None
 
 
 def found_rows(page: Page, site_of, *, shape_ok=None, limit: int = 40) -> list[Found]:
