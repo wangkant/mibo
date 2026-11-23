@@ -177,6 +177,12 @@ async def use(agent, args: dict, lookups) -> str:
     if outcome.get("picture"):
         # The window's picture goes with the tool results to the reply (search.py), fenced there as material.
         lookups.pictures.append(outcome["picture"])
+    return _report(outcome, status, named, why)
+
+
+def _report(outcome: dict, status: str, named: str, why: str) -> str:
+    """How the task went, in the words the reply model reads."""
+    from . import operate
     steps = "\n".join(f"- {line}" for line in outcome.get("steps", [])[-10:] if line)
     # The result and the steps carry words read off the window: fenced as data, as a page's words are.
     # When it asks: what it saw there that has no name, for the question to say.

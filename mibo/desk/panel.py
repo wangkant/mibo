@@ -125,8 +125,7 @@ def said(action: dict, node, status: str, outside: bool, lang: str) -> str:
     if do == "scroll":
         name = ("向上" if action.get("direction") == "up" else "向下") if lang == "zh" else (
             "up" if action.get("direction") == "up" else "down")
-    line = words.get(do, do).format(t=name[:40], n=count, k=str(action.get("key") or "")[:20],
-                                    s=action.get("seconds") or 1)
+    line = words.get(do, do).format(t=name[:40], n=count, k=str(action.get("key") or "")[:20])
     if do == "select" and action.get("option"):
         line += f"：{action['option']}" if lang == "zh" else f": {action['option']}"
     tail = STATUS_WORDS[lang]["outside"] if outside else STATUS_WORDS[lang].get(status, "")
@@ -402,6 +401,7 @@ class Desk:
         from ..web.pageprint import view_of
         from . import uia, win32
         from .hands import Hands
+        from .view import View
         hwnd = int(payload.get("hwnd") or 0)
         if not win32.alive(hwnd):
             self.peeks.pop(hwnd, None)
@@ -414,8 +414,8 @@ class Desk:
                 return refused
             base = Path(prog["exe"]).name.lower()
             hands.program, hands.task = prog, "look"
-            hands.view = uia.View(hwnd, g.program_pid(hwnd), shared=base in g.SHARED,
-                                  never=lambda h: g.window_never(base, h))
+            hands.view = View(hwnd, g.program_pid(hwnd), shared=base in g.SHARED,
+                              never=lambda h: g.window_never(base, h))
             self.peeks[hwnd] = hands
         try:
             state = hands._read()

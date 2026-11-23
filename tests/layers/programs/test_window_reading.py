@@ -13,6 +13,7 @@ if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
 from mibo.desk import uia, win32
+from mibo.desk.view import View
 
 WINDOW = 7
 
@@ -96,7 +97,7 @@ def window(monkeypatch):
     def look(*children) -> str:
         monkeypatch.setattr(uia, "element", lambda h: El("Window", "Untitled - Notepad", (0, 0, 900, 600),
                                                          children=children))
-        return uia.View(WINDOW, 42).look()
+        return View(WINDOW, 42).look()
     return look
 
 

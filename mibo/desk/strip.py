@@ -21,9 +21,7 @@ import time
 
 from . import win32
 
-user32, kernel32, gdi32 = win32.user32, win32.kernel32, win32.gdi32
-shcore = ctypes.WinDLL("shcore")
-shcore.GetDpiForMonitor.argtypes = [w.HMONITOR, ctypes.c_int, ctypes.POINTER(w.UINT), ctypes.POINTER(w.UINT)]
+user32, kernel32, gdi32, shcore = win32.user32, win32.kernel32, win32.gdi32, win32.shcore
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, w.HWND, ctypes.c_uint, w.WPARAM, w.LPARAM)
@@ -31,9 +29,6 @@ HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, w.WPARAM, w.LPARAM)
 
 user32.DefWindowProcW.argtypes = [w.HWND, ctypes.c_uint, w.WPARAM, w.LPARAM]
 user32.DefWindowProcW.restype = LRESULT
-user32.CreateWindowExW.argtypes = [w.DWORD, w.LPCWSTR, w.LPCWSTR, w.DWORD, ctypes.c_int, ctypes.c_int,
-                                   ctypes.c_int, ctypes.c_int, w.HWND, w.HMENU, w.HINSTANCE, w.LPVOID]
-user32.CreateWindowExW.restype = w.HWND
 user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, w.HINSTANCE, w.DWORD]
 user32.SetWindowsHookExW.restype = w.HHOOK
 user32.CallNextHookEx.argtypes = [w.HHOOK, ctypes.c_int, w.WPARAM, w.LPARAM]
@@ -43,7 +38,6 @@ user32.SetLayeredWindowAttributes.argtypes = [w.HWND, w.COLORREF, ctypes.c_ubyte
 user32.SetWindowTextW.argtypes = [w.HWND, w.LPCWSTR]
 user32.SendMessageW.argtypes = [w.HWND, ctypes.c_uint, w.WPARAM, w.LPARAM]
 user32.SendMessageW.restype = LRESULT
-user32.DestroyWindow.argtypes = [w.HWND]
 user32.ShowWindow.argtypes = [w.HWND, ctypes.c_int]
 user32.BeginPaint.argtypes = [w.HWND, ctypes.c_void_p]
 user32.BeginPaint.restype = w.HDC
@@ -51,8 +45,6 @@ user32.EndPaint.argtypes = [w.HWND, ctypes.c_void_p]
 user32.FillRect.argtypes = [w.HDC, ctypes.POINTER(w.RECT), w.HBRUSH]
 user32.GetClientRect.argtypes = [w.HWND, ctypes.POINTER(w.RECT)]
 user32.SetTimer.argtypes = [w.HWND, ctypes.c_size_t, ctypes.c_uint, ctypes.c_void_p]
-user32.MonitorFromWindow.argtypes = [w.HWND, w.DWORD]
-user32.MonitorFromWindow.restype = w.HMONITOR
 user32.InvalidateRect.argtypes = [w.HWND, ctypes.c_void_p, w.BOOL]
 user32.GetMessageW.argtypes = [ctypes.POINTER(w.MSG), w.HWND, ctypes.c_uint, ctypes.c_uint]
 user32.TranslateMessage.argtypes = [ctypes.POINTER(w.MSG)]
@@ -114,7 +106,6 @@ class PAINTSTRUCT(ctypes.Structure):
 
 
 user32.RegisterClassExW.argtypes = [ctypes.POINTER(WNDCLASSEXW)]
-_registered: set[str] = set()
 
 
 class Strip:
@@ -141,6 +132,9 @@ class Strip:
         self.thread_id = 0
         self._keep: list = []
         self.border = self.strip = self.label = 0
+        # The strip's own rectangle, where the person's clicks are on the strip and not the window; its brush.
+        self.strip_rect = (0, 0, 0, 0)
+        self._back = 0
         self.thread.start()
         self.ready.wait(5)
 
@@ -321,13 +315,13 @@ class Strip:
         if msg == 0x0138:  # WM_CTLCOLORSTATIC
             gdi32.SetBkColor(wparam, STRIP_BACK)
             gdi32.SetTextColor(wparam, 0x00202020)
-            if not hasattr(self, "_back"):
+            if not self._back:
                 self._back = gdi32.CreateSolidBrush(STRIP_BACK)
             return self._back
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
     def _inside(self, x: int, y: int) -> bool:
-        return any(l <= x < r and t <= y < b for l, t, r, b in self.areas)
+        return any(left <= x < right and top <= y < bottom for left, top, right, bottom in self.areas)
 
     def _on_key(self, code, wparam, lparam):
         if code == 0 and wparam in (0x0100, 0x0104):
@@ -352,7 +346,7 @@ class Strip:
             m = MSLLHOOKSTRUCT.from_address(lparam)
             if m.dwExtraInfo != win32.MARK and self._inside(m.pt.x, m.pt.y) and not (
                     m.flags & 0x01 and time.monotonic() < self.own_until):
-                l, t, r, b = getattr(self, "strip_rect", (0, 0, 0, 0))
-                if not (l <= m.pt.x < r and t <= m.pt.y < b):
+                left, top, right, bottom = self.strip_rect
+                if not (left <= m.pt.x < right and top <= m.pt.y < bottom):
                     self.stop("paused", "the person used the mouse in the window")
         return user32.CallNextHookEx(None, code, wparam, lparam)

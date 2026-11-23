@@ -90,7 +90,7 @@ def beside(app: App, exe: str) -> bool:
     (钉钉's entry starts DingtalkLauncher.exe, its windows are main\\current\\DingTalk.exe's). Not for a folder
     many programs share (Windows' own)."""
     folder = os.path.normcase(os.path.dirname(app.target))
-    system = os.path.normcase(os.environ.get("SystemRoot", r"C:\Windows"))
+    system = os.path.normcase(os.environ.get("SYSTEMROOT", r"C:\Windows"))
     return (len(folder) > 3 and not folder.startswith(system)
             and os.path.normcase(exe).startswith(folder + os.sep))
 
@@ -154,7 +154,7 @@ def apps(fresh: bool = False) -> list[App]:
         rows = [App(name, "", target, file) for name, file, target in win32.shortcuts()]
         for name, aumid, target in win32.start_apps():
             if aumid == EXPLORER:
-                target = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "explorer.exe")
+                target = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "explorer.exe")
             if "!" in aumid or target.lower().endswith(".exe"):
                 rows.append(App(name, aumid, "" if "!" in aumid else target))
         _apps = (time.monotonic(), rows)

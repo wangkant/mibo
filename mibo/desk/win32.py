@@ -4,8 +4,10 @@ an automation pattern needs, and a window's picture.
 """
 from __future__ import annotations
 
+import base64
 import ctypes
 import ctypes.wintypes as w
+import io
 import os
 import re
 import time
@@ -65,7 +67,6 @@ kernel32.OpenProcess.argtypes = [DWORD, BOOL, DWORD]
 kernel32.OpenProcess.restype = w.HANDLE
 kernel32.CloseHandle.argtypes = [w.HANDLE]
 kernel32.QueryFullProcessImageNameW.argtypes = [w.HANDLE, DWORD, w.LPWSTR, ctypes.POINTER(DWORD)]
-kernel32.GetProcessTimes.argtypes = [w.HANDLE] + [ctypes.POINTER(w.FILETIME)] * 4
 kernel32.CreateToolhelp32Snapshot.argtypes = [DWORD, DWORD]
 kernel32.CreateToolhelp32Snapshot.restype = w.HANDLE
 advapi32.OpenProcessToken.argtypes = [w.HANDLE, DWORD, ctypes.POINTER(w.HANDLE)]
@@ -369,9 +370,8 @@ def shortcuts() -> list[tuple[str, str, str]]:
     out = []
     for folder in (known_folder(KNOWN[2][1]), known_folder(PUBLIC_DESKTOP)):
         if folder and os.path.isdir(folder):
-            for entry in os.scandir(folder):
-                if entry.is_file() and entry.name.lower().endswith((".lnk", ".url", ".exe")):
-                    out.append((os.path.splitext(entry.name)[0], entry.path, target(entry.path)))
+            out += [(os.path.splitext(entry.name)[0], entry.path, target(entry.path)) for entry in os.scandir(folder)
+                    if entry.is_file() and entry.name.lower().endswith((".lnk", ".url", ".exe"))]
     for folder in filter(None, map(known_folder, PROGRAMS)):
         for root, _dirs, files in os.walk(folder):
             for name in files:
@@ -432,19 +432,6 @@ def exe_of(pid: int) -> str:
         kernel32.CloseHandle(handle)
 
 
-def started(pid: int) -> int:
-    """When the process started (FILETIME ticks): with the pid, one running instance."""
-    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
-        return 0
-    try:
-        times = [w.FILETIME() for _ in range(4)]
-        kernel32.GetProcessTimes(handle, *map(ctypes.byref, times))
-        return (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
-    finally:
-        kernel32.CloseHandle(handle)
-
-
 def elevated(pid: int) -> bool:
     """Running as administrator, or so protected this process may not even ask: either way not ours to touch."""
     handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
@@ -484,17 +471,21 @@ def parents() -> dict[int, int]:
     return out
 
 
-def descendants(pid: int, tree: dict[int, int] | None = None) -> set[int]:
-    tree = parents() if tree is None else tree
-    found, grew = {pid}, True
+def _grown(found: set[int], tree: dict[int, int], keep=lambda pid: True) -> set[int]:
+    """`found` with every process below it in `tree` that `keep` takes, through the ones it takes."""
+    found, grew = set(found), True
     while grew:
-        more = {child for child, parent in tree.items() if parent in found and child not in found}
+        more = {child for child, parent in tree.items() if parent in found and child not in found and keep(child)}
         found |= more
         grew = bool(more)
     return found
 
 
-APP_EXE = re.compile(r"^(?:pythonw?|mibo|mibo|msedgewebview2)\w*\.exe$", re.I)
+def descendants(pid: int, tree: dict[int, int] | None = None) -> set[int]:
+    return _grown({pid}, parents() if tree is None else tree)
+
+
+APP_EXE = re.compile(r"^(?:pythonw?|mibo|msedgewebview2)\w*\.exe$", re.I)
 
 
 def own_tree() -> set[int]:
@@ -509,13 +500,7 @@ def own_tree() -> set[int]:
         if not parent or not APP_EXE.match(Path(exe_of(parent)).name):
             break
         pid = parent
-    found, grew = set(mine), True
-    while grew:
-        more = {child for child, parent in tree.items() if parent in found and child not in found
-                and APP_EXE.match(Path(exe_of(child)).name)}
-        found |= more
-        grew = bool(more)
-    return found
+    return _grown(mine, tree, lambda child: bool(APP_EXE.match(Path(exe_of(child)).name)))
 
 
 def file_facts(path: str) -> dict:
@@ -532,7 +517,7 @@ def file_facts(path: str) -> dict:
         pairs = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_uint16 * 2 * (n.value // 4))).contents
         langs = [f"{lang:04x}{page:04x}" for lang, page in pairs]
     out: dict = {}
-    for code in langs + ["040904b0", "040904e4", "000004b0"]:
+    for code in [*langs, "040904b0", "040904e4", "000004b0"]:
         for key in ("FileDescription", "ProductName", "CompanyName"):
             if key in out:
                 continue
@@ -708,17 +693,21 @@ def type_text(text: str) -> None:
         _send(seq[i:i + 64])
 
 
-def click_at(x: int, y: int, double: bool = False, right: bool = False) -> None:
-    """A real click at a screen point (physical pixels), across the whole virtual desktop."""
+def _move_to(x: int, y: int) -> INPUT:
+    """The pointer moved to a screen point (physical pixels), across the whole virtual desktop."""
     left, top = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
     wide, high = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
     nx = int(((x - left) * 65535) / max(wide - 1, 1))
     ny = int(((y - top) * 65535) / max(high - 1, 1))
-    move = INPUT(type=0, u=_INPUTUNION(mi=MOUSEINPUT(dx=nx, dy=ny, dwFlags=0x0001 | 0x8000 | 0x4000,
-                                                     dwExtraInfo=MARK)))
+    # MOUSEEVENTF_MOVE | ABSOLUTE | VIRTUALDESK
+    return INPUT(type=0, u=_INPUTUNION(mi=MOUSEINPUT(dx=nx, dy=ny, dwFlags=0x0001 | 0x8000 | 0x4000, dwExtraInfo=MARK)))
+
+
+def click_at(x: int, y: int, double: bool = False, right: bool = False) -> None:
+    """A real click at a screen point (physical pixels), across the whole virtual desktop."""
     down, up = (0x0008, 0x0010) if right else (0x0002, 0x0004)
     press = [INPUT(type=0, u=_INPUTUNION(mi=MOUSEINPUT(dwFlags=f, dwExtraInfo=MARK))) for f in (down, up)]
-    _send([move] + press)
+    _send([_move_to(x, y), *press])
     if double:
         # The second click a moment later, as a hand gives it: a list selects on the first before it opens on both.
         time.sleep(0.08)
@@ -727,12 +716,7 @@ def click_at(x: int, y: int, double: bool = False, right: bool = False) -> None:
 
 def wheel_at(x: int, y: int, notches: int) -> None:
     """Turn the wheel over a point: positive reveals what is above."""
-    left, top = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
-    wide, high = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
-    nx = int(((x - left) * 65535) / max(wide - 1, 1))
-    ny = int(((y - top) * 65535) / max(high - 1, 1))
-    _send([INPUT(type=0, u=_INPUTUNION(mi=MOUSEINPUT(dx=nx, dy=ny, dwFlags=0x0001 | 0x8000 | 0x4000,
-                                                     dwExtraInfo=MARK))),
+    _send([_move_to(x, y),
            INPUT(type=0, u=_INPUTUNION(mi=MOUSEINPUT(mouseData=ctypes.c_uint32(notches * 120).value,
                                                      dwFlags=0x0800, dwExtraInfo=MARK)))])
 
@@ -776,6 +760,13 @@ def capture(hwnd: int):
         image = image.crop((0, 0, round(wide / scale), round(high / scale))).resize((wide, high))
     # Cut the invisible resize border, so picture pixels match the drawn window.
     return image.crop((left - r.left, top - r.top, right - r.left, bottom - r.top)), (left, top)
+
+
+def jpeg64(image, quality: int) -> str:
+    """A Pillow picture as a JPEG, in base64."""
+    buf = io.BytesIO()
+    image.save(buf, "JPEG", quality=quality)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 # --- the clipboard: text put there for one paste, and the person's own put back after it

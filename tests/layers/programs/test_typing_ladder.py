@@ -14,6 +14,7 @@ if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
 from mibo.desk import hands, uia, win32
+from mibo.desk.view import View
 
 PLACEHOLDER = "Message or run a task, / commands, @ files or sessions"
 WANT = "帮我打开桌面上的网易云音乐"  # copy: voice
@@ -148,7 +149,7 @@ def electron(monkeypatch):
     """(a View over one message box [46], the box): every window call faked, nothing sent to this computer."""
     def make(role="textbox", **takes):
         box = Box(**takes)
-        v = uia.View.__new__(uia.View)
+        v = View.__new__(View)
         v.nodes = {46: uia.Node(el=Element(box), role=role, name=PLACEHOLDER, auto="", cls="", pid=1, enabled=True,
                                 focused=False, secret=False, rect=(0, 0, 300, 40), hwnd=0, patterns=["value"],
                                 readonly=False, top=7, parent=None, cells=[])}

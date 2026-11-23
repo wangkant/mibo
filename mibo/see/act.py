@@ -215,7 +215,7 @@ class WindowSurface:
         from ..desk import grants, win32
         self.hwnd = hwnd
         # Waits until the person's keyboard and mouse are still, as the structure layer does before real input
-        # (desk/uia.View.idle); raises its Refused when they kept on, and the strip asks them.
+        # (desk/view.View.idle); raises its Refused when they kept on, and the strip asks them.
         self.idle = idle
         # A packaged app's frame belongs to ApplicationFrameHost; the app inside it is another process.
         self.pids = set(pids) | {win32.pid_of(hwnd)}

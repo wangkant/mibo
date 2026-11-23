@@ -235,204 +235,252 @@ async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, tas
     the model, `said` the same steps in the person's words. `model` names the person's model, `eyes` what it may
     do with a picture (see.profile.reach) and `scale` how its self-test pointed. With "picture", the window's
     latest picture (a data URL) for the reply to look at."""
-    steps: list[str] = []
-    said: list[str] = []
-    calls = actions_used = stuck = bad = 0
-    checked = asked_again = changed = explored = addressed = False
-    # Ids of the controls an action of this task went through on, and whether the window's pictures may go with
-    # the look (None until asked, when a look shows something with no name and the model takes pictures).
-    tried: set[str] = set()
-    pictured: bool | None = None
+    errand = Errand(ask_model, hands, task, program, lang=lang, on_step=on_step, model=model, eyes=eyes, scale=scale,
+                    who=who)
     begun = await hands.begin(task, program, model if eyes else "", tuple(also))
     if begun.get("status") != "ok":
-        return {"status": begun.get("status") or "failed", "result": begun.get("line", ""), "steps": steps,
-                "said": said, "calls": 0, "why": begun.get("why") or {}, "program": ""}
-    steps.append(begun.get("line", ""))
-    program = begun.get("program") or program
+        return {"status": begun.get("status") or "failed", "result": begun.get("line", ""), "steps": errand.steps,
+                "said": errand.said, "calls": 0, "why": begun.get("why") or {}, "program": ""}
+    errand.steps.append(begun.get("line", ""))
+    errand.program = begun.get("program") or program
+    return await errand.end(await errand.go())
 
-    def finish(status: str, result: str = "", kind: str = "", why: dict | None = None,
+
+class Errand:
+    """One task's run of the loop once the app has begun it: what it has done, said and tried so far."""
+
+    def __init__(self, ask_model: Callable[[str, list[dict]], Awaitable[str]], hands, task: str, program: str, *,
+                 lang: str, on_step: Callable[[str], None], model: str, eyes: str, scale: str, who: str):
+        self.ask_model, self.hands, self.task, self.program = ask_model, hands, task, program
+        self.lang, self.on_step, self.model, self.eyes, self.scale, self.who = lang, on_step, model, eyes, scale, who
+        self.steps: list[str] = []
+        self.said: list[str] = []
+        self.calls = self.actions_used = self.stuck = self.bad = 0
+        self.checked = self.asked_again = self.changed = self.explored = self.addressed = False
+        # Ids of the controls an action of this task went through on, and whether the window's pictures may go with
+        # the look (None until asked, when a look shows something with no name and the model takes pictures).
+        self.tried: set[str] = set()
+        self.pictured: bool | None = None
+        # Each program's latest look, by its name.
+        self.seen: dict[str, str] = {}
+
+    def finish(self, status: str, result: str = "", kind: str = "", why: dict | None = None,
                seen: list | None = None) -> dict:
-        return {"status": status, "result": result, "steps": steps, "said": said, "calls": calls, "kind": kind,
-                "why": why or {}, "program": program, "seen": seen or []}
+        return {"status": status, "result": result, "steps": self.steps, "said": self.said, "calls": self.calls,
+                "kind": kind, "why": why or {}, "program": self.program, "seen": seen or []}
 
-    async def end(outcome: dict) -> dict:
-        await hands.end(outcome["status"], outcome.get("result", "")[:200])
+    async def end(self, outcome: dict) -> dict:
+        await self.hands.end(outcome["status"], outcome.get("result", "")[:200])
         return outcome
 
-    async def by_sight(look: dict) -> dict:
-        """The window, or its drawn part, by picture; looked at for the reply; or handed back with a sentence."""
-        from ..see import capture, profile, remote, when, words
-        from ..see import run as see_run
-        route, why = when.decide(named=look.get("named", 0), drawn=look.get("drawn", 0.0), eyes=eyes)
-        logger.info("[Agent] desk by picture: %s (%s)", route, why)
-        if route == "handback":
-            sentence = words.say(words.NO_PICTURES, lang, window=program, who=words.spaced(lang, who))
-            return finish("handover", sentence, why={lang: sentence})
-        # Allowed (or the person's yes in the chat, where asked) before any picture goes to the model service.
-        allowed = await asyncio.to_thread(hands._post, "see_allow", 2 * CARD_S + 30, look=route == "look")
-        if allowed.get("status") != "ok":
-            return finish(allowed.get("status") or "failed", allowed.get("line", ""))
-        sight = remote.RemoteSight(hands._post, profile.profile(model, scale), program, card_s=CARD_S)
-        if route == "look":
-            try:
-                await sight.look()
-            except capture.Refused as e:
-                return finish("handover", str(e))
-            return {**finish("looked"), "picture": sight.frame.data_url()}
-        outcome = await see_run.run(ask_model, sight, task, on_step=on_step, calls_max=CALLS_MAX - calls)
-        steps.extend(outcome["steps"])
-        out = {**finish(outcome["status"], outcome["result"]), "calls": calls + outcome["calls"]}
-        if outcome["status"] in ("unchanged", "handover", "cap", "failed") and sight.frame is not None:
-            # Not done by picture: the latest picture goes to the reply, to tell them what it shows and where to click.
-            out["picture"] = sight.frame.data_url()
-        return out
+    async def go(self) -> dict:
+        """Looks and replies until the task ends; the outcome."""
+        from ..see import when
+        look = await self.hands.look()
+        while True:
+            if look.get("status") != "ok":
+                return self.finish(look.get("status", "failed"), look.get("line", ""))
+            if look.get("named", 99) < when.FEW:
+                # Almost nothing to read: by picture, or back to the person.
+                return await self.by_sight(look)
+            if self.calls >= CALLS_MAX or self.actions_used >= ACTIONS_MAX:
+                return self.finish("cap", f"stopped after {self.calls} model calls")
+            others = look.get("others") or []
+            content, ended = await self.content(look, others)
+            if ended:
+                return ended
+            self.calls += 1
+            answer = await self.ask_model(RULES + (ACROSS if others else ""), [{"role": "user", "content": content}])
+            note, planned = parse(answer)
+            if not planned:
+                self.bad += 1
+                if self.bad >= BAD_AFTER:
+                    return self.finish("failed", "the model's answers were not the JSON object asked for")
+                self.steps.append("[failed] your answer was not the JSON object asked for")
+                continue
+            self.bad = 0
+            if note:
+                self.on_step(note)
+                await self.hands.step(len(self.said) + 1, note)
+            cut = next((i for i, a in enumerate(planned) if a.get("do") in ENDS), len(planned))
+            acts, last = planned[:cut], planned[cut] if cut < len(planned) else None
+            if self.misaddressed(acts, look):
+                continue
+            proved = True
+            if acts:
+                look, proved, ended = await self.act(acts, last, note, look)
+                if ended:
+                    return ended
+            # What a reply puts after its done, its question or its look is not run, and is said so.
+            self.steps.extend(f"[not done] {a.get('do')} {str(a.get('name') or a.get('key') or '')[:40]}: it came "
+                              f"after {last['do']} in the reply" for a in planned[cut + 1:])
+            if last is None or last["do"] == "look" or look.get("status") != "ok":
+                continue
+            ended = await self.closing(last, look, bool(acts), proved)
+            if ended:
+                return ended
 
-    look = await hands.look()
-    seen: dict[str, str] = {}
-    from ..see import when
-    while True:
-        if look.get("status") != "ok":
-            return await end(finish(look.get("status", "failed"), look.get("line", "")))
-        if look.get("named", 99) < when.FEW:
-            # Almost nothing to read: by picture, or back to the person.
-            return await end(await by_sight(look))
-        if calls >= CALLS_MAX or actions_used >= ACTIONS_MAX:
-            return await end(finish("cap", f"stopped after {calls} model calls"))
-        others = look.get("others") or []
-        seen[look.get("program") or program] = look["state"]
+    async def content(self, look: dict, others: list[str]) -> tuple[str | list | None, dict | None]:
+        """(what the model is sent for this look, None), or (None, the outcome) when the person stopped it while
+        asked about the window's pictures."""
+        self.seen[look.get("program") or self.program] = look["state"]
         # Another program's window as it was last read, so a switch is not needed only to recall it.
-        recalled = "".join(f"{name}, as it was when you left it:\n{fence(seen[name][:OTHER_SHOWN])}\n"
-                           for name in others if name in seen)
-        prompt = (f"Task (the person's own words): {task}\nProgram: {look.get('program') or program}\n"
+        recalled = "".join(f"{name}, as it was when you left it:\n{fence(self.seen[name][:OTHER_SHOWN])}\n"
+                           for name in others if name in self.seen)
+        steps = self.steps
+        prompt = (f"Task (the person's own words): {self.task}\nProgram: {look.get('program') or self.program}\n"
                   + (f"Other programs of this task: {', '.join(others)}\n" + recalled if others else "")
                   + ("What the app did and what the program showed, oldest first:\n"
                      + "\n".join(f"- {line}" for line in steps[-HISTORY_SHOWN:]) + "\n" if steps else "")
                   + "The window now:\n" + fence(look["state"])
                   + (DRAWN if look.get("drawn", 0.0) > 0 else "") + "\nReply with one JSON object.")
-        content: str | list = prompt
-        if look.get("unnamed") and eyes in ("act", "look") and pictured is not False:
-            # Something has no name: the window's picture goes with its lines, the ids marked on it, once the person
-            # let its pictures go to their model service.
-            if pictured is None:
-                allowed = await asyncio.to_thread(hands._post, "see_allow", 2 * CARD_S + 30, look=False)
-                if allowed.get("status") in ("stopped", "paused", "handover"):
-                    return await end(finish(allowed["status"], allowed.get("line", "")))
-                # A no keeps the pictures home; the task goes on by the lines alone.
-                pictured = allowed.get("status") == "ok"
-            shot = await asyncio.to_thread(hands._post, "picture", 60) if pictured else {}
-            if shot.get("picture"):
-                content = [{"type": "text", "text": prompt.removesuffix("Reply with one JSON object.")
-                            + "The window's picture, each id marked at its control:"},
-                           {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + shot["picture"]}},
-                           {"type": "text", "text": "Reply with one JSON object."}]
-        calls += 1
-        answer = await ask_model(RULES + (ACROSS if others else ""), [{"role": "user", "content": content}])
-        note, planned = parse(answer)
-        if not planned:
-            bad += 1
-            if bad >= BAD_AFTER:
-                return await end(finish("failed", "the model's answers were not the JSON object asked for"))
-            steps.append("[failed] your answer was not the JSON object asked for")
-            continue
-        bad = 0
-        if note:
-            on_step(note)
-            await hands.step(len(said) + 1, note)
-        cut = next((i for i, a in enumerate(planned) if a.get("do") in ENDS), len(planned))
-        acts, last = planned[:cut], planned[cut] if cut < len(planned) else None
-        # A send goes to the one the task names: addressed by other words than the task's, it is held once, for the
-        # model to tell the two are one, with the nameless controls it has not tried beside them.
-        other = next((str(a["to"]) for a in acts if a.get("to") and plain(a["to"]) not in plain(task)), "")
-        if other and not addressed:
-            addressed = True
-            left = untried(look, tried)
-            steps.append(f"[check] nothing was sent: this send goes to {other[:40]!r}, and the task says: {task[:120]}. "
-                         + (f"These controls have no name and you have not tried them: {'; '.join(left[:6])}. "
-                            if left else "")
-                         + "Send only where the window shows the one the task names; if it is elsewhere, open it "
-                           "first; if you cannot tell, ask_person and say what you see")
-            continue
-        proved = True
-        if acts:
-            # A reply that ends in done needs no new look when the app reads every action back.
-            closing = last is not None and last["do"] == "done" and len(acts) <= ACTIONS_A_CALL
-            out = await hands.batch(acts[:ACTIONS_A_CALL], not closing)
-            results = out.get("results") or []
-            if "look" in out or not results:
-                look = out.get("look") or {"status": out.get("status", "failed"), "line": out.get("line", "")}
-            moved = False
-            for a, result in zip(acts, results):
-                line = str(result.get("line") or "")
-                steps.append(line)
-                if (result.get("said") or {}).get(lang):
-                    said.append(result["said"][lang])
-                logger.info("[Agent] desk %s", line.replace("\n", " | ")[:300])
-                status = result.get("status")
-                if status in HELD:
-                    return await end(finish(status, line, result.get("kind", "")))
-                actions_used += status != "skipped"
-                if status == "ok" and a.get("id") is not None:
-                    tried.add(str(a["id"]))
-                moved = moved or (status == "ok" and a.get("do") != "switch"
-                                  and "the window shows no change yet" not in line)
-                changed = changed or (status == "ok" and a.get("do") not in UNCHANGING)
-                proved = proved and status == "ok" and bool(result.get("proved"))
-            if note and any(a.get("do") == "switch" for a in acts):
-                # Its next reply sees another window: what it switched for is said there.
-                steps.append(f"[your plan when switching] {note}")
-            for a in acts[ACTIONS_A_CALL:]:
-                steps.append(f"[not done] {a.get('do')} {str(a.get('name') or a.get('key') or '')[:40]}: over "
-                             f"{ACTIONS_A_CALL} actions in one reply")
-                proved = False
-            stuck = 0 if moved else stuck + 1
-            left = untried(look, tried)
-            if stuck >= STUCK_AFTER and left and not explored:
-                # Stuck is giving up too: not while nameless controls are untried.
-                explored, stuck = True, 0
-                steps.append(UNTRIED.format(lines="; ".join(left[:6])))
-            if stuck >= STUCK_AFTER:
-                return await end(finish("handover", "nothing changed three times running"))
-        for a in planned[cut + 1:]:
-            # What a reply puts after its done, its question or its look is not run, and is said so.
-            steps.append(f"[not done] {a.get('do')} {str(a.get('name') or a.get('key') or '')[:40]}: it came after "
-                         f"{last['do']} in the reply")
-        if last is None or last["do"] == "look":
-            continue
-        if look.get("status") != "ok":
-            continue
+        if not (look.get("unnamed") and self.eyes in ("act", "look") and self.pictured is not False):
+            return prompt, None
+        # Something has no name: the window's picture goes with its lines, the ids marked on it, once the person
+        # let its pictures go to their model service.
+        if self.pictured is None:
+            allowed = await asyncio.to_thread(self.hands._post, "see_allow", 2 * CARD_S + 30, look=False)
+            if allowed.get("status") in ("stopped", "paused", "handover"):
+                return None, self.finish(allowed["status"], allowed.get("line", ""))
+            # A no keeps the pictures home; the task goes on by the lines alone.
+            self.pictured = allowed.get("status") == "ok"
+        shot = await asyncio.to_thread(self.hands._post, "picture", 60) if self.pictured else {}
+        if not shot.get("picture"):
+            return prompt, None
+        return [{"type": "text", "text": prompt.removesuffix("Reply with one JSON object.")
+                 + "The window's picture, each id marked at its control:"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + shot["picture"]}},
+                {"type": "text", "text": "Reply with one JSON object."}], None
+
+    def misaddressed(self, acts: list[dict], look: dict) -> bool:
+        """A send goes to the one the task names: addressed by other words than the task's, it is held once, for the
+        model to tell the two are one, with the nameless controls it has not tried beside them."""
+        other = next((str(a["to"]) for a in acts if a.get("to") and plain(a["to"]) not in plain(self.task)), "")
+        if not other or self.addressed:
+            return False
+        self.addressed = True
+        left = untried(look, self.tried)
+        self.steps.append(f"[check] nothing was sent: this send goes to {other[:40]!r}, and the task says: "
+                          f"{self.task[:120]}. "
+                          + (f"These controls have no name and you have not tried them: {'; '.join(left[:6])}. "
+                             if left else "")
+                          + "Send only where the window shows the one the task names; if it is elsewhere, open it "
+                            "first; if you cannot tell, ask_person and say what you see")
+        return True
+
+    async def act(self, acts: list[dict], last: dict | None, note: str,
+                  look: dict) -> tuple[dict, bool, dict | None]:
+        """A reply's actions run in one piece: (the look after them, whether each was read back and agrees, the
+        outcome when one of them ends the task)."""
+        # A reply that ends in done needs no new look when the app reads every action back.
+        closing = last is not None and last["do"] == "done" and len(acts) <= ACTIONS_A_CALL
+        out = await self.hands.batch(acts[:ACTIONS_A_CALL], not closing)
+        results = out.get("results") or []
+        if "look" in out or not results:
+            look = out.get("look") or {"status": out.get("status", "failed"), "line": out.get("line", "")}
+        moved, proved = False, True
+        for a, result in zip(acts, results):
+            line = str(result.get("line") or "")
+            self.steps.append(line)
+            if (result.get("said") or {}).get(self.lang):
+                self.said.append(result["said"][self.lang])
+            logger.info("[Agent] desk %s", line.replace("\n", " | ")[:300])
+            status = result.get("status")
+            if status in HELD:
+                return look, False, self.finish(status, line, result.get("kind", ""))
+            self.actions_used += status != "skipped"
+            if status == "ok" and a.get("id") is not None:
+                self.tried.add(str(a["id"]))
+            moved = moved or (status == "ok" and a.get("do") != "switch"
+                              and "the window shows no change yet" not in line)
+            self.changed = self.changed or (status == "ok" and a.get("do") not in UNCHANGING)
+            proved = proved and status == "ok" and bool(result.get("proved"))
+        if note and any(a.get("do") == "switch" for a in acts):
+            # Its next reply sees another window: what it switched for is said there.
+            self.steps.append(f"[your plan when switching] {note}")
+        for a in acts[ACTIONS_A_CALL:]:
+            self.steps.append(f"[not done] {a.get('do')} {str(a.get('name') or a.get('key') or '')[:40]}: over "
+                              f"{ACTIONS_A_CALL} actions in one reply")
+            proved = False
+        self.stuck = 0 if moved else self.stuck + 1
+        left = untried(look, self.tried)
+        if self.stuck >= STUCK_AFTER and left and not self.explored:
+            # Stuck is giving up too: not while nameless controls are untried.
+            self.explored, self.stuck = True, 0
+            self.steps.append(UNTRIED.format(lines="; ".join(left[:6])))
+        if self.stuck >= STUCK_AFTER:
+            return look, proved, self.finish("handover", "nothing changed three times running")
+        return look, proved, None
+
+    async def closing(self, last: dict, look: dict, acted: bool, proved: bool) -> dict | None:
+        """The outcome a reply's done, question or see ends the task with, or None when it is told why not yet and
+        the loop goes on."""
         if last["do"] == "see":
             if not look.get("drawn", 0.0):
-                steps.append("[failed] this window names its controls: work with them")
-                continue
+                self.steps.append("[failed] this window names its controls: work with them")
+                return None
             # The task is inside the drawn part: for this task the structure is poor, whatever share it covers.
-            return await end(await by_sight({**look, "drawn": 1.0}))
+            return await self.by_sight({**look, "drawn": 1.0})
         giving_up = last["do"] == "ask_person" or (last["do"] == "done" and last.get("success") is False)
-        left = untried(look, tried)
-        if giving_up and left and not explored:
-            explored = True
-            steps.append(UNTRIED.format(lines="; ".join(left[:6])))
-            continue
+        left = untried(look, self.tried)
+        if giving_up and left and not self.explored:
+            self.explored = True
+            self.steps.append(UNTRIED.format(lines="; ".join(left[:6])))
+            return None
         if last["do"] == "ask_person":
-            return await end(finish("asked", " ".join(str(last.get("question") or "").split())[:300],
-                                    seen=look.get("unnamed")))
-        if acts and not proved:
+            return self.finish("asked", " ".join(str(last.get("question") or "").split())[:300],
+                               seen=look.get("unnamed"))
+        if acted and not proved:
             # Done is taken on what the program shows, never on the reply that acted.
-            steps.append("[look] done is taken only once the lines above or the window below show the task done: "
-                         "compare them with the task, word for word and number for number, and fix any mistake first")
-            continue
+            self.steps.append("[look] done is taken only once the lines above or the window below show the task "
+                              "done: compare them with the task, word for word and number for number, and fix any "
+                              "mistake first")
+            return None
         success = last.get("success") is not False
         result = " ".join(str(last.get("result") or "").split())[:600]
-        if success and not changed and not asked_again:
+        if success and not self.changed and not self.asked_again:
             # Nothing done in this task changed the program: as in picture mode (see/run.py), asked once; said
             # again, it ends "unchanged", what was read kept as the result.
-            asked_again = True
-            steps.append("[check] nothing you did has changed the window yet, so the task is not done by anything "
-                         "here. Act, or, if the task only asks what the window shows, say done again with what it shows")
-            continue
-        missing = unshown(result, look.get("state", ""), task) if success and not checked else []
+            self.asked_again = True
+            self.steps.append("[check] nothing you did has changed the window yet, so the task is not done by "
+                              "anything here. Act, or, if the task only asks what the window shows, say done again "
+                              "with what it shows")
+            return None
+        missing = unshown(result, look.get("state", ""), self.task) if success and not self.checked else []
         if missing:
-            checked = True
-            steps.append(f"[check] your result gives {', '.join(missing[:4])}, which the window below does not show. "
-                         f"Give what the window shows, word for word; if you counted it from the look, say done again")
-            continue
-        return await end(finish(("done" if changed else "unchanged") if success else "failed", result))
+            self.checked = True
+            self.steps.append(f"[check] your result gives {', '.join(missing[:4])}, which the window below does not "
+                              f"show. Give what the window shows, word for word; if you counted it from the look, say "
+                              f"done again")
+            return None
+        return self.finish(("done" if self.changed else "unchanged") if success else "failed", result)
+
+    async def by_sight(self, look: dict) -> dict:
+        """The window, or its drawn part, by picture; looked at for the reply; or handed back with a sentence."""
+        from ..see import capture, profile, remote, when, words
+        from ..see import run as see_run
+        lang, program = self.lang, self.program
+        route, why = when.decide(named=look.get("named", 0), drawn=look.get("drawn", 0.0), eyes=self.eyes)
+        logger.info("[Agent] desk by picture: %s (%s)", route, why)
+        if route == "handback":
+            sentence = words.say(words.NO_PICTURES, lang, window=program, who=words.spaced(lang, self.who))
+            return self.finish("handover", sentence, why={lang: sentence})
+        # Allowed (or the person's yes in the chat, where asked) before any picture goes to the model service.
+        allowed = await asyncio.to_thread(self.hands._post, "see_allow", 2 * CARD_S + 30, look=route == "look")
+        if allowed.get("status") != "ok":
+            return self.finish(allowed.get("status") or "failed", allowed.get("line", ""))
+        sight = remote.RemoteSight(self.hands._post, profile.profile(self.model, self.scale), program, card_s=CARD_S)
+        if route == "look":
+            try:
+                await sight.look()
+            except capture.Refused as e:
+                return self.finish("handover", str(e))
+            return {**self.finish("looked"), "picture": sight.frame.data_url()}
+        outcome = await see_run.run(self.ask_model, sight, self.task, on_step=self.on_step,
+                                    calls_max=CALLS_MAX - self.calls)
+        self.steps.extend(outcome["steps"])
+        out = {**self.finish(outcome["status"], outcome["result"]), "calls": self.calls + outcome["calls"]}
+        if outcome["status"] in ("unchanged", "handover", "cap", "failed") and sight.frame is not None:
+            # Not done by picture: the latest picture goes to the reply, to tell them what it shows and where to click.
+            out["picture"] = sight.frame.data_url()
+        return out

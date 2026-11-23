@@ -344,10 +344,11 @@ async def program(check: Check, name: str, uia: bool) -> None:
 def beside(check: Check, pid: int, wid: int, cua_lines: str) -> None:
     """The same window through desk/uia.py, the reader the app uses on Windows today: its look, one act, both
     timed, and the two trees written side by side."""
-    from mibo.desk import uia, win32
+    from mibo.desk import win32
+    from mibo.desk.view import View
     hwnd = wid if win32.pid_of(wid) == pid else next(
         (h for h in win32.top_windows() if win32.pid_of(h) == pid and win32.shown(h)), 0)
-    view = uia.View(hwnd, pid)
+    view = View(hwnd, pid)
     began = time.perf_counter()
     view.look()
     first_ms = (time.perf_counter() - began) * 1000

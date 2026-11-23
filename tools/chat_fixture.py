@@ -4,7 +4,7 @@ another program's window.
     python tools/chat_fixture.py --home <folder> [--variant named|bare|both] [--corner] [--record <file>]
 
 Fetches the pinned Electron into the home (mibo/host/launch.py) when it is not there, starts the fixture with each
-variant, reads its window once through the program layer (mibo/desk/uia.View, which wakes a Chromium-drawn window
+variant, reads its window once through the program layer (mibo/desk/view.View, which wakes a Chromium-drawn window
 first) and prints how many named controls it found, whether the avatar of the program's own agent was among them,
 and the look itself. The window is closed at once. With --corner it shows small in a corner and never takes the
 focus, so it can run on someone's own desktop; it presses nothing and types nothing.
@@ -67,8 +67,8 @@ def stop(proc) -> None:
 def read(hwnd: int, pid: int, picture: bool = False) -> dict:
     """One look of the program layer at the window: the look, its named controls and its nameless ones, and with
     `picture` the window's picture with each id marked (base64 JPEG)."""
-    from mibo.desk import uia
-    view = uia.View(hwnd, pid)
+    from mibo.desk.view import View
+    view = View(hwnd, pid)
     started = time.monotonic()
     state = view.look()
     named = sorted({n.name for n in view.nodes.values() if n.name})

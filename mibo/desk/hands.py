@@ -13,9 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import difflib
-import os
 import re
-import secrets
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -24,8 +22,9 @@ from ..cardwait import WAIT_S
 from ..web.pagewords import clip, quote
 from . import gate, names, uia, win32
 from . import grants as g
-from .operate import UNANSWERED
+from .outside import Outside, thumbnail
 from .strip import Strip
+from .view import View
 
 # The ways to press a control, and the state "check" and "uncheck" bring a tick box to.
 PRESSES = {"invoke", "click", "press", "toggle", "check", "uncheck", "select", "expand", "collapse"}
@@ -40,18 +39,13 @@ NAV_KEYS = re.compile(r"(?:shift\+)?(?:tab|up|down|left|right|pageup|pagedown|ho
 # A change that ends a reply's run of actions: what comes after was planned on a window that is no longer so.
 MOVED = ("a window opened", "a window closed", "the window closed")
 EDITING = "the name is still being edited, the file is not renamed yet: the key Enter renames it"
-# How long a program is given to show what a confirmed action did, before the line says it does not show yet.
-PROOF_S = 1.5
 # In an action's line: the program's own state was read after it and agrees with what was asked.
 PROVED = ("read back", "looked again: the field is empty", "now shows as", "no longer show")
-# The common Save and Open dialogs: the file name box and the address band, in English and Chinese Windows.
-FILE_NAME = re.compile(r"(?:file name|文件名)\s*(?:\(&?\w\))?\s*[:：]?", re.I)
-ADDRESS = re.compile(r"(?:address|地址)\s*[:：]\s*(.+)", re.I)
 OFF_TEXT = {"zh": "电脑操作未开启：请先在设置中开启“允许{who}操作电脑上的其他程序”。",
             "en": "Operating other programs is off: turn it on in Settings first."}
 
 
-class Hands:
+class Hands(Outside):
     def __init__(self, desktop: Path, *, ask: Callable[[dict], dict | None], who: str = "Mibo",
                  lang: str = "zh", review: Callable[[dict], object] | None = None):
         from ..acting import Modes
@@ -67,7 +61,7 @@ class Hands:
         self.task = ""
         self.target = None
         self.target_id = 0
-        self.view: uia.View | None = None
+        self.view: View | None = None
         self.strip: Strip | None = None
         self.program: dict = {}
         # The programs of the task (at most three, panel.PARTS), the one in use among them: {"name", "key", "hwnd"}.
@@ -167,7 +161,7 @@ class Hands:
                 time.sleep(0.05)
         pid = g.program_pid(hwnd)
         base = Path(prog["exe"]).name.lower()
-        self.view = uia.View(hwnd, pid, shared=base in g.SHARED, halted=self.held,
+        self.view = View(hwnd, pid, shared=base in g.SHARED, halted=self.held,
                              never=lambda h: g.window_never(base, h), busy=lambda: self.strip.busy())
         if self.strip:
             self.strip.close()
@@ -427,103 +421,133 @@ class Hands:
         if do == "focus":
             return {"status": "ok", "line": v.focus(ident)}
         if do in ("menu", "double"):
-            if not isinstance(ident, int):
-                return {"status": "failed", "line": f"[failed] {do}: name the control (its name in the look, or its id)"}
-            node = v.node(ident)
-            if not node.enabled:
-                return {"status": "failed", "line": f"[failed] {v.describe(ident)} is disabled"}
-            # A double click does what a press does (opens a file); a menu only unfolds, its items ask as presses.
-            kind, why = self._press_kind(node, "invoke" if do == "double" else "expand")
-            run = (lambda: v.double(ident)) if do == "double" else (lambda: v.menu(ident))
-            if kind:
-                return self._outside(kind, why, node, "", self._files(node, kind), run)
-            return {"status": "ok", "line": run()}
+            return self._open(do, ident)
         if do in PRESSES:
-            if isinstance(ident, str):
-                return self._grid_click(ident)
-            if ident is None:
-                return {"status": "failed", "line": f"[failed] {do}: name the control (its name in the look, or its id)"}
-            node = v.node(ident)
-            if not node.enabled:
-                return {"status": "failed", "line": f"[failed] {v.describe(ident)} is disabled"}
-            kind, why = self._press_kind(node, "toggle" if do in TICKS else "invoke" if do == "press" else do)
-            option = str(a.get("option") or "")
-            run = {"invoke": lambda: v.invoke(ident), "click": lambda: v.invoke(ident), "press": lambda: v.invoke(ident),
-                   "toggle": lambda: v.toggle(ident), "check": lambda: v.toggle(ident, True),
-                   "uncheck": lambda: v.toggle(ident, False), "select": lambda: v.select(ident, option),
-                   "expand": lambda: v.expand(ident, True), "collapse": lambda: v.expand(ident, False)}[do]
-            if kind:
-                source = self._composer(node) if kind in ("send", "post", "submit") and not option else None
-                return self._outside(kind, why, node, option or self._said(source), self._files(node, kind), run,
-                                     source)
-            return {"status": "ok", "line": run()}
+            return self._press(do, ident, str(a.get("option") or ""))
         if do in ("set", "type", "append", "paste"):
-            text = str(a.get("text") or "")
-            if do == "paste" and not text:
-                return {"status": "failed", "line": "[failed] paste: give the text to put in"}
-            node = v.node(ident) if ident is not None else v.focused()
-            if node is None:
-                return {"status": "failed", "line": "[failed] nothing has the focus to type into"}
-            if ident is None and do not in ("type", "paste"):
-                return {"status": "failed", "line": f"[failed] {do}: name the field (its name in the look, or its id)"}
-            if node.secret:
-                where = v.describe(ident) if ident is not None else "the focused field"
-                return {"status": "refused", "line": f"[refused] {where} is a password field: it is for the person "
-                                                     f"to type"}
-            if any(ch < " " and ch not in "\r\n" for ch in text):
-                return {"status": "failed", "line": "[failed] tabs and control characters are not typed (a Tab moves "
-                                                    "to another control); use the key action"}
-            if "\n" in text and node.role == "textbox" and not (node.hwnd and win32.multiline(node.hwnd)):
-                return {"status": "failed", "line": "[failed] a line break in a one-line field would press Enter; "
-                                                    "type the text, then the key Enter"}
-            if self._address_bar(node) and not gate.address_ok(text):
-                return {"status": "refused", "line": "[refused] File Explorer's address bar runs what is typed; only "
-                                                     "an existing folder goes there"}
-            run = {"set": lambda: v.set_value(ident, text), "append": lambda: v.set_value(ident, text, True),
-                   "type": lambda: v.type(ident, text), "paste": lambda: v.paste(ident, text)}[do]
-            kind, why = gate.set_text(node, text, win32.title_of(node.top))
-            if kind:
-                return self._outside(kind, why, node, text, self._files(node, kind), run)
-            line = run()
-            if node.role == "textbox" and not (node.hwnd and win32.multiline(node.hwnd)) and line.startswith("[ok]"):
-                # A one-line field of a form: its window's buttons may now send what was typed.
-                self.typed_tops.add(node.top)
-            if node.role == "textbox" and gate.in_shell_view(node) and line.startswith("[ok]"):
-                # A file's name being edited is not the file's name yet.
-                line += "; " + EDITING
-            return {"status": "ok", "line": line}
+            return self._write(do, ident, str(a.get("text") or ""))
         if do == "key":
-            keys = str(a.get("key") or "")
-            uia.parse_key(keys)
-            if isinstance(ident, str):
-                return {"status": "failed", "line": f"[failed] key: {ident} is a point of the picture; name a field"}
-            # A key lands where the program's own focus is once it is in front, or in the field it names: judge
-            # it there, not on whatever another window has.
-            v.forward()
-            focused = v.node(ident) if ident is not None else v.focused()
-            top = focused.top if focused else v.hwnd
-            hit = self._access_key(keys, focused, top)
-            if hit is None and focused is not None and focused.top in v.menus and keys.lower() in ("enter", "space"):
-                hit = focused
-            if hit is not None:
-                # A key that presses a button (Alt+D for &Delete, Enter on a menu item) is judged as that press.
-                kind, why = self._press_kind(hit, "invoke")
-                if kind:
-                    source = self._composer(hit) if kind in ("send", "post", "submit") else None
-                    return self._outside(kind, why, hit, self._said(source), self._files(hit, kind),
-                                         lambda: v.key(keys, ident), source)
-            kind, why = gate.key(keys, focused, win32.title_of(top), top == v.hwnd, v.texts(top))
-            if kind == "submit" and self._address_bar(focused) and gate.address_ok(self._said(focused)):
-                kind, why = "", "Enter in the address bar goes to an existing folder"
-            if kind == "open" and focused is not None and self._is_folder(focused):
-                kind, why = "", "Enter opens a folder in the same window"
-            if kind:
-                said = self._said(focused)
-                # With the program not in front there is no focus to read: the items selected in its file view.
-                files = self._files(focused, kind, said) if focused is not None else self._picked(v.hwnd)
-                return self._outside(kind, why, focused, said, files, lambda: v.key(keys, ident))
-            return {"status": "ok", "line": v.key(keys, ident)}
+            return self._key(str(a.get("key") or ""), ident)
         return {"status": "failed", "line": f"[failed] no action {do[:20]!r}"}
+
+    def _control(self, do: str, ident) -> tuple[object, dict | None]:
+        """(the node an action presses, None) when it names an enabled control, else (None, the result that ends
+        it)."""
+        if not isinstance(ident, int):
+            return None, {"status": "failed", "line": f"[failed] {do}: name the control (its name in the look, or its id)"}
+        node = self.view.node(ident)
+        if not node.enabled:
+            return None, {"status": "failed", "line": f"[failed] {self.view.describe(ident)} is disabled"}
+        return node, None
+
+    def _open(self, do: str, ident) -> dict:
+        """A double click, or a control's right-click menu."""
+        v = self.view
+        node, failed = self._control(do, ident)
+        if failed:
+            return failed
+        # A double click does what a press does (opens a file); a menu only unfolds, its items ask as presses.
+        kind, why = self._press_kind(node, "invoke" if do == "double" else "expand")
+        run = (lambda: v.double(ident)) if do == "double" else (lambda: v.menu(ident))
+        if kind:
+            return self._outside(kind, why, node, "", self._files(node, kind), run)
+        return {"status": "ok", "line": run()}
+
+    def _press(self, do: str, ident, option: str) -> dict:
+        """A press, a tick, a selection or an unfolding of a control, or a click at a point of the picture."""
+        v = self.view
+        if isinstance(ident, str):
+            return self._grid_click(ident)
+        node, failed = self._control(do, ident)
+        if failed:
+            return failed
+        kind, why = self._press_kind(node, "toggle" if do in TICKS else "invoke" if do == "press" else do)
+        run = {"invoke": lambda: v.invoke(ident), "click": lambda: v.invoke(ident), "press": lambda: v.invoke(ident),
+               "toggle": lambda: v.toggle(ident), "check": lambda: v.toggle(ident, True),
+               "uncheck": lambda: v.toggle(ident, False), "select": lambda: v.select(ident, option),
+               "expand": lambda: v.expand(ident, True), "collapse": lambda: v.expand(ident, False)}[do]
+        if kind:
+            source = self._composer(node) if kind in ("send", "post", "submit") and not option else None
+            return self._outside(kind, why, node, option or self._said(source), self._files(node, kind), run, source)
+        return {"status": "ok", "line": run()}
+
+    def _write(self, do: str, ident, text: str) -> dict:
+        """Text set into, typed into or pasted into a field, or typed where the focus is."""
+        v = self.view
+        if do == "paste" and not text:
+            return {"status": "failed", "line": "[failed] paste: give the text to put in"}
+        node = v.node(ident) if ident is not None else v.focused()
+        if node is None:
+            return {"status": "failed", "line": "[failed] nothing has the focus to type into"}
+        if ident is None and do not in ("type", "paste"):
+            return {"status": "failed", "line": f"[failed] {do}: name the field (its name in the look, or its id)"}
+        unfit = self._unfit(node, ident, text)
+        if unfit:
+            return unfit
+        run = {"set": lambda: v.set_value(ident, text), "append": lambda: v.set_value(ident, text, True),
+               "type": lambda: v.type(ident, text), "paste": lambda: v.paste(ident, text)}[do]
+        kind, why = gate.set_text(node, text, win32.title_of(node.top))
+        if kind:
+            return self._outside(kind, why, node, text, self._files(node, kind), run)
+        line = run()
+        one_line = node.role == "textbox" and not (node.hwnd and win32.multiline(node.hwnd))
+        if one_line and line.startswith("[ok]"):
+            # A one-line field of a form: its window's buttons may now send what was typed.
+            self.typed_tops.add(node.top)
+        if node.role == "textbox" and gate.in_shell_view(node) and line.startswith("[ok]"):
+            # A file's name being edited is not the file's name yet.
+            line += "; " + EDITING
+        return {"status": "ok", "line": line}
+
+    def _unfit(self, node, ident, text: str) -> dict | None:
+        """The result that refuses `text` for `node` before anything is written, or None when it may go in."""
+        if node.secret:
+            where = self.view.describe(ident) if ident is not None else "the focused field"
+            return {"status": "refused", "line": f"[refused] {where} is a password field: it is for the person to type"}
+        if any(ch < " " and ch not in "\r\n" for ch in text):
+            return {"status": "failed", "line": "[failed] tabs and control characters are not typed (a Tab moves to "
+                                                "another control); use the key action"}
+        if "\n" in text and node.role == "textbox" and not (node.hwnd and win32.multiline(node.hwnd)):
+            return {"status": "failed", "line": "[failed] a line break in a one-line field would press Enter; type the "
+                                                "text, then the key Enter"}
+        if self._address_bar(node) and not gate.address_ok(text):
+            return {"status": "refused", "line": "[refused] File Explorer's address bar runs what is typed; only an "
+                                                 "existing folder goes there"}
+        return None
+
+    def _key(self, keys: str, ident) -> dict:
+        """One keystroke, judged where it lands: as the press of the button it presses, else by the gate's rules
+        for keys."""
+        v = self.view
+        uia.parse_key(keys)
+        if isinstance(ident, str):
+            return {"status": "failed", "line": f"[failed] key: {ident} is a point of the picture; name a field"}
+        # A key lands where the program's own focus is once it is in front, or in the field it names: judge
+        # it there, not on whatever another window has.
+        v.forward()
+        focused = v.node(ident) if ident is not None else v.focused()
+        top = focused.top if focused else v.hwnd
+        hit = self._access_key(keys, focused, top)
+        if hit is None and focused is not None and focused.top in v.menus and keys.lower() in ("enter", "space"):
+            hit = focused
+        if hit is not None:
+            # A key that presses a button (Alt+D for &Delete, Enter on a menu item) is judged as that press.
+            kind, why = self._press_kind(hit, "invoke")
+            if kind:
+                source = self._composer(hit) if kind in ("send", "post", "submit") else None
+                return self._outside(kind, why, hit, self._said(source), self._files(hit, kind),
+                                     lambda: v.key(keys, ident), source)
+        kind, why = gate.key(keys, focused, win32.title_of(top), top == v.hwnd, v.texts(top))
+        if kind == "submit" and self._address_bar(focused) and gate.address_ok(self._said(focused)):
+            kind, why = "", "Enter in the address bar goes to an existing folder"
+        if kind == "open" and focused is not None and self._is_folder(focused):
+            kind, why = "", "Enter opens a folder in the same window"
+        if kind:
+            said = self._said(focused)
+            # With the program not in front there is no focus to read: the items selected in its file view.
+            files = self._files(focused, kind, said) if focused is not None else self._picked(v.hwnd)
+            return self._outside(kind, why, focused, said, files, lambda: v.key(keys, ident))
+        return {"status": "ok", "line": v.key(keys, ident)}
 
     def _press_kind(self, node, do: str) -> tuple[str, str]:
         """(kind, why) of pressing `node` as the gate judges it. An item of a menu opened on a file acts on that
@@ -575,8 +599,7 @@ class Hands:
         el = A.AutomationElement.FromPoint(Point(x, y))
         if el is None or el.Current.ProcessId not in v.pids:
             return {"status": "refused", "line": f"[refused] {ident} is not over this program's window"}
-        kind_name = el.Current.ControlType.ProgrammaticName.split(".")[-1]
-        node = uia.Node(el=el, role=uia.ROLES.get(kind_name, "custom"), name=el.Current.Name, auto="",
+        node = uia.Node(el=el, role=uia.role_of(el.Current.ControlType), name=el.Current.Name, auto="",
                         cls=el.Current.ClassName, pid=el.Current.ProcessId, enabled=True, focused=False,
                         secret=el.Current.IsPassword, rect=(x, y, 0, 0), hwnd=0, patterns=[], readonly=False,
                         top=v.hwnd, parent=None, cells=[])
@@ -584,188 +607,6 @@ class Hands:
         if kind:
             return self._outside(kind, why, node, "", [], lambda: v.invoke(ident))
         return {"status": "ok", "line": v.invoke(ident)}
-
-    # --- an action with an effect outside
-
-    def _composer(self, node):
-        """The text box a Send or Post button sends from: the nearest field of its window that holds text
-        (never a password field), or None."""
-        x, y = node.center()
-        boxes = [n for n in self.view.nodes.values() if n.top == node.top and n.role in ("textbox", "document")
-                 and not n.secret and not n.readonly and n is not node and self._said(n)]
-        return min(boxes, key=lambda n: abs(n.center()[1] - y) * 3 + abs(n.center()[0] - x), default=None)
-
-    def _outside(self, kind: str, why: str, node, text: str, files: list[str], run: Callable[[], str],
-                 source=None) -> dict:
-        """The person's press on a card first, each time (in auto mode the reviewer may pass what acting.decide
-        sends it); then the action exactly once; then a look again. `source` is the field the text comes from,
-        when it is not the target itself."""
-        from .. import acting
-        v = self.view
-        name = node.name if node is not None else ""
-        before = (self._fingerprint(node), self._fingerprint(source))
-        window = clip(win32.title_of(node.top if node else v.hwnd), 120)
-        how = "confirmed by the person"
-        answer = verdict = None
-        if self.review is not None and acting.decide(self.modes.mode(), kind, "", "programs") == "review":
-            verdict = self.review({"kind": kind, "where": f"{self.program['name']} — {window}",
-                                   "target": files[:50] or ([name] if name else []), "text": text[:2000],
-                                   "page_says": name})
-            if verdict.decision == "refuse":
-                return {"status": "declined", "kind": kind,
-                        "line": f"[declined] {kind} ({clip(name, 40)}), nothing was done. {verdict.declined()}"
-                                + ("; turned down three times in a row: stop and hand the task back" if verdict.stop
-                                   else "")}
-            if verdict.decision == "go":
-                answer, how = {"yes": True}, verdict.line(self.lang)
-        if answer is None:
-            try:
-                picture = base64_jpeg(v)
-            except Exception:
-                picture = ""
-            card = {"id": secrets.token_urlsafe(8), "type": "desk_action", "kind": kind,
-                    "program": self.program["name"], "exe": self.program["exe"], "window": window,
-                    "target": f"{node.role} {quote(clip(name, 80))}" if node is not None else "",
-                    "text": text[:2000], "files": files[:50], "why": why[:200], "task": self.task, "picture": picture,
-                    # Why the reviewer did not pass it, in one line.
-                    **({"review": verdict.line(self.lang)} if verdict is not None else {})}
-            answer = self.ask(card)
-        if answer is None:
-            return {"status": "declined", "kind": kind,
-                    "line": f"[declined] {UNANSWERED} for {kind} ({clip(name, 40)}); nothing was done"}
-        if not answer.get("yes"):
-            return {"status": "declined", "kind": kind,
-                    "line": f"[declined] the person said no to {kind} ({clip(name, 40)}); nothing was done"}
-        if self.held():
-            return {"status": self.held(), "kind": kind, "line": f"[{self.held()}] nothing was done"}
-        if (self._fingerprint(node), self._fingerprint(source)) != before:
-            return {"status": "failed", "kind": kind,
-                    "line": "[changed] the window changed since the question; nothing was done, look again"}
-        line = run()
-        if not line.startswith("[ok]"):
-            return {"status": "failed", "kind": kind, "line": line}
-        proof = self._proof(kind, source or node, text, files)
-        return {"status": "ok", "kind": kind, "outside": True, "line": f"{line} ({kind}, {how}; done once){proof}"}
-
-    def _fingerprint(self, node) -> tuple:
-        """What the card showed of the target, read again: its name and, for a field, what it holds."""
-        if node is None:
-            return ()
-        try:
-            name = str(node.el.Current.Name)
-            held = "" if node.secret else self._said(node)
-            return name, held
-        except Exception:
-            return ("gone",)
-
-    def _said(self, node) -> str:
-        """What a field or document holds now (never a password field's), or ""."""
-        A = uia.automation()
-        if node is None or node.secret:
-            return ""
-        try:
-            if node.el.GetCurrentPropertyValue(A.AutomationElement.IsValuePatternAvailableProperty):
-                return str(node.el.GetCurrentPropertyValue(A.ValuePattern.ValueProperty) or "")[:2000]
-            if node.el.GetCurrentPropertyValue(A.AutomationElement.IsTextPatternAvailableProperty):
-                return str(node.el.GetCurrentPattern(A.TextPattern.Pattern).DocumentRange.GetText(2000))
-        except Exception:
-            return ""
-        return ""
-
-    def _proof(self, kind: str, node, text: str, files: list[str]) -> str:
-        """Done is not proven by the press: look again. A file view shows the new name or the files gone; a
-        field that sent its text is empty again. The program is given PROOF_S to show it, read until it does."""
-        end = time.monotonic() + PROOF_S
-        if kind in ("send", "submit") and node is not None and text:
-            while self._said(node) and time.monotonic() < end:
-                time.sleep(0.05)
-            if not self._said(node):
-                return "; looked again: the field is empty"
-            return "; looked again: the field still holds the text, so look before saying it went, and never press again"
-        while True:
-            try:
-                self.view.look()
-            except uia.Refused as e:
-                return f"; {e}"
-            names = {n.name for n in self.view.nodes.values() if n.role in ("listitem", "row", "treeitem")}
-            shown = (kind == "file" and files and text in names and files[0] not in names) or (
-                kind == "delete" and files and names and not any(f in names for f in files))
-            if shown or not ((kind == "file" and text) or kind == "delete") or not files or time.monotonic() >= end:
-                break
-            time.sleep(0.2)
-        if kind == "file" and files and text:
-            if text in names and files[0] not in names:
-                return f"; looked again: {files[0]!r} now shows as {text!r}"
-            return "; looked again: the new name does not show yet, so look before saying it is done, and never do it again"
-        if kind == "delete" and files and names:
-            gone = [f for f in files if f not in names]
-            return (f"; looked again: {len(gone)} of {len(files)} no longer show" if gone else
-                    "; looked again: still showing, so look before saying it is done, and never do it again")
-        return "; looked again"
-
-    # --- File Explorer and the file dialogs
-
-    def _base(self) -> str:
-        return Path(self.program.get("exe", "")).name.lower()
-
-    def _address_bar(self, node) -> bool:
-        return node is not None and self._base() == "explorer.exe" and node.role in (
-            "textbox", "combobox") and not gate.in_shell_view(node) and not gate.SEARCH.search(
-                f"{node.name} {node.auto}")
-
-    def _is_folder(self, node) -> bool | None:
-        """For an item of a file view, whether its Type column says folder; None when it has no such column."""
-        if node.role not in ("listitem", "treeitem", "row") or not gate.in_shell_view(node):
-            return None
-        if node.role == "treeitem":
-            return True
-        kinds = [value for _name, value in node.cells]
-        return win32.folder_type() in kinds if kinds else None
-
-    def _files(self, node, kind: str, said: str = "") -> list[str]:
-        """The files an action touches: the item renamed or opened, else the items selected in the file view
-        of the same window (for Delete, Paste and the like)."""
-        if node is None:
-            return []
-        # An item of a right-click menu acts on what the menu was opened on.
-        node = self.view.menus.get(node.top, node)
-        items = ("listitem", "row", "treeitem")
-        if node.parent is not None and node.parent.role in items and gate.in_shell_view(node):
-            return [node.parent.name]
-        if node.role in items and gate.in_shell_view(node) and kind in ("open", "file"):
-            return [node.name]
-        if kind not in ("delete", "file", "open"):
-            return []
-        saved = self._dialog_file(node.top) if kind in ("file", "open") else ""
-        if saved:
-            return [saved]
-        return self._picked(node.top) or ([node.name] if node.role in items and gate.in_shell_view(node) else [])
-
-    def _dialog_file(self, top: int) -> str:
-        """In a Save or Open dialog: the file its File name box names, in the folder its address shows."""
-        mine = [n for n in self.view.nodes.values() if n.top == top]
-        box = next((n for n in mine if n.role == "textbox" and FILE_NAME.fullmatch(n.name)), None)
-        name = self._said(box).strip().strip('"') if box is not None else ""
-        if not name:
-            return ""
-        A = uia.automation()
-        bars = uia.element(top).FindAll(A.TreeScope.Descendants, A.PropertyCondition(
-            A.AutomationElement.ControlTypeProperty, A.ControlType.ToolBar))
-        folder = next((m.group(1).strip() for b in bars for m in [ADDRESS.match(uia.norm(b.Current.Name))] if m), "")
-        return name if os.path.isabs(name) or not folder else os.path.join(folder, name)
-
-    def _picked(self, top: int) -> list[str]:
-        """The items selected in the file view of window `top`."""
-        return [n.name for n in self.view.nodes.values() if n.top == top and n.role in ("listitem", "row", "treeitem")
-                and gate.in_shell_view(n) and self._selected(n)]
-
-    @staticmethod
-    def _selected(n) -> bool:
-        A = uia.automation()
-        try:
-            return bool(n.el.GetCurrentPropertyValue(A.SelectionItemPattern.IsSelectedProperty))
-        except Exception:
-            return False
 
     # --- the log
 
@@ -829,27 +670,9 @@ class Hands:
         """The picture a card about pictures shows: taken as the first one to the model service will be, by the same
         surface at the size the person's model gets it (password fields painted over), so the person sees what
         goes; "" when none may be taken now (another program covers the window)."""
-        import base64
-        import io
-
         from ..see import capture, profile
         try:
             frame = asyncio.run(self._surface().capture(profile.profile(self.sees).long_edge))
         except capture.Refused:
             return ""
-        image = frame.image.copy()
-        image.thumbnail((720, 720))
-        buf = io.BytesIO()
-        image.save(buf, "JPEG", quality=65)
-        return base64.b64encode(buf.getvalue()).decode("ascii")
-
-
-def base64_jpeg(view: uia.View) -> str:
-    """The window's picture for the card, without the marks."""
-    import base64
-    import io
-    image, _ = win32.capture(view.hwnd)
-    image.thumbnail((720, 720))
-    buf = io.BytesIO()
-    image.save(buf, "JPEG", quality=60)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+        return thumbnail(frame.image.copy(), 65)

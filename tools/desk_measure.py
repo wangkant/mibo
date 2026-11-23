@@ -253,6 +253,7 @@ class Bench:
     # --- what is written down, and the guard on real input
 
     def _instrument(self) -> None:
+        from mibo.desk.view import View
         uia, win32, bench = self.uia, self.win32, self
         A = uia.automation()
 
@@ -276,7 +277,7 @@ class Bench:
             return None
 
         def wrap(name: str) -> None:
-            orig = getattr(uia.View, name)
+            orig = getattr(View, name)
 
             def run(view, ident=None, *a, **k):
                 node = view.nodes.get(ident) if isinstance(ident, int) else None
@@ -296,17 +297,17 @@ class Bench:
                     if node is not None and name in ("set_value", "type"):
                         time.sleep(0.05)
                         entry["holds"] = holds(node)
-            setattr(uia.View, name, run)
+            setattr(View, name, run)
         for name in ("invoke", "toggle", "select", "expand", "set_value", "type", "focus", "key", "scroll"):
             wrap(name)
-        forward = uia.View.forward
+        forward = View.forward
 
         def fronted(view):
             # Once the layer needs the front (a menu, real keys), the window keeps it to the end of the task.
             bench.need_front = time.monotonic() + 900
             return forward(view)
-        uia.View.forward = fronted
-        look = uia.View.look
+        View.forward = fronted
+        look = View.look
 
         def timed(view, *a, **k):
             began = time.monotonic()
@@ -315,7 +316,7 @@ class Bench:
             finally:
                 bench.rec.looks += 1
                 bench.rec.look_s += time.monotonic() - began
-        uia.View.look = timed
+        View.look = timed
         send = win32._send
 
         def guarded(inputs):

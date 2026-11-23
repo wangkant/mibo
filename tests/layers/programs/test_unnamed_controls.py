@@ -157,7 +157,7 @@ def test_the_windows_picture_goes_beside_its_lines_only_on_the_persons_yes(allow
 # --- naming a nameless control to the hands (Windows only: the hands load the system's window calls)
 
 class View:
-    """A stand-in for uia.View after a look of the chat program: the avatar with no name, a text, a button."""
+    """A stand-in for view.View after a look of the chat program: the avatar with no name, a text, a button."""
     hwnd, seen, serial, menus, unnamed = 7, (), 1, {}, [AVATAR]
 
     def __init__(self):
