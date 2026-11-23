@@ -47,8 +47,31 @@ _WEEKDAYS = {
 _WEEKDAYS["zh-TW"] = _WEEKDAYS["zh"]
 
 
+def _alts(words) -> str:
+    return "(" + "|".join(words) + ")"
+
+
 def _wd(lang: str) -> str:
-    return "(" + "|".join(_WEEKDAYS[lang]) + ")"
+    return _alts(_WEEKDAYS[lang])
+
+
+def _index(words: tuple, word: str, first: int = 0) -> int | None:
+    """The place of `word` among `words` (each a regex of alternatives), counted from `first`; None if absent."""
+    return next((i for i, alts in enumerate(words, first) if re.fullmatch(alts, word, re.IGNORECASE)), None)
+
+
+def _first_hit(text: str, table: dict, langs: Iterable[str] | None, read):
+    """`read(lang, handler, match)` of the first match in `text` it does not refuse: `langs` first, then every
+    language; the earliest match wins, the longest at one place. None when none is read."""
+    wanted = [lang for lang in (langs or ()) if lang in table]
+    for group in ([wanted] if wanted else []) + [list(table)]:
+        hits = [(m.start(), -(m.end() - m.start()), lang, handler, m)
+                for lang in group for pat, handler in table[lang] for m in pat.finditer(text)]
+        for *_, lang, handler, m in sorted(hits, key=lambda h: h[:2]):
+            found = read(lang, handler, m)
+            if found:
+                return found
+    return None
 
 
 _N = r"(\d{1,2}|[一二两兩三四五六七八九十]{1,2})"
@@ -247,28 +270,25 @@ def has_negation(text: str) -> bool:
     return bool(NEGATION.search(str(text or "")))
 
 
-def _number(raw: str) -> int | None:
-    raw = raw.strip().lower()
+def _int(raw: str) -> int | None:
+    """1 to 99 in digits, in Chinese numerals ("十五", "二十三") or in words."""
+    raw = (raw or "").strip().lower()
     if raw.isdigit():
         return int(raw)
     if raw in _WORD_NUM:
         return _WORD_NUM[raw]
     if raw and all(ch in _CJK_NUM for ch in raw):
-        if raw == "十":
-            return 10
-        if raw.startswith("十"):
-            return 10 + _CJK_NUM[raw[1]]
-        if len(raw) == 2 and raw[1] == "十":
-            return _CJK_NUM[raw[0]] * 10
-        return _CJK_NUM[raw[0]] if len(raw) == 1 else None
+        if "十" not in raw:
+            return _CJK_NUM[raw] if len(raw) == 1 else None
+        tens, _, ones = raw.partition("十")
+        if len(tens) > 1 or len(ones) > 1:
+            return None
+        return (_CJK_NUM[tens] if tens else 1) * 10 + (_CJK_NUM[ones] if ones else 0)
     return None
 
 
 def _weekday(lang: str, word: str) -> int | None:
-    for i, alts in enumerate(_WEEKDAYS.get(lang, ())):
-        if re.fullmatch(alts, word, re.IGNORECASE):
-            return i
-    return None
+    return _index(_WEEKDAYS[lang], word)
 
 
 def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> tuple[datetime, datetime] | None:
@@ -286,8 +306,7 @@ def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> tuple[datetim
     if kind == "day_before":
         return day0 - 2 * day, day0 - day
     if kind == "days_ago":
-        raw = next((g for g in m.groups() if g), "")
-        n = _number(raw)
+        n = _int(next((g for g in m.groups() if g), ""))
         if not n or n > 60:
             return None
         return day0 - n * day, day0 - (n - 1) * day
@@ -316,7 +335,7 @@ def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> tuple[datetim
     if kind in ("weeks_ago", "months_ago"):
         # About N weeks (three days either way) or N months (half a month either way) back; "a" is one.
         raw = next((g for g in m.groups() if g), "")
-        n = _number(raw) if raw else 1
+        n = _int(raw) if raw else 1
         if not n or n > 12:
             return None
         middle, half = (7 * n, 3) if kind == "weeks_ago" else (30 * n, 15)
@@ -333,18 +352,8 @@ def resolve(text: str, now: float, tz: tzinfo | None = None,
     if not text.strip():
         return None
     now_dt = datetime.fromtimestamp(now, tz)
-    wanted = [lang for lang in (langs or ()) if lang in TABLE]
-    for group in ([wanted] if wanted else []) + [list(TABLE)]:
-        hits = []
-        for lang in group:
-            for pat, kind in TABLE[lang]:
-                for m in pat.finditer(text):
-                    hits.append((m.start(), -(m.end() - m.start()), lang, kind, m))
-        for _start, _neg, lang, kind, m in sorted(hits, key=lambda h: h[:2]):
-            span = _range(kind, m, lang, now_dt)
-            if span:
-                return span[0].timestamp(), span[1].timestamp()
-    return None
+    span = _first_hit(text, TABLE, langs, lambda lang, kind, m: _range(kind, m, lang, now_dt))
+    return (span[0].timestamp(), span[1].timestamp()) if span else None
 
 
 def phrase(span: Range, lang: str = "en", tz: tzinfo | None = None) -> str:
@@ -392,39 +401,12 @@ _AHEAD_WEEKDAYS["ru"] = ("понедельник", "вторник", "среду
                          "пятницу|пятница", "субботу|суббота", "воскресенье")
 
 
-def _alts(words) -> str:
-    return "(" + "|".join(words) + ")"
-
-
 def _month_of(lang: str, word: str) -> int | None:
-    for i, alts in enumerate(_MONTHS.get(lang, ()), 1):
-        if re.fullmatch(alts, word, re.IGNORECASE):
-            return i
-    return None
+    return _index(_MONTHS[lang], word, 1)
 
 
 def _ahead_weekday(lang: str, word: str) -> int | None:
-    for i, alts in enumerate(_AHEAD_WEEKDAYS.get(lang, ())):
-        if re.fullmatch(alts, word, re.IGNORECASE):
-            return i
-    return None
-
-
-def _int(raw: str) -> int | None:
-    """1 to 99 in digits, in Chinese numerals ("十五", "二十三") or in words."""
-    raw = (raw or "").strip().lower()
-    if raw.isdigit():
-        return int(raw)
-    if raw in _WORD_NUM:
-        return _WORD_NUM[raw]
-    if raw and all(ch in _CJK_NUM for ch in raw):
-        if "十" not in raw:
-            return _CJK_NUM[raw] if len(raw) == 1 else None
-        tens, _, ones = raw.partition("十")
-        if len(tens) > 1 or len(ones) > 1:
-            return None
-        return (_CJK_NUM[tens] if tens else 1) * 10 + (_CJK_NUM[ones] if ones else 0)
-    return None
+    return _index(_AHEAD_WEEKDAYS[lang], word)
 
 
 def _end_of_month(d):
@@ -790,15 +772,9 @@ def resolve_future(text: str, said_at: float, tz: tzinfo | None = None,
     if not text.strip():
         return None
     today = datetime.fromtimestamp(said_at, tz).date()
-    wanted = [lang for lang in (langs or ()) if lang in AHEAD]
-    for group in ([wanted] if wanted else []) + [list(AHEAD)]:
-        hits = []
-        for lang in group:
-            for pat, fn in AHEAD[lang]:
-                for m in pat.finditer(text):
-                    hits.append((m.start(), -(m.end() - m.start()), fn, m))
-        for _start, _neg, fn, m in sorted(hits, key=lambda h: h[:2]):
-            due = fn(m, today)
-            if due:
-                return due._replace(words=m.group(0))
-    return None
+
+    def read(_lang: str, fn, m: re.Match) -> Due | None:
+        due = fn(m, today)
+        return due._replace(words=m.group(0)) if due else None
+
+    return _first_hit(text, AHEAD, langs, read)

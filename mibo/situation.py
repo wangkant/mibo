@@ -124,7 +124,7 @@ def _edit(runtime: Path, edit: Callable[[dict], None]) -> dict:
     """Read, edit and write the factors as one transaction: {"factors": {name: row, and "probed": when the first
     start's check ran}, "hosts": read only}; only the rows `edit` changed are written."""
     with db.at(runtime).write() as conn:
-        before = {name: value for name, value in conn.execute("SELECT name, value FROM situation")}
+        before = dict(conn.execute("SELECT name, value FROM situation").fetchall())
         state = {"factors": {name: json.loads(value) for name, value in before.items()},
                  "hosts": _hosts(conn.execute("SELECT * FROM hosts").fetchall())}
         edit(state)

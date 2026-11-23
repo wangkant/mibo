@@ -63,7 +63,7 @@ def _with_found(messages: list[dict], found: str) -> list[dict]:
         content = [{**content[0], "text": head + content[0]["text"]}, *content[1:]]
     else:
         content = head + content
-    return messages[:-1] + [{**last, "content": content}]
+    return [*messages[:-1], {**last, "content": content}]
 
 
 def _done_so_far(lookups: ChatLookups) -> str:
@@ -87,6 +87,15 @@ def _page_mark(runtime, conversation: str) -> dict:
     marks = db.at(runtime).read(f"SELECT body FROM page_messages WHERE kind = 'summary' AND chat IN ({_OF_CHAT})",
                                 (conversation,))
     return json.loads(marks[0][0]) if marks else {}
+
+
+def _write_page_mark(runtime, conversation: str, mark: dict) -> None:
+    """The page's summary row of the chat `conversation` (page_messages kind 'summary', seq 0, which the page's
+    own messages never take) replaced by `mark`; a chat the page does not keep gets none."""
+    with db.at(runtime).write() as conn:
+        conn.execute("INSERT OR REPLACE INTO page_messages(chat, seq, kind, body) "
+                     "SELECT id, 0, 'summary', ? FROM page_chats WHERE conversation = ?",
+                     (json.dumps(mark, ensure_ascii=False), conversation))
 
 
 def _foldable(rows: list[dict], start: int) -> bool:
@@ -387,12 +396,10 @@ class DirectMessages:
         page's own messages never take), replaced on each compaction with the floor of the last clear carried on;
         a 无痕对话 has no row on the page."""
         conversation = user_id.split(":", 1)[-1]
-        floor = _page_mark(self.memory_file.parent, conversation).get("floor")
-        body = json.dumps({"text": head["content"], "from": head["t"], "at": time.time(),
-                           **({"floor": floor} if floor else {})}, ensure_ascii=False)
-        with db.at(self.memory_file.parent).write() as conn:
-            conn.execute("INSERT OR REPLACE INTO page_messages(chat, seq, kind, body) "
-                         "SELECT id, 0, 'summary', ? FROM page_chats WHERE conversation = ?", (body, conversation))
+        runtime = self.memory_file.parent
+        floor = _page_mark(runtime, conversation).get("floor")
+        _write_page_mark(runtime, conversation, {"text": head["content"], "from": head["t"], "at": time.time(),
+                                                 **({"floor": floor} if floor else {})})
 
     async def _dm_turn(self, user_id: str, pkey: str, text: str) -> None:
         """One turn of the model: the call under the turn's time budget, the
@@ -470,23 +477,8 @@ class DirectMessages:
                 return
             reply = final.text
             texts = self._say(reply)
-            if lookups.trace and texts:
-                # Shown under the reply and kept with it (welcome.py); the trace is what it looked up.
-                texts[-1]["sources"], texts[-1]["trace"] = lookups.sources, lookups.trace
-            if lookups.activity and texts:
-                # One entry for each call the turn made (loop.py), as the waiting row showed them.
-                texts[-1]["activity"] = lookups.activity
-            if texts and lookups.feedback:
-                # What the person said of finds; the page keeps it in the feed (welcome.py).
-                texts[-1]["feedback"] = lookups.feedback
-            if texts and lookups.bring:
-                # The find it brought, as a card under the reply, the way the share step posts one.
-                from . import life
-                from .library import Library
-                item = Library(today.runtime_of(self)).get(lookups.bring)
-                card = life.said(item).get("card") if item is not None else None
-                if card:
-                    texts[-1]["card"] = card
+            if texts:
+                self._show_work(texts[-1], lookups)
 
             asked = "\n".join(said)
             unsaid = bool(person.unsaid(asked))
@@ -533,6 +525,26 @@ class DirectMessages:
             if vars(self).get("_page_turns", {}).get(conversation) is lookups:
                 del self._page_turns[conversation]
 
+    def _show_work(self, said: dict, lookups: ChatLookups) -> None:
+        """What the turn looked up and did, put on the reply's last message for the page (welcome.py)."""
+        if lookups.trace:
+            # Shown under the reply and kept with it; the trace is what it looked up.
+            said["sources"], said["trace"] = lookups.sources, lookups.trace
+        if lookups.activity:
+            # One entry for each call the turn made (loop.py), as the waiting row showed them.
+            said["activity"] = lookups.activity
+        if lookups.feedback:
+            # What the person said of finds; the page keeps it in the feed.
+            said["feedback"] = lookups.feedback
+        if lookups.bring:
+            # The find it brought, as a card under the reply, the way the share step posts one.
+            from . import life
+            from .library import Library
+            item = Library(today.runtime_of(self)).get(lookups.bring)
+            card = life.said(item).get("card") if item is not None else None
+            if card:
+                said["card"] = card
+
     def stop_turn(self, conversation: str) -> bool:
         """Cancel the reply under way in the chat `conversation`: its model
         and tool calls stop, and what it said and did so far is the reply."""
@@ -569,7 +581,7 @@ class DirectMessages:
             # Image parts after the words; an endpoint that refuses them gets the words alone (endpoints.py).
             urls = [await self._vision_data_url(data, _detect_image_mime(data)) for data in pictures]
             last = messages[-1]
-            messages = messages[:-1] + [{**last, "content": [
+            messages = [*messages[:-1], {**last, "content": [
                 {"type": "text", "text": last["content"]},
                 *({"type": "image_url", "image_url": {"url": url}} for url in urls if url)]}]
         if lookups is None or out_of_time:
@@ -687,10 +699,7 @@ class DirectMessages:
             self.dm_history[user_id] = []
             vars(self).get("_compact_fails", {}).pop(user_id, None)
             mark = {"text": "", "from": now, "at": now, "cleared": True, "floor": now}
-            with db.at(self.memory_file.parent).write() as conn:
-                conn.execute("INSERT OR REPLACE INTO page_messages(chat, seq, kind, body) "
-                             "SELECT id, 0, 'summary', ? FROM page_chats WHERE conversation = ?",
-                             (json.dumps(mark), conversation))
+            _write_page_mark(self.memory_file.parent, conversation, mark)
             self._recent_dirty.add(pkey)
             self._maybe_flush_recent()
             logger.info("[Agent] the chat's context was cleared by the person")

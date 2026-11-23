@@ -64,10 +64,7 @@ def _items(library: Library) -> list[Item]:
     key = library.version()
     with _cache_lock:
         hit = _cache.get(library.root)
-        if hit and hit[0] == key:
-            items = hit[1]
-        else:
-            items = None
+    items = hit[1] if hit and hit[0] == key else None
     if items is None:
         items = library.items()
         with _cache_lock:
@@ -117,7 +114,7 @@ def wonder(runtime: Path, words: str, now: float, asked: bool = False) -> str:
                              for row in saved["done"]):
             return ""
         queue = [row for row in saved["queue"] if row["w"].casefold() != key]
-        saved["queue"] = (queue + [{"w": words, "at": now, **({"asked": True} if asked else {})}])[-WONDER_MAX:]
+        saved["queue"] = [*queue, {"w": words, "at": now, **({"asked": True} if asked else {})}][-WONDER_MAX:]
         _save_wonders(runtime, saved)
     return words
 
@@ -165,7 +162,7 @@ def wondered(runtime: Path, words: str, kept: list[str], now: float, *, asked: b
            "missed": [list(pair) for pair in missed], **({"asked": True} if asked else {})}
     with _wonder_lock:
         saved = _wonders(runtime)
-        saved["done"] = (saved["done"] + [row])[-DONE_MAX:]
+        saved["done"] = [*saved["done"], row][-DONE_MAX:]
         _save_wonders(runtime, saved)
     if asked and _told["tell"] is not None:
         _told["tell"](row)

@@ -137,14 +137,18 @@ def own_full_screen(on: bool) -> None:
         _hook.poke()
 
 
-def _moved() -> None:
-    if _told:
-        return
-    for fn in _front_listeners:
+def _tell(listeners: list[Callable], *args) -> None:
+    """Each listener told; one that fails is logged and the others still hear."""
+    for fn in listeners:
         try:
-            fn()
+            fn(*args)
         except Exception:
-            logger.exception("quiet: a front listener failed")
+            logger.exception("quiet: a listener failed")
+
+
+def _moved() -> None:
+    if not _told:
+        _tell(_front_listeners)
 
 
 def settings(runtime: Path) -> dict:
@@ -173,11 +177,7 @@ def _change(quiet: bool, why: str, now: float) -> None:
     else:
         _calm.set()
     logger.info("quiet: %s", f"on ({why})" if quiet else "off")
-    for fn in _listeners:
-        try:
-            fn(state())
-        except Exception:
-            logger.exception("quiet: a listener failed")
+    _tell(_listeners, state())
 
 
 def step(signal: str, video: bool, on: bool, now: float) -> None:

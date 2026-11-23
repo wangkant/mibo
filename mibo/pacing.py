@@ -215,7 +215,10 @@ def wants(runtime: Path) -> dict:
     """What the person set (profile.py): {"slow": SLOW of their pace, "quiet": (start, end) minutes or None}."""
     known = profile.load(runtime, False)
     hours = known["quiet_hours"]
-    minutes = lambda clock: int(clock[:2]) * 60 + int(clock[3:])  # noqa: E731
+
+    def minutes(clock: str) -> int:
+        return int(clock[:2]) * 60 + int(clock[3:])
+
     return {"slow": SLOW[known["pace"]], "quiet": hours and (minutes(hours["from"]), minutes(hours["to"]))}
 
 
