@@ -171,8 +171,8 @@
 }
 /* Each figure's own colour, and its lighter form for a dark window. */
 :root[data-figure="mibo"] {
-  --char: #3f5f7f;
-  --char-hi: #a3bdd6;
+  --char: #2f7fb8;
+  --char-hi: #7cc8f2;
 }
 :root[data-figure="deepseek"] {
   --char: #3c5aa6;
