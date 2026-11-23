@@ -401,10 +401,9 @@
     head.append(tile, text);
     return head;
   }
-  // The card for something with an effect outside (web/gate.py): its act as the question, then only what
-  // matters, each once; the control it presses is ringed on the page itself. A send, a comment, a like or follow
-  // and a post answer 允许 / 始终允许 / 不允许; paying, deleting and account changes only 确认 / 取消, every
-  // time. Drawn once per card.
+  // Something with an effect outside (web/gate.py), waiting for the person's yes typed in the chat (chat.js,
+  // cardwait.py): its act as the question, then only what matters, each once; the control it presses is ringed on
+  // the page itself. Drawn once per question.
   function drawCard(card) {
     if ((card?.id || "") === shownCard) return;
     shownCard = card?.id || "";
@@ -423,36 +422,7 @@
     if (card.text) node.append(el("blockquote", "browse-card-quote", card.text));
     if (card.button && card.ringed) node.append(el("p", "browse-card-ring", words.ring.replace("{button}", card.button)));
     else if (card.button) node.append(el("p", "browse-card-ring", card.button));
-    const row = el("div", "op-card-buttons");
-    // A file the page asks for: the one the person named (its path quoted), or one they choose in the system's
-    // dialog, which the app opens (pick).
-    const named = card.kind === "upload" && Boolean(card.text);
-    const choices = card.kind === "upload"
-      ? [...(named ? [["upload", "pa-btn-primary", true, false]] : []),
-        [named ? "chooseOther" : "choose", named ? "pa-btn-secondary" : "pa-btn-primary", true, false, true],
-        ["cancel", named ? "pa-btn-ghost" : "pa-btn-secondary", false, false]]
-      : card.skippable
-        ? [["once", "pa-btn-primary", true, false], ["always", "pa-btn-secondary", true, true], ["no", "pa-btn-ghost", false, false]]
-        : [["confirm", "pa-btn-primary", true, false], ["cancel", "pa-btn-secondary", false, false]];
-    for (const [name, look, yes, never, pick = false] of choices) {
-      const b = el("button", `pa-btn ${look} pa-btn-sm`, words[name]);
-      b.type = "button";
-      if (never) b.title = words.alwaysTitle;
-      b.addEventListener("click", async () => {
-        for (const other of row.querySelectorAll("button")) other.disabled = true;
-        const response = await post("browser/confirm", { id: card.id, yes, never, pick });
-        const ok = response && (await response.json().catch(() => ({}))).ok;
-        if (!ok && shownCard === card.id) node.append(el("p", "op-card-told", words.gone));
-        // The card an act ended waiting on: the answer is kept for its act, for the next turn to find.
-        if (ok && op?.end === "waiting" && op.card?.id === card.id) {
-          op = { ...op, card: null, end: yes ? op.end : "declined" };
-          drawRun();
-          if (yes) goOn(col().goOnPaused);
-        }
-      });
-      row.append(b);
-    }
-    node.append(row);
+    node.append(el("p", "op-card-ask", words.ask));
     cardBox.append(node);
   }
   // The 自动登录 card: the same look, with the three answers.

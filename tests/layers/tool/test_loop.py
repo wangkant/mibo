@@ -214,7 +214,7 @@ def test_the_pictures_they_attach_reach_the_model_whole(turn):
     assert [p["type"] for p in parts].count("image_url") == 4
 
 
-def test_two_reads_with_acting_off_ask_one_card_at_a_time_and_each_press_grants_what_it_showed(app, turn, tmp_path):
+def test_two_reads_with_acting_off_ask_once_and_the_yes_carries_the_second_folder(app, turn, tmp_path):
     acting.Modes(app.home / "runtime" / "desktop").set("off")
     for name, words in (("a", "alpha"), ("b", "beta")):
         (tmp_path / name).mkdir()
@@ -223,11 +223,12 @@ def test_two_reads_with_acting_off_ask_one_card_at_a_time_and_each_press_grants_
                                     call("read_file", path="note.txt", folder=str(tmp_path / "b"))], say("Read."))
     first, second = done.calls()
     assert "alpha" in done.result_of(first["id"]) and "beta" in done.result_of(second["id"])
-    # One card for each folder, each shown before its press; the first also turned acting on.
-    shown = sorted(Path(c["card"]["folder"]).name for c in done.cards)
+    # One question, for the first folder, which also turned acting on; the yes to it carries the second read of
+    # the turn, whose folder is granted to read as the step needs.
+    shown = [Path(c["card"]["folder"]).name for c in done.cards]
     granted = sorted(Path(f).name for f in Grants(app.home / "runtime" / "desktop", app.home).folders()
                      if Path(f).parent.resolve() == tmp_path.resolve())
-    assert shown == granted == ["a", "b"]
+    assert len(shown) == 1 and granted == ["a", "b"]
 
 
 _STEPS = '[{"step": "pick a beach", "status": "in_progress"}]'

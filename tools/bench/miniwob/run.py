@@ -317,15 +317,14 @@ def answer_cards(app: App, cards: list[dict]) -> None:
     if card and all(card["id"] != c["id"] for c in cards):
         cards.append({"id": card["id"], "place": "browser", "yes": True,
                       **{k: str(card.get(k) or "")[:300] for k in ("kind", "button", "to", "text", "what")}})
-        app.call("POST", "/api/browser/confirm", {"id": card["id"], "yes": True, "never": False}, own=True)
+        app.call("POST", "/api/confirm", {"id": card["id"], "text": "确定"}, own=True)
     for path in CARD_PATHS:
         card = app.call("GET", f"/api/{path}/card").get("card")
         if card and all(card["id"] != c["id"] for c in cards):
             cards.append({"id": card["id"], "place": path, "yes": False,
                           **{k: str(card.get(k) or "")[:300] for k in ("type", "tool", "command", "what")}})
-            # A press is taken from the app window's own page only, as for the browser's cards.
-            app.call("POST", f"/api/{path}/card", {"id": card["id"], **({"answer": "no"} if path == "mcp" else
-                                                                         {"yes": False})}, own=True)
+            # Answered as the person types in the chat box, from the app window's own page only.
+            app.call("POST", "/api/confirm", {"id": card["id"], "text": "不用了"}, own=True)
 
 
 def episode(app: App, pane, site: str, name: str, page_seed: int, meter) -> tuple[dict, dict]:

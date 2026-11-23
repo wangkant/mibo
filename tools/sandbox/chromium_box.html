@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Box sent 0</title>
+<style>
+  body { font: 15px system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+  #log { min-height: 120px; border: 1px solid #ccc; padding: 8px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; position: relative; }
+  #box { flex: 1; min-height: 24px; border: 1px solid #888; padding: 6px; white-space: pre-wrap; outline: none; }
+  #hint { position: absolute; left: 8px; top: 7px; color: #999; pointer-events: none; }
+</style>
+</head>
+<body>
+<!-- A chat program's composer as rich editors in Electron apps build it (Lexical, ProseMirror): a contenteditable
+     whose text lives in the editor's own model. Input comes in through beforeinput and paste; the page draws the
+     model back, so a change made to the page from outside (UI Automation's value) is undone, as in such apps. The
+     placeholder is a separate element, and the box is named by it. Enter or Send sends; the title counts what was
+     sent and names the last message. -->
+<div id="log" aria-label="Messages"></div>
+<div class="row">
+  <div id="box" contenteditable="true" role="textbox" aria-multiline="true"
+       aria-label="Message or run a task"></div>
+  <div id="hint" aria-hidden="true">Message or run a task</div>
+  <button id="send" type="button">Send</button>
+</div>
+<script>
+  const box = document.getElementById("box"), hint = document.getElementById("hint");
+  const log = document.getElementById("log"), send = document.getElementById("send");
+  let model = "", sent = 0;
+
+  function draw() {
+    observer.disconnect();
+    if (box.textContent !== model) {
+      box.textContent = model;
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      range.collapse(false);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    hint.style.display = model ? "none" : "";
+    observer.observe(box, { childList: true, characterData: true, subtree: true });
+  }
+
+  function insert(text) {
+    const sel = getSelection();
+    const all = sel.rangeCount && box.contains(sel.anchorNode) && sel.toString() === model && model;
+    model = (all ? "" : model) + text;
+    draw();
+  }
+
+  function go() {
+    if (!model.trim()) return;
+    sent += 1;
+    const line = document.createElement("div");
+    line.textContent = model;
+    log.appendChild(line);
+    document.title = `Box sent ${sent}: ${model}`;
+    model = "";
+    draw();
+  }
+
+  const observer = new MutationObserver(draw);
+  box.addEventListener("beforeinput", (e) => {
+    e.preventDefault();
+    if (e.inputType === "insertText" || e.inputType === "insertReplacementText") insert(e.data || "");
+    else if (e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") insert("\n");
+    else if (e.inputType.startsWith("delete")) { model = model.slice(0, -1); draw(); }
+  });
+  box.addEventListener("paste", (e) => {
+    e.preventDefault();
+    insert(e.clipboardData.getData("text/plain"));
+  });
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); }
+    if (e.key === "a" && e.ctrlKey) {
+      e.preventDefault();
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+    }
+  });
+  send.addEventListener("click", go);
+  draw();
+</script>
+</body>
+</html>

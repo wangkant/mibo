@@ -149,10 +149,8 @@ def _upload(home: Path, data: bytes) -> dict:
         return json.loads(answer.read().decode() or "{}")
 
 
-# The card routes the page polls, and the press of no on each (tests/harness/turn.py).
-CARDS = {"/api/shell/card": lambda i: {"id": i, "yes": False}, "/api/programs/card": lambda i: {"id": i, "yes": False},
-         "/api/mcp/card": lambda i: {"id": i, "answer": "no"}, "/api/turnon/card": lambda i: {"id": i, "yes": False},
-         "/api/browser/confirm": lambda i: {"id": i, "yes": False, "never": False}}
+# The question routes the page polls (tests/harness/turn.py); each is answered no as the person types it.
+CARDS = ("/api/shell/card", "/api/programs/card", "/api/mcp/card", "/api/turnon/card", "/api/browser/confirm")
 
 
 def turn(home: Path, text: str) -> tuple[dict, list]:
@@ -168,12 +166,12 @@ def turn(home: Path, text: str) -> tuple[dict, list]:
     threading.Thread(target=post, daemon=True).start()
     cards, seen = [], set()
     while not done.wait(0.3):
-        for route, press in CARDS.items():
+        for route in CARDS:
             card = ev.app_api(home, route.removeprefix("/api/")).get("card")
             if card and card.get("id") not in seen:
                 seen.add(card["id"])
                 cards.append({"route": route, "title": str(card.get("title") or "")[:120]})
-                ev.app_api(home, route.removeprefix("/api/"), press(card["id"]))
+                ev.app_api(home, "confirm", {"id": card["id"], "text": "不用了"})
     return got, cards
 
 

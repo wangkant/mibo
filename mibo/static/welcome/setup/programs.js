@@ -23,7 +23,7 @@
     const onError = kit.errorLine();
     sw.about.after(onError);
     sw.box.disabled = true;
-    // ---- Pictures of a window only a picture can work: a card asks each time; on here, always for this service.
+    // ---- Pictures of a window only a picture can work: sent with no question while on; off, the chat asks first.
     const pic = kit.switchRow("programs-pictures", t.pictures, "", (box) => setPictures(box.checked));
     pic.box.disabled = true;
     // ---- How much it does by itself once on.

@@ -1,10 +1,11 @@
 """Acting switched off, turned on from inside the call that needs it.
 
 While the one acting mode (acting.py) is off, the tools of commands and files (shell/) and of other programs (desk/)
-are still offered (search.py). When the reply model calls one, the call first shows the card: what the ability does
-and what always waits for a press, with 开启 / 暂不开启. A press on 开启 sets the mode to automatic review, and the
-call then runs and answers as it would have; on 暂不开启 it answers with an Error line. Only a press on the app's own page answers it, never words
-typed in the chat, and the card waits only while the person's own turn is under way (cardwait.py).
+are still offered (search.py). When the reply model calls one, the call first asks in the chat, in the app's own
+words, whether to turn the ability on and what still waits for the person's yes. Their typed yes sets the mode to
+automatic review, and the call then runs and answers as it would have; any other message leaves it off and the call
+answers with an Error line. Only the person's own message typed in the app's chat box answers it (cardwait.py), and
+the question waits only while their own turn is under way.
 """
 from __future__ import annotations
 
@@ -18,9 +19,9 @@ from fastapi.responses import JSONResponse
 
 from .cardwait import WAIT_S, Card
 
-# What the waiting row and the step under the reply call the card (chat.js shows it on this name).
+# What the waiting row and the step under the reply call the question (chat.js shows it on this name).
 NAME = "turn_on"
-# The abilities whose tools turn acting on, and what the model and the card call each.
+# The abilities whose tools turn acting on, and what the model and the question call each.
 FEATURES = {
     "computer": {"model": "Commands and files on this computer", "zh": "文件与命令", "en": "Files and commands"},
     "programs": {"model": "Operating other programs", "zh": "电脑上的程序", "en": "Other programs"},
@@ -42,10 +43,8 @@ def card_of(feature: str) -> dict:
     from .desk.grants import SWITCH
     lines = {lang: SWITCH[lang]["sentence"].format(who=who) for lang in ("zh", "en")}
     return {"type": "turn_on", "feature": feature,
-            "zh": {"title": f"开启「{FEATURES[feature]['zh']}」？", "lines": [lines["zh"]],
-                   "yes": "开启", "no": "暂不开启", "on": "已开启", "off": "未开启"},
-            "en": {"title": f"Turn on {FEATURES[feature]['en']}?", "lines": [lines["en"]],
-                   "yes": "Turn on", "no": "Not now", "on": "Turned on", "off": "Left off"}}
+            "zh": {"title": f"开启「{FEATURES[feature]['zh']}」？", "lines": [lines["zh"]]},
+            "en": {"title": f"Turn on {FEATURES[feature]['en']}?", "lines": [lines["en"]]}}
 
 
 def switch(home: Path) -> None:
@@ -57,13 +56,12 @@ def switch(home: Path) -> None:
 # ------------------------------------------------------------ the page's side
 
 def mount(app, workspace, body) -> None:
-    from .panels.runtime import WINDOW_HEADER
     cards = Card(workspace, lambda: getattr(app.state, "window", None))
     home = Path(workspace.home)
 
     @app.post("/api/turnon/ask")
     async def turnon_ask(request: Request):
-        """From the character's turn: the card for one ability, and the press. Waits for it."""
+        """From the character's turn: the question for one ability, and the person's answer. Waits for it."""
         payload = await body(request)
         feature, conversation = payload.get("feature"), payload.get("conversation")
         if feature not in FEATURES or not isinstance(conversation, str):
@@ -78,41 +76,30 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/turnon/card")
     async def turnon_card():
+        """The question waiting in the chat, if any (chat.js draws it; /api/confirm answers it)."""
         return {"card": cards.card}
-
-    @app.post("/api/turnon/card")
-    async def turnon_press(request: Request):
-        """The person's press: from the app's own page on this computer alone."""
-        window = getattr(app.state, "window", None)
-        if window is not None and not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
-            return JSONResponse({"error": "local_only"}, status_code=403)
-        payload = await body(request)
-        ident, yes = payload.get("id"), payload.get("yes")
-        if not isinstance(ident, str) or not isinstance(yes, bool):
-            return JSONResponse({"error": "generic"}, status_code=400)
-        return {"ok": cards.press(ident, yes)}
 
 
 # ----------------------------------------------------------- the agent's side
 
 _SAID = {
     "declined": "Error: {area} is off; they chose to leave it off. Tell them in a sentence.",
-    "unanswered": "Error: {area} is off; the card to turn it on got no answer. Tell them it needs their press.",
+    "unanswered": "Error: {area} is off; the question to turn it on got no answer. Tell them it needs their yes.",
 }
 _WAITING = {"zh": "等待你确认是否开启", "en": "Asking whether to turn it on"}
 
 
 async def use(agent, feature: str, folder: str, lookups) -> str:
-    """The card for `feature` inside the call that needs it: "" once it is on, so the call goes on; else the
+    """The question for `feature` inside the call that needs it: "" once it is on, so the call goes on; else the
     Error line the call answers with. Commands and files turn on with the folder the call names, on the shell's
-    own card (shell/panel.py enable)."""
+    own question (shell/panel.py enable)."""
     from . import today
     from .browsed import _ask
     home = today.runtime_of(agent).parent
     lang = "zh" if str(getattr(agent, "chat_lang", "") or "zh").startswith("zh") else "en"
     computer = feature == "computer"
     lookups.doing("shell" if computer else NAME, _WAITING[lang])
-    # Waiting on their press is not the turn's model time.
+    # Waiting on their answer is not the turn's model time.
     lookups.away_since = time.monotonic()
     try:
         outcome = await asyncio.to_thread(_ask, home, "POST", "/api/shell/enable" if computer else "/api/turnon/ask",

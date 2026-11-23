@@ -1,8 +1,8 @@
-"""A no on a card holds for that step alone: the turn goes on and the step their request needs inside a granted
-folder is done; the same step asked again in that turn is refused with no second card, before 本次对话内允许, the
-automatic mode or the reviewer could pass it, while a write of other text is a step of its own with its own card;
-after a no, nothing in that turn passes without a card but by what the person allowed themselves; and the step log
-stays valid text when the model's arguments carry half an emoji, escaped or written as a character."""
+"""A no in the chat holds for that step alone: the turn goes on and the step their request needs inside a granted
+folder is done; the same step asked again in that turn is refused with no second question, before a yes given later,
+the automatic mode or the reviewer could pass it, while a write of other text is a step of its own with its own
+question; after a no, nothing in that turn passes without a question but by what the person allowed themselves; and
+the step log stays valid text when the model's arguments carry half an emoji, escaped or written as a character."""
 from __future__ import annotations
 
 import json
@@ -33,7 +33,7 @@ def folder(app, tmp_path, monkeypatch):
     return place
 
 
-def test_a_no_stops_that_step_only_and_the_same_step_again_gets_no_second_card(app, turn, folder):
+def test_a_no_stops_that_step_only_and_the_same_step_again_gets_no_second_question(app, turn, folder):
     delete = call("delete_files", paths=["old.txt"], folder=str(folder))
     write = call("write_file", path="new.txt", content="new\n", folder=str(folder))
     done = turn("Delete old.txt and write new.txt", delete, write, delete, say("Wrote new.txt; old.txt stays."),  # copy: voice
@@ -47,21 +47,21 @@ def test_a_no_stops_that_step_only_and_the_same_step_again_gets_no_second_card(a
     assert [step["status"] for step in done.trace if step.get("tool") == "shell"] == ["declined", "done", "declined"]
 
 
-def test_a_declined_write_is_never_done_later_in_the_turn_and_other_text_asks_on_its_own_card(app, turn, folder,
-                                                                                               monkeypatch):
+def test_a_declined_write_is_never_done_later_in_the_turn_and_other_text_asks_on_its_own(app, turn, folder,
+                                                                                          monkeypatch):
     # No checkpoint could keep the file, so every change to it asks.
     monkeypatch.setattr(checkpoint, "KEEP_MAX", 1)
     (folder / "notes.txt").write_text("first\n", encoding="utf-8")
     first = call("write_file", path="notes.txt", content="A\n", folder=str(folder))
     other = call("write_file", path="notes.txt", content="B\n", folder=str(folder))
-    done = turn("Rewrite notes.txt", first, other, first, say("Wrote B."), cards=["no", "chat"])  # copy: voice
-    assert [(c["kind"], c["answer"]) for c in done.cards] == [("shell", "no"), ("shell", "chat")]
-    # The declined text comes back after 本次对话内允许 was pressed for the other: still not written.
+    done = turn("Rewrite notes.txt", first, other, first, say("Wrote B."), cards=["no", "yes"])  # copy: voice
+    assert [(c["kind"], c["answer"]) for c in done.cards] == [("shell", "no"), ("shell", "yes")]
+    # The declined text comes back after a yes was given to the other: still not written.
     assert (folder / "notes.txt").read_text(encoding="utf-8") == "B\n"
     assert [step["status"] for step in done.trace if step.get("tool") == "shell"] == ["declined", "done", "declined"]
 
 
-def test_after_a_no_a_change_the_automatic_mode_would_pass_asks_on_a_card(app, turn, folder):
+def test_after_a_no_a_change_the_automatic_mode_would_pass_asks(app, turn, folder):
     (folder / "notes.txt").write_text("first\n", encoding="utf-8")
     delete = call("delete_files", paths=["old.txt"], folder=str(folder))
     write = call("write_file", path="notes.txt", content="second\n", folder=str(folder))
@@ -70,14 +70,14 @@ def test_after_a_no_a_change_the_automatic_mode_would_pass_asks_on_a_card(app, t
     assert (folder / "notes.txt").read_text(encoding="utf-8") == "second\n" and (folder / "old.txt").exists()
 
 
-def test_after_a_no_on_another_programs_card_a_change_the_automatic_mode_would_pass_asks(app, turn, folder,
+def test_after_a_no_in_another_program_a_change_the_automatic_mode_would_pass_asks(app, turn, folder,
                                                                                           monkeypatch):
     from mibo.loop import ChatLookups
     (folder / "notes.txt").write_text("first\n", encoding="utf-8")
     write = call("write_file", path="notes.txt", content="second\n", folder=str(folder))
-    # Without a no anywhere, the automatic mode writes it with no card.
+    # Without a no anywhere, the automatic mode writes it with no question.
     assert turn("Change notes.txt", write, say("Changed.")).cards == []  # copy: voice
-    # The person said no on a card in another program this turn (desk/tool.py keeps it with the turn).
+    # The person said no to a step in another program this turn (desk/tool.py keeps it with the turn).
     monkeypatch.setattr(ChatLookups, "desk_said_no", {("notepad", "write the note")}, raising=False)
     again = call("write_file", path="notes.txt", content="third\n", folder=str(folder))
     done = turn("Change notes.txt", again, say("Changed."), cards=["yes"])  # copy: voice

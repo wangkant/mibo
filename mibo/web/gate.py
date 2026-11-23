@@ -5,12 +5,13 @@ Reading, scrolling and going to an address are free. Typing into a field is
 allowed, but never into a secret field (password, payment, one-time code: see
 pageops.secret). Two sorts of rule decide the rest.
 
-The floor, which always asks on a card (`_by_name` and the rules beside it):
+The floor, which always asks the person in the chat (`_by_name` and the rules beside it):
 paying (PAY_WORDS, a confirm next to an amount, CHECKOUT's link only going to
 the cart), deleting (DELETE_WORDS, DELETE_CLASSES), granting access
 (GRANT_WORDS, an affirmative on a consent page), an account's security
 (ACCOUNT_WORDS, a submit in a form that holds a password, a switch that saves a
-setting). These kinds ask every time, whatever the mode or the reviewer. The
+setting). These kinds ask whatever the mode or the reviewer, and a yes to another
+kind of step earlier in the turn does not reach them (cardwait.reaches). The
 word sets are the whole app's: a program's controls (desk/gate.py) and MCP
 tools (mcp_tools.hard) are sorted by them too.
 
@@ -18,7 +19,7 @@ The judgment, which the reviewer makes: any other press, Enter or form that
 sends something out of the page is one kind, "outward" (review.judged). What
 its words suggest (`looks`: the like, comment, send and post vocabularies, a
 like's icon class) is only a reading: it is passed to the reviewer as a hint
-and names the card until the reviewer reads the act itself; it never decides
+and names the question until the reviewer reads the act itself; it never decides
 whether the act goes. The page's own asks are reviewable too: a file it wants
 (upload), its own confirm or prompt (dialog, or the kind its words name:
 `asks`), and going to a site of nobody's naming with nothing typed carried
@@ -69,7 +70,7 @@ KINDS = ("send", "comment", "like", "post", "submit", "press", "outward", "order
 # The readings the person may let through without asking, per site.
 SKIPPABLE = ("send", "comment", "like", "post")
 ALLOW_FILE = "browser-allow.json"
-# Let through without a card at most this many a day on one site; past it the card comes back.
+# Let through without a question at most this many a day on one site; past it the question comes back.
 SKIPPED_A_DAY = 60
 
 
@@ -193,7 +194,7 @@ SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "t
                       ["密码", "口令", "密碼", "パスワード", "비밀번호"])
 # A name with no letters in it: a count, a sign, nothing.
 NO_WORDS = re.compile(r"^[\W\d_]*$")
-# A press or Enter in another site's frame does what nothing here can see: the floor, a card every time.
+# A press or Enter in another site's frame does what nothing here can see: the floor, asked in the chat.
 FRAME_WHY = "a press or Enter in a frame from another site, whose controls the app cannot see"
 
 # Readings, ours: what an outward act's words suggest, a hint for the reviewer and the card's wording. A class that

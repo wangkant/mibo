@@ -1,12 +1,13 @@
 """One task in another program, asked for by the person in chat: the never list,
-the look, every action through the gate, the card for what has an effect
-outside, the strip, the stop and the log, put together.
+the look, every action through the gate, the question in the chat for what
+has an effect outside, the strip, the stop and the log, put together.
 
 `Hands` is the shape web/operate.py's loop drives (`begin`, `look`, `act`,
 `step`, `end`, and the statuses it knows), plus `use` to take the program's
-window. It lives in the app's process, where the card can be shown;
-`ask(card)` shows the person a card and returns their answer, or None when
-nobody answered. Nothing the model sends counts as consent: only that answer.
+window. It lives in the app's process, where the question can be asked;
+`ask(card)` says the step in the chat in the app's words and returns the
+person's answer, or None when nobody answered. Nothing the model sends counts
+as consent: only that answer, typed by the person.
 """
 from __future__ import annotations
 
@@ -414,7 +415,8 @@ class Hands:
             return {"status": "ok", "line": v.wait(float(a.get("seconds") or 2), str(a.get("until") or "")[:80])}
         if do == "switch":
             return self._switch(" ".join(str(a.get("program") or a.get("name") or "").split()))
-        ident = None if do == "key" else self._find(a)
+        # A key may name the field it is for: the focus is put there first.
+        ident = self._find(a)
         if isinstance(ident, int):
             # The element is read again before anything is done with it: still the control the look printed.
             ident = v.live(ident)
@@ -492,10 +494,12 @@ class Hands:
         if do == "key":
             keys = str(a.get("key") or "")
             uia.parse_key(keys)
-            # A key lands where the program's own focus is once it is in front: judge it there, not on
-            # whatever another window has.
+            if isinstance(ident, str):
+                return {"status": "failed", "line": f"[failed] key: {ident} is a point of the picture; name a field"}
+            # A key lands where the program's own focus is once it is in front, or in the field it names: judge
+            # it there, not on whatever another window has.
             v.forward()
-            focused = v.focused()
+            focused = v.node(ident) if ident is not None else v.focused()
             top = focused.top if focused else v.hwnd
             hit = self._access_key(keys, focused, top)
             if hit is None and focused is not None and focused.top in v.menus and keys.lower() in ("enter", "space"):
@@ -506,7 +510,7 @@ class Hands:
                 if kind:
                     source = self._composer(hit) if kind in ("send", "post", "submit") else None
                     return self._outside(kind, why, hit, self._said(source), self._files(hit, kind),
-                                         lambda: v.key(keys), source)
+                                         lambda: v.key(keys, ident), source)
             kind, why = gate.key(keys, focused, win32.title_of(top), top == v.hwnd, v.texts(top))
             if kind == "submit" and self._address_bar(focused) and gate.address_ok(self._said(focused)):
                 kind, why = "", "Enter in the address bar goes to an existing folder"
@@ -516,8 +520,8 @@ class Hands:
                 said = self._said(focused)
                 # With the program not in front there is no focus to read: the items selected in its file view.
                 files = self._files(focused, kind, said) if focused is not None else self._picked(v.hwnd)
-                return self._outside(kind, why, focused, said, files, lambda: v.key(keys))
-            return {"status": "ok", "line": v.key(keys)}
+                return self._outside(kind, why, focused, said, files, lambda: v.key(keys, ident))
+            return {"status": "ok", "line": v.key(keys, ident)}
         return {"status": "failed", "line": f"[failed] no action {do[:20]!r}"}
 
     def _press_kind(self, node, do: str) -> tuple[str, str]:
@@ -635,7 +639,7 @@ class Hands:
             return {"status": self.held(), "kind": kind, "line": f"[{self.held()}] nothing was done"}
         if (self._fingerprint(node), self._fingerprint(source)) != before:
             return {"status": "failed", "kind": kind,
-                    "line": "[changed] the window changed since the card; nothing was done, look again"}
+                    "line": "[changed] the window changed since the question; nothing was done, look again"}
         line = run()
         if not line.startswith("[ok]"):
             return {"status": "failed", "kind": kind, "line": line}

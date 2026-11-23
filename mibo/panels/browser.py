@@ -11,10 +11,13 @@ nothing while the switch is off.
 And the character acting in the pane's tabs for the person (surface.py's act,
 web/operate.py): the service's loop sends each act call to /api/browser/op,
 where `Operating` keeps a Hands for each tab acted in this turn, every step
-through the gate; a card for an action with an effect outside waits at
-/api/browser/confirm, which only the app window's own page can answer (its
-window key), never the service; one card at a time, and a card whose time ran
-out stays answerable after the turn ends waiting on it (`left`), its answer
+through the gate; an action with an effect outside is said in the chat in
+the app's own words and waits for the person's yes typed in the app window's
+chat box (cardwait.py, /api/confirm), never the service's or the page's words;
+the column beside the page shows what waits (/api/browser/confirm). One
+question at a time, and one whose time ran out stays answerable after the
+turn ends waiting on it (`left`): the person's next message beside the page
+answers it, a plain yes as a yes and anything else as a no, and the answer is
 kept for the next turn (`kept`). The kinds the person let through per site are
 listed and revoked at /api/browser/allowed, and the person's mode for the pane
 (acting.py) is read and set at /api/browser/acting. What the person types in
@@ -103,7 +106,7 @@ class Operating:
         self.card: dict | None = None
         self.answer: asyncio.Future | None = None
         self.lang = "zh"
-        # The card answered last in this turn, for the chat's one line about it: {"id", "yes", "said"}.
+        # The question answered last in this turn, for the chat's one line about it: {"id", "yes", "said"}.
         self.answered: dict | None = None
         # The answers to this turn's acts (operate.Hands.kept); the card a turn ended waiting on, still answerable,
         # its answer kept for the next turn; one card at a time.
@@ -230,12 +233,19 @@ class Operating:
                                    attended=self.window.attended(), lang=self.lang)
 
     async def ask(self, card: dict, tab: int) -> dict | None:
-        """The card shows beside the page, its control ringed on the page, until the person presses, the turn
-        stops or time is up; one at a time, so a second never takes the place of one the person is reading. A tab
-        worked on out of sight comes to the middle for it (the column beside the page shows cards). Time up with
-        the card still up: {"waiting": the act}, and the card stays (`left`)."""
+        """The act is said in the chat and shown beside the page, its control ringed on the page, until the person
+        answers in the chat, the turn stops or time is up; one at a time, so a second never takes the place of one
+        the person is reading. A yes earlier in the turn that reaches its kind (cardwait.reaches) lets it go with
+        no question. A tab worked on out of sight comes to the middle for it. Time up with the question still up:
+        {"waiting": the act}, and it stays (`left`). An upload with no file named opens the system's Open dialog
+        on their yes: the files they choose there are the answer."""
+        from ..cardwait import asking, risk_of, turn_of
         from ..web.operate import CARD_S
         pane = self.window.pane
+        everyone, turn = asking(self.workspace), turn_of(self.workspace)
+        risk = "send" if card.get("kind") == "upload" else risk_of(str(card.get("kind") or ""))
+        if card.get("kind") != "upload" and everyone.carried(turn, risk):
+            return {"yes": True}
         async with self.one:
             if not self.showing:
                 await asyncio.to_thread(self.window.show)
@@ -247,6 +257,19 @@ class Operating:
             said, act = SAID[self.lang], act_of(card, self.lang)
             shown = {k: card.get(k) for k in ("id", "kind", "site", "to", "text", "button", "skippable", "what")}
             self.card, self.answer = card, asyncio.get_running_loop().create_future()
+
+            async def settle(yes: bool) -> bool:
+                if self.card is not card or self.answer.done():
+                    return False
+                files: list[str] = []
+                if yes and card.get("kind") == "upload" and not card.get("text"):
+                    files = await asyncio.to_thread(self.window.pick_files, bool(card.get("many")))
+                    yes = bool(files)
+                if self.card is not card or self.answer.done():
+                    return False
+                self.answer.set_result({"yes": yes, "never": False, **({"files": files} if files else {})})
+                return True
+            everyone.open[card["id"]] = (turn, risk, settle)
             await asyncio.to_thread(pane.op_card, {**shown, "ringed": card.get("node") is not None},
                                     said["wait"].format(act=act))
             page = self._page(tab)
@@ -265,6 +288,7 @@ class Operating:
                     self.left = {**card, "said": act}
                 return answer
             finally:
+                everyone.open.pop(card["id"], None)
                 self.card = self.answer = None
                 yes = bool(answer and answer.get("yes"))
                 if card.get("node") is not None and not yes:
@@ -276,22 +300,11 @@ class Operating:
                     if self.window.pane is not None:
                         await asyncio.to_thread(self.window.pane.op_answered, "done" if yes else "cancelled", told)
 
-    def answer_card(self, ident: str, yes: bool, never: bool, files: list[str]) -> bool:
-        if self.left is not None and self.left["id"] == ident and self.card is None:
-            # The card a turn ended waiting on: the answer is kept for the act, and the next turn goes on with it.
-            return self.keep(yes)
-        if self.card is None or self.card["id"] != ident or self.answer is None or self.answer.done():
-            return False
-        self.answer.set_result({"yes": yes, "never": never, **({"files": files} if files else {})})
-        return True
-
-    def keep(self, yes: bool, said: bool = False) -> bool:
-        """The person's answer to the card a turn ended waiting on, from the card or (`said`) their own words in the
-        chat beside the page, kept for its act. Paying, deleting, the account and access are answered on the card
-        alone: words leave such a card waiting."""
-        from ..acting import HARD
+    def keep(self, yes: bool) -> bool:
+        """The person's answer to the question a turn ended waiting on, from their next message in the chat beside
+        the page (a plain yes, or a no), kept for its act."""
         left = self.left
-        if left is None or said and left.get("kind") in HARD:
+        if left is None:
             return False
         self.left = None
         self.kept[left["act"]] = {"yes": yes}
@@ -471,13 +484,13 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         op, run = payload.get("op"), operating()
         if op == "keep":
-            # The person's own words in the chat answered the card a turn ended waiting on (loop._beside_page).
+            # The person's own message in the chat answered the question a turn ended waiting on (loop._beside_page).
             yes, left = payload.get("yes"), run.left
             if not isinstance(yes, bool):
                 raise ValueError("browse_invalid")
-            return {"status": "ok", "said": left["said"]} if left and run.keep(yes, said=True) else {"status": "none"}
+            return {"status": "ok", "said": left["said"]} if left and run.keep(yes) else {"status": "none"}
         if op == "left":
-            # The act the card a turn ended waiting on is about, if one waits.
+            # The act the question a turn ended waiting on is about, if one waits.
             return {"status": "ok", "said": run.left["said"] if run.left else ""}
         if op == "place_done":
             await run.place_done(payload.get("stopped") is True)
@@ -539,26 +552,9 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/browser/confirm")
     async def browser_card():
+        """The act waiting for the person's yes in the chat, if any, and the one answered last, for the column."""
         run = getattr(app.state, "operating", None)
         return {"card": run.card if run is not None else None, "answered": run.answered if run is not None else None}
-
-    @app.post("/api/browser/confirm")
-    async def browser_confirm(request: Request):
-        """The person's press on a card: from the app window's own page alone, never from the service. `pick` on
-        an upload card opens the system's Open dialog: the files they choose there are the answer."""
-        window = own_window(request)
-        payload = await body(request)
-        run = getattr(app.state, "operating", None)
-        ident, yes, never = payload.get("id"), payload.get("yes"), payload.get("never", False)
-        pick = payload.get("pick", False)
-        if (not isinstance(ident, str) or not isinstance(yes, bool) or not isinstance(never, bool)
-                or not isinstance(pick, bool)):
-            raise ValueError("browse_invalid")
-        files: list[str] = []
-        if pick and run is not None and run.card is not None and run.card["id"] == ident and run.card["kind"] == "upload":
-            files = await asyncio.to_thread(window.pick_files, bool(run.card.get("many")))
-            yes = bool(files)
-        return {"ok": run is not None and run.answer_card(ident, yes, never, files)}
 
     @app.get("/api/browser/acting")
     async def browser_acting():

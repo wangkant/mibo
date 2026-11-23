@@ -260,14 +260,16 @@ def test_work_asked_for_in_the_browser_comes_with_the_page_in_front(app, pages):
     assert any(m.get("role") == "tool" and "High water 06:12" in str(m.get("content")) for m in first)
 
 
-def test_a_left_card_is_answered_by_a_plain_no_typed_beside_the_page(app):
+@pytest.mark.parametrize("typed, yes", [("确定", True), ("不要发", False)])
+def test_a_left_question_is_answered_by_the_next_message_typed_beside_the_page(app, typed, yes):
+    # Read by cardwait.said_yes from their words alone, with no model call; the message is then a turn like any other.
     from mibo.panels.browser import Operating
-    pane = SimpleNamespace(op=None, op_kept=lambda yes: None)
-    run = Operating(SimpleNamespace(pane=pane, attended=lambda: True), app.home / "runtime" / "desktop", None)
+    pane = SimpleNamespace(op=None, op_kept=lambda yes: None, tabs=lambda: [])
+    run = Operating(SimpleNamespace(pane=pane, attended=lambda: True), app.home / "runtime" / "desktop", app)
     run.left = {"id": "c1", "kind": "comment", "act": ("card", "comment"), "said": "回复阿杰"}  # copy: voice
     app.app.state.window, app.app.state.operating = SimpleNamespace(pane=pane), run
-    app.model.script(text(json.dumps({"card": "no"})))
-    sent = app.post("/api/chat", {"text": "不要发", "chat": "main", "choices": ["page"]}, timeout=120)  # copy: voice
+    app.model.script(say("好的。"))
+    sent = app.post("/api/chat", {"text": typed, "chat": "main", "choices": ["page"]}, timeout=120)
     app.model.check()
-    assert "回复阿杰" in sent.json()["reply"] and run.kept == {("card", "comment"): {"yes": False}}  # copy: voice
+    assert sent.json()["reply"] == "好的。" and run.kept == {("card", "comment"): {"yes": yes}}
 

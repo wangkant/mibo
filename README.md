@@ -2,7 +2,7 @@
 
 **An AI companion that lives on your desktop, keeps you company and gets things done.**
 
-A character with its own look and personality talks with you, remembers you and brings you one thing worth your time. It does more than chat: it browses the web, operates the programs on your computer, works with your files and commands, uses skills and MCP connectors, and runs tasks on a schedule. It runs on your computer with a model service you choose. Actions are reviewed automatically, and a card asks you only when one needs your decision; paying, deleting and account changes always do.
+A character with its own look and personality talks with you, remembers you and brings you one thing worth your time. It does more than chat: it browses the web, operates the programs on your computer, works with your files and commands, uses skills and MCP connectors, and runs tasks on a schedule. It runs on your computer with a model service you choose. Actions are reviewed automatically, and the character asks you in the chat only when one needs your decision: reply yes and the task runs to the end; paying, deleting and account changes are asked on their own.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -22,7 +22,7 @@ A character with its own look and personality talks with you, remembers you and 
 | **Going out** | Walks on public pages as a visitor, signed out and honouring robots.txt. A page is read at once, with its headings and tables. Web search needs no key. |
 | **Built-in browser** (Windows) | Links open beside the chat, with tabs, private tabs and downloads. The character looks at a page and clicks, types, chooses, drags and uploads on it. |
 | **Other programs** (Windows) | Reads and operates other programs' windows through UI Automation, Electron apps included, only while you leave the keyboard and mouse alone. |
-| **Files and commands** | Granted folders only. Commands are read before they run; each turn's file changes can be undone; on Windows, deletions go to the Recycle Bin. |
+| **Files and commands** | Your own Desktop, Documents, Downloads, Pictures, Music and Videos, and the folders you grant. Commands are read before they run; each turn's file changes can be undone; on Windows, deletions go to the Recycle Bin. |
 | **Skills and connectors** | Skills (`SKILL.md` folders) and MCP servers, each with a curated market. `/name` starts a skill. |
 | **Scheduled tasks** | Reminders, tasks and checks on a rhythm. A run only reads, plus what you allowed when you made the task. |
 | **Languages** | Ten interface languages. |
@@ -81,7 +81,7 @@ Data stays in one folder: `~/mibo` for an installed copy, the clone itself when 
 | **Your model service** | Receives your messages, relevant memory, the pages and files used for a reply, and the steps the reviewer judges. Your key goes only there. |
 | **Websites** | Walks read public pages signed out, three a day by default (Settings › Going out); a reply reads the pages it needs. Your sign-ins stay in the built-in browser and are used only there. |
 | **Other services** | A search query when a reply searches; the version number to GitHub at most once a day; catalog lookups when you open a market; what the character passes to an MCP server's tools. |
-| **Always asks** | Paying or buying, deleting, and changes to an account's security or access, every time and in every mode. Every action on banking, payment, health and mail sites. |
+| **Always asks** | Paying or buying, deleting, and changes to an account's security or access, in every mode; a yes to another kind of step does not cover them. Every action on banking, payment, health and mail sites. Only your own message typed in the chat counts as a yes. |
 | **Never** | Reading or typing passwords, payment details or verification codes; running anything as administrator; changing security settings. |
 | **Unattended** | Only walks and the scheduled tasks you create. |
 

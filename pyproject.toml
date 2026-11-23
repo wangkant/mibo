@@ -72,6 +72,14 @@ dependencies = [
     "lxml_html_clean>=0.4,<1",
     # Reads the YAML front matter of a skill's SKILL.md, as other agents' hosts do (skills/store.py).
     "pyyaml>=6,<7",
+    # Word documents made from the model's Markdown and changed in place (shell/office/docx.py).
+    "python-docx>=1.2,<2",
+    # Excel workbooks, the same way (shell/office/xlsx.py).
+    "openpyxl>=3.1.5,<4",
+    # PowerPoint decks, the same way (shell/office/pptx.py).
+    "python-pptx>=1.0.2,<2",
+    # A PDF's text, page by page, for read_file (shell/files.py).
+    "pypdf>=6,<7",
     # The person's MCP servers, through the official SDK (mcp_client.py); jsonschema checks a call's
     # arguments against the tool's schema before the card (mcp_tools.py).
     "mcp>=2.3,<3",

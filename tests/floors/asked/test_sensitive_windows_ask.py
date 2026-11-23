@@ -1,6 +1,6 @@
 """The picture of a password manager's, a bank's or a mail client's window never goes to the model service without
-the person's press on a card, and that card offers no always: even with a reviewer that would pass anything and
-with Settings' always-send switch on for the service, the reviewer is never asked and on no nothing is sent."""
+the person's yes in the chat: even with a reviewer that would pass anything and with Settings' switch on that sends
+other windows' pictures with no question, the reviewer is never asked and on no nothing is sent."""
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +25,7 @@ PASS = json.dumps({"kind_asked": True, "target_named": True, "text_given": True,
 
 
 @pytest.mark.parametrize("attack", ROWS)
-def test_a_sensitive_windows_picture_asks_every_time_with_no_always(attack, tmp_path, monkeypatch):
+def test_a_sensitive_windows_picture_asks_every_time(attack, tmp_path, monkeypatch):
     asked, cards = [], []
 
     async def reviewer(system: str, messages: list) -> str:
@@ -49,4 +49,4 @@ def test_a_sensitive_windows_picture_asks_every_time_with_no_always(attack, tmp_
     finally:
         desk.worker.shutdown()
     assert done["status"] == "declined" and desk.pictured is None and asked == []
-    assert [(c["type"], c["choices"]) for c in cards] == [("see_grant", ["once", "no"])]
+    assert [c["type"] for c in cards] == ["see_grant"]

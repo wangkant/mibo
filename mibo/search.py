@@ -9,7 +9,7 @@ import re
 import time
 import types
 from html import unescape
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import httpx
 from keyring.errors import KeyringError
@@ -96,6 +96,9 @@ async def key_taken(api: str, key: str) -> bool:
         return True
     return True
 
+# The tool that goes to a site the person names for things on it.
+FIND_ON_SITE = "find_on_site"
+
 # The web tools of the reply model's catalog (catalog.py).
 TOOLS = [
     {"type": "function", "function": {
@@ -103,8 +106,9 @@ TOOLS = [
         "description": (
             "Search the web before answering anything current (news, prices, releases) or any name, product, "
             "slang or event you are not sure of. Turn slang and nicknames into the real name first, and leave old years out: recent means this year. Not for small talk or "
-            "questions about you, and not when they want something else to watch or read (\"还有别的吗\"): "
-            "that is bring_find."),
+            "questions about you, not when they want something else to watch or read (\"还有别的吗\"): "
+            "that is bring_find, and not for things on a site they name (\"去抖音找点好玩的视频\"): that is "
+            "find_on_site."),
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string", "description": "what you would type into a search engine"}},
             "required": ["query"]}}},
@@ -134,6 +138,20 @@ TOOLS = [
                                                           "the outline a read of it gave"},
             "look_for": {"type": "string", "description": "words to find in a long page, besides their question"}},
             "required": ["url"]}}},
+    {"type": "function", "function": {
+        "name": FIND_ON_SITE,
+        "description": (
+            "Go to a site they name and bring back what is on it: \"去抖音找些好玩的视频\", \"B站上有什么讲烘焙的\", "
+            "\"find me a guitar lesson on YouTube\". It reads the site's own search, or its front page, in the app's "
+            "browser with their session, and searches the web within that site; it gives the items with their "
+            "titles and links. Answer with those items, never with kinds of things described in general, and never "
+            "send them to search the site themselves."),
+        "parameters": {"type": "object", "properties": {
+            "site": {"type": "string", "description": "the site as they named it (抖音, B站, YouTube) or its web "
+                                                      "address"},
+            "words": {"type": "string", "description": "what to look for there, in the site's language (搞笑 for "
+                                                       "funny ones); empty for what the site shows now"}},
+            "required": ["site"]}}},
     {"type": "function", "function": {
         "name": "pages_they_read",
         "description": (
@@ -182,6 +200,75 @@ def _page_words(page: dict, question: str, room: int, args: dict) -> str:
     body = "\n\n".join(t for t in (page.get("description"), page.get("text")) if t)
     given, note = pagetext.give(body, question, room, *_part(args))
     return f"{page.get('title', '')}\n{page['url']}\n\n{given}\n\n({note})"
+
+
+# Items one find_on_site gives the model, the site's own list first, and fewer than which the find is thin.
+SITE_ITEMS = 8
+SITE_FEW = 3
+# Why a site's own page gave no items, as the note under them says it.
+_SITE_UNREAD = {
+    "off": "they turned off letting you use the app's browser",
+    "no_app": "the app window with its browser is not open",
+    "chose": "they turned off your reading this site on your own",
+    "host_day_cap": "it was read enough times today",
+    "sign_in": "it asks them to sign in", "sign_in_overlay": "it asks them to sign in",
+    "sign_in_page": "it asks them to sign in", "wall": "it showed a sign-in or a check lately",
+    "verification": "it asked for a check (a CAPTCHA), which is theirs to do",
+}
+_ADDRESS = re.compile(r"(?:https?://)?[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:[/:?#]\S*)?", re.I)
+
+
+def platform(runtime, said: str) -> dict:
+    """The site they named ("抖音", "B站", "YouTube", "douyin.com", a full address) as find_on_site goes to it:
+    {"key", "name", "search": its search address with {q} for the words ("" when the app knows none), "list": the
+    page that shows what is on it now}; {} for words that name no site the app knows and no address."""
+    from .web import signin, sites
+    said = " ".join(str(said or "").split())[:200]
+    hinted = signin.find(said)
+    key = hinted.get("site") or next(
+        (k for k, seed in sites.SEEDS.items() if seed["name"].casefold() == said.casefold()), "")
+    if not key and _ADDRESS.fullmatch(said):
+        key = sites.key_of(said)
+    if not key:
+        return {}
+    card = sites.card(runtime, key)
+    # A feed is no page to read in the browser: the site's front page stands in.
+    search = card["search"].get("template", "") if card["search"].get("kind") != "feed" else ""
+    hot = next((h["url"] for h in card["hot"] if h.get("kind") != "feed"), "")
+    return {"key": key, "name": (card["name"] or key) if _ADDRESS.fullmatch(said) else said, "search": search,
+            "list": hot or hinted.get("home") or card["home"]}
+
+
+def _site_rows(rows: list, key: str, origin: str) -> list[dict]:
+    """A list's rows that are things on the site `key`: {"title", "link", "author", "text", "origin"}, each with a
+    title and an address on the site other than its front page."""
+    from .web import sites
+    found = []
+    for row in rows:
+        link, title = str(row.get("link") or "").strip(), " ".join(str(row.get("title") or "").split())
+        if title and urlsplit(link).scheme in ("http", "https") and urlsplit(link).path.strip("/") \
+                and sites.key_of(link) == key:
+            found.append({"title": title[:200], "link": link[:2000], "origin": origin,
+                          "author": " ".join(str(row.get("author") or "").split())[:80],
+                          "text": " ".join(str(row.get("text") or row.get("snippet") or "").split())[:200]})
+    return found
+
+
+def site_note(name: str, address: str, items: list, why: str) -> str:
+    """The app's note under what find_on_site gave: answer with the items; or, when they are few, why in one
+    sentence and an offer to open the site."""
+    opening = f"open with name {address} and show true once they say yes"
+    if len(items) >= SITE_FEW:
+        return ("\n[Note from the app] Answer with these items themselves: the two to four that best fit what they "
+                "asked, each by its title with its full link and a few words of your own on it; bring_find url with "
+                "one of these links puts it as the card under your reply. Never describe kinds of things in general "
+                "and never tell them to search the site themselves. Say only what the rows show; when you are not "
+                f"sure the items fit, ask whether they want you to open {name} for them ({opening}).")
+    cause = (f"{name}'s own pages were not read: {_SITE_UNREAD.get(why, 'its page did not load')}" if why
+             else f"{name} gave little for it")
+    return (f"\n[Note from the app] {cause}. Say so in one sentence, give what was found by its title and full link, "
+            f"and ask whether they want you to open {name} for them ({opening}). Never tell them to search it "
+            "themselves, and never describe kinds of things in general instead.")
 
 
 def _part(args: dict) -> tuple[int, str]:
@@ -307,6 +394,8 @@ class WebSearch:
                 return _SESSION_ERRORS.get(page["error"], f"(not read: {page['error']})")
             lookups.source(page.get("title") or site_name(page["url"]), page["url"], read=True)
             return fence_pages(_page_words(page, lookups.said, self._page_room(), args))
+        if name == FIND_ON_SITE:
+            return await self._find_on_site(home, args, lookups)
         if name == "pages_they_read":
             lookups.doing("pages")
             rows = await asyncio.to_thread(browsed.recent_pages, home, max(1, min(int(args.get("n") or 15), 30)))
@@ -319,6 +408,50 @@ class WebSearch:
                 for row in rows))
         lookups.doing("operate", str(args.get("site") or "")[:80])
         return await _connect.use(home, args, getattr(self, "chat_lang", "") or "zh")
+
+    async def _find_on_site(self, home, args: dict, lookups) -> str:
+        """find_on_site: the things on a site they named. Its own page first, read in the app's browser with their
+        session (its search for the words when the app knows its address, else what it shows now), then a web
+        search within the site for the words; each item is a source of the reply, which bring_find url can make
+        the card. A sign-in or a check the site shows is never gone round: the note says why and has the model
+        offer to open the site."""
+        from . import browsed
+        from .roam import fence_pages
+        from .web import signin
+        place = platform(home / "runtime", args.get("site"))
+        if not place:
+            return ("Error: site takes the site as they named it (抖音, B站, YouTube) or its web address "
+                    "(douyin.com)")
+        words = " ".join(str(args.get("words") or "").split())[:100]
+        lookups.doing("search", f"{place['name']} {words}".strip())
+        searched = bool(place["search"] and words)
+        address = place["search"].replace("{q}", quote(words)) if searched else place["list"]
+        items, why = [], "chose"
+        if signin.chose(home / "runtime" / "desktop", address, "task"):
+            page = await asyncio.to_thread(browsed.read_signed_in, home, address)
+            why = page.get("error", "")
+            items = _site_rows(page.get("rows") or [], place["key"], "its search page" if searched
+                               else "its front page, what it shows now") if not why else []
+        if words and len(items) < SITE_ITEMS:
+            rows = await self._search_rows(f"site:{place['key']} {words}", _ROWS_A_SEARCH)
+            items += _site_rows([{"link": r["url"], "title": r["title"], "text": r["snippet"]} for r in rows],
+                                place["key"], "a web search within the site")
+        unique: dict = {}
+        for item in items:
+            unique.setdefault(item["link"], item)
+        items = list(unique.values())[:SITE_ITEMS]
+        logger.info("[Agent] find_on_site %s (%d-char words) -> %d items%s", place["key"], len(words), len(items),
+                    f", own page not read ({why})" if why else "")
+        for item in items:
+            lookups.source(item["title"], item["link"], read=True)
+            # bring_find url may make it the card (findtool.bring).
+            lookups._read[-1]["found"] = True
+        listed = "\n".join(f"{n}. {item['title']}" + (f" | {item['author']}" if item["author"] else "")
+                           + f" ({item['link']})" + f"\n   from {item['origin']}"
+                           + (f": {item['text']}" if item["text"] else "")
+                           for n, item in enumerate(items, 1))
+        return fence_pages(f"{place['name']} ({place['key']}), for: {words or 'what it shows now'}\n\n"
+                           + (listed or "(nothing found)")) + site_note(place["name"], address, items, why)
 
     def _page_room(self) -> int:
         """Tokens of page one tool result may carry: the reader's room in the reply model's budget

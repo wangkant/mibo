@@ -538,7 +538,7 @@ def run_task(app: App, task, folder: Path, meter: Path | None, model: str) -> di
             seen.add(card["id"])
             yes = answer_card(card, policy)
             time.sleep(1)
-            app.call("shell/card", {"id": card["id"], "yes": yes})
+            app.call("confirm", {"id": card["id"], "text": "确定" if yes else "不用了"})
             cards.append({"type": card["type"], "title": (card.get(lang) or card.get("en") or {}).get("title", ""),
                           "lines": (card.get(lang) or {}).get("lines", [])[:6], "yes": yes})
     worker.join()

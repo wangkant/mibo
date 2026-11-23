@@ -1,10 +1,10 @@
 "use strict";
-// The card in the chat before one of the person's MCP servers is used (mcp_hub.py): starting a local program the
-// first time, named by the program it runs with its exact command under a fold, or calling a tool that writes or
-// deletes, with its arguments in plain words and the raw JSON under a fold; and what a server asks of the person
-// during a call, a form they fill in (sent to the server alone) or a page
-// they choose to open. Only a press here answers it (POST /api/mcp/card), never words typed in the chat or text from
-// a server.
+// The question in the chat before one of the person's MCP servers is used (mcp_hub.py): starting a local program
+// the first time, named by the program it runs with its exact command under a fold, or calling a tool that writes or
+// deletes, with its arguments in plain words and the raw JSON under a fold, or a page a server asks them to open.
+// Their yes typed in the chat box answers it (chat.js, POST /api/confirm), never text from a server. A form a server
+// asks them to fill in during a call is filled in here and sent with its button (POST /api/mcp/card), to the server
+// alone.
 (() => {
   const SVG = "http://www.w3.org/2000/svg";
   const ICON = {
@@ -164,53 +164,47 @@
       fold.append(el("summary", "", t.raw), el("pre", "", card.raw));
       node.append(fold);
     }
-    const answer = async (value) => {
-      const filled = values && value === "once" ? values() : undefined;
-      if (filled === null) return;
-      for (const b of node.querySelectorAll("button, input")) b.disabled = true;
-      node.classList.add("answered");
-      const kind = start ? "start" : link ? "link" : asked ? "ask" : "tool";
-      const told = el("p", "op-card-told", t[kind + { once: "Once", chat: "Chat", always: "Always", no: "No" }[value]]);
-      node.querySelector(".op-card-told")?.remove();
-      node.append(told);
-      try {
-        const response = await fetch("/api/mcp/card", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json",
-            "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-            "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
-          body: JSON.stringify({ id: card.id, answer: value, values: filled }),
-        });
-        const said = await response.json().catch(() => ({}));
-        if (said.problem) {
-          // The server's form wants something else: the card stays up to be corrected.
-          told.textContent = t.fix;
-          node.classList.remove("answered");
-          for (const b of node.querySelectorAll("button, input")) b.disabled = false;
-        } else if (!said.ok) told.textContent = t.gone;
-      } catch {
-        told.textContent = t.gone;
+    if (asked && !link) {
+      const answer = async (value) => {
+        const filled = value === "once" ? values() : undefined;
+        if (filled === null) return;
+        for (const b of node.querySelectorAll("button, input")) b.disabled = true;
+        node.classList.add("answered");
+        const told = el("p", "op-card-told", t[value === "once" ? "askOnce" : "askNo"]);
+        node.querySelector(".op-card-told")?.remove();
+        node.append(told);
+        try {
+          const response = await fetch("/api/mcp/card", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json",
+              "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
+              "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
+            body: JSON.stringify({ id: card.id, answer: value, values: filled }),
+          });
+          const said = await response.json().catch(() => ({}));
+          if (said.problem) {
+            // The server's form wants something else: it stays up to be corrected.
+            told.textContent = t.fix;
+            node.classList.remove("answered");
+            for (const b of node.querySelectorAll("button, input")) b.disabled = false;
+          } else if (!said.ok) told.textContent = t.gone;
+        } catch {
+          told.textContent = t.gone;
+        }
+      };
+      const buttons = el("div", "op-card-buttons");
+      for (const [cls, text, value] of [["pa-btn-primary", t.submit, "once"], ["pa-btn-ghost", t.decline, "no"]]) {
+        const b = el("button", `pa-btn ${cls} pa-btn-sm`, text);
+        b.type = "button";
+        b.addEventListener("click", () => answer(value));
+        buttons.append(b);
       }
-    };
-    const buttons = el("div", "op-card-buttons");
-    const add = (cls, text, value) => {
-      const b = el("button", `pa-btn ${cls} pa-btn-sm`, text);
-      b.type = "button";
-      b.addEventListener("click", () => answer(value));
-      buttons.append(b);
-    };
-    if (asked) {
-      add("pa-btn-primary", link ? t.open : t.submit, "once");
-      add("pa-btn-ghost", t.decline, "no");
+      node.append(buttons);
     } else {
-      // What the app offers on this card: a tool marked destructive asks each time.
-      add("pa-btn-primary", t.once, "once");
-      if (card.choices.includes("chat")) add("pa-btn-secondary", t.chat, "chat");
-      if (card.choices.includes("always")) add("pa-btn-secondary", start ? t.always : t.alwaysTool, "always");
-      add("pa-btn-ghost", t.no, "no");
+      // Answered by the person's yes typed in the chat box (chat.js).
+      node.append(el("p", "op-card-ask", paI18n.words("chat").confirmAsk));
     }
-    node.append(buttons);
     waiting.after(node);
     shown = node;
     const label = waiting.querySelector(".doing");

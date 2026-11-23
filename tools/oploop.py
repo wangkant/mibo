@@ -129,7 +129,7 @@ def one(run: Run, pane, site: str, task: dict, meter, tasks) -> dict:
             no = bool(task.get("deny")) and bool(re.search(task["deny"], str(card.get("button") or "")))
             cards.append({"id": card["id"], "yes": not no,
                           **{k: str(card.get(k) or "")[:300] for k in ("kind", "button", "to", "text", "what")}})
-            run.call("POST", "/api/browser/confirm", {"id": card["id"], "yes": not no, "never": False}, own=True)
+            run.call("POST", "/api/confirm", {"id": card["id"], "text": "不用了" if no else "确定"}, own=True)
         thread.join(0.1)
     if thread.is_alive():
         # Past the task's time: the turn is stopped as the stop button stops it, before the next task.

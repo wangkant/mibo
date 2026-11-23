@@ -2,7 +2,7 @@
 
 **Un compañero de IA que vive en su escritorio: le acompaña y además resuelve tareas.**
 
-Un personaje con aspecto y carácter propios conversa con usted, le recuerda y le trae, una cada vez, cosas que merecen su tiempo. No se queda en la conversación: navega por la web, maneja los programas de su equipo, trabaja con sus archivos y comandos, usa habilidades y conectores MCP, y ejecuta tareas programadas. Se ejecuta en su equipo con el servicio de modelos que usted elija. Las acciones se revisan automáticamente y una tarjeta le pregunta solo cuando hace falta su decisión; los pagos, las eliminaciones y los cambios de cuenta siempre la requieren.
+Un personaje con aspecto y carácter propios conversa con usted, le recuerda y le trae, una cada vez, cosas que merecen su tiempo. No se queda en la conversación: navega por la web, maneja los programas de su equipo, trabaja con sus archivos y comandos, usa habilidades y conectores MCP, y ejecuta tareas programadas. Se ejecuta en su equipo con el servicio de modelos que usted elija. Las acciones se revisan automáticamente y el personaje le pregunta en el chat solo cuando hace falta su decisión: con su sí, la tarea se completa; los pagos, las eliminaciones y los cambios de cuenta se preguntan por separado.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versión](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -22,7 +22,7 @@ Un personaje con aspecto y carácter propios conversa con usted, le recuerda y l
 | **Salidas** | Recorre páginas públicas como visitante, sin iniciar sesión y respetando robots.txt. Lee cada página de una vez, con sus títulos y tablas. La búsqueda web no requiere clave. |
 | **Navegador integrado** (Windows) | Los enlaces se abren junto a la conversación, con pestañas, pestañas privadas y descargas. El personaje examina la página y hace clic, escribe, elige, arrastra y sube archivos en ella. |
 | **Otros programas** (Windows) | Lee y maneja ventanas de otros programas mediante UI Automation, también aplicaciones Electron, y solo mientras usted no usa el teclado ni el ratón. |
-| **Archivos y comandos** | Solo en las carpetas que usted autorice. Los comandos se analizan antes de ejecutarse; los cambios de archivos de cada turno se pueden deshacer; en Windows, lo eliminado va a la Papelera de reciclaje. |
+| **Archivos y comandos** | Solo en su Escritorio, Documentos, Descargas, Imágenes, Música y Vídeos, y en las carpetas que usted autorice. Los comandos se analizan antes de ejecutarse; los cambios de archivos de cada turno se pueden deshacer; en Windows, lo eliminado va a la Papelera de reciclaje. |
 | **Habilidades y conectores** | Habilidades (carpetas con `SKILL.md`) y servidores MCP, cada uno con un catálogo seleccionado. Un mensaje que empieza por `/name` (el nombre de la habilidad) la activa. |
 | **Tareas programadas** | Recordatorios, tareas y comprobaciones periódicas. Al ejecutarse solo leen, además de lo que usted permitió al crearlas. |
 | **Idiomas** | Diez idiomas de interfaz. |
@@ -81,7 +81,7 @@ Los datos se guardan en una sola carpeta: `~/mibo` en una copia instalada, el pr
 | **Su servicio de modelos** | Recibe sus mensajes, la memoria pertinente, las páginas y archivos usados para una respuesta y los pasos que juzga la revisión. Su clave solo se envía a este servicio. |
 | **Sitios web** | Las salidas leen páginas públicas sin iniciar sesión, tres al día de forma predeterminada (Configuración › Salidas); una respuesta lee las páginas que necesita. Sus sesiones permanecen en el navegador integrado y solo se usan allí. |
 | **Otros servicios** | Una consulta de búsqueda cuando una respuesta busca; el número de versión a GitHub como máximo una vez al día; consultas al catálogo cuando abre un mercado; lo que el personaje pasa a las herramientas de un servidor MCP. |
-| **Siempre pregunta** | Pagar o comprar, eliminar y cambiar la seguridad o el acceso de una cuenta, cada vez y en cualquier modo. Toda acción en sitios de bancos, pagos, salud y correo. |
+| **Siempre pregunta** | Pagar o comprar, eliminar y cambiar la seguridad o el acceso de una cuenta, en cualquier modo; un sí a otro tipo de paso no los cubre. Toda acción en sitios de bancos, pagos, salud y correo. Solo su propio mensaje escrito en el chat cuenta como un sí. |
 | **Nunca** | Leer ni escribir contraseñas, datos de pago o códigos de verificación; ejecutar nada como administrador; cambiar la configuración de seguridad. |
 | **Sin supervisión** | Solo las salidas y las tareas programadas que usted cree. |
 

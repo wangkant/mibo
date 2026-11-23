@@ -3,20 +3,22 @@
 Settings › programs, Settings › files and commands all set the same mode) and read again at every action, so a change
 made while a task runs holds from its next step.
 
-    off    it does not act at all; an acting call shows the turn-on card inside the call (turnon.py)
+    off    it does not act at all; an acting call asks in the chat to turn it on inside the call (turnon.py)
     read   it looks, reads, scrolls and moves between pages; nothing it does sends, saves or changes anything
            (in a program: it only looks; by command: it only reads files in the granted folders)
     auto   automatic review, the default: code first lets through what plainly only reads or moves about, or can
            be undone inside what the person granted (a page's own reads and telemetry, a tab or filter fetching
            what it shows, a read-only command, a file changed in a granted folder under each turn's checkpoint);
-           the reviewer (review.py) then judges what is left of the reviewable kinds, and a card comes only where
-           it does not pass or code says always ask
+           the reviewer (review.py) then judges what is left of the reviewable kinds, and the chat asks the
+           person (cardwait.py) only where it does not pass or code says always ask
 
 What no mode loosens, decided here in code: paying or buying, deleting, an account's security or access (`HARD`)
-ask every time, with no always-allow and no reviewer; a password, payment detail or code is never typed or read
-by the character (the gates); an outward act skips the card only by the person's always-allow for that site or
-the reviewer's pass, never on a sensitive site (`sensitive`: banks and payment, health, mail and accounts), where
-every kind asks. The reviewer passes nothing while no request of the person's own is under way.
+are asked in the chat, with no always-allow and no reviewer, and a yes to another kind of step earlier in the turn
+does not reach them (cardwait.reaches); a password, payment detail or code is never typed or read by the character
+(the gates); an outward act skips the question only by the person's always-allow for that site, a yes earlier in
+the turn or the reviewer's pass, never the reviewer's on a sensitive site (`sensitive`: banks and payment, health,
+mail and accounts), where every kind asks. The reviewer passes nothing while no request of the person's own is under
+way.
 
 Claude Code's auto mode with its classifier, Claude in Chrome's act-without-asking with its plan, Codex's
 approvals reviewer and Qwen Code's approval modes are what this follows.

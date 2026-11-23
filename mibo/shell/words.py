@@ -1,5 +1,5 @@
 """What a command will do, in plain written words made by the app from its reading: the step log line while it
-runs and after, the card's lines before it runs, the reason it is refused. Never the model's own words."""
+runs and after, the question's lines before it runs, the reason it is refused. Never the model's own words."""
 from __future__ import annotations
 
 import os
@@ -7,6 +7,7 @@ import re
 import shutil
 import sys
 
+from . import office
 from .grants import known_folders, norm
 from .read import NEVER_KINDS, Act, Reading, Verdict
 
@@ -39,19 +40,6 @@ def folder_name(path: str, lang: str) -> str:
 def quote(text: str, lang: str) -> str:
     text = visible(text)
     return f"「{text}」" if lang == "zh" else f"“{text}”"
-
-
-def always_folders(folders: list[str], write: bool, lang: str) -> dict:
-    """The card's 始终允许 for places outside the granted folders: the button and what is said once pressed."""
-    what = quote(folder_name(folders[0], lang), lang) if len(folders) == 1 else (
-        f"这 {len(folders)} 个文件夹" if lang == "zh" else f"these {len(folders)} folders")
-    if lang == "zh":
-        verb = "更改" if write else "读取"
-        return {"always": f"始终允许{verb}{what}",
-                "always_told": f"已授权{verb}{what}，可在「设置 › 文件与命令」中撤销。"}
-    verb = "changing" if write else "reading"
-    return {"always": f"Always allow {verb} {what}",
-            "always_told": f"Granted {verb} {what}. You can take it back in Settings › Files and commands."}
 
 
 def shown(path: str, raw: str, lang: str) -> str:
@@ -187,7 +175,7 @@ def size(n: int, lang: str) -> str:
 
 
 def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
-    """The card's lines: each reason the command needs the person's press, said plainly, with the real list
+    """The question's lines: each reason the command needs the person's yes, said plainly, with the real list
     of what a delete moves to the Recycle Bin and what an overwrite replaces."""
     zh = lang == "zh"
     lines: list[str] = []
@@ -346,7 +334,10 @@ def file_doing(op: str, args: dict, lang: str, done: bool = False) -> str:
         "search": (f"在{name('path')}中查找{quote(str(args.get('text') or ''), lang)}",
                    f"Searching {name('path')} for {quote(str(args.get('text') or ''), lang)}",
                    f"Searched {name('path')} for {quote(str(args.get('text') or ''), lang)}"),
-        "write": (f"写入{name('path')}", f"Writing {name('path')}", f"Wrote {name('path')}"),
+        # A Word, Excel or PowerPoint file is made from the model's text, not written as it is.
+        "write": (f"生成{name('path')}", f"Making {name('path')}", f"Made {name('path')}")
+        if os.path.splitext(str(args.get("path") or "").strip())[1].lower() in office.KINDS else
+        (f"写入{name('path')}", f"Writing {name('path')}", f"Wrote {name('path')}"),
         "edit": (f"修改{name('path')}", f"Changing {name('path')}", f"Changed {name('path')}"),
         "open": (f"打开{name('path')}", f"Opening {name('path')}", f"Opened {name('path')}"),
         "move": ((f"复制 {count} 项" if args.get("copy") else f"移动 {count} 项"),
@@ -374,23 +365,21 @@ def move_said(moves: list[dict], copy: bool, lang: str) -> str:
     return f"{'Copied' if copy else 'Moved'} {len(moves)} items to {places}"
 
 
-def folder_card(folder: str, lang: str, reading_will_do: bool, turn_on: bool) -> dict:
-    """The card that grants a folder, read-only or to sort in when only reading is needed; with `turn_on` the same
-    press also turns on commands and files, the first time. No folder: the card only turns them on."""
+def folder_card(folder: str, lang: str, write: bool, turn_on: bool) -> dict:
+    """The question that grants a folder, to read only or, when the step changes something there, to change in;
+    with `turn_on` the same yes also turns on commands and files, the first time. No folder: it only turns them
+    on."""
     zh = lang == "zh"
     lines = []
     if not folder:
         title = "允许 Mibo 通过命令和文件工具操作本机？" if zh else "Let Mibo work on this computer with commands and file tools?"
     else:
         name = folder_name(folder, lang)
-        title = f"允许 Mibo 在「{name}」中整理文件？" if zh else f"Let Mibo sort files in “{name}”?"
-        if reading_will_do:
-            lines.append("只读：仅查看和读取其中的文件。可整理：还可在其中新建、复制、重命名和移动文件。" if zh else
-                         "Read only: it only looks at and reads the files. Sort: it may also create, copy, rename and "
-                         "move files in it.")
-    lines.append("移到回收站、覆盖、移出文件、联网和运行程序时，每次仍需要你确认。可随时在 设置 › 文件与命令 中更改。" if zh
-                 else "Moving to the Recycle Bin, replacing or moving files out, the network and running programs "
-                 "still ask you every time. You can change this in Settings › Files and commands.")
+        title = (f"允许 Mibo 在「{name}」中新建和整理文件？" if write else f"允许 Mibo 读取「{name}」中的文件？") if zh else (
+            f"Let Mibo create and sort files in “{name}”?" if write else f"Let Mibo read the files in “{name}”?")
+    lines.append("删除文件、付款和更改账号时仍将另行确认。可随时在 设置 › 文件与命令 中更改。" if zh
+                 else "Deleting files, paying and changing an account are still confirmed separately. You can change "
+                 "this in Settings › Files and commands.")
     if turn_on:
         lines.append("此操作将同时开启“通过命令操作本机”。" if zh else
                      "This also turns on “Let it do things on this computer by command”.")

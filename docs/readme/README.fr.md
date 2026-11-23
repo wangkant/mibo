@@ -2,7 +2,7 @@
 
 **Un compagnon IA qui vit sur votre bureau : il vous tient compagnie et agit pour vous.**
 
-Un personnage doté d'une apparence et d'un caractère propres converse avec vous, se souvient de vous et vous apporte, une à la fois, des choses qui méritent votre temps. Il ne se limite pas à la conversation : il navigue sur le web, utilise les programmes de votre ordinateur, travaille avec vos fichiers et vos commandes, emploie des compétences et des connecteurs MCP, et exécute des tâches planifiées. Il s'exécute sur votre ordinateur avec le service de modèles de votre choix. Les actions sont vérifiées automatiquement, et une carte ne vous sollicite que lorsqu'une décision vous revient ; les paiements, les suppressions et les modifications de compte la demandent toujours.
+Un personnage doté d'une apparence et d'un caractère propres converse avec vous, se souvient de vous et vous apporte, une à la fois, des choses qui méritent votre temps. Il ne se limite pas à la conversation : il navigue sur le web, utilise les programmes de votre ordinateur, travaille avec vos fichiers et vos commandes, emploie des compétences et des connecteurs MCP, et exécute des tâches planifiées. Il s'exécute sur votre ordinateur avec le service de modèles de votre choix. Les actions sont vérifiées automatiquement, et le personnage ne vous sollicite dans la discussion que lorsqu'une décision vous revient : avec votre accord, la tâche va jusqu'au bout ; les paiements, les suppressions et les modifications de compte sont demandés à part.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -22,7 +22,7 @@ Un personnage doté d'une apparence et d'un caractère propres converse avec vou
 | **Sorties** | Parcourt les pages publiques en tant que visiteur, sans connexion et dans le respect de robots.txt. Une page est lue en une fois, titres et tableaux compris. La recherche web ne demande aucune clé. |
 | **Navigateur intégré** (Windows) | Les liens s'ouvrent à côté de la conversation, avec onglets, onglets privés et téléchargements. Le personnage examine la page et y clique, saisit, choisit, fait glisser et téléverse des fichiers. |
 | **Autres programmes** (Windows) | Lit et pilote les fenêtres d'autres programmes via UI Automation, applications Electron comprises, uniquement lorsque vous n'utilisez ni le clavier ni la souris. |
-| **Fichiers et commandes** | Limités aux dossiers autorisés. Les commandes sont analysées avant exécution ; les modifications de fichiers de chaque tour peuvent être annulées ; sous Windows, les suppressions vont dans la Corbeille. |
+| **Fichiers et commandes** | Limités à vos dossiers Bureau, Documents, Téléchargements, Images, Musique et Vidéos, et aux dossiers que vous autorisez. Les commandes sont analysées avant exécution ; les modifications de fichiers de chaque tour peuvent être annulées ; sous Windows, les suppressions vont dans la Corbeille. |
 | **Compétences et connecteurs** | Compétences (dossiers `SKILL.md`) et serveurs MCP, chacun avec un catalogue sélectionné. Un message commençant par `/name` (le nom de la compétence) la lance. |
 | **Tâches planifiées** | Rappels, tâches et vérifications périodiques. À l'exécution, elles ne font que lire, en plus de ce que vous avez autorisé à leur création. |
 | **Langues** | Dix langues d'interface. |
@@ -81,7 +81,7 @@ Les données restent dans un seul dossier : `~/mibo` pour une copie installée, 
 | **Votre service de modèles** | Reçoit vos messages, la mémoire utile, les pages et fichiers utilisés pour une réponse, et les étapes soumises à la vérification. Votre clé n'est envoyée qu'à lui. |
 | **Sites web** | Les sorties lisent des pages publiques sans connexion, trois par jour par défaut (Paramètres › Sorties) ; une réponse lit les pages dont elle a besoin. Vos connexions restent dans le navigateur intégré et ne servent que là. |
 | **Autres services** | Une requête de recherche lorsqu'une réponse cherche ; le numéro de version envoyé à GitHub au plus une fois par jour ; des consultations de catalogue à l'ouverture d'une boutique ; ce que le personnage transmet aux outils d'un serveur MCP. |
-| **Demande toujours** | Payer ou acheter, supprimer, modifier la sécurité ou les accès d'un compte, à chaque fois et dans tous les modes. Toute action sur les sites de banque, de paiement, de santé et de messagerie. |
+| **Demande toujours** | Payer ou acheter, supprimer, modifier la sécurité ou les accès d'un compte, dans tous les modes ; un accord donné pour une autre sorte d'étape ne les couvre pas. Toute action sur les sites de banque, de paiement, de santé et de messagerie. Seul votre propre message saisi dans la discussion vaut accord. |
 | **Jamais** | Lire ou saisir des mots de passe, données de paiement ou codes de vérification ; exécuter quoi que ce soit en administrateur ; modifier les paramètres de sécurité. |
 | **Sans surveillance** | Uniquement les sorties et les tâches planifiées que vous créez. |
 

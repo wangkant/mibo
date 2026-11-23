@@ -19,10 +19,10 @@ Nothing on the page or in the window is pressed.
 act does steps in a page place, out of sight or in the middle, with the verbs the page tools converged on
 (Playwright MCP's browser_click, browser_type, browser_select_option, browser_press_key, browser_hover,
 browser_drag, browser_wait_for, browser_file_upload, browser_navigate): each step through web/operate.Hands in the
-app, so the gate, the reviewer, the watch of what a press sends and the cards hold as before. The result is the
-step lines, what changed, and a Noticed line (what a press sent: method, host, status; the address and title
-after; the page's own dialogs), then the page as the steps left it, as Playwright MCP answers each action with
-its snapshot. The reply model decides when the task is done; no loop inside the call. A read
+app, so the gate, the reviewer, the watch of what a press sends and the questions in the chat hold as before. The
+result is the step lines, what changed, and a Noticed line (what a press sent: method, host, status; the address
+and title after; the page's own dialogs), then the page as the steps left it, as Playwright MCP answers each
+action with its snapshot. The reply model decides when the task is done; no loop inside the call. A read
 step reads the page for a question (web/pagetext.py) with the reply model.
 """
 from __future__ import annotations
@@ -73,8 +73,8 @@ LOOK = {"type": "function", "function": {
 _STEP = {"type": "object", "properties": {
     "do": {"type": "string", "enum": ["click", "type", "select_option", "key", "hover", "drag", "select_text",
                                       "scroll_to", "wait_for", "upload_file", "go", "back", "read"]},
-    "what": {"type": "string", "description": "what this step does, in a few words of their language: the card "
-                                              "they may be asked on shows it"},
+    "what": {"type": "string", "description": "what this step does, in a few words of their language: the question "
+                                              "they may be asked shows it"},
     "ref": {"type": "integer", "description": "the control's ref from the latest look"},
     "text": {"type": "string", "description": "type: the text; click, hover or drag without a ref: the words it "
                                               "shows; select_text: the words to select (left out: all of it); "
@@ -110,7 +110,7 @@ ACT = {"type": "function", "function": {
         "line with what changed; after the steps you get what the app noticed (what a press sent, the address and "
         "title now, the page's own dialogs) and the page now, whose refs the next act takes. You decide whether "
         "the task is done. Sending, posting, submitting, uploading, ordering and deleting are checked by the app first and "
-        "may wait for their press; a step it declined is not tried another way. Out of sight unless the place is "
+        "may wait for their yes; a step it declined is not tried another way. Out of sight unless the place is "
         "in front of them. A point is taken from a ref's top left (a drawing lists its shapes with theirs) or from "
         "a picture a look returned."),
     "parameters": {"type": "object", "properties": {
@@ -147,7 +147,7 @@ async def run(agent, called: dict, args: dict, lookups) -> str:
 
 
 async def _programs_on(agent, home, lookups) -> str:
-    """"" when other programs' windows may be read (turnon.py's programs switch, its card asked here), else the
+    """"" when other programs' windows may be read (turnon.py's programs switch, its question asked here), else the
     Error line the call answers with."""
     from . import turnon
     if "programs" not in await asyncio.to_thread(turnon.off, home):

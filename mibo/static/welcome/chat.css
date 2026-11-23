@@ -1687,6 +1687,17 @@ button.find-why:hover,
   border-top: 1px solid var(--pa-line);
   color: var(--pa-muted);
 }
+/* What the person types in the chat box to let the step run (cardwait.py): gone once they have answered. */
+.op-card-ask {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--pa-line);
+  color: var(--pa-text);
+  font-weight: 500;
+}
+.op-card.answered .op-card-ask {
+  display: none;
+}
 /* A form an MCP server asks the person to fill (toolcard.js): one labelled field a row. */
 .op-card-form {
   display: grid;

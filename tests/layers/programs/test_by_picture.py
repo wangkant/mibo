@@ -142,7 +142,7 @@ def desk(tmp_path, monkeypatch):
 
     def ask(card: dict) -> dict:
         one.cards_seen.append(card)
-        return {"answer": "no"} if "always" in card["choices"] else {"yes": False}
+        return {"yes": False}
 
     one.ask = ask
     monkeypatch.setattr(win32, "title_of", lambda hwnd: one.title)
@@ -158,30 +158,30 @@ def allow_pictures(desk, reviewer: Reviewer, program: str, title: str, monkeypat
     return asyncio.run(desk.op("see_allow", {}))
 
 
-def logged(desk) -> list[dict]:
-    return [json.loads(line) for line in (desk.desktop / "desk-log.jsonl").read_text(encoding="utf-8").splitlines()]
+def test_a_windows_pictures_go_to_their_model_service_with_no_question(desk, monkeypatch):
+    # As every word of the chat goes there: no question and no reviewer, for a window they named or not.
+    for program, title in (("Grok Bot", "Grok Bot — 主界面"), ("微信", "微信")):
+        reviewer = Reviewer("ask", "你没有提到微信。")
+        done = allow_pictures(desk, reviewer, program, title, monkeypatch)
+        assert done["status"] == "ok" and desk.cards_seen == [] and desk.pictured is desk.hands
+        assert reviewer.seen == []
 
 
-def test_the_window_the_person_named_goes_to_their_model_service_on_the_reviewers_pass(desk, monkeypatch):
-    reviewer = Reviewer("go", "你让操作 Grok Bot。")
-    done = allow_pictures(desk, reviewer, "Grok Bot", "Grok Bot — 主界面", monkeypatch)
-    assert done["status"] == "ok" and desk.cards_seen == [] and desk.pictured is desk.hands
-    (shown,) = reviewer.seen
-    assert (shown["kind"], shown["where"]) == ("picture", "openrouter.ai")
-    assert logged(desk)[-1]["review"] == {"decision": "go", "by": "review", "reason": "你让操作 Grok Bot。"}
-
-
-def test_a_window_their_words_do_not_point_at_asks_on_a_card_saying_why(desk, monkeypatch):
-    reviewer = Reviewer("ask", "你没有提到微信。")
-    done = allow_pictures(desk, reviewer, "微信", "微信", monkeypatch)
-    assert done["status"] == "declined"
+def test_with_the_settings_switch_off_every_window_asks_in_the_chat_first(desk, monkeypatch):
+    from mibo.see import when
+    when.Switch(desk.desktop).set("")
+    done = allow_pictures(desk, Reviewer("go"), "Grok Bot", "Grok Bot — 主界面", monkeypatch)
+    assert done["status"] == "declined" and desk.pictured is None
     ((card,),) = [desk.cards_seen]
-    assert card["choices"] == ["once", "always", "no"] and "你没有提到微信。" in card["review"]
+    assert card["type"] == "see_grant"
+    # Turned back on for their service, it goes with no question.
+    when.Switch(desk.desktop).set("openrouter.ai")
+    assert allow_pictures(desk, Reviewer("go"), "Grok Bot", "Grok Bot — 主界面", monkeypatch)["status"] == "ok"
 
 
-def test_a_mail_clients_window_always_asks_with_no_always_and_never_reaches_the_reviewer(desk, monkeypatch):
+def test_a_mail_clients_window_always_asks_and_never_reaches_the_reviewer(desk, monkeypatch):
     reviewer = Reviewer("go")
     done = allow_pictures(desk, reviewer, "Grok Bot", "Outlook — 收件箱", monkeypatch)
     assert done["status"] == "declined" and reviewer.seen == []
     ((card,),) = [desk.cards_seen]
-    assert card["choices"] == ["once", "no"]
+    assert card["type"] == "see_grant"

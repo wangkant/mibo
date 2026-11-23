@@ -42,7 +42,10 @@ NEVER = (
     ("关机、重启或注销", "Shutting down, restarting or signing out"),
 )
 
-# Known folders the person can grant with one press: Windows' own ids for them.
+# The person's own folders, by Windows' own ids for them. They are theirs to work in: reading, listing and making
+# or changing a file there needs no grant and no question (deleting, and replacing a file outside what the turn's
+# checkpoint can put back, still asks), as a product asks nobody before saving the document they asked for in
+# Documents or on the Desktop.
 KNOWN = (
     ("downloads", "{374DE290-123F-4565-9164-39C4925E467B}", "下载", "Downloads"),
     ("documents", "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}", "文档", "Documents"),
@@ -100,6 +103,17 @@ def known_folder(guid: str) -> str:
         return out.value or ""
     finally:
         ctypes.windll.ole32.CoTaskMemFree(out)
+
+
+# The Public Desktop, which File Explorer shows as part of the person's own Desktop.
+PUBLIC_DESKTOP = "{C4AA340D-F20F-4863-AFEF-F87EF2E6BA25}"
+
+
+def own_folders() -> list[str]:
+    """The person's own folders (KNOWN), and the Public Desktop beside their real Desktop (not beside a stand-in)."""
+    mine = [row["path"] for row in known_folders()]
+    public = known_folder(PUBLIC_DESKTOP) if stand_in("desktop") is None else ""
+    return mine + ([public] if public and os.path.isdir(public) else [])
 
 
 def known_folders() -> list[dict]:
@@ -188,10 +202,6 @@ class Grants:
     def _read(self) -> dict:
         try:
             data = json.loads((self.desktop / SETTINGS_FILE).read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            # A fresh home: the person's own folders, to read.
-            mine = [row["path"] for row in known_folders()]
-            return {"folders": mine, "read_only": mine}
         except (OSError, ValueError):
             return {}
         return data if isinstance(data, dict) else {}
@@ -201,13 +211,20 @@ class Grants:
         atomic_write_text(self.desktop / SETTINGS_FILE, json.dumps(data, ensure_ascii=False, indent=1))
 
     def folders(self) -> list[str]:
-        """Granted folders as the person chose them, the ones that are still grantable."""
+        """Granted folders: the ones they chose and the person's own (own_folders), those still grantable."""
         kept = [str(p) for p in self._read().get("folders") or [] if isinstance(p, str)]
-        return [p for p in kept if not self.places.grantable(norm(p))]
+        seen, out = set(), []
+        for place in kept + own_folders():
+            if norm(place) not in seen and not self.places.grantable(norm(place)):
+                seen.add(norm(place))
+                out.append(place)
+        return out
 
     def read_only(self) -> set[str]:
-        """The granted folders, `norm`ed, where files may be read but nothing made, moved or changed."""
-        return {norm(p) for p in self._read().get("read_only") or [] if isinstance(p, str)}
+        """The granted folders, `norm`ed, where files may be read but nothing made, moved or changed: never the
+        person's own."""
+        own = {norm(p) for p in own_folders()}
+        return {norm(p) for p in self._read().get("read_only") or [] if isinstance(p, str)} - own
 
     def roots(self, write: bool = False) -> list[str]:
         """The granted folders, `norm`ed; with `write`, only those that may be changed."""

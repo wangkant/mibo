@@ -27,6 +27,8 @@ datas += collect_data_files("tzdata")
 datas += copy_metadata("keyring")
 # trafilatura reads its settings.cfg on import and jusText its stop-word lists (web/fetch.py).
 datas += collect_data_files("trafilatura") + collect_data_files("justext")
+# python-docx and python-pptx make every new document from the templates they ship (shell/office/).
+datas += collect_data_files("docx") + collect_data_files("pptx")
 
 # Imported by name: the commands, the panels, the chat languages;
 # uvicorn's protocols, ddgs's engines and keyring's backends the same way.

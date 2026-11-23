@@ -98,19 +98,20 @@ def use(row_id: str, **arguments):
 def test_paying_and_account_calls_ask_every_time_with_no_reviewer_even_when_set_to_always(app, turn, tmp_path):
     log = bank(app, tmp_path, "mcp-send-money", "mcp-update-scheduled-transaction", "mcp-update-user-info",
                "mcp-free-get-balance")
-    # Settings may store an always for send_money; it does not take the card away.
+    # Settings may store an always for send_money; it does not take the question away.
     app.post("/api/mcp", {"tool": {"server": "bank", "tool": "send_money", "mode": mcp_tools.ALWAYS}})
     row = next(t for s in app.get("/api/mcp").json()["servers"] for t in s["tools"] if t["name"] == "send_money")
     assert row["hard"] == "order" and row["destructive"] is True and row["mode"] == mcp_tools.AUTO
     app.model.script(*PASSES, purpose="reviewer")
     asked = "Pay the rent of 1000 to US133000000121212121212, move my rent to the new account and fix my address"  # copy: voice
     done = turn(asked, use("mcp-send-money"), use("mcp-update-scheduled-transaction"), use("mcp-update-user-info"),
-                use("mcp-free-get-balance"), say("Done."), cards=["always", "yes", "yes"])
-    assert [(c["card"]["type"], c["card"]["hard"], c["card"]["choices"]) for c in done.cards] == [
-        ("mcp_tool", "order", ["once"]), ("mcp_tool", "order", ["once"]), ("mcp_tool", "account", ["once"])]
+                use("mcp-free-get-balance"), say("Done."), cards="yes")
+    # The yes to the payment carries the second payment of the turn; the account change is asked on its own.
+    assert [(c["card"]["type"], c["card"]["hard"], c["card"]["risk"]) for c in done.cards] == [
+        ("mcp_tool", "order", "pay"), ("mcp_tool", "account", "account")]
     assert done.asked("reviewer") == []
     assert received(log) == ["send_money", "update_scheduled_transaction", "update_user_info", "get_balance"]
-    # A wider press counted as this once: the same payment asks again, and on no the server gets no call.
+    # The yes held for that turn alone: the same payment asks again, and on no the server gets no call.
     again = turn("Pay it once more", use("mcp-send-money"), say("I left it."), cards="no")  # copy: voice
     assert [(c["card"]["hard"], c["answer"]) for c in again.cards] == [("order", "no")]
     assert again.result_of(again.calls()[0]["id"]).startswith("Error:")

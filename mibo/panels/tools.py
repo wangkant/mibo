@@ -245,23 +245,25 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/mcp/call")
     async def mcp_call(request: Request):
-        """One call from the character's turn: started, checked, asked about, run. Waits for the card."""
+        """One call from the character's turn: started, checked, asked about, run. Waits for the person's yes."""
         payload = await body(request)
         return await hub.call(str(payload.get("server") or ""), str(payload.get("tool") or ""),
                               payload.get("arguments"), str(payload.get("conversation") or ""))
 
     @app.get("/api/mcp/card")
     async def mcp_card():
-        """The card waiting for the person, if any."""
+        """The question waiting for the person, if any (chat.js and toolcard.js draw it)."""
         return {"card": hub.cards.card}
 
     @app.post("/api/mcp/card")
     async def mcp_press(request: Request):
+        """A server's form, filled in and sent or not, from the app's own page; every other question is answered
+        by the person's yes typed in the chat (/api/confirm)."""
         if not own_page(request):
             return _error("local_only", 403)
         payload = await body(request)
         ident, answer = payload.get("id"), payload.get("answer")
-        if not isinstance(ident, str) or answer not in ("once", "chat", "always", "no"):
+        if not isinstance(ident, str) or answer not in ("once", "no"):
             return _error("generic")
         # A server's form comes with what the person filled in; a value that does not fit keeps the card up.
         pressed = hub.press(ident, answer, payload.get("values"))

@@ -1,17 +1,17 @@
 """The reviewer: a second look at one action that would otherwise wait for the
-person's press on a card, so that the plainly fine ones can go ahead.
+person's yes in the chat, so that the plainly fine ones can go ahead.
 
 It sits under the gates (web/gate.py, desk/gate.py, the shell's, the MCP
 hub's), never in place of them. Code sorts first and lets through what plainly
 only reads; the reviewer only sees what code already sorted as "allowed, with
 asking", and only while the one acting mode is automatic review (acting.py:
-off, read, auto; auto is the default). It can turn a card into
+off, read, auto; auto is the default). It can turn a question into
 "go ahead", or keep it ("ask"), or turn the action down ("refuse"); it never
 unblocks anything. Paying, deleting, accounts, access, installing, settings
 and anything code could not sort go to the person; secrets, elevation,
 security settings, hidden or encoded commands and download-and-run are refused
 here by code before any model is asked (`precheck`), as a second line behind
-the gates. Code keeps the card itself only for the floor: invisible or
+the gates. Code keeps the question itself only for the floor: invisible or
 look-alike letters, a link, number or address the person did not give, an
 effect that deletes or overwrites. What else code notices (words that differ
 from theirs, more recipients than they named, a name one letter off from
@@ -24,7 +24,7 @@ It sees the person's own messages in this chat and the action as code
 describes it, nothing else: no page, no file, no command output, not the
 character's words. Every field of the action is data, so words in it that
 read like an instruction change nothing. Its answer is one closed JSON object
-(`parse`); anything else, a timeout or an error means the card, as today.
+(`parse`); anything else, a timeout or an error means the question, as today.
 
 The policy's layout (person's words as the only authority, everything else a
 fact, one closed answer parsed strictly, no retries) is adapted from DeepSeek's
@@ -81,8 +81,8 @@ REASON_MAX = 140
 ASK_MODEL = Callable[[str, list[dict]], Awaitable[str]]
 
 POLICY = """You review ONE action that Mibo, a desktop companion app, is about to take for its person. The app's code \
-has already sorted this action as one that would wait for the person to press "yes" on a card. Your answer only \
-decides whether that card may be skipped. You cannot unblock anything: code already stopped payments, deletions, \
+has already sorted this action as one that would wait for the person's "yes" in the chat. Your answer only \
+decides whether that question may be skipped. You cannot unblock anything: code already stopped payments, deletions, \
 account changes, installs and secrets.
 
 The first message gives the language for your reason. Each message with role "person" is one thing the person \
@@ -772,8 +772,8 @@ turn_verdicts: contextvars.ContextVar[list | None] = contextvars.ContextVar("tur
 
 async def decide(area: str, request, action: dict, *, ask: ASK_MODEL, attended: bool, lang: str = "zh",
                  now: float | None = None, tally: Tally = TALLY) -> Verdict:
-    """The one call a gate makes for an action that acting.decide sent to review. Only "go" skips the card; "ask"
-    shows it; "refuse" ends the step, and REFUSALS_STOP in a row set `stop`."""
+    """The one call a gate makes for an action that acting.decide sent to review. Only "go" skips the question; "ask"
+    asks it; "refuse" ends the step, and REFUSALS_STOP in a row set `stop`."""
     action = {**action, "area": area}
     if not attended:
         return Verdict("ask", said("away", lang), "code")

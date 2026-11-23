@@ -51,6 +51,16 @@ def test_the_dependencies_have_floors_and_stay_on_pydantic_2() -> None:
     assert [line for line in requirements if ">=" not in line] == []
 
 
+def test_the_office_libraries_are_required_and_the_installer_carries_their_templates() -> None:
+    """Word, Excel and PowerPoint files are made by their libraries (shell/office/) and a PDF is read by pypdf;
+    python-docx and python-pptx make every new document from the templates they ship, which the frozen app must
+    hold."""
+    names = {re.match(r"[A-Za-z0-9_.-]+", line).group(0).lower() for line in _dependencies()}
+    assert {"python-docx", "openpyxl", "python-pptx", "pypdf"} <= names
+    spec = (ROOT / "packaging" / "windows" / "mibo.spec").read_text(encoding="utf-8")
+    assert 'collect_data_files("docx")' in spec and 'collect_data_files("pptx")' in spec
+
+
 def test_the_window_toolkit_is_required_only_where_the_system_has_one() -> None:
     """Windows ships WebView2; macOS and Linux opt in with the `app` extra, so a server install never needs
     a GUI toolkit."""

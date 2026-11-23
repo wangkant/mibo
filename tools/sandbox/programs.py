@@ -21,12 +21,66 @@ import json
 import os
 import subprocess
 import sys
+import time
 from types import SimpleNamespace
 
 from _suite import Suite, scratch_home, scrub_env, stand_in_model
 
 FEATURES = ("keys wait for a busy person", "pause and resume", "right-click menu behind the card", "double click",
-            "in File Explorer")
+            "in File Explorer", "a Chromium message box")
+# The stand-in for an Electron chat program: a page whose composer is a rich editor's contenteditable, shown by the
+# runner's Edge in app mode, which gives the same accessibility tree as Electron.
+BOX_PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chromium_box.html")
+BOX_NAME = "Message or run a task"
+BOX_TEXT = "你好，Mibo 2026"  # copy: voice
+
+
+def chromium_box(bench, home) -> dict:
+    """Write into the stand-in's message box through the product's own View, send it once with Enter named for the
+    box and once with the Send button, and read the page's own record (its title) after each. Edge is a browser,
+    which the person's grants only look at, so the writes go to the View, below the tier and the card."""
+    import shutil
+    page = os.path.join(str(home), "chromium_box.html")
+    shutil.copyfile(BOX_PAGE, page)
+    edge = os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Microsoft", "Edge",
+                        "Application", "msedge.exe")
+    win32 = bench.win32
+    hwnd = bench.launch([edge, "--app=" + "file:///" + page.replace("\\", "/"), f"--user-data-dir={home}\\edge",
+                         "--no-first-run", "--no-default-browser-check"],
+                        lambda h: win32.title_of(h).startswith("Box sent"))
+    out: dict = {"steps": []}
+    try:
+        hands = bench.hands(hwnd, "在消息框里发一条消息")  # copy: voice
+
+        def run() -> None:
+            view = hands.view
+            theirs = win32.clipboard_save()
+
+            def ident(role: str, name: str) -> int:
+                view.look()
+                return next(i for i, n in view.nodes.items() if n.role == role and n.name == name)
+            box = ident("textbox", BOX_NAME)
+            out["steps"].append(view.set_value(box, BOX_TEXT))
+            out["holds after set"] = view.text_of(box)
+            out["steps"].append(view.key("Enter", box))
+            time.sleep(0.5)
+            out["title after Enter"] = win32.title_of(hwnd)
+            box = ident("textbox", BOX_NAME)
+            out["steps"].append(view.type(box, BOX_TEXT))
+            out["steps"].append(view.invoke(ident("button", "Send")))
+            time.sleep(0.5)
+            out["title after Send"] = win32.title_of(hwnd)
+            out["holds after Send"] = view.text_of(ident("textbox", BOX_NAME))
+            out["clipboard kept"] = win32.clipboard_save() == theirs
+        try:
+            bench.on(run)
+        except Exception as error:
+            # The lines written before it stopped stay with the numbers.
+            out["stopped"] = repr(error)[:400]
+        bench.on(hands.end, "done", "")
+    finally:
+        win32.close(hwnd)
+    return out
 
 
 class NoExplorer(Exception):
@@ -42,6 +96,20 @@ def judge(suite: Suite, result: dict) -> None:
     pause = result.get("pause", {})
     suite.check(FEATURES[1], "two presses of 下一步 done across a pause by the person", pause.get("done") is True,
                 {k: pause.get(k) for k in ("status", "clicks", "calls", "stopped")})
+    box = result.get("box", {})
+    steps = box.get("steps", [])
+    suite.check(FEATURES[5], "set lands in the box and is read back",
+                len(steps) > 0 and steps[0].startswith("[ok]") and "read back" in steps[0]
+                and box.get("holds after set", "").strip() == BOX_TEXT, {k: box.get(k) for k in ("steps", "holds after set", "stopped")})
+    suite.check(FEATURES[5], "Enter named for the box sends it once",
+                box.get("title after Enter") == f"Box sent 1: {BOX_TEXT}", box.get("title after Enter"))
+    suite.check(FEATURES[5], "type lands in the box and is read back",
+                len(steps) > 2 and steps[2].startswith("[ok]") and "read back" in steps[2], steps[2:3])
+    suite.check(FEATURES[5], "the Send button sends it once and the box is empty again",
+                box.get("title after Send") == f"Box sent 2: {BOX_TEXT}" and BOX_TEXT not in box.get("holds after Send", BOX_TEXT),
+                {k: box.get(k) for k in ("title after Send", "holds after Send")})
+    suite.check(FEATURES[5], "the person's clipboard is theirs afterwards", box.get("clipboard kept") is True,
+                box.get("clipboard kept"))
     menu, double = result.get("menu", {}), result.get("double", {})
     mine = menu.get("test program", {})
     suite.check(FEATURES[2], "删除 raises the card", bool(mine.get("删除", {}).get("card")), mine.get("删除"))
@@ -151,6 +219,15 @@ def main() -> int:
         if bench and "stopped" in result.get(name, {}):
             suite.shot(f"stopped-{name}")
             suite.log(f"{name} stopped; windows on the screen, front first: {on_screen(bench[0].win32)}; ours: {sorted(bench[0].ours)}")
+    try:
+        result["box"] = chromium_box(desk_manners.Bench(SimpleNamespace(home=str(home), tree=None)), home)
+    except BaseException as error:
+        suite.check("desk_manners", "box ran to its end", False, repr(error)[:400])
+        result["box"] = {"stopped": repr(error)[:400]}
+        if bench:
+            suite.shot("stopped-box")
+            suite.log(f"box stopped; windows on the screen, front first: {on_screen(bench[0].win32)}")
+    (suite.out / "box.json").write_text(json.dumps(result["box"], ensure_ascii=False, indent=1), encoding="utf-8")
     judge(suite, result)
     return suite.finish()
 

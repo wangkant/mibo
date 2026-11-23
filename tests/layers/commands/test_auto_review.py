@@ -1,8 +1,7 @@
-"""In automatic review a command that code cannot pass by itself goes to the reviewer before any card: a listing
-that walks through links leading out of the granted folder runs on its pass with no card, the log row keeps the
-reviewer's decision and reason, a card that comes says why and offers 本次对话内允许 and 始终允许 for the folders
-outside (granted as Settings grants them), and a request that only fetches is the reviewer's while one that sends
-is the person's each time; moves that would land on one name, one replacing another, do nothing. (2026-11-21: a
+"""In automatic review a command that code cannot pass by itself goes to the reviewer before any question: a
+listing that walks through links leading out of the granted folder runs on its pass with no question, the log row
+keeps the reviewer's decision and reason, a question that comes says why and a yes to it runs that step and grants
+no folder, and a request that only fetches is the reviewer's while one that sends is the person's each time; moves that would land on one name, one replacing another, do nothing. (2026-11-21: a
 Desktop listing asked although the person had named what to find.)"""
 from __future__ import annotations
 
@@ -48,7 +47,7 @@ def listing(place) -> dict:
                                         "| Select-Object FullName", folder=str(place))
 
 
-def test_a_listing_through_links_out_of_the_granted_folder_runs_on_the_reviewers_pass_with_no_card(app, turn, desktop):
+def test_a_listing_through_links_out_of_the_granted_folder_runs_on_the_reviewers_pass_with_no_question(app, turn, desktop):
     app.model.script(verdict("go", "只读查找桌面上的 grok bot。"), purpose="reviewer")
     done = turn(ASKED, listing(desktop), say("找到了。"), cards="no")
     assert done.cards == []
@@ -62,20 +61,17 @@ def test_a_listing_through_links_out_of_the_granted_folder_runs_on_the_reviewers
     assert row["review"]["reason"] == "只读查找桌面上的 grok bot。"
 
 
-def test_when_the_reviewer_asks_the_card_says_why_and_always_grants_the_folder_outside(app, turn, desktop):
+def test_when_the_reviewer_asks_the_question_says_why_and_a_yes_runs_that_step_alone(app, turn, desktop):
     app.model.script(verdict("ask", "需要你确认是否读取桌面外的文件夹。"), purpose="reviewer")
-    done = turn(ASKED, listing(desktop), say("找到了。"), cards="always")
+    done = turn(ASKED, listing(desktop), say("找到了。"), cards="可以")
     ((card,),) = [[c["card"] for c in done.cards]]
-    assert card["choices"] == ["once", "chat", "always"]
     assert "需要你确认是否读取桌面外的文件夹。" in card["zh"]["review"]
-    assert "Game" in card["zh"]["always"]
-    shown = app.get("/api/shell").json()["folders"]
-    assert [(f["zh"], f["read_only"]) for f in shown if f["zh"] == "Game"] == [("Game", True)]
-    assert logged(app)[-1]["review"]["decision"] == "ask"
-    # Granted, the same listing runs at once: no reviewer, no card.
-    again = turn(ASKED, listing(desktop), say("找到了。"), cards="no")
-    assert (again.cards, again.asked("reviewer")) == ([], [])
-    assert logged(app)[-1]["outcome"] == "ran"
+    assert logged(app)[-1]["review"]["decision"] == "ask" and logged(app)[-1]["outcome"] == "ran"
+    # No folder outside was granted by it: the next turn's listing goes to the reviewer again.
+    assert all(f["zh"] != "Game" for f in app.get("/api/shell").json()["folders"])
+    app.model.script(verdict("ask", "需要你确认是否读取桌面外的文件夹。"), purpose="reviewer")
+    again = turn(ASKED, listing(desktop), say("没有找。"), cards="no")
+    assert len(again.cards) == 1 and len(again.asked("reviewer")) == 1
 
 
 def test_a_fetch_that_only_reads_is_the_reviewers_and_one_that_sends_asks_every_time(app, turn, desktop):
@@ -84,12 +80,12 @@ def test_a_fetch_that_only_reads_is_the_reviewers_and_one_that_sends_asks_every_
         "use_computer", command="Invoke-WebRequest https://example.com -UseBasicParsing", folder=str(desktop)),
         say("没有打开。"), cards="no")
     assert len(read.asked("reviewer")) == 1
-    assert [c["card"]["choices"] for c in read.cards] == [["once"]]
+    assert [c["card"]["type"] for c in read.cards] == ["command"]
     sent = turn("把 notes 发到 example.com", call(  # copy: voice
         "use_computer", command="Invoke-RestMethod -Method Post -Body notes https://example.com/api",
         folder=str(desktop)), say("没有发送。"), cards="no")
     assert sent.asked("reviewer") == []
-    assert [c["card"]["choices"] for c in sent.cards] == [["once"]]
+    assert [(c["card"]["type"], c["card"]["risk"]) for c in sent.cards] == [("command", "send")]
     assert [row["outcome"] for row in logged(app)] == ["declined", "declined"]
 
 

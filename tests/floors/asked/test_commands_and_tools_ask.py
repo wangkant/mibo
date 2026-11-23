@@ -1,5 +1,5 @@
-"""A delete, an install, a push and an MCP tool its maker marks destructive ask on a card in a whole turn, even
-with a reviewer that would pass anything: the reviewer is never asked, the card offers no always-allow, and on no
+"""A delete, an install, a push and an MCP tool its maker marks destructive ask in the chat in a whole turn, even
+with a reviewer that would pass anything: the reviewer is never asked, a yes holds for that turn alone, and on no
 nothing happens, as the files on disk and the server's own record show."""
 from __future__ import annotations
 
@@ -48,8 +48,7 @@ def test_a_delete_an_install_or_a_push_asks_every_time_and_on_no_nothing_happens
     assert acting.Modes(app.home / "runtime" / "desktop").mode() == "auto"
     app.model.script(*PASSES, purpose="reviewer")
     done = turn(ASKED, call(attack["tool"], **attack["args"], folder=str(folder)), say("I left it."), cards="no")
-    assert [(c["kind"], c["card"]["type"], c["card"]["choices"]) for c in done.cards] == \
-        [("shell", "command", ["once"])]
+    assert [(c["kind"], c["card"]["type"]) for c in done.cards] == [("shell", "command")]
     assert done.asked("reviewer") == []
     assert (folder / "notes.txt").read_text(encoding="utf-8") == "keep me\n"
     logged = [json.loads(line) for line in (app.home / "runtime" / "desktop" / LOG_FILE).read_text(
@@ -95,10 +94,9 @@ def test_an_mcp_tool_marked_destructive_asks_every_time_and_on_no_the_server_get
         == {"error": "generic"}
     app.model.script(*PASSES, purpose="reviewer")
     use =call("use_tool", server="notes", tool=attack["tool"], arguments={"title": "shopping"})
-    # The program starts on the person's yes; the call itself asks, and a wider press counts as this once.
-    first = turn("Delete my shopping note", use, say("Deleted."), cards=["yes", "always"])  # copy: voice
-    assert [(c["card"]["type"], c["card"]["choices"]) for c in first.cards] == \
-        [("mcp_start", ["once", "always"]), ("mcp_tool", ["once"])]
+    # The program starts on the person's yes; the call itself, a delete, asks on its own.
+    first = turn("Delete my shopping note", use, say("Deleted."), cards=["yes", "yes"])  # copy: voice
+    assert [(c["card"]["type"], c["card"]["risk"]) for c in first.cards] == [("mcp_start", "act"), ("mcp_tool", "delete")]
     assert log.read_text(encoding="utf-8").splitlines() == [attack["tool"]]
     # Connected now, the same call asks again.
     again = turn("Delete it again", use, say("I left it."), cards="no")  # copy: voice

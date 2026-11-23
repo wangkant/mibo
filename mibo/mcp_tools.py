@@ -17,11 +17,12 @@ allowed asks again. What a server says (descriptions, results) is third-party
 material: fenced, cut to size, never obeyed. Its annotations are hints the
 specification says not to trust alone: a tool runs with no reviewer only when
 its server marks it read-only and its name reads by its own words (`reads`),
-and one marked destructive always asks. Hints can only add a card, never take
-one away: whether a call pays, deletes or changes an account's security or
+and one marked destructive always asks. Hints can only add a question, never
+take one away: whether a call pays, deletes or changes an account's security or
 access is decided here from the tool's name, parameters, description and the
 call's arguments with the app's one floor vocabulary (`hard`, web/gate.py), and
-such a call always asks.
+such a call is always asked in the chat, where a yes to another kind of step
+earlier in the turn does not reach it (cardwait.reaches).
 
 The page process runs the servers (mcp_hub.py); the reply model reaches them
 through it (mcp_offer.py).
@@ -64,7 +65,7 @@ SCHEMA_CHARS = 20_000
 #: Characters of one result the model reads, and the record keeps.
 RESULT_CHARS = 4000
 LOG_KEPT = 500
-# auto: a tool in the read group (group_of) runs; any other, the reviewer (review.py) looks first and a card comes
+# auto: a tool in the read group (group_of) runs; any other, the reviewer (review.py) looks first and the chat asks
 # only where it does not pass. always; never.
 AUTO, ALWAYS, NEVER = "auto", "always", "never"
 MODES = (AUTO, ALWAYS, NEVER)
@@ -684,7 +685,7 @@ def _arguments_kind(tool: dict, arguments: dict) -> str:
 def hard(tool: dict, arguments: dict | None = None) -> str:
     """The floor kind of a tool (and of one call of it, given its `arguments`): "order" (pays, buys, books or
     changes a payment), "delete", "account" (its security, sign-in or details) or "grant" (who may reach what);
-    "" for anything else. Hints are not read: a tool that says it only reads is judged by what it is."""
+    "" for anything else. A floor kind is asked in the chat as its own risk (cardwait.risk_of). Hints are not read: a tool that says it only reads is judged by what it is."""
     words = _words(tool["name"])
     kind = _name_kind(words)
     if kind:

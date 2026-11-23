@@ -1,7 +1,7 @@
 """The person's MCP servers: the client on the official SDK (against a stand-in and an SDK server), mcp.json and
 its secrets, the cleaned environment, third-party words fenced, and the hub: a local program starts only once
-allowed, each call asks on a card unless set to always or never, an allowed tool that changes asks again, and a
-server that dies is started again."""
+allowed, each call asks in the chat unless set to always or never or carried by a yes earlier in the turn, an
+allowed tool that changes asks again, and a server that dies is started again."""
 from __future__ import annotations
 
 import asyncio
@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from mibo import mcp_hub, mcp_tools
+from mibo import cardwait, mcp_hub, mcp_tools
 from mibo.mcp_client import Connection, McpError
 from mibo.textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN
 
@@ -258,24 +258,29 @@ class _Turn:
 
     async def __aenter__(self):
         await self.workspace._chat_lock.acquire()
+        self.next("t1")
+        return self
+
+    def next(self, token: str) -> None:
+        """A new chat turn in the same conversation: nothing said yes to in the one before carries into it."""
         desk = mcp_tools.desktop_dir(self.home)
         desk.mkdir(parents=True, exist_ok=True)
-        (desk / "chat-doing.json").write_text(json.dumps({"conversation": "c1", "tool": "mcp"}), encoding="utf-8")
-        return self
+        (desk / "chat-doing.json").write_text(json.dumps({"conversation": "c1", "turn": token, "tool": "mcp"}),
+                                              encoding="utf-8")
 
     async def __aexit__(self, *exc):
         self.workspace._chat_lock.release()
 
 
-async def _press(hub, answer: str) -> dict:
-    """Waits for the card, as the page polls for it, and presses `answer`."""
+async def _press(hub, typed: str) -> dict:
+    """Waits for the question, as the page polls for it, and answers it with the person's `typed` message."""
     for _ in range(600):
         card = hub.cards.card
         if card is not None and hub.cards.up(card["id"]):
-            assert hub.press(card["id"], answer) == "ok"
+            assert (await cardwait.asking(hub.workspace).answer(card["id"], typed))["ok"]
             return card
         await asyncio.sleep(0.05)
-    raise AssertionError("no card")
+    raise AssertionError("no question")
 
 
 async def _state(hub, name: str, *states: str, seconds: float = 30) -> None:
@@ -299,24 +304,26 @@ async def test_a_local_program_starts_only_once_allowed_and_each_call_asks(tmp: 
         # Nobody's turn: nothing is asked, nothing runs.
         assert (await hub.call("stand", "echo", {"text": "x"}, "c1"))["status"] == "unwatched"
         async with turn:
-            pressing = asyncio.ensure_future(_press(hub, "once"))
+            pressing = asyncio.ensure_future(_press(hub, "确定"))
             calling = asyncio.ensure_future(hub.call("stand", "echo", {"text": "hello"}, "c1"))
             start = await pressing
             assert start["type"] == "mcp_start" and STANDIN in start["command"]
-            card = await _press(hub, "once")
-            assert card["type"] == "mcp_tool" and card["args"] == [["text", "hello"]]
+            # The yes to starting it carries the call it was started for, in the same turn.
             done = await calling
-            assert done["status"] == "done" and done["text"] == "hello"
-            # No to the card: nothing is called.
-            pressing = asyncio.ensure_future(_press(hub, "no"))
+            assert done["status"] == "done" and done["text"] == "hello" and hub.cards.how == "carried"
+            # The next turn asks again; words that are not a yes call nothing.
+            turn.next("t2")
+            pressing = asyncio.ensure_future(_press(hub, "先不要"))
             assert (await hub.call("stand", "echo", {"text": "again"}, "c1"))["status"] == "declined"
-            await pressing
-            # Always: the next call needs no card.
-            pressing = asyncio.ensure_future(_press(hub, "always"))
+            card = await pressing
+            assert card["type"] == "mcp_tool" and card["args"] == [["text", "again"]]
+            # One yes: the turn's next call needs no question.
+            turn.next("t3")
+            pressing = asyncio.ensure_future(_press(hub, "ok"))
             assert (await hub.call("stand", "add", {"a": 1, "b": 2}, "c1"))["text"] == "3"
             await pressing
             assert (await hub.call("stand", "add", {"a": 2, "b": 2}, "c1"))["text"] == "4"
-            # Arguments that break the schema never reach the card.
+            # Arguments that break the schema never reach the question.
             assert (await hub.call("stand", "add", {"a": "x"}, "c1"))["status"] == "bad_arguments"
             tool = next(t for t in hub.runners["stand"].tools if t["name"] == "echo")
             hub.grants.set_mode("stand", tool, mcp_tools.NEVER)

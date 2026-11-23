@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import re
+import secrets
 import sys
 import threading
 import time
@@ -155,6 +156,8 @@ class ChatLookups:
 
     def __init__(self, path: Path | None = None, conversation: str = "") -> None:
         self.path, self.conversation = path, conversation
+        # The turn's own token, with which a yes typed in the chat reaches the rest of this turn only (cardwait.py).
+        self.turn = secrets.token_hex(8)
         self.trace: list[dict] = []
         # One entry a call: {"place", "mark", "line", "status": ok | error | stopped, "thumb"}.
         self.activity: list[dict] = []
@@ -220,8 +223,9 @@ class ChatLookups:
         if self.path is None:
             return
         try:
-            atomic_write_text(self.path, json.dumps({"conversation": self.conversation, **step, "at": time.time(),
-                                                     "entries": self.activity[-12:]}, ensure_ascii=False))
+            atomic_write_text(self.path, json.dumps({"conversation": self.conversation, "turn": self.turn, **step,
+                                                     "at": time.time(), "entries": self.activity[-12:]},
+                                                    ensure_ascii=False))
         except OSError as e:
             logger.debug("[Agent] chat status not written: %s", e)
 
@@ -257,11 +261,9 @@ class ToolLoop:
         from .panels import modelbar
         from .turns import turn_choices
         if turn_choices() & _BESIDE_PAGE:
-            # Typed beside the page (the column's input, panels/browser.py): a plain answer to the card the last
-            # turn left waiting answers it; then the turn goes on as any other, the page in front its place.
-            answered = await self._beside_page(said, lookups)
-            if answered:
-                return answered
+            # Typed beside the page (the column's input, panels/browser.py): it answers the question the last turn
+            # left waiting, a plain yes as a yes and anything else as a no; then the turn goes on as any other.
+            await self._beside_page(said)
         url = self._endpoint_for(model)[0]
         await modelbar.measured(url, model, MEASURE_WAIT_S)
         started = time.monotonic()
@@ -532,31 +534,15 @@ class ToolLoop:
                   {"role": "tool", "tool_call_id": "front_0", "content": seen}]
         return True
 
-    async def _beside_page(self, said: str, lookups: ChatLookups) -> str:
-        """What they typed beside the page, when the last turn left a card waiting there: a plain yes or no to its
-        act (one short reading of their words) answers it as a press would, a no ending the turn with a line; ""
-        when nothing waits, the message is not a plain answer, or it is a yes, and the turn goes on to do it."""
+    async def _beside_page(self, said: str) -> None:
+        """What they typed beside the page, when the last turn left a question waiting there: a plain yes
+        (cardwait.said_yes) answers it yes and anything else no, read from their own message alone."""
+        from .cardwait import said_yes
         home = today.runtime_of(self).parent
         waits_on = (await asyncio.to_thread(surface._ask, home, "/api/browser/op", 10, {"op": "left"})).get("said")
-        if not waits_on:
-            return ""
-        told = _CARD_TOLD["zh" if (getattr(self, "chat_lang", "") or "zh").startswith("zh") else "en"]
-        asked = json.dumps({"waits_on": waits_on, "message": said.rsplit(chr(3), 1)[-1][:500]}, ensure_ascii=False)
-        try:
-            with purpose("operate"):
-                read = await self._call_llm(_CARD_WORDS, [{"role": "user", "content": asked}], self.llm_dm_model,
-                                            max_tokens=100, disable_thinking=True, temperature=0, json_object=True)
-            found = re.search(r"\{.*\}", read or "", re.S)
-            card = (json.loads(found.group(0)) if found else {}).get("card")
-        except Exception as e:  # not read: the message is a turn like any other
-            logger.info("[Agent] beside the page: the message was not read for the card: %s", e)
-            return ""
-        if card not in ("yes", "no"):
-            return ""
-        kept = await asyncio.to_thread(surface._ask, home, "/api/browser/op", 10, {"op": "keep", "yes": card == "yes"})
-        if kept.get("status") != "ok":
-            return told["on_card"].format(act=waits_on)
-        return told["refused"].format(act=waits_on) if card == "no" else ""
+        if waits_on:
+            await asyncio.to_thread(surface._ask, home, "/api/browser/op", 10,
+                                    {"op": "keep", "yes": said_yes(said.rsplit(chr(3), 1)[-1])})
 
 
 def _flat(convo: list[dict]) -> list[dict]:
@@ -574,17 +560,7 @@ def _flat(convo: list[dict]) -> list[dict]:
     return out
 
 
-# The turn choices of a message typed beside the page (panels/browser.py), and what is said when their words answer
-# the card the last turn left waiting (_beside_page).
+# The turn choices of a message typed beside the page (panels/browser.py).
 _BESIDE_PAGE = frozenset({"page", "page_on"})
 # The turn choices that ask for the work to be done in the app's browser (prompt.py's notes).
 _ON_PAGE = _BESIDE_PAGE | {"browser"}
-_CARD_TOLD = {
-    "zh": {"on_card": "此操作须在卡片上确认：{act}。", "refused": "已按你的回复取消：{act}。"},
-    "en": {"on_card": "This one is confirmed on the card only: {act}.", "refused": "Cancelled as you said: {act}."},
-}
-_CARD_WORDS = (
-    "The person typed a message in the chat beside a web page, where a card waits for their yes to one act "
-    "(waits_on). Answer with JSON alone: {\"card\": \"yes\", \"no\" or \"\"}: \"yes\" when the message plainly "
-    "says yes or go ahead to that act, \"no\" when it plainly says no, \"\" otherwise and whenever in doubt. Their "
-    "words alone decide.")

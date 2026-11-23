@@ -2,7 +2,7 @@
 
 **Um companheiro de IA que vive na sua área de trabalho: faz companhia e resolve tarefas.**
 
-Um personagem com aparência e personalidade próprias conversa com você, lembra de você e traz, uma de cada vez, coisas que valem o seu tempo. Ele vai além da conversa: navega na web, opera os programas do seu computador, trabalha com seus arquivos e comandos, usa habilidades e conectores MCP e executa tarefas agendadas. Ele roda no seu computador com o serviço de modelos que você escolher. As ações são revisadas automaticamente, e um cartão só pergunta quando a decisão é sua; pagamentos, exclusões e alterações de conta sempre pedem confirmação.
+Um personagem com aparência e personalidade próprias conversa com você, lembra de você e traz, uma de cada vez, coisas que valem o seu tempo. Ele vai além da conversa: navega na web, opera os programas do seu computador, trabalha com seus arquivos e comandos, usa habilidades e conectores MCP e executa tarefas agendadas. Ele roda no seu computador com o serviço de modelos que você escolher. As ações são revisadas automaticamente, e o personagem só pergunta na conversa quando a decisão é sua: com o seu sim, a tarefa vai até o fim; pagamentos, exclusões e alterações de conta são perguntados à parte.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versão](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -22,7 +22,7 @@ Um personagem com aparência e personalidade próprias conversa com você, lembr
 | **Passeios** | Percorre páginas públicas como visitante, sem login e respeitando o robots.txt. Cada página é lida de uma vez, com títulos e tabelas. A pesquisa na web não exige chave. |
 | **Navegador integrado** (Windows) | Os links abrem ao lado da conversa, com abas, abas privadas e downloads. O personagem examina a página e clica, digita, escolhe, arrasta e envia arquivos nela. |
 | **Outros programas** (Windows) | Lê e opera janelas de outros programas por meio do UI Automation, inclusive aplicativos Electron, apenas enquanto você não usa o teclado e o mouse. |
-| **Arquivos e comandos** | Somente nas pastas que você autorizar. Os comandos são lidos antes de rodar; as alterações de arquivos de cada turno podem ser desfeitas; no Windows, o que é excluído vai para a Lixeira. |
+| **Arquivos e comandos** | Somente na sua Área de Trabalho, Documentos, Downloads, Imagens, Músicas e Vídeos, e nas pastas que você autorizar. Os comandos são lidos antes de rodar; as alterações de arquivos de cada turno podem ser desfeitas; no Windows, o que é excluído vai para a Lixeira. |
 | **Habilidades e conectores** | Habilidades (pastas com `SKILL.md`) e servidores MCP, cada um com um catálogo selecionado. Uma mensagem que começa com `/name` (o nome da habilidade) a inicia. |
 | **Tarefas agendadas** | Lembretes, tarefas e verificações periódicas. Na execução, apenas leem, além do que você permitiu ao criá-las. |
 | **Idiomas** | Dez idiomas de interface. |
@@ -81,7 +81,7 @@ Os dados ficam em uma única pasta: `~/mibo` em uma cópia instalada, o próprio
 | **Seu serviço de modelos** | Recebe suas mensagens, a memória relevante, as páginas e arquivos usados em uma resposta e os passos que a revisão avalia. Sua chave é enviada somente a ele. |
 | **Sites** | Os passeios leem páginas públicas sem login, três por dia por padrão (Configurações › Passeios); uma resposta lê as páginas de que precisa. Seus logins ficam no navegador integrado e só são usados ali. |
 | **Outros serviços** | Uma consulta de pesquisa quando uma resposta pesquisa; o número da versão enviado ao GitHub no máximo uma vez por dia; consultas ao catálogo quando você abre uma loja; o que o personagem passa às ferramentas de um servidor MCP. |
-| **Sempre pergunta** | Pagar ou comprar, excluir e alterar a segurança ou o acesso de uma conta, todas as vezes e em qualquer modo. Toda ação em sites de bancos, pagamentos, saúde e e-mail. |
+| **Sempre pergunta** | Pagar ou comprar, excluir e alterar a segurança ou o acesso de uma conta, em qualquer modo; um sim a outro tipo de etapa não os cobre. Toda ação em sites de bancos, pagamentos, saúde e e-mail. Só a sua própria mensagem digitada na conversa conta como sim. |
 | **Nunca** | Ler ou digitar senhas, dados de pagamento ou códigos de verificação; executar algo como administrador; alterar configurações de segurança. |
 | **Sem supervisão** | Apenas os passeios e as tarefas agendadas que você criar. |
 

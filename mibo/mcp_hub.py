@@ -24,19 +24,20 @@ here (/api/mcp/offer, /find, /call: panels/tools.py). A local server that was
 never allowed starts inside the call that needs it, on its card. A call that
 pays or orders, changes a payment, deletes, or changes an account's security
 or access (mcp_tools.hard, from the tool's name, parameters, description and
-the arguments, whatever its hints say) asks on the card every time, in every
-mode, with no reviewer and no always-allow; so does a tool marked destructive.
-A tool its provider marks read-only whose name reads by its own words
-(mcp_tools.group_of) runs with no reviewer and no card; any other goes to the
-reviewer on the person's own words, and to the card when it
-does not pass, unless the person set it to always (that exact description) or
-allowed it for this conversation. Arguments holding a password, a code, a key
-or a card number are never sent. Never, for a tool or for a server's tools that
-write, stops it. A card is raised only while the person's own chat turn is under
-way, waits for them there (cardwait.py), and only a press on the app's own page
-answers it. What a server asks of the person during a call (elicitation) is such
-a card too: a form they fill in, sent to the server and never to the model, or a
-page they choose to open in their browser.
+the arguments, whatever its hints say) is asked in the chat in every mode, with
+no reviewer and no always-allow, and a yes to another kind of step earlier in
+the turn does not reach it (cardwait.reaches); a tool marked destructive asks
+too. A tool its provider marks read-only whose name reads by its own words
+(mcp_tools.group_of) runs with no reviewer and no question; any other goes to
+the reviewer on the person's own words, and is asked in the chat when it does
+not pass, unless the person set it to always (that exact description).
+Arguments holding a password, a code, a key or a card number are never sent.
+Never, for a tool or for a server's tools that write, stops it. A question is
+asked only while the person's own chat turn is under way, waits for them there
+(cardwait.py), and only their own message typed in the app's chat box answers
+it. What a server asks of the person during a call (elicitation) is a page they
+choose to open in their browser, asked the same way, or a form they fill in on
+the page, sent to the server and never to the model.
 """
 from __future__ import annotations
 
@@ -52,7 +53,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import mcp_tools as mt
 from . import runtimes, secretstore
-from .cardwait import Card
+from .cardwait import Card, risk_of
 from .mcp_client import (Connection, KeptTokens, McpError, describe, find_program, oauth_client, program_env,
                          revoke)
 
@@ -143,8 +144,6 @@ class Hub:
         #: For a card that is a server's form: the schema it was drawn from, and what the person filled in.
         self.card_schema: dict = {}
         self.filled: dict = {}
-        #: What 本次对话内允许 covers, per conversation: (server, tool, its fingerprint); gone when the app ends.
-        self.session: dict[str, set[tuple]] = {}
         self.busy = asyncio.Lock()
         self._stamp = None
         self._running = False
@@ -519,8 +518,6 @@ class Hub:
             elif mode == mt.AUTO and mt.group_of(tool) == "read":
                 # Marked read-only by its provider, and a read by its name's own words: it runs.
                 how = "read_only"
-            elif mode == mt.AUTO and (server, tool_name, tool["fp"]) in self.session.get(conversation, set()):
-                how = "this_chat"
             elif mode == mt.AUTO and tool["hints"].get("destructiveHint") is not True:
                 # The reviewer first, on the person's own words of this turn; a tool marked destructive skips it.
                 passed = await self._review(server, tool, arguments)
@@ -533,18 +530,14 @@ class Hub:
                 if passed is not None:
                     # Why the reviewer did not pass it, in one line (toolcard.js draws it).
                     card["review"] = passed.line(str(self.workspace.config().get("AGENT_LANG") or "zh"))
-                answer = await self.ask(card, conversation)
+                answer = await self.ask(card, conversation, risk_of(floor))
                 if answer in (None, "no"):
                     status = "declined" if answer == "no" else "unanswered"
                     self._log(server, tool_name, arguments, status, "review" if passed is not None else "",
                               passed.reason if passed is not None else "")
                     return {"status": status}
-                how = answer
-                if answer == "always":
-                    self.grants.set_mode(server, tool, mt.ALWAYS)
-                elif answer == "chat":
-                    self.session.setdefault(conversation, set()).add((server, tool_name, tool["fp"]))
-                # The tool must still be the one the card showed.
+                how = self.cards.how
+                # The tool must still be the one the question showed.
                 now = next((t for t in runner.tools if t["name"] == tool_name), None)
                 if now is None or now["fp"] != tool["fp"] or runner.state != "connected":
                     self._log(server, tool_name, arguments, "changed")
@@ -582,34 +575,34 @@ class Hub:
     def turn_on(self, conversation: str) -> bool:
         return self.cards.turn_on(conversation)
 
-    async def ask(self, card: dict, conversation: str) -> str | None:
-        """Shows `card` and waits: "once", "always" or "no" as pressed, None when nobody answered."""
+    async def ask(self, card: dict, conversation: str, risk: str = "act") -> str | None:
+        """Says `card` in the chat and waits: "once" on the person's typed yes, "no" on any other message, None when
+        nobody answered. A server's form is filled in on the page instead and answered by `press`."""
         names = {"server": card["server"], "tool": card.get("title") or card.get("tool") or ""}
         what = dict(zip(("zh", "en"), (text.format(**names) for text in CARD_WHAT[card["type"]])))
-        return await self.cards.ask(card, conversation, what)
+        form = card["type"] == "mcp_ask" and card["mode"] == "form"
+        return await self.cards.ask(card, conversation, what, yes="once", no="no", risk=risk, typed=not form)
 
     def press(self, ident: str, answer: str, values=None) -> str:
-        """The person's press on the card: "ok", "gone" for a card no longer up, or where a form's values do not
-        fit what the server asked for. A wider answer than the card offers counts as this once."""
+        """The person's answer to a server's form, sent or not: "ok", "gone" for a form no longer up, or where the
+        values do not fit what the server asked for."""
         card = self.cards.card
-        if not self.cards.up(ident):
+        if not self.cards.up(ident) or card["type"] != "mcp_ask" or card["mode"] != "form":
             return "gone"
-        if card["type"] == "mcp_ask" and card["mode"] == "form" and answer == "once":
+        if answer == "once":
             self.filled, problem = mt.ask_content(card["fields"], self.card_schema, values)
             if problem:
                 return problem
-        if answer in ("chat", "always") and answer not in card.get("choices", ()):
-            answer = "once"
         self.cards.press(ident, answer)
         return "ok"
 
     def _start_card(self, runner: Runner) -> dict:
         """The server and the program it runs in one line (python · tiny_server.py); the exact command, folder and
-        values under the card's fold."""
+        values under the question's fold."""
         return {"type": "mcp_start", "server": runner.name, "program": mt.program_of(runner.spec),
                 "command": mt.command_line(runner.spec),
                 "cwd": runner.spec.get("cwd") or str(mt.server_folder(self.home, runner.name)),
-                "env": sorted(runner.spec.get("env") or {}), "choices": ["once", "always"]}
+                "env": sorted(runner.spec.get("env") or {})}
 
     async def _ask_start(self, runner: Runner, conversation: str) -> bool:
         answer = await self.ask(self._start_card(runner), conversation)
@@ -635,14 +628,12 @@ class Hub:
         destructive = tool["hints"].get("destructiveHint") is True
         return {"type": "mcp_tool", "server": runner.name, "tool": tool["name"], "title": tool["title"],
                 "args": mt.plain_arguments(arguments), "raw": raw if len(raw) <= 4000 else raw[:4000] + "\n…",
-                "destructive": destructive and not floor, "hard": floor, "changed": changed,
-                # A tool marked destructive, and a call that pays, deletes or changes an account, ask each time.
-                "choices": ["once"] if destructive or floor else ["once", "chat", "always"]}
+                "destructive": destructive and not floor, "hard": floor, "changed": changed}
 
     async def _elicit(self, runner: Runner, request: dict) -> dict:
-        """A server asks the person for something during a call of their turn: a form shown on the card for them to
-        fill, or a page for them to open in their browser. What they fill in goes to the server alone, never to the
-        model. Outside such a call, or when nobody answers, it is cancelled; a form the card cannot draw, or an
+        """A server asks the person for something during a call of their turn: a form shown on the page for them to
+        fill, or a page for them to open in their browser, asked in the chat. What they fill in goes to the server alone, never to the
+        model. Outside such a call, or when nobody answers, it is cancelled; a form the page cannot draw, or an
         address that is not a web page, is declined."""
         calling = runner.calling
         if calling is None:

@@ -306,6 +306,10 @@ window.paChat = (() => {
       noted = new Set(),
       shellCard = null,
       deskCard = null,
+      // The step waiting in the chat for the person's yes (cardwait.py): its id, which the next message answers;
+      // a message that was not a yes, sent as an ordinary message once the reply has ended.
+      awaitingYes = null,
+      queued = null,
       polling = false,
       pollTimer = null,
       loaded = false,
@@ -509,10 +513,11 @@ window.paChat = (() => {
         setReply(null);
       }
     });
-    // Enter sends from the box itself: a submit here is the button, which stops a reply on its way.
+    // Enter sends from the box itself: a submit here is the button, which stops a reply on its way, or answers the
+    // step waiting for the person's yes when they typed something.
     parts.form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (sending) stopReply("stopped");
+      if (sending && !(awaitingYes && parts.input.value.trim())) stopReply("stopped");
       else submit();
     });
     // The page's own listeners, taken off again when the chat is deleted.
@@ -613,13 +618,15 @@ window.paChat = (() => {
           settingsButton("pa-btn pa-btn-link chat-banner-link"));
       syncSend();
     }
-    // While a reply is on its way the send button is the stop button.
+    // While a reply is on its way the send button is the stop button, unless a step waits for the person's yes
+    // and they have typed their answer.
     function syncSend() {
-      if (parts.send.classList.contains("stopping") !== sending || !parts.send.firstChild) {
-        parts.send.classList.toggle("stopping", sending);
-        parts.send.replaceChildren(svg(sending ? I.stop : I.up));
-        parts.send.setAttribute("aria-label", say(sending ? "stop" : "send"));
-        parts.send.title = say(sending ? "stop" : "send");
+      const stops = sending && !(awaitingYes && parts.input.value.trim());
+      if (parts.send.classList.contains("stopping") !== stops || !parts.send.firstChild) {
+        parts.send.classList.toggle("stopping", stops);
+        parts.send.replaceChildren(svg(stops ? I.stop : I.up));
+        parts.send.setAttribute("aria-label", say(stops ? "stop" : "send"));
+        parts.send.title = say(stops ? "stop" : "send");
       }
       parts.send.disabled = !sending && (!state?.configured || !(parts.input.value.trim() || attached.length) ||
         attached.some((item) => !item.data));
@@ -1524,6 +1531,10 @@ window.paChat = (() => {
 
     // ---- Sending
     function submit() {
+      if (sending && awaitingYes && parts.input.value.trim()) {
+        answerAsk(parts.input.value);
+        return;
+      }
       if (sending) {
         // The text stays in the box: say why Enter did nothing.
         flash(say("wait"));
@@ -1608,6 +1619,7 @@ window.paChat = (() => {
         showShellCard(null);
         showDeskCard(null);
         window.paToolCard.show(null, null);
+        awaitingYes = null;
         cut = stopping = null;
         hooks.doing("");
         sending = false;
@@ -1617,11 +1629,49 @@ window.paChat = (() => {
         if (!main) hooks.changed();
         poll();
         bar.refresh();
+        // What they typed while a step waited, which was not a yes, is the message it is.
+        if (queued) {
+          const next = queued;
+          queued = null;
+          send(next);
+        }
       }
     }
-    // Something with an effect outside (web/gate.py) waits on the person's press in the column beside the page
-    // (browse.js), which only this window's page can give: here the waiting row says so, and once it is answered
-    // one line keeps what was decided.
+    // The person's own words typed in the chat box, under the step waiting for their yes (cardwait.py): a plain yes
+    // runs it; anything else is a no for that step, and the message is sent as it is once the reply has ended. Only
+    // this window's page can pass it on (POST /api/confirm).
+    async function answerAsk(text) {
+      const ident = awaitingYes;
+      awaitingYes = null;
+      parts.input.value = "";
+      grow();
+      const told = el("p", "op-note", "");
+      (shellCard || deskCard || waiting).after(told);
+      keepEnd();
+      try {
+        const response = await fetch("/api/confirm", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json",
+            "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
+            "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
+          body: JSON.stringify({ id: ident, text }),
+        });
+        const said = await response.json().catch(() => ({}));
+        if (said.ok && said.yes) told.textContent = say("confirmYes").replace("{text}", text.trim());
+        else {
+          told.textContent = say(said.ok ? "confirmNo" : "opGone");
+          queued = text;
+        }
+      } catch {
+        told.textContent = say("opGone");
+        queued = text;
+      }
+      for (const node of [shellCard, deskCard]) node?.classList.add("answered");
+    }
+    // Something with an effect outside (web/gate.py) is shown in the column beside the page (browse.js) and waits
+    // for the person's yes typed in the chat (answerAsk): here the waiting row says so, and once it is answered one
+    // line keeps what was decided.
     function showCard(card, answered = null) {
       if (!waiting) return;
       const label = waiting.querySelector(".doing");
@@ -1631,11 +1681,11 @@ window.paChat = (() => {
       waiting.before(el("p", "op-note", answered.said));
       keepEnd();
     }
-    // A card before a command runs on this computer (shell/panel.py): what it will do in the app's own words, the
-    // real list of files for a delete, the exact command under a fold; or a card asking for a folder. Only a press
-    // here answers it, never words typed in the chat. The card that turns a switched-off ability on (turnon.py) is
-    // drawn here too, with the words it carries.
-    function showShellCard(card, place = "shell/card") {
+    // A step before a command runs on this computer (shell/panel.py), said in the chat in the app's own words: what
+    // it will do, the real list of files for a delete, the exact command under a fold; or a folder to grant. The
+    // question that turns a switched-off ability on (turnon.py) is drawn here too. The person's yes typed in the chat
+    // box answers it (answerAsk), never the model's words.
+    function showShellCard(card) {
       if (shellCard && (!card || shellCard.dataset.id !== card.id)) {
         if (!shellCard.classList.contains("answered")) shellCard.remove();
         shellCard = null;
@@ -1664,68 +1714,22 @@ window.paChat = (() => {
         fold.append(el("summary", "", say("shellCommand")), el("pre", "", card.command));
         node.append(fold);
       }
-      // `how`: {read: true} grants a folder read only, {other: true} asks the character for another way,
-      // {scope: "chat" | "always"} allows it for this conversation or always for this program in this folder.
-      const answer = async (yes, how = {}) => {
-        for (const b of node.querySelectorAll("button")) b.disabled = true;
-        node.classList.add("answered");
-        // A card's own words for its 始终允许 (folders outside, granted) come with it.
-        const told = el("p", "op-card-told", own ? (yes ? said.on : said.off)
-          : how.scope === "always" && said.always_told ? said.always_told
-          : say(how.read ? "folderReadAllowed" : how.other ? "shellOtherAsked"
-            : how.scope === "chat" ? "shellChatAllowed" : how.scope === "always" ? "shellAlwaysAllowed"
-            : folder ? (yes ? "folderAllowed" : "folderDenied") : (yes ? "shellAllowed" : "shellDenied")));
-        node.append(told);
-        try {
-          const response = await fetch(`/api/${place}`, {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json",
-              "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-              "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
-            body: JSON.stringify({ id: card.id, yes, ...how }),
-          });
-          if (!(await response.json().catch(() => ({}))).ok) told.textContent = say("opGone");
-        } catch {
-          told.textContent = say("opGone");
-        }
-      };
-      const buttons = el("div", "op-card-buttons");
-      if (folder && card.choices?.includes("read")) {
-        // Read only, or sort in it too (WorkBuddy's 问一问 / 做一做); the narrower first.
-        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("folderRead"), () => answer(true, { read: true })),
-          button("pa-btn pa-btn-secondary pa-btn-sm", say("folderWrite"), () => answer(true)));
-      } else if (card.other_way) {
-        // What the command does cannot be told first: asking for another way leads, not reading the command.
-        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("shellOtherWay"), () => answer(false, { other: true })),
-          button("pa-btn pa-btn-secondary pa-btn-sm", say("shellYes"), () => answer(true)));
-      } else {
-        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", own ? said.yes : say(folder ? "folderYes" : "shellYes"), () => answer(true)));
-        // What the app lets a wider yes cover (shell/panel.py _scope): this conversation, or this program here.
-        if (card.choices?.includes("chat"))
-          buttons.append(button("pa-btn pa-btn-secondary pa-btn-sm", say("shellChat"), () => answer(true, { scope: "chat" })));
-        if (card.choices?.includes("always"))
-          buttons.append(button("pa-btn pa-btn-secondary pa-btn-sm", said.always || say("shellAlways"), () => answer(true, { scope: "always" })));
-      }
-      buttons.append(button("pa-btn pa-btn-ghost pa-btn-sm", own ? said.no : say(folder ? "folderNo" : "shellNo"), () => answer(false)));
-      node.append(buttons);
+      node.append(el("p", "op-card-ask", say("confirmAsk")));
       waiting.after(node);
       shellCard = node;
       const label = waiting.querySelector(".doing");
       if (label) label.textContent = say("opWaiting");
       keepEnd();
     }
-    // A card from a task in another program (desk/panel.py): may it do this one thing with an effect outside, shown
-    // with the program, the window, the control, the exact text or the files, and the window's picture. Only a
-    // press here answers it, never words typed in the chat.
+    // A step of a task in another program (desk/panel.py) with an effect outside, said in the chat with the
+    // program, the window, the control, the exact text or the files, and the window's picture. The person's yes
+    // typed in the chat box answers it (answerAsk), never the model's words.
     function showDeskCard(card) {
       if (deskCard && (!card || deskCard.dataset.id !== card.id)) {
         if (!deskCard.classList.contains("answered")) deskCard.remove();
         deskCard = null;
       }
       if (!card || deskCard || !waiting) return;
-      // The card that asks to send a window's pictures: this once, always, or no.
-      const three = (card.choices || []).includes("always");
       const node = el("div", "op-card desk-card");
       node.dataset.id = card.id;
       const facts = el("dl", "op-card-facts");
@@ -1759,36 +1763,7 @@ window.paChat = (() => {
           node.append(shot);
         }
       }
-      const answer = async (value) => {
-        for (const b of node.querySelectorAll("button, input")) b.disabled = true;
-        node.classList.add("answered");
-        const told = el("p", "op-card-told", say(three ? { once: "deskOnceDone", always: "deskAlwaysDone", no: "deskRefused" }[value]
-          : (value ? "deskDone" : "deskRefused")));
-        node.append(told);
-        try {
-          const response = await fetch("/api/programs/card", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json",
-              "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-              "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
-            body: JSON.stringify(three ? { id: card.id, answer: value } : { id: card.id, yes: value }),
-          });
-          if (!(await response.json().catch(() => ({}))).ok) told.textContent = say("opGone");
-        } catch {
-          told.textContent = say("opGone");
-        }
-      };
-      const buttons = el("div", "op-card-buttons");
-      if (three) {
-        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("deskOnce"), () => answer("once")),
-          button("pa-btn pa-btn-secondary pa-btn-sm", say("deskAlways"), () => answer("always")),
-          button("pa-btn pa-btn-ghost pa-btn-sm", say("deskNo"), () => answer("no")));
-      } else {
-        buttons.append(button("pa-btn pa-btn-primary pa-btn-sm", say("opYes"), () => answer(true)),
-          button("pa-btn pa-btn-ghost pa-btn-sm", say("opNo"), () => answer(false)));
-      }
-      node.append(buttons);
+      node.append(el("p", "op-card-ask", say("confirmAsk")));
       waiting.after(node);
       deskCard = node;
       const label = waiting.querySelector(".doing");
@@ -1820,36 +1795,26 @@ window.paChat = (() => {
         try {
           const step = (await history(seen)).doing;
           const line = window.paActivity.live(waiting, step);
-          // Working in the browser takes its time, and may wait on the person's press.
-          if (step?.tool === "operate" && sending) {
+          // Working in the browser takes its time, and a step may wait on the person's yes, as may a command
+          // (shell/panel.py), turning a switched-off ability on (turnon.py), a task in another program
+          // (desk/panel.py) or one of their MCP servers (mcp_hub.py, toolcard.js).
+          const place = { operate: "browser/confirm", shell: "shell/card", turn_on: "turnon/card",
+            desk: "programs/card", mcp: "mcp/card" }[step?.tool];
+          if (place && sending) {
             clearTimeout(turnLimit);
             turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            const asked = await ctx.api("browser/confirm");
-            showCard(asked.card, asked.answered);
-          }
-          // A command may wait on the person's press too (shell/panel.py).
-          if (step?.tool === "shell" && sending) {
-            clearTimeout(turnLimit);
-            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            showShellCard((await ctx.api("shell/card")).card);
-          }
-          // A switched-off ability asks to be turned on (turnon.py), with the same card.
-          if (step?.tool === "turn_on" && sending) {
-            clearTimeout(turnLimit);
-            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            showShellCard((await ctx.api("turnon/card")).card, "turnon/card");
-          }
-          // A task in another program may wait on the person's press as well (desk/panel.py).
-          if (step?.tool === "desk" && sending) {
-            clearTimeout(turnLimit);
-            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            showDeskCard((await ctx.api("programs/card")).card);
-          }
-          // One of the person's MCP servers may wait on the person's press too (toolcard.js, mcp_hub.py).
-          if (step?.tool === "mcp" && sending) {
-            clearTimeout(turnLimit);
-            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            window.paToolCard.show(waiting, (await ctx.api("mcp/card")).card, keepEnd);
+            const asked = await ctx.api(place);
+            if (step.tool === "operate") showCard(asked.card, asked.answered);
+            else if (step.tool === "desk") showDeskCard(asked.card);
+            else if (step.tool === "mcp") window.paToolCard.show(waiting, asked.card, keepEnd);
+            else showShellCard(asked.card);
+            // A server's form is filled in on the page; every other step is answered in the chat box.
+            const id = asked.card && asked.card.typed !== false ? asked.card.id : null;
+            if (id !== awaitingYes && !(awaitingYes === null && id && noted.has(`asked:${id}`))) {
+              awaitingYes = id;
+              if (id) noted.add(`asked:${id}`);
+              syncSend();
+            }
           }
           // The sidebar's line under the character's name says it too (app.js).
           if (sending) hooks.doing(line);

@@ -238,17 +238,19 @@ class Pane:
         self.kept.append(yes)
 
 
-def test_a_card_whose_time_runs_out_stays_answerable_and_its_answer_is_kept(monkeypatch, tmp_path):
+def test_a_question_whose_time_runs_out_stays_answerable_and_its_answer_is_kept(monkeypatch, tmp_path):
     monkeypatch.setattr(operate, "CARD_S", 0.5)
     pane = Pane()
-    run = Operating(SimpleNamespace(pane=pane, attended=lambda: True, show=lambda: None), tmp_path, None)
+    run = Operating(SimpleNamespace(pane=pane, attended=lambda: True, show=lambda: None), tmp_path,
+                    SimpleNamespace(home=tmp_path / "home"))
     card = {"id": "c1", "kind": "comment", "site": "127.0.0.1", "to": "阿杰", "text": REPLY, "button": "回复",
             "skippable": True, "act": ("card", "comment", "127.0.0.1", "回复", REPLY, "阿杰")}
     assert asyncio.run(run.ask(card, 1)) == {"waiting": act_of(card, "zh")}
     assert len(pane.shown) == 1 and pane.told == []
-    assert run.answer_card("c1", True, False, [])
+    # The person's next message beside the page answers it (loop.py reads it with cardwait.said_yes).
+    assert run.keep(True)
     assert run.kept == {card["act"]: {"yes": True}} and pane.kept == [True]
-    assert not run.answer_card("c1", True, False, [])
+    assert not run.keep(True)
 
 
 def test_a_press_on_the_chat_laid_over_the_page_is_not_a_press_on_the_page():

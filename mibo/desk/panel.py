@@ -1,20 +1,21 @@
-"""The app page's side of operating other programs: where a task's steps run, the cards wait, and Settings'
+"""The app page's side of operating other programs: where a task's steps run, the questions wait, and Settings'
 section reads the one acting mode, the kept tiers, the never list and the log.
 
 The character's turn runs in the service; its loop (operate.py) sends each step here (/api/programs/op). Here one
 `Hands` does it on one worker thread (UI Automation, the input and the per-monitor scale belong to the thread
-that started them). A card waits at /api/programs/card for the person's press, which only the app's own page can
-give (the window's key), never the service and never words typed in the chat. A step runs only while the
-person's own chat turn is under way in the app, and a card waits for them there (cardwait.py): nothing for a turn
-nobody started, on a timer or in the background. The turn stopped in the chat stops the run and closes the strip.
+that started them). A step that needs the person's yes is said in the chat in the app's own words (the program,
+the window, the control, the exact text or the files) and waits for their typed yes (cardwait.py), which only the
+app's own page passes on, never the service and never the model's words. A step runs only while the person's own
+chat turn is under way in the app: nothing for a turn nobody started, on a timer or in the background. The turn
+stopped in the chat stops the run and closes the strip.
 
 Which program a name means is found the way Start finds one (names.py): a window of it already open, the
-front-most first, or else its entry in Start, opened for the task with no card; never a path from the model. No name at all means the window that was in front before the person came to the app. A
+front-most first, or else its entry in Start, opened for the task with no question; never a path from the model. No name at all means the window that was in front before the person came to the app. A
 program on the never list is refused by its name before any window is looked for.
 
-A window only a picture can work sends no picture to the model service before the person's yes on a card at the
-first picture of the task (this once, or always for that service, kept in see.json and taken back in Settings);
-the yes covers clicking by sight in that window for the task, while typing and keys still ask each time.
+A window only a picture can work sends its pictures to the model service the person chose, as every word of the chat
+goes there, with no question; a password manager's, a bank's or a mail client's window asks in the chat first. The
+pictures allowed cover clicking by sight in that window for the task, while typing and keys ask as any step does.
 """
 from __future__ import annotations
 
@@ -78,11 +79,11 @@ ACTION_WORDS = {
 }
 STATUS_WORDS = {
     "zh": {"declined": "（已拒绝，未执行）", "refused": "（不允许，未执行）", "failed": "（未成功）",
-           "stopped": "（已停止）", "paused": "（已暂停）", "handover": "（已交由你操作）", "outside": "（经你在卡片上确认，仅执行一次）",
+           "stopped": "（已停止）", "paused": "（已暂停）", "handover": "（已交由你操作）", "outside": "（经你在聊天中确认，仅执行一次）",
            "skipped": "（未执行）"},
     "en": {"declined": " (you said no; not done)", "refused": " (not allowed; not done)", "failed": " (did not work)",
            "stopped": " (stopped)", "paused": " (paused)", "handover": " (handed to you)",
-           "outside": " (confirmed by you on the card; done once)", "skipped": " (not done)"},
+           "outside": " (confirmed by you in the chat; done once)", "skipped": " (not done)"},
 }
 
 
@@ -169,7 +170,7 @@ def serve(hands, op: str, payload: dict) -> dict:
 
 
 class Desk:
-    """One task at a time: its Hands on the worker thread, the card waiting for the person, the turn it is for."""
+    """One task at a time: its Hands on the worker thread, the question waiting for the person, the turn it is for."""
 
     def __init__(self, app, workspace):
         self.app, self.workspace = app, workspace
@@ -179,7 +180,7 @@ class Desk:
         self.hands = None
         self.lang = "zh"
         self.conversation = ""
-        # The card waiting for the person, and the event loop it waits on (the worker thread asks through it).
+        # The question waiting for the person, and the event loop it waits on (the worker thread asks through it).
         self.cards = Card(workspace, lambda: getattr(app.state, "window", None))
         self.loop: asyncio.AbstractEventLoop | None = None
         self.watch: asyncio.Task | None = None
@@ -215,18 +216,23 @@ class Desk:
         self.loop = asyncio.get_running_loop()
         return await asyncio.wrap_future(self.worker.submit(fn, *args))
 
-    # --- the card, from the worker thread
+    # --- the question, from the worker thread
 
     def ask(self, card: dict) -> dict | None:
-        """Shows `card` and waits on the worker thread: the person's answer, or None when nobody answered,
-        the turn ended or the strip halted the run."""
+        """Says `card` in the chat and waits on the worker thread: {"yes": True} on the person's typed yes (or a
+        yes earlier in the turn that reaches its kind), {"yes": False} on any other message, None when nobody
+        answered, the turn ended or the strip halted the run."""
+        from ..cardwait import risk_of
         program = card.get("program") or ""
         what = {"zh": f"在{program}中操作", "en": f"An action in {program}"}
+        # Sending a window's pictures out is its own risk; any other step is asked as its kind is.
+        risk = "send" if card.get("type") == "see_grant" else risk_of(str(card.get("kind") or ""))
 
         def halted() -> bool:
             return self.hands is not None and self.hands.strip is not None and self.hands.strip.halted
-        return asyncio.run_coroutine_threadsafe(self.cards.ask(card, self.conversation, what, halted),
-                                                self.loop).result()
+        return asyncio.run_coroutine_threadsafe(
+            self.cards.ask(card, self.conversation, what, halted, yes={"yes": True}, no={"yes": False}, risk=risk),
+            self.loop).result()
 
     # --- the steps
 
@@ -301,7 +307,7 @@ class Desk:
               f"another name, use the tool again with that name; otherwise tell them it was not found.")}
 
     def _launch(self, app) -> dict:
-        """A program Start or the Desktop lists and no window shows, opened from its entry with no card when it is
+        """A program Start or the Desktop lists and no window shows, opened from its entry with no question when it is
         off the never lists: {"hwnd"}, or the result that ends the task. A shortcut to something that is not a
         program is opened at once, and that ends the task."""
         from . import names, win32
@@ -392,7 +398,7 @@ class Desk:
         return {"status": "ok", "hwnd": hwnd, "program": prog["name"], "title": win32.title_of(hwnd)}
 
     def _peek(self, payload: dict) -> dict:
-        """A look at a window with Hands that have no task, no strip and no card: its print or a part of it in the
+        """A look at a window with Hands that have no task, no strip and no question: its print or a part of it in the
         page grammar (pageops.view_of), and a picture after the same yes a task's first picture needs."""
         from ..web.pageops import view_of
         from . import uia, win32
@@ -450,48 +456,31 @@ class Desk:
                                          attended=window is not None and window.attended(), lang=self.lang))
 
     def _pictures(self, hands, look: bool) -> dict:
-        """On the worker thread, before the first picture of a task goes to the model service the person chose:
-        in automatic review the reviewer passes it when their words of this turn name or point at this program;
-        else a card that shows the window (this once, always, or no), unless they said always for this service. A
-        password manager's, a bank's or a mail client's window always asks, with no always. `look`: the model only
-        looks and tells them, and the card says so."""
+        """On the worker thread, before the first picture of a task goes to the model service the person chose: the
+        pictures go with no question, as every word of the chat goes there, unless they turned that off in Settings.
+        A password manager's, a bank's or a mail client's window asks in the chat first, showing the window, and so
+        does any window while the Settings switch is off. `look`: the model only looks and tells them, and the
+        question says so."""
         from .. import acting
-        from ..acting import Modes
         from ..see import when, words
         from . import win32
-        service, switch = self.service(), when.Switch(self.desktop)
+        service = self.service()
         name = hands.program["name"]
         title = win32.title_of(hands.view.hwnd) if hands.view else ""
-        sensitive = acting.sensitive_window(name, os.path.basename(hands.program["exe"]), title)
-        if sensitive or not switch.on(service):
-            verdict = None
-            if not sensitive and acting.decide(Modes(self.desktop).mode(), "picture", "", "programs") == "review":
-                verdict = self.review({"kind": "picture", "where": service, "target": [name, title[:120]], "text": ""})
-                if verdict.decision == "refuse":
-                    self.grants.log({"do": "review", "program": name, "exe": hands.program["exe"], "status": "refused",
-                                     "line": f"pictures to {service}: {verdict.reason}"})
-                    return {"status": "declined", "line": "[declined] the window's pictures were not sent: "
-                                                          + verdict.declined()}
-            if verdict is not None and verdict.decision == "go":
-                answer = "once"
-            else:
-                pressed = self.ask({"id": secrets.token_urlsafe(8), "type": "see_grant", "program": name,
-                                    "exe": hands.program["exe"], "window": name, "task": hands.task,
-                                    "text": words.say(words.LOOK if look else words.ASK, self.lang, window=name,
-                                                      service=service, who=words.spaced(self.lang, self.who())),
-                                    **({"review": verdict.line(self.lang)} if verdict is not None else {}),
-                                    "picture": hands.sent_picture(),
-                                    "choices": ["once", "no"] if sensitive else ["once", "always", "no"]}) or {}
-                answer = pressed.get("answer") or ("once" if pressed.get("yes") else None)
-            self.grants.log({"do": "ask", "program": name, "exe": hands.program["exe"], "status": answer or "unanswered",
-                             "line": f"pictures to {service}",
-                             **({"review": {"decision": verdict.decision, "by": verdict.by, "reason": verdict.reason}}
-                                if verdict is not None else {})})
-            if answer not in ("once", "always"):
+        if acting.sensitive_window(name, os.path.basename(hands.program["exe"]), title) or not when.Switch(
+                self.desktop).on(service):
+            answer = self.ask({"id": secrets.token_urlsafe(8), "type": "see_grant", "program": name,
+                               "exe": hands.program["exe"], "window": name, "task": hands.task,
+                               "text": words.say(words.LOOK if look else words.ASK, self.lang, window=name,
+                                                 service=service, who=words.spaced(self.lang, self.who())),
+                               "picture": hands.sent_picture()})
+            yes = bool(answer and answer.get("yes"))
+            self.grants.log({"do": "ask", "program": name, "exe": hands.program["exe"],
+                             "status": "once" if yes else "no" if answer else "unanswered",
+                             "line": f"pictures to {service}"})
+            if not yes:
                 return {"status": "declined", "line": "[declined] the person did not let the window's pictures go to "
                                                       "their model service; nothing was sent"}
-            if answer == "always" and not sensitive:
-                switch.set(service)
         self.pictured = hands
         return {"status": "ok"}
 
@@ -524,7 +513,7 @@ class Desk:
             "on": Modes(self.desktop).mode() != "off",
             "mode": Modes(self.desktop).mode(),
             "block": self.grants.blocked(),
-            # Pictures of a window only a picture can work: asked on a card each time unless always for this service.
+            # Pictures of a window only a picture can work: sent with no question unless turned off here.
             "pictures": {"on": when.Switch(self.desktop).on(service),
                          "sentence": {lang: when.Switch.sentence(lang, who, service) for lang in ("zh", "en")}},
             "switch": {lang: {k: v.format(who=who) for k, v in g.SWITCH[lang].items()} for lang in ("zh", "en")},
@@ -551,8 +540,8 @@ def mount(app, workspace, body) -> None:
     quiet.on_front(lambda: desk().fronted())
 
     def own_page(request: Request) -> bool:
-        """The app window's own page on this computer: the only place a permission is given (a card's press,
-        the switch turned on, a grant raised), never the service or another tab."""
+        """The app window's own page on this computer: the only place a permission is given (a yes typed in its
+        chat, the switch turned on, a grant raised), never the service or another tab."""
         window = getattr(app.state, "window", None)
         return window is None or window.is_own_page(request.headers.get(WINDOW_HEADER, ""))
 
@@ -618,7 +607,7 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/programs/op")
     async def desk_op(request: Request):
-        """One step of the character's task in a program, from the service's loop. Waits for a card."""
+        """One step of the character's task in a program, from the service's loop. Waits for the person's yes."""
         payload = await body(request)
         op, state = payload.get("op"), desk()
         if op == "begin":
@@ -650,20 +639,5 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/programs/card")
     async def desk_card():
-        """The card waiting for the person, if any."""
+        """The step waiting in the chat for the person's yes, if any (chat.js draws it; /api/confirm answers it)."""
         return {"card": desk().cards.card}
-
-    @app.post("/api/programs/card")
-    async def desk_press(request: Request):
-        """The person's press: from the app's own page on this computer alone, never from the service."""
-        if not own_page(request):
-            return _error("local_only", 403)
-        payload = await body(request)
-        ident = payload.get("id")
-        if not isinstance(ident, str):
-            return _error("generic")
-        if isinstance(payload.get("yes"), bool):
-            return {"ok": desk().cards.press(ident, {"yes": payload["yes"]})}
-        if payload.get("answer") in ("once", "always", "no"):
-            return {"ok": desk().cards.press(ident, {"answer": payload["answer"]})}
-        return _error("generic")

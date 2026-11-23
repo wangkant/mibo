@@ -1,12 +1,12 @@
-"""One whole turn through the page: the person's message posted to /api/chat, each card the turn raises
-answered through the page's own card routes as the policy says, and what came of it read back: the reply,
-its steps, its sources, the cards, and what reached the model, round by round."""
+"""One whole turn through the page: the person's message posted to /api/chat, each question the turn raises
+answered as the page does, by what the person types in the chat box (/api/confirm), and what came of it read back:
+the reply, its steps, its sources, the questions, and what reached the model, round by round."""
 from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
 
-# The card routes the page polls (petline.js), and how each takes a press of yes, no, always (or chat, 本次对话内允许).
+# The question routes the page polls (chat.js), one per place a step can wait.
 CARD_ROUTES = {
     "shell": "/api/shell/card",
     "desk": "/api/programs/card",
@@ -15,19 +15,17 @@ CARD_ROUTES = {
     "operate": "/api/browser/confirm",
 }
 POLL_S = 0.05
+# What the person types for a plain answer; any other answer is typed as it is.
+TYPED = {"yes": "确定", "no": "不用了"}
 
 
-def _press(kind: str, ident: str, answer: str) -> dict:
-    yes = answer in ("yes", "always")
-    if kind == "mcp":
-        return {"id": ident, "answer": {"yes": "once", "always": "always"}.get(answer, "no")}
-    if kind == "desk" and answer == "always":
-        return {"id": ident, "answer": "always"}
-    if kind == "shell" and answer in ("always", "chat"):
-        return {"id": ident, "yes": True, "scope": answer}
-    if kind == "operate":
-        return {"id": ident, "yes": yes, "never": answer == "never"}
-    return {"id": ident, "yes": yes}
+def _answer(app, kind: str, card: dict, answer: str) -> None:
+    """Answers one question as the page does: an MCP server's form by its own controls, every other question by the
+    person's message typed in the chat box."""
+    if card.get("typed") is False:
+        app.post("/api/mcp/card", {"id": card["id"], "answer": "once" if answer == "yes" else "no"}, own_page=True)
+        return
+    app.post("/api/confirm", {"id": card["id"], "text": TYPED.get(answer, answer)}, own_page=True)
 
 
 @dataclass
@@ -74,9 +72,9 @@ class TurnResult:
 def run_turn(app, message: str, *script, cards="yes", conversation: str = "main",
              attachments: list | None = None) -> TurnResult:
     """Send `message` in a chat, with `attachments` as chat.js sends them ({"kind": "picture", "data": base64});
-    `script` rounds are queued on the model first. `cards` answers every card: one of "yes", "no", "always",
-    "never", or a list taken in order. Fails when the model was asked something no script covers or a scripted
-    round was never asked for."""
+    `script` rounds are queued on the model first. `cards` answers every question: "yes" (typed as 确定), "no"
+    (typed as 不用了), any other message typed as it is, or a list taken in order. Fails when the model was asked
+    something no script covers or a scripted round was never asked for."""
     model = app.model
     model.script(*script)
     seen = len(model.requests)
@@ -99,7 +97,7 @@ def run_turn(app, message: str, *script, cards="yes", conversation: str = "main"
             if card and all(card["id"] != c["card"]["id"] for c in raised):
                 answer = answers.pop(0) if len(answers) > 1 else answers[0]
                 raised.append({"kind": kind, "card": card, "answer": answer})
-                app.post(route, _press(kind, card["id"], answer), own_page=True)
+                _answer(app, kind, card, answer)
     response = sent["response"]
     model.check()
     assert model.left() == 0, f"{model.left()} scripted reply round(s) were never asked for"

@@ -2,7 +2,7 @@
 
 **Ein KI-Begleiter, der auf Ihrem Desktop lebt: Er leistet Ihnen Gesellschaft und erledigt Aufgaben.**
 
-Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen, merkt sich, was Sie betrifft, und bringt Ihnen jeweils eine Sache, die Ihre Zeit wert ist. Sie kann mehr als plaudern: Sie surft im Web, bedient die Programme auf Ihrem Computer, arbeitet mit Ihren Dateien und Befehlen, nutzt Skills und MCP-Connectoren und führt geplante Aufgaben aus. Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Aktionen werden automatisch geprüft, und eine Karte fragt Sie nur, wenn Ihre Entscheidung nötig ist; Zahlungen, Löschungen und Kontoänderungen erfordern sie immer.
+Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen, merkt sich, was Sie betrifft, und bringt Ihnen jeweils eine Sache, die Ihre Zeit wert ist. Sie kann mehr als plaudern: Sie surft im Web, bedient die Programme auf Ihrem Computer, arbeitet mit Ihren Dateien und Befehlen, nutzt Skills und MCP-Connectoren und führt geplante Aufgaben aus. Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Aktionen werden automatisch geprüft, und die Figur fragt Sie nur dann im Chat, wenn Ihre Entscheidung nötig ist: Mit Ihrem Ja läuft die Aufgabe bis zum Ende; Zahlungen, Löschungen und Kontoänderungen werden eigens erfragt.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -22,7 +22,7 @@ Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen,
 | **Ausflüge** | Besucht öffentliche Seiten als Gast, ohne Anmeldung und unter Beachtung von robots.txt. Eine Seite wird in einem Zug gelesen, mit Überschriften und Tabellen. Die Websuche braucht keinen Schlüssel. |
 | **Integrierter Browser** (Windows) | Links öffnen sich neben der Unterhaltung, mit Tabs, privaten Tabs und Downloads. Die Figur sieht sich die Seite an und klickt, tippt, wählt aus, zieht und lädt Dateien hoch. |
 | **Andere Programme** (Windows) | Liest und bedient Fenster anderer Programme über UI Automation, auch Electron-Apps, und nur, solange Sie Tastatur und Maus ruhen lassen. |
-| **Dateien und Befehle** | Nur in freigegebenen Ordnern. Befehle werden vor der Ausführung gelesen; die Dateiänderungen jedes Durchgangs lassen sich rückgängig machen; unter Windows landet Gelöschtes im Papierkorb. |
+| **Dateien und Befehle** | Nur in Ihren eigenen Ordnern Desktop, Dokumente, Downloads, Bilder, Musik und Videos und in Ordnern, die Sie freigeben. Befehle werden vor der Ausführung gelesen; die Dateiänderungen jedes Durchgangs lassen sich rückgängig machen; unter Windows landet Gelöschtes im Papierkorb. |
 | **Skills und Connectoren** | Skills (Ordner mit `SKILL.md`) und MCP-Server, jeweils mit einem kuratierten Katalog. Eine Nachricht, die mit `/name` (dem Namen des Skills) beginnt, startet ihn. |
 | **Geplante Aufgaben** | Erinnerungen, Aufgaben und regelmäßige Prüfungen. Bei der Ausführung wird nur gelesen, dazu kommt, was Sie beim Anlegen erlaubt haben. |
 | **Sprachen** | Zehn Oberflächensprachen. |
@@ -81,7 +81,7 @@ Die Daten liegen in einem einzigen Ordner: `~/mibo` bei einer installierten Kopi
 | **Ihr Modelldienst** | Erhält Ihre Nachrichten, relevante Erinnerungen, die für eine Antwort genutzten Seiten und Dateien sowie die Schritte, die die Prüfung beurteilt. Ihr Schlüssel geht nur an diesen Dienst. |
 | **Websites** | Ausflüge lesen öffentliche Seiten ohne Anmeldung, standardmäßig dreimal am Tag (Einstellungen › Ausflüge); eine Antwort liest die Seiten, die sie braucht. Ihre Anmeldungen bleiben im integrierten Browser und werden nur dort verwendet. |
 | **Andere Dienste** | Eine Suchanfrage, wenn eine Antwort sucht; die Versionsnummer an GitHub höchstens einmal am Tag; Katalogabfragen, wenn Sie einen Katalog öffnen; was die Figur an die Werkzeuge eines MCP-Servers übergibt. |
-| **Fragt immer** | Bezahlen oder Kaufen, Löschen und Änderungen an Sicherheit oder Zugang eines Kontos, jedes Mal und in jedem Modus. Jede Aktion auf Websites von Banken, Zahlungsdiensten, Gesundheitsdiensten und E-Mail-Anbietern. |
+| **Fragt immer** | Bezahlen oder Kaufen, Löschen und Änderungen an Sicherheit oder Zugang eines Kontos, in jedem Modus; ein Ja zu einem Schritt anderer Art deckt sie nicht ab. Jede Aktion auf Websites von Banken, Zahlungsdiensten, Gesundheitsdiensten und E-Mail-Anbietern. Nur Ihre eigene, im Chat getippte Nachricht gilt als Ja. |
 | **Nie** | Passwörter, Zahlungsdaten oder Bestätigungscodes lesen oder eingeben; etwas als Administrator ausführen; Sicherheitseinstellungen ändern. |
 | **Unbeaufsichtigt** | Nur Ausflüge und die geplanten Aufgaben, die Sie anlegen. |
 

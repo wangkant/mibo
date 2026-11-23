@@ -7,6 +7,19 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+### Files
+
+- Word, Excel and PowerPoint files are made as files: asked for a document, a table or slides, the character writes the finished .docx, .xlsx or .pptx instead of typing into the program's window, and changes an existing one in place, keeping its layout. Such changes can be taken back like any other change to a file. Three built-in skills guide a good document, workbook and deck.
+- PDFs are read page by page; a scanned PDF is reported as holding no text.
+
+### Approvals
+
+- Approval cards are gone. When a step needs your decision, the character tells you in the chat what it is about to do and waits; reply in your own words, such as “ok”, “确定” or “go ahead”, and it goes ahead. Anything else is a no for that step and is then read as an ordinary message.
+- One yes finishes the task: later steps of the same kind in that reply run without asking again. Paying, deleting, account changes and sending something out are asked once more on their own unless that is what you said yes to.
+- Only your own message typed in the chat counts as a yes; nothing on a page, in a file, in a tool's answer or in the character's own words does. A yes belongs to the one step it was asked for, and a step that changes is asked again.
+- Your own Desktop, Documents, Downloads, Pictures, Music and Videos folders no longer need a grant: files there are read and written for you, while deleting still asks.
+- Pictures of a window are sent to the model service without a question, unless the window looks sensitive or you turn this off in Settings.
+
 ## [0.1.0] - 2026-11-22
 
 First release. Attached below: an installer and a zip that needs no installing for Windows 10 and 11 (x64), a disk image for macOS on Apple silicon, and the wheel, which is also on PyPI as `mibo` for any system with Python 3.10–3.14. Mibo needs a model service you choose, with your own key, or a model server on your computer.

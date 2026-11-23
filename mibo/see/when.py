@@ -25,7 +25,8 @@ SWITCH_FILE = "see.json"
 
 
 class Switch:
-    """"Always" on the picture card: pictures of such windows go to this model service without a card."""
+    """Pictures of windows only a picture can work go to this model service with no question: on until the person
+    turns it off in Settings, after which each task's first picture is asked about in the chat."""
 
     def __init__(self, folder: Path):
         self.path = Path(folder) / SWITCH_FILE
@@ -33,11 +34,13 @@ class Switch:
     def on(self, service: str) -> bool:
         try:
             return json.loads(self.path.read_text(encoding="utf-8")).get("always") == service
+        except FileNotFoundError:
+            return True
         except (OSError, ValueError):
             return False
 
     def set(self, service: str) -> None:
-        """Always for `service`; "" takes it back."""
+        """On for `service`; "" turns it off."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({"always": service}), encoding="utf-8")
 

@@ -16,8 +16,9 @@ NAME, REACT = "bring_find", "react"
 ABOUT = ("thing", "topic", "source", "kind", "length")
 # The one instruction for a wish no find fits: the same words in bring_find's description and the tool guide
 # (prompts.OWNER_TOOL_GUIDE).
-LOOK = ("When none of your finds is on what they asked, look it up now with web_search and read_page, and bring the "
-        "page you read with bring_find url; never ask whether to look.")
+LOOK = ("When none of your finds is on what they asked, look it up now: on a site they named with find_on_site, "
+        "else with web_search and read_page; bring the item or the page you read with bring_find url, and never ask "
+        "whether to look.")
 
 TOOLS = [
     {"type": "function", "function": {
@@ -26,8 +27,9 @@ TOOLS = [
             "Recommend one of your own finds, shown as a card under your reply: when they ask for something to "
             "watch or read, or for another one. Without pick it lists your finds for the wish; then call it again "
             "with pick, the id of one that is on what they asked (its subject, not only its site or its kind), or "
-            "pick none for no card. The last pick is the card. " + LOOK + " A find you name comes from this tool "
-            "only, never from memory."),
+            "pick none for no card. The last pick is the card. Things on a site they name (\"去抖音找点好玩的视频\") "
+            "are find_on_site's, not this. " + LOOK + " A find you name comes from a tool only, never from "
+            "memory."),
         "parameters": {"type": "object", "properties": {
             "wish": {"type": "string", "description": "what they asked for, in their words and in English "
                                                       "(烘焙 baking); empty when they named nothing"},
@@ -36,7 +38,8 @@ TOOLS = [
             "length": {"type": "string", "enum": ["short", "long"],
                        "description": "only when they asked for a short or a long one"},
             "pick": {"type": "string", "description": "the id of a find the list gave, for the card; none for no card"},
-            "url": {"type": "string", "description": "a page you read with read_page this turn, as the card"},
+            "url": {"type": "string", "description": "a page you read with read_page, or an item find_on_site gave, "
+                                                     "this turn, as the card"},
             "later": {"type": "boolean", "description": "true only when they said yes to your looking for the wish "
                                                         "later, on a walk"}},
             "required": []}}},
@@ -83,10 +86,14 @@ async def bring(agent, args: dict, lookups) -> str:
     if args.get("later") is True:
         return await _later(runtime, wish, lookups)
     if url:
-        # Only a page read this turn: the library's own finds are picked from the list.
-        item = Library(runtime).get(item_id(url)) if url in {s["url"] for s in lookups._read} else None
+        # Only a page read this turn or an item found on a site: the library's own finds are picked from the list.
+        read = next((s for s in lookups._read if s["url"] == url), None)
+        library = Library(runtime)
+        item = library.get(item_id(url)) if read is not None else None
+        if item is None and read is not None and read.get("found"):
+            item = library.add(_found(read))
         if item is None:
-            return "Error: url takes a page you read with read_page this turn"
+            return "Error: url takes a page you read with read_page, or an item find_on_site gave, this turn"
         lookups.doing("pick", item.title[:80])
         lookups.bring = item.id
         return _picked(item, "")
@@ -132,6 +139,15 @@ def _list(agent, runtime, wish: str, avoid: list, kind: str, length: str) -> lis
                                       recommend.size(item, shaped), chip) if v)
         listed.append((item.id, chip, line, words))
     return listed
+
+
+def _found(source: dict):
+    """An item find_on_site gave (search.WebSearch._find_on_site), as the library keeps it once it is the card."""
+    from .library import CHAT, Item
+    from .players import player_for
+    embed = player_for(source["url"])
+    return Item(url=source["url"], site=source["site"], kind="video" if embed else "page", title=source["title"],
+                embed=embed, via=CHAT)
 
 
 def _picked(item, chip: str) -> str:

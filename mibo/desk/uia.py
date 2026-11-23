@@ -15,8 +15,11 @@ the window are skipped with what is under them.
 Actions go through UI Automation patterns first (invoke, set value, toggle,
 select, expand, scroll), text into an edit control through the control's own
 messages; real input (keys, a click at a point) only where a control offers
-none or the action is input by nature (a right-click menu through Shift+F10,
-a double click), only once the person has left the keyboard and mouse alone,
+none, where its pattern did not take (text climbs from the value to the focus
+and keys, a click and keys, then a paste, each rung read back: `climb`; a
+press whose action fails ends in a click), or where the action is input by
+nature (a right-click menu through Shift+F10, a double click), only once the
+person has left the keyboard and mouse alone,
 and only after the target window is the one in front and the focused
 control is checked. Before any action the element is read again: it must still
 be the kind and name the look printed, or it is found again by them, or nothing
@@ -96,6 +99,87 @@ BIDI = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 class Refused(Exception):
     """An action this layer will not do; its text goes back to the loop as is."""
+
+
+class Missed(Exception):
+    """One rung of a write or a focus that did not get to the field; the next rung is tried."""
+
+
+def _why(e: Exception) -> str:
+    """An exception's first line, as a step's line quotes it."""
+    return (str(e).splitlines() or [type(e).__name__])[0][:120]
+
+
+# The controls a write or a key may click into: a click on any other would press it.
+FIELDS = {"textbox", "document", "combobox"}
+# The rungs a write climbs, as its line names them.
+BY_VALUE, BY_MESSAGES, BY_KEYS, BY_CLICK, BY_FOCUS_PASTE, BY_PASTE = (
+    "its value", "the edit control's own messages", "focusing it and typing", "a click on it and typing",
+    "focusing it and a paste", "a click on it and a paste")
+HOW = {BY_VALUE: "", BY_MESSAGES: "", BY_KEYS: " (typed)", BY_CLICK: " (typed after a click on it)",
+       BY_FOCUS_PASTE: " (through the clipboard, theirs put back)",
+       BY_PASTE: " (pasted after a click on it, through the clipboard, theirs put back)"}
+# A write into a field that offers no way to read its text back.
+UNREAD = "the field gives no way to read its text back, so look before going on"
+
+
+def plain_text(s: str) -> str:
+    """A field's text as a person reads it: Chromium keeps a typed space as a no-break space."""
+    return s.replace("\xa0", " ").replace("\r\n", "\n").replace("\r", "\n")
+
+
+def same_text(a: str, b: str) -> bool:
+    """Whether two texts of a field read the same, the line break a document ends in aside."""
+    return plain_text(a).strip("\n") == plain_text(b).strip("\n")
+
+
+def _before(tried: list[str]) -> str:
+    """What a write's line adds about the rungs that did not take before the one that did."""
+    return f"; before that, {clip(' and '.join(tried), 200)} did not take" if tried else ""
+
+
+def _held_by(el) -> str | None:
+    """What a live element holds now, or None when it offers no way to say."""
+    A = automation()
+    if el.GetCurrentPropertyValue(A.AutomationElement.IsTextPatternAvailableProperty):
+        return str(el.GetCurrentPattern(A.TextPattern.Pattern).DocumentRange.GetText(-1))
+    if el.GetCurrentPropertyValue(A.AutomationElement.IsValuePatternAvailableProperty):
+        return str(el.GetCurrentPropertyValue(A.ValuePattern.ValueProperty) or "")
+    return None
+
+
+def climb(rungs: list[tuple[str, Callable[[], None]]], read: Callable[[], str] | None,
+          landed: Callable[[str], bool], *, again: bool) -> tuple[str, str, list[str]]:
+    """Write into a field by the first rung that takes, as computer-use and UI automation tools write into a
+    Chromium text field: its value, then the focus and keys, then a real click and keys or a paste. After each
+    rung the field is read back (until `landed`, SETTLE_S at most): that, not the rung, decides. Returns (the
+    rung that took or "", what the field holds, the rungs that did not take with why). A rung that changed the
+    field without landing ends the climb unless `again` (each rung writes the whole text over): a next rung
+    would put the text in twice. With no `read` the field cannot be read back: the first rung that runs is
+    taken, unproven."""
+    was = read() if read else ""
+    holds, tried = was, []
+    for name, act in rungs:
+        try:
+            act()
+        except Refused:
+            raise
+        except Exception as e:
+            tried.append(f"{name} ({clip(_why(e), 90)})")
+            continue
+        if read is None:
+            return name, "", tried
+        end = time.monotonic() + SETTLE_S
+        holds = read()
+        while not landed(holds) and time.monotonic() < end:
+            time.sleep(POLL_S)
+            holds = read()
+        if landed(holds):
+            return name, holds, tried
+        tried.append(name)
+        if not again and holds != was:
+            break
+    return "", holds, tried
 
 
 _A = None
@@ -808,7 +892,12 @@ class View:
         if win32.top_of(win32.foreground()) not in shown:
             # A modal dialog leaves the main window disabled, and a disabled window takes no focus: the dialog does.
             front = self.hwnd if win32.enabled(self.hwnd) else next((h for h in shown[1:] if win32.enabled(h)), self.hwnd)
-            element(front).SetFocus()
+            try:
+                element(front).SetFocus()
+            except Exception:
+                # An Electron or other Chromium window takes no focus from UI Automation: brought in front by
+                # Windows itself, as pywinauto's set_focus does.
+                win32.give_back(front)
             time.sleep(0.15)
         front = win32.top_of(win32.foreground())
         if front not in self.windows():
@@ -832,7 +921,8 @@ class View:
         A = automation()
         f = A.AutomationElement.FocusedElement
         if f is None or not (self.ours(f.Current.ProcessId) or f.Current.ProcessId == win32.pid_of(self.hwnd)):
-            raise Refused("[refused] the keyboard focus is not in this program; nothing was typed")
+            raise Refused("[refused] the keyboard focus is not in this program; nothing was typed. Name the field the "
+                          "keys are for (its name or id with the action), so it is clicked into first")
         if f.Current.IsPassword or (typing and SECRET_LABEL.search(f"{f.Current.Name} {f.Current.AutomationId}")
                                     and f.Current.ControlType.ProgrammaticName.endswith("Edit")):
             raise Refused("[refused] the focus is in a password field: that is for the person to type")
@@ -872,22 +962,36 @@ class View:
                 return " (selected)"
             if "expand" in n.patterns:
                 return self._expand(n, None)
+            return click() + " (no pattern)"
+
+        def click() -> str:
             self.forward()
             x, y = self._point(n)
             win32.click_at(x, y)
-            return f" (no pattern: clicked at {x},{y})"
+            return f" (clicked at {x},{y})"
 
         def body() -> str:
+            # The ladder of UI automation tools: the control's own action; once more with its window in front (a
+            # menu, or a control that acts only there); then a real click at its clickable point.
+            start = self.snapshot()
             try:
                 return press()
             except Refused:
                 raise
-            except Exception:
-                if self.forwarded:
-                    raise
-                # A menu, or a control that acts only in the window in front: once more, with it in front.
+            except Exception as e:
+                why = _why(e)
+            if not self.forwarded:
                 self.forward()
-                return press()
+                try:
+                    return press()
+                except Refused:
+                    raise
+                except Exception as e:
+                    why = _why(e)
+            if self.changes(start, self.snapshot()):
+                # The action went through though it answered with an error: a click now would press twice.
+                return f" (pressed once; it answered {quote(clip(why, 80))}, and the window changed)"
+            return click() + f", once its own action failed ({clip(why, 80)})"
         # A control that unfolds, or whose name ends in an ellipsis, opens a menu or a dialog: that is given
         # longer to show (the wait ends as soon as it does).
         opens = "expand" in n.patterns or n.name.rstrip().endswith(("...", "…"))
@@ -899,141 +1003,274 @@ class View:
         return line
 
     def set_value(self, ident: int, text: str, append: bool = False) -> str:
-        """Replace what a field holds with `text` (or, with `append`, add it after what it holds): through its
-        value pattern, else the edit control's own messages, else by typing. The field is then read back, and
-        the line says what it holds. Never into a password field."""
+        """Replace what a field holds with `text` (or, with `append`, add it after what it holds), up the ladder
+        `climb` names: its value pattern or the edit control's own messages, then the focus and keys, then a real
+        click and keys, then a click and a paste. The field is read back after each rung, and the line says what
+        it holds. Never into a password field."""
         ident = self.live(ident)
         n = self.node(ident)
         if n.secret:
             raise Refused(f"[refused] {self.describe(ident)} is a password field: it is for the person to fill")
         A = automation()
         want = text.replace("\r\n", "\n")
+        op = "append to" if append else "set"
 
         def body() -> str:
             if not append and len(self.text_of(ident)) > DOCUMENT_MAX:
                 # The look showed only its beginning: writing that back would cut the rest off.
                 raise Refused(f"[failed] {self.describe(ident)} holds more text than the look shows; setting it "
                               f"would lose the rest. Use append, or the program's own find and replace")
-            was = self._plain(ident) if append else ""
+            was = self._unfilled(n, self._plain(ident)) if append else ""
             # Added to a document, text starts on a line of its own.
             apart = append and n.role == "document" and was and not was.endswith("\n") and not want.startswith("\n")
             whole = was + ("\n" if apart else "") + want if append else want
-            # A combo box's edit takes a set value without telling its program (a file dialog then saves
-            # under the old name), so that one is typed.
-            how = ""
-            if "value" in n.patterns and not n.readonly and not win32.in_combo(n.hwnd):
-                n.el.GetCurrentPattern(A.ValuePattern.Pattern).SetValue(whole.replace("\n", "\r\n") if n.hwnd and
-                                                                        win32.multiline(n.hwnd) else whole)
-            elif n.hwnd and win32.edit_box(n.hwnd) and not win32.in_combo(n.hwnd):
-                win32.edit_replace(n.hwnd, whole[len(was):] if append else whole, whole=not append, end=append)
-            else:
-                self.forward()
-                n.el.SetFocus()
-                self._focused_ok(True)
-                win32.chord([win32.VK["Ctrl"], win32.VK["End"]] if append else [win32.VK["Ctrl"], ord("A")])
-                self._type(whole[len(was):] if append else whole)
-                how = " (typed)"
-            holds = self._held(ident, whole)
-            if holds != whole.strip("\n"):
-                raise Refused(f"[failed] {'append to' if append else 'set'} {self.describe(ident)}: after writing, it "
-                              f"holds {quote(clip(holds, 200))}, which is not the text given")
-            return f" = {quote(clip(text, 60))}{how}, read back and it holds exactly that" + (
-                " after what it held" if append and was else "")
+            add = whole[len(was):] if append else whole
+            start = [win32.VK["Ctrl"], win32.VK["End"]] if append else [win32.VK["Ctrl"], ord("A")]
+
+            def landed(holds: str) -> bool:
+                return same_text(holds, whole)
+
+            def by_value() -> None:
+                if "value" in n.patterns and not n.readonly:
+                    n.el.GetCurrentPattern(A.ValuePattern.Pattern).SetValue(
+                        whole.replace("\n", "\r\n") if n.hwnd and win32.multiline(n.hwnd) else whole)
+                else:
+                    win32.edit_replace(n.hwnd, add, whole=not append, end=append)
+
+            def by_keys(click: bool, paste: bool) -> Callable[[], None]:
+                def act() -> None:
+                    self._focus_on(n, click)
+                    win32.chord(start)
+                    if paste:
+                        self._paste_keys(add, lambda: landed(self._plain(ident)))
+                    else:
+                        self._type(add)
+                return act
+            rungs = [(BY_KEYS, by_keys(False, False)), (BY_CLICK, by_keys(True, False)), (BY_PASTE, by_keys(True, True))]
+            # A combo box's edit takes a set value without telling its program (a file dialog then saves under
+            # the old name), so that one is typed.
+            if not win32.in_combo(n.hwnd) and (("value" in n.patterns and not n.readonly) or (
+                    n.hwnd and win32.edit_box(n.hwnd))):
+                rungs.insert(0, (BY_VALUE, by_value))
+            read = self._reader(n, ident)
+            # Appended text typed twice would be there twice; a whole text written again only replaces itself.
+            rung, holds, tried = climb(rungs, read, landed, again=not append)
+            if not rung:
+                raise self._missed(op, ident, holds, tried, len(tried) < len(rungs), read is not None)
+            if read is None:
+                return f" = {quote(clip(text, 60))}{HOW[rung]}; {UNREAD}"
+            return f" = {quote(clip(text, 60))}{HOW[rung]}, read back and it holds exactly that" + (
+                " after what it held" if append and was else "") + _before(tried)
         return self._act("append" if append else "set", ident, body, wait=0)
 
     def _plain(self, ident: int) -> str:
         return self.text_of(ident).replace("\r\n", "\n").replace("\r", "\n")
 
-    def _held(self, ident: int, want: str) -> str:
-        """What a field holds once it has settled on `want`, or after a short wait whatever it holds."""
-        end = time.monotonic() + SETTLE_S
-        while True:
-            holds = self._plain(ident).strip("\n")
-            if holds == want.strip("\n") or time.monotonic() >= end:
-                return holds
-            time.sleep(POLL_S)
+    def _reader(self, n: Node, ident: int) -> Callable[[], str] | None:
+        """How a write reads its field back, or None when the field offers no way to read its text."""
+        return (lambda: self._plain(ident)) if {"value", "text"} & set(n.patterns) else None
+
+    @staticmethod
+    def _unfilled(n: Node, holds: str) -> str:
+        """What an empty field holds, as text written after it: nothing, where the field shows only its own name
+        (Chromium reads an empty box as its placeholder, which is also its name)."""
+        return "" if n.name and same_text(holds, n.name) else holds
+
+    def _missed(self, op: str, ident: int, holds: str, tried: list[str], partly: bool, readable: bool) -> Refused:
+        """Why a write took on no rung, with what to do next: never the same write again."""
+        what = self.describe(ident)
+        n = self.node(ident)
+        if not readable:
+            return Refused(f"[failed] {op} {what}: tried {'; then '.join(tried)}; none got to the field. Nothing was "
+                           f"written: look again (another control may have to be pressed first), or ask_person and "
+                           f"say what the window shows")
+        shown = (f"only its own name {quote(clip(holds, 60))}, as an empty field shows its placeholder"
+                 if n.name and same_text(holds, n.name) else quote(clip(holds, 200)))
+        if partly:
+            return Refused(f"[failed] {op} {what}: after {tried[-1]} it holds {shown}, which is not the text given; "
+                           f"nothing more was put in, so nothing goes in twice. Set the field to the whole text to "
+                           f"correct it")
+        return Refused(f"[failed] {op} {what}: tried {'; then '.join(tried)}; after them it holds {shown}. Nothing "
+                       f"was written, and set, type or paste again will not take either: look again (another control "
+                       f"may have to be pressed first, such as a new chat or an edit button, or the text goes in "
+                       f"another field), or ask_person and say what the window shows")
 
     def type(self, ident: int | None, text: str) -> str:
-        """Type `text` at the caret of `ident` (focused first), or where the focus is: into an edit control
-        through its own messages, else real keystrokes, a line break as Enter. The field is read back. Never
+        """Type `text` at the caret of `ident`, up the ladder `climb` names: an edit control's own messages, then
+        the focus and real keys, then a real click and keys, then a click and a paste; a line break goes as
+        Shift+Enter. The field is read back after each rung. Without `ident`, real keys where the focus is. Never
         into a password field."""
         if ident is not None:
             ident = self.live(ident)
         n = self.node(ident) if ident is not None else None
         if n is not None and n.secret:
             raise Refused(f"[refused] {self.describe(ident)} is a password field: it is for the person to fill")
-        want = text.replace("\r\n", "\n")
-
-        def body() -> str:
-            if n is not None and n.hwnd and win32.edit_box(n.hwnd) and not win32.in_combo(n.hwnd):
-                win32.edit_replace(n.hwnd, want, whole=False)
-            else:
+        if n is None:
+            def at_focus() -> str:
                 self.forward()
-                if n is not None:
-                    n.el.SetFocus()
                 self._focused_ok(True)
                 self._type(text)
-            if n is not None and ({"value", "text"} & set(n.patterns)):
-                end = time.monotonic() + SETTLE_S
-                while want not in self._plain(ident) and time.monotonic() < end:
-                    time.sleep(POLL_S)
-                holds = self._plain(ident)
-                if want not in holds:
-                    raise Refused(f"[failed] type into {self.describe(ident)}: after typing, it holds "
-                                  f"{quote(clip(holds, 200))}, which does not have the text given")
-                return f" {quote(clip(text, 60))}, read back and it is there"
-            return f" {quote(clip(text, 60))}"
-        return self._act("type", ident, body, wait=0 if n is not None else SETTLE_S)
+                return f" {quote(clip(text, 60))}"
+            return self._act("type", None, at_focus)
+
+        def by_keys(click: bool, paste: bool, landed: Callable[[str], bool]) -> Callable[[], None]:
+            def act() -> None:
+                self._focus_on(n, click)
+                if paste:
+                    self._paste_keys(text, lambda: landed(self._plain(ident)))
+                else:
+                    self._type(text)
+            return act
+
+        def body() -> str:
+            read = self._reader(n, ident)
+            landed = self._inserted(text, read() if read else "")
+            rungs = [(BY_KEYS, by_keys(False, False, landed)), (BY_CLICK, by_keys(True, False, landed)),
+                     (BY_PASTE, by_keys(True, True, landed))]
+            if n.hwnd and win32.edit_box(n.hwnd) and not win32.in_combo(n.hwnd):
+                rungs.insert(0, (BY_MESSAGES, lambda: win32.edit_replace(n.hwnd, text, whole=False)))
+            rung, holds, tried = climb(rungs, read, landed, again=False)
+            if not rung:
+                raise self._missed("type into", ident, holds, tried, len(tried) < len(rungs), read is not None)
+            if read is None:
+                return f" {quote(clip(text, 60))}{HOW[rung]}; {UNREAD}"
+            return f" {quote(clip(text, 60))}{HOW[rung]}, read back and it is there" + _before(tried)
+        return self._act("type", ident, body, wait=0)
+
+    @staticmethod
+    def _inserted(text: str, was: str) -> Callable[[str], bool]:
+        """Whether a field holds `text` once more than it did before (`was`): text put in at the caret."""
+        want = plain_text(text)
+        return lambda holds: plain_text(holds).count(want) > plain_text(was).count(want)
 
     def paste(self, ident: int | None, text: str) -> str:
-        """Put `text` in at the caret of `ident` (focused first), or where the focus is, as Ctrl+V does: the
+        """Put `text` in at the caret of `ident` as Ctrl+V does, focused by UI Automation, else by a real click: the
         person's clipboard is kept, the text set there, Ctrl+V sent once the focus is checked, and their clipboard
-        put back once the field shows the text. Never into a password field."""
+        put back once the field shows the text. Without `ident`, where the focus is. Never into a password field."""
         if ident is not None:
             ident = self.live(ident)
         n = self.node(ident) if ident is not None else None
         if n is not None and n.secret:
             raise Refused(f"[refused] {self.describe(ident)} is a password field: it is for the person to fill")
         A = automation()
-        want = text.replace("\r\n", "\n")
+        want = plain_text(text)
 
-        def holds(el) -> str | None:
-            """What the field holds now, or None when it cannot say."""
-            if el.GetCurrentPropertyValue(A.AutomationElement.IsTextPatternAvailableProperty):
-                got = str(el.GetCurrentPattern(A.TextPattern.Pattern).DocumentRange.GetText(-1))
-            elif el.GetCurrentPropertyValue(A.AutomationElement.IsValuePatternAvailableProperty):
-                got = str(el.GetCurrentPropertyValue(A.ValuePattern.ValueProperty) or "")
-            else:
-                return None
-            return got.replace("\r\n", "\n").replace("\r", "\n")
-
-        def body() -> str:
+        def at_focus() -> str:
             self.forward()
-            if n is not None:
-                n.el.SetFocus()
             self._focused_ok(True)
             field = A.AutomationElement.FocusedElement
-            theirs = win32.clipboard_save()
-            try:
-                win32.clipboard_put(win32.clipboard_text(text))
-                win32.chord([win32.VK["Ctrl"], ord("V")])
-                # The program reads the clipboard when it handles the keys: theirs goes back once the text shows.
-                end = time.monotonic() + 2 * SETTLE_S
-                got = holds(field)
-                while got is not None and want not in got and time.monotonic() < end:
-                    time.sleep(POLL_S)
-                    got = holds(field)
-                if got is None:
-                    time.sleep(SETTLE_S)
-            finally:
-                win32.clipboard_put(theirs)
-            if got is None:
+            got: list[str | None] = [None]
+
+            def landed() -> bool:
+                got[0] = _held_by(field)
+                return got[0] is not None and want in plain_text(got[0])
+            self._paste_keys(text, landed)
+            if got[0] is None:
                 return f" {quote(clip(text, 60))} (through the clipboard, theirs put back)"
-            if want not in got:
-                raise Refused(f"[failed] paste into {self.describe(ident) if n else 'the focused field'}: after "
-                              f"pasting, it holds {quote(clip(got, 200))}, which does not have the text given")
+            if want not in plain_text(got[0]):
+                raise Refused(f"[failed] paste into the focused field: after pasting, it holds "
+                              f"{quote(clip(got[0], 200))}, which does not have the text given")
             return f" {quote(clip(text, 60))} (through the clipboard, theirs put back), read back and it is there"
-        return self._act("paste", ident, body, wait=0 if n is not None else SETTLE_S)
+        if n is None:
+            return self._act("paste", None, at_focus)
+
+        def by_paste(click: bool, landed: Callable[[str], bool]) -> Callable[[], None]:
+            def act() -> None:
+                self._focus_on(n, click)
+                self._paste_keys(text, lambda: landed(self._plain(ident)))
+            return act
+
+        def body() -> str:
+            read = self._reader(n, ident)
+            landed = self._inserted(text, read() if read else "")
+            rungs = [(BY_FOCUS_PASTE, by_paste(False, landed)), (BY_PASTE, by_paste(True, landed))]
+            rung, holds, tried = climb(rungs, read, landed, again=False)
+            if not rung:
+                raise self._missed("paste into", ident, holds, tried, len(tried) < len(rungs), read is not None)
+            if read is None:
+                return f" {quote(clip(text, 60))}{HOW[rung]}; {UNREAD}"
+            return f" {quote(clip(text, 60))}{HOW[rung]}, read back and it is there" + _before(tried)
+        return self._act("paste", ident, body, wait=0)
+
+    def _paste_keys(self, text: str, landed: Callable[[], bool]) -> None:
+        """Ctrl+V with `text` on the clipboard, the person's own put back once `landed()` (the program reads the
+        clipboard when it handles the keys), 2 * SETTLE_S at most."""
+        theirs = win32.clipboard_save()
+        try:
+            win32.clipboard_put(win32.clipboard_text(text))
+            win32.chord([win32.VK["Ctrl"], ord("V")])
+            end = time.monotonic() + 2 * SETTLE_S
+            while not landed() and time.monotonic() < end:
+                time.sleep(POLL_S)
+        finally:
+            win32.clipboard_put(theirs)
+
+    def _focus_on(self, n: Node, click: bool) -> None:
+        """The keyboard focus put in `n` with its window in front: by UI Automation, or with `click` by a real
+        click at its clickable point (a Chromium page's editable box takes no focus from UI Automation). Missed,
+        with why, unless the focus is then in `n`; refused where a password field has it."""
+        A = automation()
+        if click and n.role not in FIELDS:
+            # Clicked, any other control would be pressed, past the gate.
+            raise Missed(f"it is a {n.role}, not a text field, so it is not clicked into")
+        self.forward()
+        if click:
+            x, y = self._point(n)
+            win32.click_at(x, y)
+        else:
+            try:
+                n.el.SetFocus()
+            except Exception as e:
+                raise Missed(f"it takes no focus from UI Automation: {_why(e)}") from None
+        end = time.monotonic() + SETTLE_S
+        while not self._has_focus(n):
+            if time.monotonic() >= end:
+                f = A.AutomationElement.FocusedElement
+                where = "nothing" if f is None else (
+                    f"{ROLES.get(f.Current.ControlType.ProgrammaticName.split('.')[-1], 'custom')} "
+                    f"{quote(clip(norm(f.Current.Name), 40))}")
+                raise Missed(f"the focus went to {where}, not to it")
+            time.sleep(POLL_S)
+        self._focused_ok(True)
+
+    def _has_focus(self, n: Node) -> bool:
+        """Whether the keyboard focus is on `n` or inside it, or on the edit box `n` sits in (a Chromium editable
+        host round the element the look printed)."""
+        A = automation()
+        f = A.AutomationElement.FocusedElement
+        if f is None:
+            return False
+        walker = A.TreeWalker.RawViewWalker
+        el = f
+        for _up in range(8):
+            if el is None:
+                break
+            if A.Automation.Compare(el, n.el):
+                return True
+            el = walker.GetParent(el)
+        if not f.Current.ControlType.ProgrammaticName.endswith("Edit"):
+            return False
+        el = walker.GetParent(n.el)
+        for _up in range(4):
+            if el is None:
+                return False
+            if A.Automation.Compare(el, f):
+                return True
+            el = walker.GetParent(el)
+        return False
+
+    def _focus(self, n: Node) -> str:
+        """The focus put in `n` for a key: by UI Automation, else by a real click on it. Returns how it went in."""
+        missed = []
+        for click in (False, True):
+            try:
+                self._focus_on(n, click)
+                return " (after a click on it)" if click else ""
+            except Missed as e:
+                missed.append(str(e))
+        raise Refused(f"[failed] the focus would not go into {n.role} {quote(clip(n.name, 60))}: "
+                      f"{'; then, after a click on it, '.join(missed)}. Nothing was pressed or typed: look again (it "
+                      f"may be covered, or open only after another control is pressed), or ask_person")
 
     def _type(self, text: str) -> None:
         """Real keystrokes in short runs; between runs, a stop or a focus that moved ends the typing."""
@@ -1248,16 +1485,20 @@ class View:
                           f"nothing was clicked")
         return x, y
 
-    def key(self, keys: str) -> str:
-        """One keystroke with its modifiers, e.g. "Enter", "Ctrl+A", "Shift+Tab", "F2", "Ctrl+Shift+S"."""
+    def key(self, keys: str, ident: int | None = None) -> str:
+        """One keystroke with its modifiers, e.g. "Enter", "Ctrl+A", "Shift+Tab", "F2", "Ctrl+Shift+S": where the
+        focus is, or with `ident` in that control, the focus put there first (by a real click on it when it takes
+        none from UI Automation)."""
         vks = parse_key(keys)
+        n = self.node(ident) if ident is not None else None
 
         def body() -> str:
             self.forward()
+            how = self._focus(n) if n is not None else ""
             self._focused_ok(False)
             win32.chord(vks)
-            return f" {keys}"
-        return self._act("key", None, body)
+            return f" {keys}{how}"
+        return self._act("key", ident, body)
 
     def wait(self, seconds: float, until: str = "") -> str:
         """Wait for the program: until it shows the words `until`, or until anything in it changes, `seconds`

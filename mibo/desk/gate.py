@@ -2,7 +2,7 @@
 itself and what goes to the reviewer or the person.
 
 Reading, scrolling, moving the focus and typing into a document or a field are
-free. The floor asks the person on a card every time: deleting or throwing away
+free. The floor asks the person in the chat: deleting or throwing away
 work, buying, changing an account or access, changing a setting of the program,
 and opening a file (which starts its program). The browser gate's floor
 vocabularies (web/gate.py) decide those by a control's name; the rest are rules
@@ -16,7 +16,7 @@ say what it does (press), and any act that sends something out of the window.
 That last is one kind, "outward" (review.judged): the send, post, comment and
 like words, a button in a window where the task typed into a field (submit),
 and Enter or Ctrl+Enter in a one-line field are only readings of it, passed to
-the reviewer as a hint and naming the card, never deciding whether it goes. A
+the reviewer as a hint and naming the question, never deciding whether it goes. A
 name that says nothing is not taken as harmless: in a window where the task
 typed into a field, a button may send what was typed unless it only closes,
 goes back or opens another dialog; and a 整理 of the program's own menu goes to

@@ -1732,16 +1732,19 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
     # A turn's MCP tools come from the hub the tools panel made (mcp_offer.py).
     from . import mcp_offer
     mcp_offer.offer_source = app.state.mcp.offer
-    # Commands on this computer: their cards, Settings' section and the log (shell/panel.py).
+    # Commands on this computer: their questions, Settings' section and the log (shell/panel.py).
     from .shell import panel as shell_panel
     shell_panel.mount(app, workspace, body)
-    # The card that turns a switched-off ability on from the chat (turnon.py).
+    # The question that turns a switched-off ability on from the chat (turnon.py).
     from . import turnon
     turnon.mount(app, workspace, body)
+    # The person's typed yes to a step waiting in the chat, for every place that asks (cardwait.py).
+    from . import cardwait
+    cardwait.mount(app, workspace, body)
     # Skills: Settings' section, adding and removing them (skills/panel.py).
     from .skills import panel as skills_panel
     skills_panel.mount(app, workspace, body)
-    # Other programs' windows, on Windows: their cards, Settings' section and the log (desk/panel.py).
+    # Other programs' windows, on Windows: their questions, Settings' section and the log (desk/panel.py).
     if os.name == "nt":
         from .desk import panel as desk_panel
         desk_panel.mount(app, workspace, body)

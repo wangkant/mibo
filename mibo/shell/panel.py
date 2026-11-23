@@ -2,25 +2,24 @@
 
 The character's turn runs in the service, which sends the command here
 (/api/shell/do) and waits. Here it is read and judged (read.py) against the
-grants (grants.py); a card waits at /api/shell/card for the person's press,
-which only the app's own page can give (the window's key when there is a
-window, and never a request from another device), never the service and never
-words typed in the chat. A card is raised only while the person's own chat
-turn is under way in the app, and waits for them there (cardwait.py); nothing
-runs for a turn nobody started, on a timer or in the background. The turn
-stopped in the chat ends a waiting card and the running command's whole
-process tree.
+grants (grants.py); a step that needs the person's yes is said in the chat in
+the app's own words (cardwait.py) and waits for their typed yes, which only
+the app's own page can pass on (/api/confirm, the window's key), never the
+service and never the model's words. A question is asked only while the
+person's own chat turn is under way in the app; nothing runs for a turn
+nobody started, on a timer or in the background. The turn stopped in the chat
+ends a waiting question and the running command's whole process tree.
 
 The person's mode for commands (acting.py) is read at every step: read only
 runs nothing that changes or starts anything; automatic review lets changes to
-files inside folders that may be changed go without a card, as the turn's
+files inside folders that may be changed go without a question, as the turn's
 checkpoint can put them back, and puts a program run, a step outside the
-granted folders or a request that only fetches to the reviewer (review.py) before any card; the log row and the
-card carry the reviewer's decision and reason. A card about a program run in a granted folder offers
-本次对话内允许 and 对此程序在此文件夹始终允许 (a rule in shell.json that
-Settings lists and takes back), one about places outside 本次对话内允许 and 始终允许 for the folders that hold
-them (granted as Settings grants), one about edits 本次对话内允许; a delete, sending
-or an install is asked each time, as OpenCode's and Codex's approvals.
+granted folders or a request that only fetches to the reviewer (review.py)
+before any question; the log row carries the reviewer's decision and reason.
+One yes reaches the rest of the turn for steps of its kind of risk and every
+ordinary step (cardwait.reaches): a delete after a yes to a program run is
+asked again. A folder outside the grants is asked for in the chat too, granted
+to read when the step only reads and to change when it changes.
 """
 from __future__ import annotations
 
@@ -37,7 +36,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ..cardwait import Card
-from . import checkpoint, files, words
+from . import checkpoint, files, office, words
 from . import read as reading
 from . import run as running
 from .grants import NEVER, Grants, known_folders, norm, under
@@ -50,9 +49,10 @@ LOG_OUT = 1500
 FIND_MOST = 20000
 # Seconds the reading /api/shell/read made stays good for the /api/shell/do that follows it.
 READ_KEPT_S = 5.0
-# How a step that asked went ahead after a press on its card (without one: "auto_edit", "rule", "this_chat", "").
-PRESSED = ("once", "chat", "always")
-# In a turn's declined steps: a no the person gave on a card of another program this turn.
+# How a step that asked went ahead on the person's yes typed under it (without one: "auto_edit", "rule", "review",
+# "carried" for a yes earlier in the turn, "").
+PRESSED = ("said",)
+# In a turn's declined steps: a no the person gave to a step in another program this turn.
 ELSEWHERE = ("elsewhere",)
 # The reasons a command asks that the reviewer may pass in automatic review.
 REVIEWED = ("program", "outside", "move_out")
@@ -70,8 +70,6 @@ def _fetch(act) -> bool:
     return (act.kind, act.what) == ("network", "net") and not act.sends and act.host not in ("", "?")
 
 
-# Folders an always-allow on one card may grant at most (a step through links on the Desktop reached five).
-ALWAYS_FOLDERS = 5
 # The step log's line for a step the read-only mode held.
 READ_MODE ={"zh": "当前为只读模式，未进行任何更改", "en": "Read only: nothing was changed"}
 
@@ -81,7 +79,7 @@ def _error(code: str, status: int = 400) -> JSONResponse:
 
 
 class Shell:
-    """One command at a time: the grants, the card waiting for the person, the command running."""
+    """One command at a time: the grants, the question waiting for the person, the command running."""
 
     def __init__(self, app, workspace):
         self.app, self.workspace = app, workspace
@@ -97,29 +95,18 @@ class Shell:
         self.running: dict | None = None
         # (command, folder, when, reading) of the last /api/shell/read, which the /api/shell/do after it takes.
         self.kept_read: tuple | None = None
-        # What 本次对话内允许 covers, per conversation: scope keys (_scope); gone when the app ends.
-        self.session: dict[str, set[str]] = {}
-        # What they said no to on a card, per turn: the same step (a write or an edit with the same text) or folder
-        # asked for again in that turn is refused with no second card; every other step of the turn goes on, and
-        # none passes without a card but by what the person allowed themselves.
+        # What they said no to, per turn: the same step (a write or an edit with the same text) or folder asked for
+        # again in that turn is refused with no second question; every other step of the turn goes on, and none
+        # passes without a question but by what the person allowed themselves.
         self.said_no: dict[str, set[tuple]] = {}
 
     def turn_on(self, conversation: str) -> bool:
         return self.cards.turn_on(conversation)
 
-    async def ask(self, card: dict, conversation: str) -> bool | str | None:
-        """Shows `card` and waits: True or False as pressed ("read", "other", "chat" or "always" for those
-        buttons), None when nobody answered or the turn ended."""
-        return await self.cards.ask(card, conversation, {lang: card[lang]["title"] for lang in ("zh", "en")})
-
-    def press(self, ident: str, answer: str) -> bool:
-        """The person's press on the card up now: once, chat (本次对话内允许), always (对此程序在此文件夹始终允许),
-        read (a folder to read only), other (another way) or no."""
-        value = {"once": True, "no": False}.get(answer, answer)
-        card = self.cards.card
-        if value in ("chat", "always") and answer not in ((card or {}).get("choices") or []):
-            value = True
-        return self.cards.press(ident, value)
+    async def ask(self, card: dict, conversation: str, risk: str = "act") -> bool | None:
+        """Says `card` in the chat and waits: True on the person's typed yes (or a yes earlier in the turn that
+        reaches `risk`), False on any other message, None when nobody answered or the turn ended."""
+        return await self.cards.ask(card, conversation, {lang: card[lang]["title"] for lang in ("zh", "en")}, risk=risk)
 
     def mode(self) -> str:
         """The person's one acting mode (acting.py): off, read or auto (automatic review)."""
@@ -127,11 +114,11 @@ class Shell:
         return Modes(self.desktop).mode()
 
     def _scope(self, read_: reading.Reading, verdict: reading.Verdict, cwd: str) -> dict | None:
-        """What a wider press on this card could cover: {"key": "edit"} for changes to files inside folders that
+        """What may pass this step without a question: {"key": "edit"} for changes to files inside folders that
         may be changed, which auto-edit lets through when each can be put back; or one program run in the granted
-        folder it runs in, with arguments that stay inside it ({"key", "program", "shown", "root"}). None for a
-        card about anything else (a delete, the network, an install, a place outside, what cannot be told), which
-        asks each time, as no mode loosens those."""
+        folder it runs in, with arguments that stay inside it ({"key", "program", "shown", "root"}), which an
+        always-allow rule kept from before may cover. None for anything else (a delete, the network, an install, a
+        place outside, what cannot be told)."""
         runs = [a for a in read_.acts if a.args is not None and a.paths]
         exes = {norm(a.paths[0]) for a in runs}
         reasons = [a for a in verdict.reasons if not (a.kind == "outside" and a.paths and norm(a.paths[0]) in exes)]
@@ -143,15 +130,6 @@ class Shell:
             if all(any(under(norm(p), r) for r in writable) for p in paths):
                 return {"key": "edit", "paths": paths}
             return None
-        if all(a.kind == "outside" and a.paths for a in reasons):
-            # Places outside the granted folders (a link's target too): this conversation, or the folders that hold
-            # them granted for good, as Settings grants them (read only when the step only reads).
-            folders = list(dict.fromkeys(reading.folder_for(os.path.realpath(p)) for a in reasons for p in a.paths))
-            if "" in folders or len(folders) > ALWAYS_FOLDERS or any(
-                    self.grants.places.grantable(norm(f)) for f in folders):
-                return None
-            return {"key": "outside:" + "|".join(sorted(norm(f) for f in folders)), "folders": folders,
-                    "write": any(a.write for a in reasons)}
         root = self.grants.root_of(norm(cwd))
         if not root or len(exes) != 1 or len(runs) != len([a for a in read_.acts if a.kind == "program"]) or \
                 any(a.kind != "program" or a.args is None for a in reasons):
@@ -167,17 +145,15 @@ class Shell:
         exe = exes.pop()
         return {"key": f"program:{exe}@{root}", "program": exe, "shown": words.program_name(runs[0]), "root": root}
 
-    def _passed(self, scope: dict | None, mode: str, conversation: str) -> str:
-        """How a card is skipped: "auto_edit" (the mode, for changes each turn's checkpoint can put back),
-        "rule" (the person's always-allow), "this_chat" (their 本次对话内允许 earlier); "" when it is shown."""
+    def _passed(self, scope: dict | None, mode: str) -> str:
+        """How a question is skipped: "auto_edit" (the mode, for changes each turn's checkpoint can put back),
+        "rule" (an always-allow the person gave this program in this folder); "" when it is asked."""
         if scope is None:
             return ""
         if scope["key"] == "edit" and mode == "auto" and all(
                 not os.path.isfile(p) or os.path.getsize(p) <= checkpoint.KEEP_MAX for p in scope["paths"]):
             return "auto_edit"
-        if scope.get("program") and self.grants.allowed(scope["program"], scope["root"]):
-            return "rule"
-        return "this_chat" if scope["key"] in self.session.get(conversation, set()) else ""
+        return "rule" if scope.get("program") and self.grants.allowed(scope["program"], scope["root"]) else ""
 
     def cwd_for(self, folder: str) -> tuple[str, str]:
         """(folder to run in, a folder to ask for first): the named folder, else the first granted one, else the
@@ -219,20 +195,15 @@ class Shell:
         return None
 
     def folder_card(self, folder: str, write: bool, turn_on: bool) -> dict:
-        """The card granting `folder` (read only too, unless the step must change something there); with
-        `turn_on`, the same press turns commands and files on. No folder: it only turns them on."""
-        card = {"type": "folder" if folder else "turn_on", "folder": folder, "turn_on": turn_on,
-                "choices": ["write"] if write or not folder else ["read", "write"],
-                **{lang: words.folder_card(folder, lang, not write, turn_on) for lang in ("zh", "en")}}
-        if not folder:
-            # Drawn as turnon.py's card is, with its words for the buttons and what was decided.
-            card["zh"].update(yes="开启", no="暂不开启", on="已开启", off="未开启")
-            card["en"].update(yes="Turn on", no="Not now", on="Turned on", off="Left off")
-        return card
+        """The question granting `folder`, to read only when the step only reads and to change when it must change
+        something there; with `turn_on`, the same yes turns commands and files on. No folder: it only turns them
+        on."""
+        return {"type": "folder" if folder else "turn_on", "folder": folder, "turn_on": turn_on, "write": write,
+                **{lang: words.folder_card(folder, lang, write, turn_on) for lang in ("zh", "en")}}
 
     async def enable(self, folder: str, conversation: str) -> dict:
-        """turn_on for commands and files (turnon.py): one card turns them on and grants the folder their message
-        names, read only or to sort in, as WorkBuddy and Cowork ask for the working folder at the start."""
+        """turn_on for commands and files (turnon.py): one question turns them on and grants the folder their
+        message names to read, as WorkBuddy and Cowork ask for the working folder at the start."""
         if not self.turn_on(conversation):
             return {"status": "unanswered"}
         place = self.cwd_for(folder)[1] if folder else ""
@@ -246,9 +217,9 @@ class Shell:
             from ..acting import Modes
             Modes(self.desktop).set("auto")
             self.grants.log({"granted": place, "outcome": "turned_on"})
-        if place and not self.grants.add(place, read_only=answer == "read"):
+        if place and not self.grants.add(place, read_only=True):
             self.last = place
-        return {"status": "on", "folder": place, "read_only": answer == "read"}
+        return {"status": "on", "folder": place, "read_only": bool(place)}
 
     def take_read(self, command: str, cwd: str) -> reading.Reading | None:
         """The reading /api/shell/read made of this command in this folder a moment ago, taken once."""
@@ -259,7 +230,7 @@ class Shell:
 
     async def judged(self, command: str, conversation: str, folder: str, card: dict | None = None,
                      job: dict | None = None, turn: str = "") -> tuple:
-        """Reads and judges `command` in `folder`, asks for a folder and for the press a card needs: (outcome,
+        """Reads and judges `command` in `folder`, asks for a folder and for the yes a step needs: (outcome,
         context), the outcome None when it may run now. A file tool's `job` is judged by its own acts (files.acts),
         `command` being its call; `card` gives its own title and lines."""
         cwd, ask_first = self.cwd_for(folder)
@@ -289,8 +260,8 @@ class Shell:
             inside = [f for f in self.grants.folders()
                       if under(norm(f), norm(folder_to_grant)) and norm(f) != norm(folder_to_grant)]
             if inside:
-                # A badly built path in the folder above one they granted: never a card for it, the model is
-                # told which folder to use.
+                # A badly built path in the folder above one they granted: never a question for it, the model
+                # is told which folder to use.
                 self.log(command, cwd, read_, None, "use_granted")
                 return {"status": "use_granted", "folder": folder_to_grant, "folders": inside}, {}
             if norm(folder_to_grant) in asked_for:
@@ -304,7 +275,7 @@ class Shell:
                     no.add(("folder", norm(folder_to_grant)))
                 self.log(command, cwd, read_, None, "folder_declined" if answer is False else "folder_unanswered")
                 return {"status": "folder_declined" if answer is False else "unanswered", "folder": folder_to_grant}, {}
-            why = self.grants.add(folder_to_grant, read_only=answer == "read")
+            why = self.grants.add(folder_to_grant, read_only=not write)
             if why:
                 return {"status": "bad_folder", "why": why}, {}
             self.grants.log({"granted": folder_to_grant, "outcome": "granted"})
@@ -330,7 +301,7 @@ class Shell:
                     "why": {lang: words.refused(verdict, lang) for lang in ("zh", "en")},
                     "reasons": [a.why for a in verdict.reasons][:6]}, context
         if mode == "read" and any(a.kind != "read" or a.write for a in read_.acts):
-            # Read only: it reads files in the granted folders and nothing else, with no card to ask.
+            # Read only: it reads files in the granted folders and nothing else, with no question to ask.
             self.log(command, cwd, read_, verdict, "read_mode", said=asked_said)
             return {"status": "read_mode", "shown": READ_MODE}, context
         if self.grants.root_of(norm(cwd)):
@@ -342,9 +313,9 @@ class Shell:
             return {"status": "declined", "again": True, "said": asked_said,
                     "asked": {lang: [asked_said[lang]] for lang in ("zh", "en")}}, context
         scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" else None
-        context["how"] = self._passed(scope, mode, conversation)
+        context["how"] = self._passed(scope, mode)
         if no and context["how"] == "auto_edit":
-            # After a no in this turn, only what the person allowed themselves (始终允许, 本次对话内允许) skips a card.
+            # After a no in this turn, only what the person allowed themselves (an always-allow rule) skips a question.
             context["how"] = ""
         passed = None
         if verdict.action == "ask" and not context["how"] and mode == "auto" and not no and all(
@@ -357,7 +328,7 @@ class Shell:
                 "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6],
                 "only_reads": all(a.kind == "read" and not a.write for a in read_.acts)},
                 ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"))
-            # The reviewer's decision and reason go with the log row, so a card that came can be read from it.
+            # The reviewer's decision and reason go with the log row, so a question that came can be read from it.
             context["review"] = {"decision": passed.decision, "by": passed.by, "reason": passed.reason}
             if passed.decision == "go":
                 context["how"] = "review"
@@ -367,11 +338,11 @@ class Shell:
                 return {"status": "refused", "said": asked_said, "why": {"zh": passed.reason, "en": passed.reason},
                         "reasons": [passed.reason], "declined": passed.declined()}, context
         if verdict.action == "ask" and not context["how"]:
-            # 本次 always; 本次对话内允许 for a program, for edits or for places outside; 始终允许 for a program in this
-            # folder or for the folders outside. Never for a delete, sending or an install, which are asked each time.
-            choices = ["once"] + (["chat"] if scope else []) + (
-                ["always"] if scope and (scope.get("program") or scope.get("folders")) else [])
-            asked = {"type": "command", "command": words.visible(command), "cwd": words.visible(cwd), "choices": choices,
+            # Said in the chat in the app's own reading of the step; a delete or a send is its own risk, which a yes
+            # to another kind of step earlier in the turn does not reach (cardwait.reaches).
+            risk = "delete" if verdict.deletes or any(a.kind == "delete" for a in verdict.reasons) else \
+                "send" if any(a.kind == "network" and a.sends for a in verdict.reasons) else "act"
+            asked = {"type": "command", "command": words.visible(command), "cwd": words.visible(cwd),
                      "where": {lang: words.folder_name(cwd, lang) for lang in ("zh", "en")},
                      **{lang: {"title": asked_said[lang],
                                # A file tool's difference says what an overwrite line would, only better.
@@ -382,16 +353,10 @@ class Shell:
             if (card or {}).get("diff"):
                 # An edit's whole difference, with its indentation (activity.js draws it).
                 asked["diff"] = card["diff"]
-            if any(a.kind == "unknown" for a in verdict.reasons):
-                # What it does cannot be told first: the person may ask for another way instead of reading it.
-                asked["other_way"] = True
             if passed is not None:
                 # Why the reviewer did not pass it, in one line (chat.js draws it under the title).
                 for lang in ("zh", "en"):
                     asked[lang]["review"] = passed.line(lang)
-            if scope and scope.get("folders"):
-                for lang in ("zh", "en"):
-                    asked[lang].update(words.always_folders(scope["folders"], scope["write"], lang))
             # A command that names a file in a skill's folder says which skill it comes from (skills/store.py).
             from ..skills.store import FROM_SKILL, skill_in
             skill = await asyncio.to_thread(skill_in, command, self.home)
@@ -400,14 +365,14 @@ class Shell:
                 for lang in ("zh", "en"):
                     asked[lang]["lines"].insert(0, FROM_SKILL[lang].format(name=skill))
             lines = {lang: asked[lang]["lines"] for lang in ("zh", "en")}
-            yes = await self.ask(asked, conversation)
-            if yes not in (True, "chat", "always"):
+            yes = await self.ask(asked, conversation, risk)
+            if not yes:
                 if yes is False:
                     no.add(step)
-                status = {False: "declined", None: "unanswered", "other": "other_way"}[yes]
+                status = "declined" if yes is False else "unanswered"
                 self.log(command, cwd, read_, verdict, status, said=asked_said, review=context.get("review"))
                 return {"status": status, "said": asked_said, "asked": lines}, context
-            # What the card showed must still be what runs.
+            # What was said in the chat must still be what runs.
             again = await asyncio.to_thread(lambda: reading.judge(read_now(), self.grants))
             if again.action != "ask" or (
                     sorted(d["path"] for d in again.deletes) != sorted(d["path"] for d in verdict.deletes)
@@ -415,16 +380,7 @@ class Shell:
                     or sorted(again.overwrites) != sorted(verdict.overwrites)):
                 self.log(command, cwd, read_, again, "changed", said=asked_said)
                 return {"status": "changed", "said": asked_said}, context
-            if yes == "chat":
-                self.session.setdefault(conversation, set()).add(scope["key"])
-            elif yes == "always" and scope.get("folders"):
-                for place in scope["folders"]:
-                    self.grants.add(place, read_only=not scope["write"])
-                    self.grants.log({"granted": place, "outcome": "granted_on_card"})
-            elif yes == "always":
-                self.grants.allow(scope["program"], scope["shown"], scope["root"])
-                self.grants.log({"granted": scope["shown"], "outcome": "rule_added", "folder": scope["root"]})
-            context["how"] = "once" if yes is True else yes
+            context["how"] = self.cards.how
         return None, context
 
     async def do(self, command: str, conversation: str, folder: str, limit_s: float, turn: str,
@@ -498,8 +454,8 @@ class Shell:
 
     async def file(self, op: str, args: dict, conversation: str, folder: str, turn: str,
                    said_no: bool = False) -> dict:
-        """One file tool: made ready and checked here, judged by its paths (files.acts: the same folder card, card
-        and refusal as a command doing it), then done in Python (files.py)."""
+        """One file tool: made ready and checked here, judged by its paths (files.acts: the same folder question,
+        question and refusal as a command doing it), then done in Python (files.py)."""
         not_now = self.ready(conversation)
         if not_now:
             return not_now
@@ -545,7 +501,7 @@ class Shell:
 
     def _prepare(self, op: str, args: dict, base: str) -> dict:
         """What a file tool will do, with absolute paths, checked before the gate: the error a model can fix
-        comes back at once, with no card."""
+        comes back at once, with no question."""
         def place(key: str, find: bool = True) -> str:
             return self._place(args.get(key) or "", base, find)
 
@@ -569,28 +525,41 @@ class Shell:
             return job
         if op in ("write", "edit"):
             path = place("path", op == "edit")
-            if op == "write":
-                text = str(args.get("content") if args.get("content") is not None else "")
-                if os.path.isdir(path):
-                    raise ValueError(f"{path} is a folder.")
-                before, encoding, data = files.read_for_change(path) if os.path.isfile(path) else ("", "utf-8", None)
-                after = text.replace("\r\n", "\n").replace("\n", "\r\n") if "\r\n" in before else text
+            name, ext = os.path.basename(path), os.path.splitext(path)[1].lower()
+            if os.path.isdir(path):
+                raise ValueError(f"{path} is a folder.")
+            if ext in office.OLD:
+                raise ValueError(f"{ext} is the {office.NAMES[office.OLD[ext]]} format from before 2007, which is not "
+                                 f"written here. Write {os.path.splitext(name)[0]}{office.OLD[ext]} instead: it opens "
+                                 "in the same program.")
+            if ext == ".pdf" and op == "write":
+                raise ValueError("write_file does not make PDFs. Make the document as a .docx instead; Word saves it "
+                                 "as a PDF (另存为 PDF) when they need one.")
+            if ext in office.KINDS:
+                job, before_lines, after_lines = self._document(op, path, ext, args)
             else:
-                before, encoding, data = files.read_for_change(path)
-                after = files.replaced(before, str(args.get("old_string") or ""), str(args.get("new_string") or ""),
-                                       bool(args.get("replace_all")))
-                if after == before:
-                    raise ValueError("old_string and new_string are the same: nothing would change.")
-            job = {"op": "write", "kind": op, "path": path, "folder": os.path.dirname(path), "bytes": files.encode(after, encoding),
-                   "before": data}
-            if data is not None:
-                name = os.path.basename(path)
+                if op == "write":
+                    text = str(args.get("content") if args.get("content") is not None else "")
+                    before, encoding, data = files.read_for_change(path) if os.path.isfile(path) else ("", "utf-8", None)
+                    after = text.replace("\r\n", "\n").replace("\n", "\r\n") if "\r\n" in before else text
+                else:
+                    before, encoding, data = files.read_for_change(path)
+                    after = files.replaced(before, str(args.get("old_string") or ""),
+                                           str(args.get("new_string") or ""), bool(args.get("replace_all")))
+                    if after == before:
+                        raise ValueError("old_string and new_string are the same: nothing would change.")
+                job = {"op": "write", "kind": op, "path": path, "folder": os.path.dirname(path),
+                       "bytes": files.encode(after, encoding), "before": data}
+                before_lines, after_lines = before.splitlines(), after.splitlines()
+            if job["before"] is not None:
                 job["card"] = {lang: {"title": (f"修改「{name}」的内容" if lang == "zh" else f"Change the text of “{name}”")
                                       if op == "edit" else (f"用新内容替换「{name}」" if lang == "zh"
                                                             else f"Replace “{name}” with new text"),
                                       "lines": []} for lang in ("zh", "en")}
-                job["card"]["diff"] = files.diff(before.splitlines(), after.splitlines(), name)
+                job["card"]["diff"] = files.diff(before_lines, after_lines, name)
                 job["said"] = {"zh": f"修改「{name}」", "en": f"Changed “{name}”"}
+            elif ext in office.KINDS:
+                job["said"] = {"zh": f"生成「{name}」", "en": f"Made “{name}”"}
             return job
         if op == "move":
             moves, copy = [], bool(args.get("copy"))
@@ -625,10 +594,33 @@ class Shell:
                     if len(paths) == 1 else {"zh": f" {len(paths)} 项", "en": f"{len(paths)} items"})
             return {"op": "delete", "paths": paths, "folder": os.path.dirname(paths[0]),
                     "said": {lang: words.file_doing("delete", {"paths": paths}, lang, done=True) for lang in ("zh", "en")},
-                    # The card says where they go; the gate's own lines below it say what is in them.
+                    # The question says where they go; the gate's own lines below it say what is in them.
                     "card": {"zh": {"title": f"将{what['zh']}移到回收站", "lines": []},
                              "en": {"title": f"Move {what['en']} to the Recycle Bin", "lines": []}}}
         raise ValueError(f"No file tool {op}.")
+
+    @staticmethod
+    def _document(op: str, path: str, ext: str, args: dict) -> tuple[dict, list[str], list[str]]:
+        """write_file or edit_file on a Word, Excel or PowerPoint file (office/): the document made from the model's
+        Markdown, or the one there changed by exact replacement inside it; with the two documents' text, from which
+        the question's difference is taken."""
+        name = os.path.basename(path)
+        data = files.document_for_change(path) if op == "edit" or os.path.isfile(path) else None
+        if op == "write":
+            text = str(args.get("content") or "")
+            if not text.strip():
+                raise ValueError(f"content is empty: give what {name} holds, written as Markdown.")
+            made = office.make(ext, text)
+        else:
+            old, new = str(args.get("old_string") or ""), str(args.get("new_string") or "")
+            if old == new:
+                raise ValueError("old_string and new_string are the same: nothing would change.")
+            made = office.replaced(ext, data, old, new, bool(args.get("replace_all")), name)
+        job = {"op": "write", "kind": op, "path": path, "folder": os.path.dirname(path), "bytes": made,
+               "before": data, "document": office.summary(ext, made)}
+        # A file there that is not a readable document is replaced whole; its question shows all of the new text.
+        before = (files.document_lines(path, data) if data is not None else None) or []
+        return job, before, files.document_lines(path, made) or []
 
     def _perform(self, job: dict) -> str:
         """Does a judged file tool's work; what came of it, for the model."""
@@ -656,9 +648,18 @@ class Shell:
             return f"Opened {job['path']} with its default program."
         if op == "write":
             os.makedirs(os.path.dirname(job["path"]), exist_ok=True)
-            with open(job["path"], "wb") as f:
-                f.write(job["bytes"])
-            return f"{'Changed' if job['before'] is not None else 'Made'} {job['path']} ({files.size(len(job['bytes']))})."
+            try:
+                with open(job["path"], "wb") as f:
+                    f.write(job["bytes"])
+            except PermissionError as e:
+                # Word, Excel and PowerPoint hold the file they have open.
+                raise OSError(e.errno, "the file is open in another program or is read-only; ask them to close it "
+                                       "there, then write it again", job["path"]) from e
+            done = f"{'Changed' if job['before'] is not None else 'Made'} {job['path']} ({files.size(len(job['bytes']))})"
+            if job.get("document"):
+                return (f"{done}: {job['document']}. The file is finished and saved; no program has to be opened to "
+                        "make it. open with show true shows it to them if they want to see it.")
+            return done + "."
         if op == "move":
             files.move(job["moves"], job["copy"])
             verb = "Copied" if job["copy"] else "Moved"
@@ -777,8 +778,8 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/shell/enable")
     async def shell_enable(request: Request):
-        """turn_on for commands and files from the character's turn (turnon.py): the one card that turns them on
-        and grants the folder named. Waits for the press."""
+        """turn_on for commands and files from the character's turn (turnon.py): the one question that turns them
+        on and grants the folder named. Waits for the person's yes."""
         payload = await body(request)
         conversation = payload.get("conversation")
         if not isinstance(conversation, str):
@@ -787,7 +788,7 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/shell/do")
     async def shell_do(request: Request):
-        """One command from the character's turn: judged, asked about, run, refused. Waits for the card."""
+        """One command from the character's turn: judged, asked about, run, refused. Waits for the person's yes."""
         payload = await body(request)
         command, conversation, turn = payload.get("command"), payload.get("conversation"), payload.get("turn")
         if not isinstance(command, str) or not command.strip() or not isinstance(conversation, str) or                 not isinstance(turn, str) or not TURN.fullmatch(turn):
@@ -800,7 +801,7 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/shell/file")
     async def shell_file(request: Request):
         """One file tool from the character's turn (read, list, search, write, edit, open, move, delete), through
-        the same gate as a command. Waits for the card."""
+        the same gate as a command. Waits for the person's yes."""
         payload = await body(request)
         op, args, conversation, turn = payload.get("op"), payload.get("args"), payload.get("conversation"), payload.get("turn")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(conversation, str) or                 not isinstance(turn, str) or not TURN.fullmatch(turn):
@@ -865,21 +866,5 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/shell/card")
     async def shell_card():
-        """The card waiting for the person, if any."""
+        """The step waiting in the chat for the person's yes, if any (chat.js draws it; /api/confirm answers it)."""
         return {"card": shell().cards.card}
-
-    @app.post("/api/shell/card")
-    async def shell_press(request: Request):
-        """The person's press: from the app's own page on this computer alone, never from the service."""
-        window = getattr(app.state, "window", None)
-        if window is not None and not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
-            return _error("local_only", 403)
-        payload = await body(request)
-        ident, yes = payload.get("id"), payload.get("yes")
-        if not isinstance(ident, str) or not isinstance(yes, bool):
-            return _error("generic")
-        # A folder granted read only {read: true}; a command to be done another way {other: true}; a wider yes
-        # {scope: "chat" | "always"}, kept only where the card offered it.
-        scope = payload.get("scope") if payload.get("scope") in ("chat", "always") else "once"
-        answer = ("read" if payload.get("read") is True else scope) if yes else ("other" if payload.get("other") is True else "no")
-        return {"ok": shell().press(ident, answer)}

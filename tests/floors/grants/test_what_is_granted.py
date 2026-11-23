@@ -33,8 +33,7 @@ def places(app, tmp_path):
 def test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written(app, turn, places, where):
     target = places[where] / "plan.txt"
     done = turn(ASKED, call("write_file", path=str(target), content="buy milk"), say("I left it."), cards="no")
-    assert [(c["kind"], c["card"]["type"], c["card"]["choices"]) for c in done.cards] == \
-        [("shell", "folder", ["write"])]
+    assert [(c["kind"], c["card"]["type"], c["card"]["write"]) for c in done.cards] == [("shell", "folder", True)]
     assert not target.exists()
 
 
@@ -44,7 +43,7 @@ def test_the_acting_mode_holds_off_waits_for_the_person_and_read_only_changes_no
     modes.set(mode)
     target = places["granted"] / "plan.txt"
     done = turn(ASKED, call("write_file", path=str(target), content="buy milk"), say("I left it."), cards="no")
-    # Off: only the card that would turn acting on, answered no; read only: no card at all.
+    # Off: only the question that would turn acting on, answered no; read only: no question at all.
     assert [c["card"].get("type") for c in done.cards] == (["turn_on"] if mode == "off" else [])
     assert not target.exists()
     assert json.loads(modes.path.read_text(encoding="utf-8")) == {"mode": mode}

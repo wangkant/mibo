@@ -12,6 +12,7 @@ from __future__ import annotations
 import codecs
 import difflib
 import fnmatch
+import io
 import mimetypes
 import os
 import re
@@ -21,6 +22,7 @@ import zipfile
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
+from . import office
 from .grants import norm
 from .read import EXE_NEVER, EXE_OPEN, INSTALLERS, OPEN_RISKY, VERBED, Act, Sorter, _base, _copy_overwrites, _local_host
 
@@ -199,6 +201,15 @@ def kind_of(path: str) -> str:
 
 # ---------------------------------------------------------------- documents a person has
 
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+# The main part of each kind of Office package, by which a copy kept under another name is known too.
+_MAIN_PARTS = {"word/document.xml": ".docx", "xl/workbook.xml": ".xlsx", "ppt/presentation.xml": ".pptx"}
+# What a tab and a line break in a Word paragraph read as.
+_BREAKS = {_W + "tab": "\t", _W + "br": "\n", _W + "cr": "\n"}
+# Pages of a PDF read at most.
+PDF_PAGES = 300
+
+
 def _xml_text(data: bytes, tag: str, para: str) -> list[str]:
     """Paragraphs of an Office XML part: the text of each `para` element, its `tag` runs joined."""
     root = ElementTree.fromstring(data)
@@ -208,6 +219,31 @@ def _xml_text(data: bytes, tag: str, para: str) -> list[str]:
             words = "".join(t.text or "" for t in p.iter() if t.tag.endswith("}" + tag))
             if words.strip():
                 rows.append(words)
+    return rows
+
+
+def _word(part: bytes) -> list[str]:
+    """A Word part's paragraphs in reading order, each table row as one line of its cells: | a | b |."""
+    root = ElementTree.fromstring(part)
+    rows = []
+
+    def walk(parent) -> None:
+        for child in parent:
+            if child.tag == _W + "p":
+                # Tabs as tabs and a line break as a new line, as edit_file reads the paragraph.
+                words = "".join(node.text or "" if node.tag == _W + "t" else _BREAKS.get(node.tag, "")
+                                for run in child.iter(_W + "r") for node in run)
+                rows.extend(line for line in words.split("\n") if line.strip())
+            elif child.tag == _W + "tbl":
+                for tr in child.iter(_W + "tr"):
+                    cells = [" ".join("".join(t.text or "" for t in p.iter(_W + "t")) for p in tc.iter(_W + "p")).strip()
+                             for tc in tr if tc.tag == _W + "tc"]
+                    if any(cells):
+                        rows.append("| " + " | ".join(cells) + " |")
+            elif child.tag in (_W + "body", _W + "sdt", _W + "sdtContent", _W + "customXml"):
+                walk(child)
+
+    walk(root)
     return rows
 
 
@@ -235,27 +271,66 @@ def _xlsx(z: zipfile.ZipFile) -> list[str]:
     return rows
 
 
-def document_lines(path: str) -> list[str] | None:
-    """The text of a .docx, .xlsx or .pptx (they are zip files of XML, read with what Python ships); None for
-    other kinds or a file that is not what its name says."""
+def document_lines(path: str, data: bytes | None = None) -> list[str] | None:
+    """The text of a Word, Excel or PowerPoint document (they are zip files of XML, read with what Python ships),
+    from the file at `path` or from its bytes; None for anything else. The kind is told by what the package holds
+    when the name does not say it, so a copy kept under another name (checkpoint.py) reads as the document it is."""
     ext = os.path.splitext(path)[1].lower()
-    if ext not in (".docx", ".xlsx", ".pptx"):
-        return None
     try:
-        with zipfile.ZipFile(path) as z:
-            if ext == ".docx":
-                return _xml_text(z.read("word/document.xml"), "t", "p")
-            if ext == ".xlsx":
+        if data is None:
+            with open(path, "rb") as f:
+                if f.read(4) != b"PK\x03\x04":
+                    return None
+        with zipfile.ZipFile(io.BytesIO(data) if data is not None else path) as z:
+            names = set(z.namelist())
+            kind = ext if ext in office.KINDS else next((k for part, k in _MAIN_PARTS.items() if part in names), "")
+            if kind == ".docx":
+                rows = _word(z.read("word/document.xml"))
+                # Headers and footers after the body, as edit_file reaches them too; a page number alone is left out.
+                for name in sorted(n for n in names if re.match(r"word/(header|footer)\d*\.xml$", n)):
+                    words = [line for line in _word(z.read(name)) if not line.strip().isdigit()]
+                    if words:
+                        rows += [f"[{'header' if 'header' in name else 'footer'}]", *words]
+                return rows
+            if kind == ".xlsx":
                 return _xlsx(z)
-            slides = sorted((n for n in z.namelist() if re.match(r"ppt/slides/slide\d+\.xml$", n)),
+            if kind != ".pptx":
+                return None
+            slides = sorted((n for n in names if re.match(r"ppt/slides/slide\d+\.xml$", n)),
                             key=lambda n: int(re.findall(r"\d+", n)[0]))
             rows = []
             for n, name in enumerate(slides, 1):
                 rows.append(f"[slide {n}]")
                 rows += _xml_text(z.read(name), "t", "p")
             return rows
-    except (zipfile.BadZipFile, KeyError, ElementTree.ParseError, ValueError):
+    except (OSError, zipfile.BadZipFile, KeyError, ElementTree.ParseError, ValueError):
         return None
+
+
+def pdf_lines(path: str) -> list[str] | str:
+    """A PDF's text page by page, each page under a [page n] line; or a sentence for the model when there is none
+    to give (pages that are pictures, a password, a damaged file)."""
+    from pypdf import PdfReader
+    from pypdf.errors import PyPdfError
+    name = os.path.basename(path)
+    try:
+        reader = PdfReader(path)
+        if reader.is_encrypted and not reader.decrypt(""):
+            return f"{name} is protected with a password, so its text cannot be read."
+        rows, pages, empty = [], len(reader.pages), 0
+        for n, page in enumerate(reader.pages[:PDF_PAGES], 1):
+            lines = [line.rstrip() for line in (page.extract_text() or "").splitlines() if line.strip()]
+            empty += not lines
+            rows += [f"[page {n}]", *lines]
+    except (PyPdfError, ValueError, KeyError, TypeError) as e:
+        return f"{name} could not be read as a PDF ({type(e).__name__}): the file may be damaged."
+    if empty == min(pages, PDF_PAGES):
+        return (f"{name} is a PDF of {pages} page{'s' if pages != 1 else ''} with no text in it: its pages are "
+                "pictures (a scan or photos), so their words cannot be read here. open with show true opens it for "
+                "them in their PDF reader.")
+    if pages > PDF_PAGES:
+        rows.append(f"[{pages - PDF_PAGES} more pages not read]")
+    return rows
 
 
 # ---------------------------------------------------------------- read, list, search
@@ -268,12 +343,14 @@ def read(path: str, offset: int = 1, limit: int = READ_LINES) -> str:
     if not os.path.isfile(path):
         return f"There is no file {path}. List the folder with list_files to see what is there."
     stat = os.stat(path)
-    lines = document_lines(path)
+    pdf = os.path.splitext(path)[1].lower() == ".pdf"
+    lines = pdf_lines(path) if pdf else document_lines(path)
+    if isinstance(lines, str):
+        return lines
     how = ""
-    if lines is None:
-        if os.path.splitext(path)[1].lower() == ".pdf":
-            return (f"{os.path.basename(path)} is a PDF of {size(stat.st_size)}. Its text cannot be read with what "
-                    "this app has; open with show true opens it for them in their PDF reader.")
+    if pdf:
+        how = f", text of the PDF, {sum(line.startswith('[page ') for line in lines)} pages read"
+    elif lines is None:
         with open(path, "rb") as f:
             data = f.read(TEXT_MAX + 1)
         text = decode(data[:TEXT_MAX])
@@ -437,6 +514,16 @@ def read_for_change(path: str) -> tuple[str, str, bytes]:
         raise ValueError(f"{os.path.basename(path)} is not a plain text file ({kind_of(path)}), so it cannot be "
                          "edited as text.")
     return decoded[0], decoded[1], data
+
+
+def document_for_change(path: str) -> bytes:
+    """The bytes of a Word, Excel or PowerPoint file about to be changed; ValueError says why not."""
+    if not os.path.isfile(path):
+        raise ValueError(f"There is no file {path}; write_file makes a new one.")
+    if os.path.getsize(path) > TEXT_MAX:
+        raise ValueError(f"{path} is larger than 10 MB, too large to change this way.")
+    with open(path, "rb") as f:
+        return f.read()
 
 
 def replaced(text: str, old: str, new: str, every: bool) -> str:
