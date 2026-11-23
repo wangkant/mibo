@@ -1,5 +1,5 @@
 """A card pressed with the real pointer where the chat lies over the page (a narrow window), in the real app window:
-the press answers the card and never pauses the run (browser.on_page), and the site gets the message. For the
+the press answers the card and never pauses the run (paneop.on_page), and the site gets the message. For the
 sandbox runner only (tools/sandbox/pane.py): it moves the machine's own pointer, which a desk in use must not.
 
     python tools/panecard.py <scratch home> --out <folder> [--site-port 59411] [--model-port 59410]

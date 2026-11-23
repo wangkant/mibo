@@ -310,7 +310,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
             import webbrowser
             threading.Thread(target=webbrowser.open, args=(address,), name="mibo-link", daemon=True).start()
 
-    # The app's own browser pane (browser.Pane) and what it reads (browser.Reader).
+    # The app's own browser pane (browser.Pane) and what it reads (signedread.Reader).
 
     @property
     def pane(self):
@@ -341,7 +341,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         return True
 
     def browse_read(self, url: str, start: int = 0) -> dict:
-        """One address read with the person's session, out of sight (browser.Reader), from character `start`."""
+        """One address read with the person's session, out of sight (signedread.Reader), from character `start`."""
         if self._reader is None or not browsed.shared(self.storage.parent):
             return {"error": "off"}
         return self._reader.read(url, runtime=self.storage.parent.parent, start=start)
@@ -369,15 +369,15 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
     def _make_pane(self) -> None:
         """The browser pane in the app window, the reader that reads with its session, and the feeds it reads.
         Without it, as without the tray, links go to the system browser."""
-        from .. import browser
+        from .. import browser, signedread
         desktop = self.storage.parent
         self._browser = browser.Pane(
             desktop / "browser", self._window.native, ui=self._on_ui, find=self.find,
             visit=self._visit, tell=lambda state: self._tell(self._window, browser.tell_script(state)),
             full=self._full_screen)
-        self._reader = browser.Reader(desktop / "browser", self._window.native, ui=self._on_ui,
-                                      pace=browsed.Pace(desktop))
-        self._feeds = browser.Feeds(self._reader, desktop.parent, shared=lambda: browsed.shared(desktop))
+        self._reader = signedread.Reader(desktop / "browser", self._window.native, ui=self._on_ui,
+                                         pace=browsed.Pace(desktop))
+        self._feeds = signedread.Feeds(self._reader, desktop.parent, shared=lambda: browsed.shared(desktop))
 
     def _read(self, ident: str, seconds: float) -> None:
         """A find read in the app's browser, told to the recommender as the page tells it a reaction."""
@@ -394,7 +394,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         """A page read in the app's browser: its row kept; read long enough and shared, an Item of the
         person's reading; a find's or such an Item's time told to the recommender."""
         desktop = self.storage.parent
-        from ..browser import READ_MIN_S
+        from ..panereading import READ_MIN_S
         from ..web import signin
         # A signed-in site's pages are the person's own: kept only where they let it be browsed in the background.
         if signin.kept_out(desktop, row["url"]):

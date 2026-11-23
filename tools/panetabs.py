@@ -64,10 +64,10 @@ def views(d) -> list:
 
 def ask(d, core, script: str):
     """`script` run in the page of `core`; its JSON answer, None when it gave none."""
-    from mibo import browser
+    from mibo import webview2
     asked: list = []
-    d._ui(lambda: asked.append(browser._run(core, script)))
-    raw = browser._wait(asked[0] if asked else None, 8)
+    d._ui(lambda: asked.append(webview2.run_script(core, script)))
+    raw = webview2.script_answer(asked[0] if asked else None, 8)
     try:
         return json.loads(raw) if raw else None
     except ValueError:

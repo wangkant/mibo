@@ -20,8 +20,8 @@ from typing import ClassVar
 import pytest
 
 from mibo import review
-from mibo.browser import on_page
 from mibo.panels.browser import Operating, act_of
+from mibo.paneop import on_page
 from mibo.web import gate, operate
 
 PAGE = """<!doctype html><meta charset="utf-8"><title>创作者中心</title>

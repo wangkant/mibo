@@ -445,7 +445,7 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/browser/permissions")
     async def browser_permission_off(request: Request):
         """One taken back ({origin, kind}): the site is asked again next time."""
-        from ..browser import ASKED, origin_of
+        from ..paneasks import ASKED, origin_of
         payload = await body(request)
         origin, kind = payload.get("origin"), payload.get("kind")
         if not (isinstance(origin, str) and browsed.web(origin) and origin_of(origin) == origin

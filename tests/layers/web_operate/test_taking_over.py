@@ -5,7 +5,7 @@ answered the card and then ended the errand as taken over: the page still held t
 watch looked the card was gone and the chat no longer lay over the page.)"""
 from __future__ import annotations
 
-from mibo.browser import cuts_at, on_page, went_to_page
+from mibo.paneop import cuts_at, on_page, went_to_page
 
 # The chat column over the right of a pane 1000 CSS px wide, on a display at 150%.
 CUTS = [[600, 0, 400, 800]]

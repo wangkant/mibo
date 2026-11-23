@@ -18,7 +18,7 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
     ask: '<circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16.2v.3" />',
     key: '<circle cx="8" cy="15" r="4" /><path d="M10.8 12.2 20 3M16 7l3 3M14 9l2 2" />',
   };
-  // The ends after which the page is the person's until they say to go on (browser.THEIRS).
+  // The ends after which the page is the person's until they say to go on (paneop.THEIRS).
   const THEIRS = ["handover", "asked", "paused", "cap", "waiting"];
   const col = () => paI18n.words("browse").col;
   const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;

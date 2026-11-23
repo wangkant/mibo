@@ -7,7 +7,7 @@ A page read longer than ITEM_S also becomes a library Item marked as theirs
 other reading. Never kept: anything while the pane's private switch is on,
 sign-in, account and payment pages, and anything but http(s).
 
-Also the guard of reading with the person's session (browser.Reader): one host's
+Also the guard of reading with the person's session (signedread.Reader): one host's
 reads a day, and the hosts where a check or a sign-in wall stopped it.
 
 The setting SHARE_KEY in the app's settings ("角色可以参考你在应用内浏览器里看过的
@@ -68,6 +68,7 @@ _SECRET_LABELS = frozenset({"login", "signin", "sign-in", "auth", "sso", "passpo
                             "checkout", "pay", "payment", "payments", "billing", "wallet", "secure"})
 _SECRET_PATH = re.compile(r"/(log-?in|sign-?in|sign-?up|register|oauth\d?|authorize|auth|sso|session|password|"
                           r"account|checkout|payment|pay|billing|wallet|cart/checkout)(/|$|\?)", re.I)
+
 
 def web(address: str) -> bool:
     return urlsplit(str(address)).scheme in ("http", "https")
@@ -328,7 +329,7 @@ def _ask(home: Path, method: str, path: str, timeout: float = 60, **sent) -> dic
 
 def read_signed_in(home: Path, url: str) -> dict:
     """`url` read with the person's session in the app's browser, out of sight: the same fields with its whole
-    text, or {"error": why} (browser.Reader.read)."""
+    text, or {"error": why} (signedread.Reader.read)."""
     if not shared(Path(home) / "runtime" / "desktop"):
         return {"error": "off"}
     return _ask(home, "POST", "/api/browser/read", json={"url": url}) or {"error": "no_app"}

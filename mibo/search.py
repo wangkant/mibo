@@ -15,13 +15,12 @@ import httpx
 from keyring.errors import KeyringError
 
 from . import lookup_need, paths, schedule_tool, secretstore, today
-from .textproc import (
-    _fence_search_results,
-)
+from .textproc import _fence_search_results
+
+# Connecting a site they name: its sign-in in the app's browser, as the Connections page's 登录 (web/connect.py).
+from .web import connect as _connect
 
 logger = logging.getLogger("agent")
-
-#: Chat lines before the trigger that the search decision reads.
 
 # DuckDuckGo's region for each chat language, so results come in the language the chat is in.
 _DDG_REGIONS = {"zh": "cn-zh", "zh-TW": "tw-tzh", "en": "us-en", "ja": "jp-jp", "ko": "kr-kr",
@@ -150,9 +149,6 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {
             "n": {"type": "integer", "description": "how many, up to 30"}}, "required": []}}},
 ]
-# Connecting a site they name: its sign-in in the app's browser, as the Connections page's 登录 (web/connect.py).
-from .web import connect as _connect  # noqa: E402
-
 # Search rows one call hands the model. A page's words go through web/pagetext.py: whole when they fit the reply
 # model's room, else its outline and the lines that match.
 _ROWS_A_SEARCH = 6
@@ -303,11 +299,12 @@ class WebSearch:
             # An English query in a Chinese, Japanese or Korean chat finds more in English.
             region = "us-en"
         others = ", ".join(reversed(_DDG_BACKENDS.split(", ")))
-        for region, backend in ((region, _DDG_BACKENDS), (region, others), ("wt-wt", "auto")):
-            def _run(region=region, backend=backend):
-                return DDGS().text(query, region=region, max_results=max_results, backend=backend) or []
+
+        def text(where: str, backend: str) -> list:
+            return DDGS().text(query, region=where, max_results=max_results, backend=backend) or []
+        for where, backend in ((region, _DDG_BACKENDS), (region, others), ("wt-wt", "auto")):
             try:
-                rows = await asyncio.wait_for(asyncio.to_thread(_run), 15)
+                rows = await asyncio.wait_for(asyncio.to_thread(text, where, backend), 15)
             except Exception as e:
                 logger.info("[Agent] web_search DDG found nothing (%d-char query, %s): %s", len(query), backend, e)
                 continue

@@ -327,7 +327,7 @@ class PaneTab(_BlockingTab):
 
 
 class HiddenTab(_BlockingTab):
-    """A hidden WebView2 on the pane's profile (browser.Reader), for reading with the person's session out of
+    """A hidden WebView2 on the pane's profile (signedread.Reader), for reading with the person's session out of
     sight. Read only by construction: it goes to addresses of the one site it was opened for, its page may
     send only GET requests to that site, and of DevTools it has only what reading needs (no clicks, no keys;
     a wheel to scroll). It never reads cookies or storage."""

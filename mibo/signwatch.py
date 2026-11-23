@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import itertools
 import json
 import threading
 import time
@@ -29,6 +30,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import browsed
+from .webview2 import CDP_S, call_devtools, make_view
 
 # A page is looked at this long after it loads: soon (a person with a filled form signs in fast), then
 # again (a sign-in layer comes up late). A site's icon is kept at most this big.
@@ -212,17 +214,7 @@ class _Blank:
         ui(self._make)
 
     def _make(self) -> None:
-        from Microsoft.Web.WebView2.WinForms import (
-            CoreWebView2CreationProperties,
-            WebView2,
-        )
-        view = WebView2()
-        properties = CoreWebView2CreationProperties()
-        properties.UserDataFolder = str(self.folder / "webview")
-        from .browser import BROWSER_ARGS, language
-        properties.Language = language()
-        properties.AdditionalBrowserArguments = BROWSER_ARGS
-        view.CreationProperties = properties
+        view = make_view(self.folder)
         view.Visible = False
         self.view = view
         self._handler = self._ready
@@ -252,27 +244,29 @@ class Profile:
         self.pane = pane
 
     @contextlib.contextmanager
-    def _page(self):
+    def page(self):
         """(cdp, core getter) on a page of the normal profile."""
-        from .browser import CDP_S, _call
         pane = self.pane
         if pane._core is not None and not pane.private:
-            yield (lambda method, params, timeout=CDP_S: _call(pane.ui, lambda: pane._core, method, params, timeout),
-                   lambda: pane._core)
+            yield self._reach(lambda: pane._core)
             return
         blank = _Blank(pane.folder, pane.form, pane.ui)
         try:
             if not blank.made.wait(20) or blank.core is None:
                 raise RuntimeError("the profile could not be opened")
-            yield (lambda method, params, timeout=CDP_S: _call(pane.ui, lambda: blank.core, method, params, timeout),
-                   lambda: blank.core)
+            yield self._reach(lambda: blank.core)
         finally:
             blank.close()
+
+    def _reach(self, core_of: Callable) -> tuple[Callable[..., dict], Callable]:
+        """(cdp, core getter) for the page `core_of()` gives."""
+        return (lambda method, params, timeout=CDP_S: call_devtools(self.pane.ui, core_of, method, params, timeout),
+                core_of)
 
     def names(self) -> dict[str, set]:
         """{site: the names of its cookies} for every site with any (values dropped at once)."""
         from .web import signin
-        with self._page() as (cdp, _):
+        with self.page() as (cdp, _):
             cookies = cdp("Storage.getCookies", {}).get("cookies") or []
         held: dict[str, set] = {}
         for cookie in cookies:
@@ -285,7 +279,7 @@ class Profile:
         """The site's cookies and storage go (every host of it seen in the cookies, and its home); how many
         cookies went."""
         bare = browsed.site_of(urlsplit(f"//{site}").hostname or site)
-        with self._page() as (cdp, _):
+        with self.page() as (cdp, _):
             cookies = cdp("Storage.getCookies", {}).get("cookies") or []
             hosts = {bare, f"www.{bare}"}
             gone = 0
@@ -298,12 +292,11 @@ class Profile:
                 hosts.add(domain.lstrip("."))
                 gone += 1
             port = urlsplit(f"//{site}").port
-            for host in hosts:
-                for scheme in ("https", "http"):
-                    with contextlib.suppress(RuntimeError):
-                        cdp("Storage.clearDataForOrigin", {
-                            "origin": f"{scheme}://{host}" + (f":{port}" if port else ""),
-                            "storageTypes": "local_storage,indexeddb,service_workers,cache_storage,websql,file_systems"})
+            for host, scheme in itertools.product(hosts, ("https", "http")):
+                with contextlib.suppress(RuntimeError):
+                    cdp("Storage.clearDataForOrigin", {
+                        "origin": f"{scheme}://{host}" + (f":{port}" if port else ""),
+                        "storageTypes": "local_storage,indexeddb,service_workers,cache_storage,websql,file_systems"})
         return gone
 
     def clear(self, what: str, since: float = 0.0) -> None:
@@ -316,7 +309,7 @@ class Profile:
         kinds = {"sessions": Kinds.AllSite, "passwords": Kinds.PasswordAutosave | Kinds.GeneralAutofill,
                  "history": Kinds.BrowsingHistory | Kinds.DownloadHistory | Kinds.DiskCache}[what]
         done = threading.Event()
-        with self._page() as (_, core_of):
+        with self.page() as (_, core_of):
             def start() -> None:
                 handler = Action[Task](lambda task: done.set())
                 self._cleared = handler
