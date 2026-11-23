@@ -1,7 +1,7 @@
 "use strict";
-// ---- its dial: while the pointer stays on it (pet.js showQuick), eight round buttons on an arc over
+// ---- its dial: while the pointer stays on it (petpointer.js showQuick), eight round buttons on an arc over
 // its head, all as far from it, always in the same places, the name of the one pointed at or focused in a
-// pill above them: 聊天, 推荐一条, 勿扰, 截图提问, 外出浏览, 打开浏览器, 推荐记录, 设置. 推荐一条 and 勿扰 are pet.js's;
+// pill above them: 聊天, 推荐一条, 勿扰, 截图提问, 外出浏览, 打开浏览器, 推荐记录, 设置. 推荐一条 and 勿扰 are petpointer.js's;
 // the rest are handled here, 聊天, 截图提问 and 外出浏览 in the compact chat (petchat.py). The window takes the
 // pointer over the buttons while the dial is out.
 (() => {
@@ -35,7 +35,7 @@
     button.addEventListener("pointerleave", () => named(null));
     button.addEventListener("blur", () => named(null));
   }
-  // pet.js labels its three from the menu's words; the dial's own names win, so all eight read alike.
+  // petpointer.js labels its three from the menu's words; the dial's own names win, so all eight read alike.
   const labels = () => {
     buttons[0].setAttribute("aria-label", W.chat);
     buttons[1].setAttribute("aria-label", W.find);
@@ -72,7 +72,7 @@
     pill.style.top = `${Math.round(cy - RADIUS - SIZE / 2 - 24)}px`;
     pet.style.setProperty("--pet-accent", ACCENTS[figureBox.dataset.figure] || ACCENTS.mibo);
   }
-  // Out and in with pet.js's own: placed as it comes out, and where the window takes the pointer.
+  // Out and in with petpointer.js's own: placed as it comes out, and where the window takes the pointer.
   new MutationObserver(() => {
     const on = quick.classList.contains("on");
     if (on) {
@@ -88,7 +88,7 @@
     petUx.spot("dial", on ? [[x0, y0, x1 - x0, y1 - y0, 0]] : null);
   }).observe(quick, { attributes: true, attributeFilter: ["class"] });
 
-  // The six handled here; pet.js's listener on the dial sees none of them.
+  // The six handled here; petpointer.js's listener on the dial sees none of them.
   quick.addEventListener(
     "click",
     (event) => {

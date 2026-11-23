@@ -1,7 +1,7 @@
 "use strict";
 // ---- 显示桌宠 off (petoff.py): no figure and nothing it does by itself. Its window waits at the screen's
 // corner, takes the pointer over a card alone, and a find still comes as its card there; what it would
-// say goes to the chat only (pet.js bringRemark).
+// say goes to the chat only (petbring.js bringRemark).
 (() => {
   let edge = false;
   const bareBefore = petUx.setBare;

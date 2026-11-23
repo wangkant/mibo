@@ -57,7 +57,8 @@ PET_FIGURES = ("mibo", "chatgpt", "deepseek", "claude")
 # The page's own files, served by name.
 PAGE_ASSETS = ("i18n.js", "app.js", "app.css", "chat.js", "chat.css", "finds.js", "finds.css", "signin.css",
                "onboard.js", "onboard.css", "setup.js", "setup.css",
-               "pet.js", "pet.css", "card.js", "card.css", "characters.js", "characters.css",
+               "pet.js", "petclips.js", "petwalk.js", "petpaint.js", "petlife.js", "petbring.js", "pethand.js",
+               "petpointer.js", "pet.css", "card.js", "card.css", "characters.js", "characters.css",
                "browse.js", "browsetabs.js", "browsemenu.js", "browsestrip.js", "browse.css", "plus.js", "plus.css", "activity.js", "activity.css",
                "linkcard.js", "linkcard.css", "modelbar.js", "modelbar.css", "providermarks.js", "sites.js", "sites.css",
                "toolcard.js", "petux.css", "petbox.js", "petline.js", "petedge.js", "petdial.js",

@@ -102,7 +102,7 @@
     tuckIn(screenX - before);
   }).observe(pet, { attributes: true, attributeFilter: ["class"] });
 
-  // A press on the tucked head (not a drag) brings it out; pet.js's pat that follows is stopped.
+  // A press on the tucked head (not a drag) brings it out; pethand.js's pat that follows is stopped.
   let down = null;
   pet.addEventListener("pointerdown", (event) => (down = side ? [event.screenX, event.screenY] : null), true);
   pet.addEventListener("pointerup", (event) => {

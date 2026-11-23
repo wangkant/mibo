@@ -1,8 +1,8 @@
 "use strict";
 // ---- a click, a stroke, a double-click. One click on the figure brings its compact chat out beside it
 // (petchat.py, the app's own chat in a small window) or puts it away; acted on a moment after the press, so
-// the second click of a double-click, which hands over the whole window (pet.js), can still take it back.
-// The pointer drawn across its head or its feet pats it, as a hand would (pet.js pat).
+// the second click of a double-click, which hands over the whole window (petpointer.js), can still take it back.
+// The pointer drawn across its head or its feet pats it, as a hand would (pethand.js pat).
 //
 // What is beside the pet, one thing at a time; the first of these has the room and the rest give way or
 // wait: the compact chat, what to do with something dropped (petbox.js), the dial (petdial.js), then what
