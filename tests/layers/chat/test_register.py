@@ -8,7 +8,7 @@ from datetime import date
 
 from harness.model import say
 
-from mibo import person
+from mibo import person, personview
 from mibo.prompt import _TURN_CONTEXT_OPEN
 from mibo.prompts import OWNER_TOOL_GUIDE, STYLE_KNOBS, PersonaStyle, dm_output_protocol, dm_style_guide
 from mibo.textproc import _OWN_CHAT_INPUT_RULES, _USER_DATA_CLOSE, _USER_DATA_OPEN, _WEB_DESC_CLOSE, _WEB_DESC_OPEN
@@ -86,7 +86,7 @@ def test_what_it_is_told_of_a_past_plan_asks_for_no_markup_in_a_plain_text_reply
     store = person.Person(tmp_path / "person.json")
     day = time.time() - 3 * 86400
     store.put_plan("dentist appointment on Friday", Due(date.fromtimestamp(day).isoformat(), "exact"), day)
-    block, placed = person.recall_block(store, "", time.time(), None, "en", 4000)
+    block, placed = personview.recall_block(store, "", time.time(), None, "en", 4000)
     assert placed and "dentist appointment" in block
     assert "{" not in block and '"op"' not in block
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import functools
 import hashlib
 import io
@@ -14,17 +15,17 @@ import logging
 import re
 import socket
 import ssl
-import time
 import warnings
 import zlib
 from dataclasses import dataclass
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlsplit
 
 import httpcore
 import httpx
 import openai
 from httpcore._backends.auto import AutoBackend
 
+from .bilibili import BilibiliLinks, cap_cache, format_line
 from .config_env import env_int
 from .textproc import _detect_image_mime
 
@@ -43,6 +44,9 @@ MAX_HTML_WIRE_BYTES = 128 * 1024
 MAX_HTML_DECODED_BYTES = 128 * 1024
 MAX_IMAGE_PIXELS = 16_000_000
 MAX_IMAGE_DIMENSION = 8192
+
+# Punctuation that ends a sentence around a link, not the link.
+_URL_TAIL = re.compile(r"[).,;:!?。，；：！？)』」\]>]+$")
 
 # Internal by definition (RFC 6761/2606), so rejected without a lookup.
 _RESERVED_LOCAL_NAMES = frozenset({
@@ -100,12 +104,6 @@ def _url_for_log(url: str) -> str:
     if ":" in host:
         host = f"[{host}]"
     return f"{scheme}://{host}{f':{port}' if port else ''}/…"
-
-
-def _cap_cache(cache: dict, cap: int = 200, drop: int = 50) -> None:
-    if len(cache) > cap:
-        for k in list(cache)[:drop]:
-            cache.pop(k, None)
 
 
 async def _resolve_public_target(url: str) -> tuple[str, str, int] | None:
@@ -253,6 +251,41 @@ def _decode_body(
     return bytes(decoded)
 
 
+def _type_allowed(response: httpx.Response, allowed_content_types: tuple[str, ...], require_content_type: bool) -> bool:
+    """Whether the answer's content type is one asked for (a "text/" entry takes its subtypes)."""
+    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if require_content_type and not content_type:
+        return False
+    return not allowed_content_types or any(
+        content_type == allowed.rstrip("/") or content_type.startswith(allowed) for allowed in allowed_content_types)
+
+
+async def _bounded_result(response: httpx.Response, current: str, max_wire_bytes: int,
+                          max_decoded_bytes: int) -> SafeFetchResult | None:
+    """The answer's body within both limits, on the wire and decoded; None past either."""
+    length = response.headers.get("content-length", "")
+    with contextlib.suppress(TypeError, ValueError):
+        if length and int(length) > max_wire_bytes:
+            return None
+    chunks: list[bytes] = []
+    wire_size = 0
+    async for chunk in response.aiter_raw():
+        wire_size += len(chunk)
+        if wire_size > max_wire_bytes:
+            return None
+        chunks.append(chunk)
+    encoding = response.headers.get("content-encoding", "").strip().lower()
+    body = _decode_body(chunks, encoding, max_decoded_bytes)
+    if body is None:
+        return None
+    return SafeFetchResult(
+        url=str(getattr(response, "url", current) or current),
+        status_code=response.status_code,
+        headers={str(k): str(v) for k, v in response.headers.items()},
+        content=body,
+    )
+
+
 async def safe_fetch_url(
     url: str,
     *,
@@ -274,109 +307,44 @@ async def safe_fetch_url(
         if not current or len(current) > MAX_URL_LENGTH:
             return None
         try:
-            resolved = await asyncio.wait_for(
-                _resolve_public_target(current),
-                timeout=timeout,
-            )
+            resolved = await asyncio.wait_for(_resolve_public_target(current), timeout=timeout)
         except asyncio.TimeoutError:
             logger.warning("[Agent] DNS resolution timed out: %s", _url_for_log(current))
             return None
         if resolved is None:
-            logger.warning("[Agent] refusing internal/unresolvable URL hop: %s",
-                           _url_for_log(current))
+            logger.warning("[Agent] refusing internal/unresolvable URL hop: %s", _url_for_log(current))
             return None
         hostname, pinned_ip, _port = resolved
         transport = _PinnedAsyncHTTPTransport(hostname, pinned_ip)
         factory = client_factory or httpx.AsyncClient
         try:
-            client_cm = factory(
-                timeout=timeout,
-                transport=transport,
-                follow_redirects=False,
-                trust_env=False,
-            )
+            client_cm = factory(timeout=timeout, transport=transport, follow_redirects=False, trust_env=False)
             async with client_cm as client, client.stream(
-                "GET",
-                current,
-                headers=request_headers,
-                follow_redirects=False,
-            ) as response:
+                    "GET", current, headers=request_headers, follow_redirects=False) as response:
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get("location", "")
                     if not location:
                         return None
                     current = str(httpx.URL(current).join(location))
                     continue
-                if response.status_code != 200:
+                if response.status_code != 200 or not _type_allowed(
+                        response, allowed_content_types, require_content_type):
                     return None
-
-                content_type = (
-                    response.headers.get("content-type", "")
-                    .split(";", 1)[0]
-                    .strip()
-                    .lower()
-                )
-                if require_content_type and not content_type:
-                    return None
-                if allowed_content_types and not any(
-                    content_type == allowed.rstrip("/")
-                    or content_type.startswith(allowed)
-                    for allowed in allowed_content_types
-                ):
-                    return None
-
-                length = response.headers.get("content-length", "")
-                try:
-                    if length and int(length) > max_wire_bytes:
-                        return None
-                except (TypeError, ValueError):
-                    pass
-
-                chunks: list[bytes] = []
-                wire_size = 0
-                async for chunk in response.aiter_raw():
-                    wire_size += len(chunk)
-                    if wire_size > max_wire_bytes:
-                        return None
-                    chunks.append(chunk)
-
-                encoding = (
-                    response.headers.get("content-encoding", "")
-                    .strip()
-                    .lower()
-                )
-                body = _decode_body(chunks, encoding, max_decoded_bytes)
-                if body is None:
-                    return None
-                return SafeFetchResult(
-                    url=str(getattr(response, "url", current) or current),
-                    status_code=response.status_code,
-                    headers={str(k): str(v) for k, v in response.headers.items()},
-                    content=body,
-                )
+                return await _bounded_result(response, current, max_wire_bytes, max_decoded_bytes)
         except Exception as e:
             logger.debug("[Agent] safe fetch failed (%s): %s", _url_for_log(current), e)
             return None
         finally:
             # A fake client factory may ignore the transport; closing twice is
             # safe for httpx and ensures the transport never leaks a pool.
-            try:
+            with contextlib.suppress(Exception):
                 await transport.aclose()
-            except Exception:
-                pass
     logger.warning("[Agent] redirect cap exceeded: %s", _url_for_log(url))
     return None
 
 
-class ContentIngestion:
+class ContentIngestion(BilibiliLinks):
     """Mixed into Agent; see agent.py."""
-
-    _WBI_MIXIN_KEY_ENC_TAB = [
-        46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
-        27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13,
-        37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4,
-        22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
-    ]
 
     # ============ Generic URL understanding ============
     # Ends at whitespace, CJK punctuation/ideographs/full-width, or brackets.
@@ -419,174 +387,6 @@ class ContentIngestion:
             return None
         return data
 
-    @staticmethod
-    def _format_bili_line(info: dict, title_fallback: str = "") -> str:
-        """The `[bilibili-video] "title" — by <up>, ...` line fed to the model."""
-        title = info.get("title") or title_fallback
-        up = info.get("up", "")
-        summary = (info.get("summary", "") or "").strip().replace("\n", " ")
-        desc = (info.get("desc", "") or "").strip().replace("\n", " ")[:80]
-        line = f"[bilibili-video] \"{title}\""
-        if up:
-            line += f" — by {up}"
-        if summary:
-            line += f", AI summary: {summary[:200]}"
-        elif desc:
-            line += f", description: {desc}"
-        return line
-
-    async def _fetch_bili_info(self, url: str) -> dict:
-        """Bilibili title/uploader/desc (and AI summary) for a share URL, via
-        b23.tv and the web view API; {} on any failure."""
-        if not url or len(url) > MAX_URL_LENGTH:
-            return {}
-
-        cache_key = self._url_cache_key(url)
-        if cache_key in self.bili_info_cache:
-            return self.bili_info_cache[cache_key]
-
-        real_url = url
-        if "b23.tv" in url:
-            # "contains b23.tv" is not "is a shortlink": never fetch internal hosts.
-            if self._host_is_internal(url):
-                logger.warning("[Agent] refusing internal-address b23 url: %s", url)
-                self.bili_info_cache[cache_key] = {}
-                return {}
-            # _safe_get re-checks every redirect hop.
-            r = await self._safe_get(url, timeout=5,
-                                     headers={"User-Agent": "Mozilla/5.0"})
-            if r is not None:
-                real_url = str(r.url)
-
-        m = re.search(r"BV[a-zA-Z0-9]{10}", real_url)
-        if not m:
-            self.bili_info_cache[cache_key] = {}
-            return {}
-        bvid = m.group(0)
-
-        info: dict = {}
-        cid: int = 0
-        up_mid: int = 0
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                r = await client.get(
-                    "https://api.bilibili.com/x/web-interface/view",
-                    params={"bvid": bvid},
-                    headers={"User-Agent": "Mozilla/5.0"},
-                )
-                r.raise_for_status()
-                data = r.json()
-                if data.get("code") == 0:
-                    d = data.get("data") or {}
-                    cid = int(d.get("cid") or 0)
-                    # "owner" is Bilibili's field for the uploader.
-                    up_mid = int((d.get("owner") or {}).get("mid") or 0)
-                    info = {
-                        "title": (d.get("title") or "")[:80],
-                        "up": ((d.get("owner") or {}).get("name") or "")[:30],
-                        "desc": (d.get("desc") or "")[:200],
-                    }
-        except Exception as e:
-            logger.debug("[Agent] Bili view API failed (%s): %s", bvid, e)
-
-        if info and cid and up_mid:
-            summary = await self._fetch_bili_summary(bvid, cid, up_mid)
-            if summary:
-                info["summary"] = summary
-
-        self.bili_info_cache[cache_key] = info
-        _cap_cache(self.bili_info_cache)
-        logger.info("[Agent] bili view %s: %s", bvid, (info.get("title") or "(empty)")[:60])
-        return info
-
-    async def _fetch_wbi_keys(self) -> tuple[str, str]:
-        """(img_key, sub_key) for WBI signing, cached 24h; ('', '') on failure."""
-        now = time.time()
-        if self._wbi_keys[0] and now - self._wbi_keys_ts < 86400:
-            return self._wbi_keys
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                r = await client.get(
-                    "https://api.bilibili.com/x/web-interface/nav",
-                    headers={"User-Agent": "Mozilla/5.0"},
-                )
-                data = (r.json().get("data") or {})
-                wbi_img = data.get("wbi_img") or {}
-                img_url = wbi_img.get("img_url", "") or ""
-                sub_url = wbi_img.get("sub_url", "") or ""
-                img_key = img_url.rsplit("/", 1)[-1].split(".")[0]
-                sub_key = sub_url.rsplit("/", 1)[-1].split(".")[0]
-                if img_key and sub_key:
-                    self._wbi_keys = (img_key, sub_key)
-                    self._wbi_keys_ts = now
-                    return self._wbi_keys
-        except Exception as e:
-            logger.debug("[Agent] WBI keys fetch failed: %s", e)
-        return ("", "")
-
-    def _wbi_sign_params(
-        self, params: dict, img_key: str, sub_key: str
-    ) -> dict:
-        """Apply WBI signing: appends wts + w_rid. Returns a new params dict."""
-        orig = img_key + sub_key
-        mixin = "".join(orig[i] for i in self._WBI_MIXIN_KEY_ENC_TAB if i < len(orig))[:32]
-        signed = dict(sorted({**params, "wts": int(time.time())}.items()))
-        signed = {
-            k: "".join(c for c in str(v) if c not in "!'()*")
-            for k, v in signed.items()
-        }
-        sign = hashlib.md5((urlencode(signed) + mixin).encode()).hexdigest()
-        signed["w_rid"] = sign
-        return signed
-
-    async def _fetch_bili_summary(self, bvid: str, cid: int, up_mid: int) -> str:
-        """Bilibili AI summary via view/conclusion/get, or ""."""
-        img_key, sub_key = await self._fetch_wbi_keys()
-        if not img_key or not sub_key:
-            return ""
-        params = self._wbi_sign_params(
-            {"bvid": bvid, "cid": cid, "up_mid": up_mid},
-            img_key, sub_key,
-        )
-        try:
-            async with httpx.AsyncClient(timeout=8) as client:
-                r = await client.get(
-                    "https://api.bilibili.com/x/web-interface/view/conclusion/get",
-                    params=params,
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Referer": f"https://www.bilibili.com/video/{bvid}",
-                    },
-                )
-                r.raise_for_status()
-                data = r.json()
-                if data.get("code") != 0:
-                    logger.debug("[Agent] bili summary %s: code=%s msg=%s",
-                                 bvid, data.get("code"), data.get("message"))
-                    return ""
-                d = data.get("data") or {}
-                mr = d.get("model_result") or {}
-                if not mr.get("result_type"):
-                    return ""
-                summary = (mr.get("summary") or "").strip()
-                outline = mr.get("outline") or []
-                outline_titles: list[str] = []
-                for sec in outline[:5]:
-                    t = (sec.get("title") or "").strip()
-                    if t:
-                        outline_titles.append(t[:30])
-                line = summary
-                if outline_titles:
-                    sep = " | outline:" if line else "outline:"
-                    line += sep + " / ".join(outline_titles)
-                line = line[:300]
-                if line:
-                    logger.info("[Agent] bili summary %s: %s", bvid, line[:80])
-                return line
-        except Exception as e:
-            logger.debug("[Agent] bili summary failed (%s): %s", bvid, e)
-        return ""
-
     @classmethod
     def _extract_urls(cls, text: str) -> list[str]:
         """Pull http(s) URLs out of text, deduped, order preserved, capped at
@@ -596,7 +396,7 @@ class ContentIngestion:
         urls = []
         seen = set()
         for u in cls.URL_PATTERN.findall(text):
-            u = u.rstrip(').,;:!?。，；：！？)』」]>')
+            u = _URL_TAIL.sub("", u)
             if u in seen:
                 continue
             seen.add(u)
@@ -681,7 +481,7 @@ class ContentIngestion:
         if "bilibili.com" in host or "b23.tv" in host:
             info = await self._fetch_bili_info(url)
             if info:
-                result = self._format_bili_line(info)
+                result = format_line(info)
         elif "youtube.com" in host or "youtu.be" in host:
             result = await self._fetch_oembed_youtube(url)
         else:
@@ -914,4 +714,4 @@ class ContentIngestion:
         return await self._describe_image_vision(url) or ""
 
     def _gc_image_cache(self) -> None:
-        _cap_cache(self.image_caption_cache)
+        cap_cache(self.image_caption_cache)

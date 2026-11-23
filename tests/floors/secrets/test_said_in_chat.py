@@ -13,7 +13,7 @@ from harness.home import holding, restarted
 from harness.model import call, say
 from harness.turn import run_turn
 
-from mibo import db, person
+from mibo import db, secretwords
 
 ROWS = [param.values[0] for param in attacks.load("secrets")]
 
@@ -98,7 +98,7 @@ SPOKEN_OF = ["my API key is not working", "我的 API key 余额还剩 5000，�
 
 @pytest.mark.parametrize("said", SPOKEN_OF)
 def test_talk_about_a_key_with_no_key_in_it_is_kept_as_said(said):
-    assert not person.secret(said) and person.mask(said) == (said, False)
+    assert not secretwords.secret(said) and secretwords.mask(said) == (said, False)
 
 
 @pytest.mark.parametrize("said, shown", [
@@ -107,4 +107,4 @@ def test_talk_about_a_key_with_no_key_in_it_is_kept_as_said(said):
     ("api_key=sk-abcdefgh12345678ijkl", "api_key=****"),
 ])
 def test_a_key_after_its_word_is_masked(said, shown):
-    assert person.secret(said) and person.mask(said) == (shown, True)
+    assert secretwords.secret(said) and secretwords.mask(said) == (shown, True)

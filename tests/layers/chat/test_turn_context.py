@@ -18,7 +18,7 @@ from harness.model import call, fail, say, tokens
 from harness.page import measured
 from harness.turn import run_turn
 
-from mibo import context, pastchats, person, today, turnctx
+from mibo import context, pastchats, person, personview, today, turnctx
 from mibo.dm import chat_key
 from mibo.library import Item, Library
 from mibo.prompt import _CHECKPOINT_OPEN, _TURN_CONTEXT_OPEN
@@ -161,7 +161,7 @@ def test_the_memory_block_takes_no_more_than_the_tokens_it_is_given(tmp_path, bu
     now = time.time()
     for n, fact in enumerate(FACTS):
         store.put_fact("life", f"slot{n}", fact, now - n * 3600, src="page")
-    block, placed = person.recall_block(store, "周末去哪儿玩", now, None, "zh", budget)
+    block, placed = personview.recall_block(store, "周末去哪儿玩", now, None, "zh", budget)
     assert context.text_tokens(block) <= budget
     # Too little for even the block's frame: none at all; else what is placed is what the block says.
     kept = {row["id"]: row["text"] for row in store.facts()}

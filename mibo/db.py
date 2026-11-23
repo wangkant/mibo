@@ -91,10 +91,9 @@ class Db:
                        f"journal_size_limit={JOURNAL_MAX}"):
             self._conn.execute(f"PRAGMA {pragma}")
         self._conn.executescript(SCHEMA)
-        try:
+        # Windows ACLs do not map to POSIX mode bits.
+        with contextlib.suppress(OSError):
             os.chmod(path, 0o600)
-        except OSError:
-            pass  # Windows ACLs do not map to POSIX mode bits
 
     def read(self, sql: str, args=()) -> list[tuple]:
         with self._lock:
@@ -205,14 +204,7 @@ def take_back(runtime: Path, archived: Path | None) -> None:
 def _log_rows(path: Path) -> list[dict]:
     from .chatlog import clean_row
 
-    by_seq: dict[int, dict] = {}
-    for raw in path.read_bytes().split(b"\n"):
-        try:
-            row = clean_row(json.loads(raw.decode("utf-8")))
-        except (UnicodeDecodeError, ValueError):
-            continue
-        if row is not None:
-            by_seq[row["seq"]] = row
+    by_seq = {row["seq"]: row for row in map(clean_row, _lines(path)) if row is not None}
     return [by_seq[s] for s in sorted(by_seq)]
 
 
@@ -314,7 +306,9 @@ def _write_chats(conn: sqlite3.Connection, held: tuple) -> None:
     conn.executemany("INSERT OR REPLACE INTO embeddings VALUES (?,?,?)",
                      [(model, key, vec) for (model, key), vec in stored.items()])
     # Read back: every row moved is in the database.
-    count = lambda sql, arg: conn.execute(sql, arg).fetchone()[0]  # noqa: E731
+    def count(sql: str, arg: tuple) -> int:
+        return conn.execute(sql, arg).fetchone()[0]
+
     if not (all(count("SELECT count(*) FROM chatlog WHERE conv = ?", (conv,)) == len(rows)
                 for conv, rows in records.items())
             and all(count("SELECT count(*) FROM page_messages WHERE chat = ?", (chat[0],)) == len(chat[5])
@@ -350,7 +344,7 @@ def _read_finds(runtime: Path, moving: dict[Path, Path]) -> tuple[dict[str, list
     not read as one."""
     from dataclasses import fields
 
-    from . import library, situation
+    from . import library
     from .sources import weights
 
     rows: dict[str, list[tuple]] = {}
@@ -378,13 +372,7 @@ def _read_finds(runtime: Path, moving: dict[Path, Path]) -> tuple[dict[str, list
                 items[item.id] = library.row(item)
         rows["library"] = list(items.values())
     if "feed.json" in by_name and (saved := whole("feed.json")) is not None:
-        events = saved.get("events") if isinstance(saved.get("events"), list) else []
-        # An event of five, from before events kept the model's snapshot, gets an empty one.
-        rows["feed_events"] = [(None, *e[:5], json.dumps(e[5] if len(e) == 6 else {}, ensure_ascii=False))
-                               for e in events if isinstance(e, list)
-                               and (len(e) == 5 or (len(e) == 6 and isinstance(e[5], dict)))]
-        topics = saved.get("topics") if isinstance(saved.get("topics"), list) else []
-        rows["feed_topics"] = [(None, t) for t in topics if isinstance(t, str)]
+        rows.update(_feed_rows(saved))
     if "shown.jsonl" in by_name:
         rows["shown"] = [(None, r.pop("at"), r.pop("id"), bool(r.pop("gated", False)), json.dumps(r, ensure_ascii=False))
                          for r in _lines(by_name["shown.jsonl"][1]) if "at" in r and "id" in r]
@@ -398,21 +386,42 @@ def _read_finds(runtime: Path, moving: dict[Path, Path]) -> tuple[dict[str, list
                                              for f in weights.FIELDS))
                                 for key, row in state.items() if isinstance(row, dict)]
     if "sources.json" in by_name and (saved := whole("sources.json")) is not None:
-        own = {e["key"]: e for e in saved.get("own") or [] if isinstance(e, dict) and e.get("key") and e.get("url")}
-        rows["own_feeds"] = [(key, n, json.dumps(e, ensure_ascii=False)) for n, (key, e) in enumerate(own.items())]
-        last = saved.get("last") if isinstance(saved.get("last"), dict) else {}
-        rows["source_reads"] = [(key, int(r.get("at") or 0), int(r.get("count") or 0), str(r.get("error") or ""))
-                                for key, r in last.items() if isinstance(r, dict)]
+        rows.update(_sources_rows(saved))
     if "situation.json" in by_name and (saved := whole("situation.json")) is not None:
-        factors = saved.get("factors") if isinstance(saved.get("factors"), dict) else {}
-        rows["situation"] = [(name, json.dumps(row, ensure_ascii=False, sort_keys=True)) for name, row in factors.items()
-                             if name in situation.NAMES and isinstance(row, dict) and isinstance(row.get("by"), dict)]
-        if saved.get("probed"):
-            rows["situation"].append(("probed", json.dumps(float(saved["probed"]))))
-        hosts = saved.get("hosts") if isinstance(saved.get("hosts"), dict) else {}
-        rows["hosts"] = [(site, *({**situation._blank_host(), **row}[f] for f in situation.HOST_FIELDS))
-                         for site, row in hosts.items() if isinstance(row, dict)]
+        rows.update(_situation_rows(saved))
     return rows, unplaced
+
+
+def _feed_rows(saved: dict) -> dict[str, list[tuple]]:
+    events = saved.get("events") if isinstance(saved.get("events"), list) else []
+    topics = saved.get("topics") if isinstance(saved.get("topics"), list) else []
+    # An event of five, from before events kept the model's snapshot, gets an empty one.
+    return {"feed_events": [(None, *e[:5], json.dumps(e[5] if len(e) == 6 else {}, ensure_ascii=False))
+                            for e in events if isinstance(e, list)
+                            and (len(e) == 5 or (len(e) == 6 and isinstance(e[5], dict)))],
+            "feed_topics": [(None, t) for t in topics if isinstance(t, str)]}
+
+
+def _sources_rows(saved: dict) -> dict[str, list[tuple]]:
+    own = {e["key"]: e for e in saved.get("own") or [] if isinstance(e, dict) and e.get("key") and e.get("url")}
+    last = saved.get("last") if isinstance(saved.get("last"), dict) else {}
+    return {"own_feeds": [(key, n, json.dumps(e, ensure_ascii=False)) for n, (key, e) in enumerate(own.items())],
+            "source_reads": [(key, int(r.get("at") or 0), int(r.get("count") or 0), str(r.get("error") or ""))
+                             for key, r in last.items() if isinstance(r, dict)]}
+
+
+def _situation_rows(saved: dict) -> dict[str, list[tuple]]:
+    from . import situation
+
+    factors = saved.get("factors") if isinstance(saved.get("factors"), dict) else {}
+    rows = [(name, json.dumps(row, ensure_ascii=False, sort_keys=True)) for name, row in factors.items()
+            if name in situation.NAMES and isinstance(row, dict) and isinstance(row.get("by"), dict)]
+    if saved.get("probed"):
+        rows.append(("probed", json.dumps(float(saved["probed"]))))
+    hosts = saved.get("hosts") if isinstance(saved.get("hosts"), dict) else {}
+    return {"situation": rows,
+            "hosts": [(site, *({**situation._blank_host(), **row}[f] for f in situation.HOST_FIELDS))
+                      for site, row in hosts.items() if isinstance(row, dict)]}
 
 
 def _write_finds(conn: sqlite3.Connection, rows: dict[str, list[tuple]]) -> None:

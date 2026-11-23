@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from . import life, paths, person, quiet, settingsfile
+from . import life, paths, person, personview, quiet, settingsfile
 from .dm import chat_key
 from .library import KEPT, Library
 from .memstore import MemoryFileDamaged
@@ -173,8 +173,8 @@ class Character:
     def person_view(self) -> dict:
         """What it knows of the one person, for the memory view."""
         if self.agent is not None:
-            return person.page_view(self.agent.person_store)
-        return person.page_view(person.Person(self._runtime() / person.FILE))
+            return personview.page_view(self.agent.person_store)
+        return personview.page_view(person.Person(self._runtime() / person.FILE))
 
     async def person_write(self, action: str, conversation: str, item: str, text: str,
                            payload: dict | None = None) -> dict:
@@ -212,7 +212,7 @@ class Character:
                     raise ValueError("activity_changed")
             else:
                 agent._person_forget_all()
-        return {**person.page_view(agent.person_store), **extra}
+        return {**personview.page_view(agent.person_store), **extra}
 
     async def person_said(self, item: str) -> list[dict]:
         """The chat lines one kept item came from. ValueError("activity_changed") when it is gone."""
@@ -229,7 +229,7 @@ class Character:
         from .textproc import _env_tz_offset
         store = self.agent.person_store if self.agent is not None else person.Person(self._runtime() / person.FILE)
         lang = self.agent.chat_lang if self.agent is not None else "en"
-        return person.export(store, fmt, lang, time.time(), timezone(timedelta(hours=_env_tz_offset())))
+        return personview.export(store, fmt, lang, time.time(), timezone(timedelta(hours=_env_tz_offset())))
 
     # ---- its day --------------------------------------------------------------
 

@@ -4,6 +4,7 @@ JSONL replay that quarantines invalid rows without deleting them.
 """
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import logging
@@ -20,7 +21,6 @@ logger = logging.getLogger("agent.storage")
 
 PRIVATE_FILE_MODE = 0o600
 DEFAULT_LOCK_TIMEOUT_SEC = 30.0
-DEFAULT_WARNING_BYTES = 50_000_000
 
 _T = TypeVar("_T")
 
@@ -57,26 +57,14 @@ def file_stamp(path: str | Path) -> tuple[int, int]:
         return 0, 0
 
 
-def warning_bytes(env_name: str, override: int | None = None,
-                  default: int = DEFAULT_WARNING_BYTES) -> int:
-    """Ledger size at which health reporting warns: ``override``, else ``env_name``."""
-    if override is not None:
-        return max(0, int(override))
-    try:
-        return max(0, int(os.getenv(env_name, str(default))))
-    except ValueError:
-        return default
-
-
 class LockUnavailable(RuntimeError):
     """Raised when a file lock cannot be acquired within its timeout."""
 
 
 def _set_private_permissions(path: Path) -> None:
-    try:
+    # Windows ACLs do not map to POSIX mode bits.
+    with contextlib.suppress(OSError):
         os.chmod(path, PRIVATE_FILE_MODE)
-    except OSError:
-        pass  # Windows ACLs do not map to POSIX mode bits
 
 
 def _sync_directory(directory: Path) -> None:
@@ -177,11 +165,6 @@ class FileLock:
         self.release()
 
 
-ALREADY_RUNNING = (
-    "another Mibo is already running from {home}; stop that one first, "
-    "or give this one its own folder with --home DIR (or AGENT_HOME)")
-
-
 class RuntimeInstanceLock(FileLock):
     """Non-blocking single-holder lock for one deployment root: AGENT_HOME,
     not the runtime dir, which two processes could set apart."""
@@ -243,22 +226,6 @@ def append_jsonl(path: str | Path, row: dict, *,
         return append_jsonl_unlocked(path, row)
 
 
-def append_jsonl_rotating(path: str | Path, row: dict, *, max_bytes: int,
-                          lock_timeout: float | None = DEFAULT_LOCK_TIMEOUT_SEC) -> int:
-    """Locked append that first moves ``path`` aside to ``<path>.old`` past ``max_bytes``."""
-    path = Path(path)
-    with append_lock(path, timeout=lock_timeout):
-        try:
-            if path.exists() and path.stat().st_size > max_bytes:
-                old = path.with_suffix(path.suffix + ".old")
-                if old.exists():
-                    old.unlink()
-                path.replace(old)
-        except OSError as exc:
-            logger.warning("log rotation failed for %s: %s", path, exc)
-        return append_jsonl_unlocked(path, row)
-
-
 _WINDOWS = os.name == "nt"
 
 
@@ -286,10 +253,9 @@ def atomic_write_text(path: str | Path, text: str, *,
         dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     tmp = Path(tmp_name)
     try:
-        try:
+        # No fchmod on Windows.
+        with contextlib.suppress(AttributeError, OSError):
             os.fchmod(fd, PRIVATE_FILE_MODE)
-        except (AttributeError, OSError):
-            pass
         with os.fdopen(fd, "w", encoding=encoding, newline="\n") as handle:
             fd = -1
             handle.write(text)
@@ -303,10 +269,8 @@ def atomic_write_text(path: str | Path, text: str, *,
     except BaseException:
         if fd >= 0:
             os.close(fd)
-        try:
+        with contextlib.suppress(OSError):
             tmp.unlink()
-        except OSError:
-            pass
         raise
 
 
@@ -396,28 +360,3 @@ def read_validated_jsonl(
             continue
         rows.append(row)
     return ValidatedJsonl(rows, quarantined)
-
-
-def append_only_health(
-    path: str | Path,
-    *,
-    warning_bytes: int,
-    quarantined_rows: int = 0,
-) -> dict:
-    """Return non-destructive size/integrity metadata for health reporting."""
-    path = Path(path)
-    try:
-        size = path.stat().st_size
-    except OSError:
-        size = 0
-    threshold = max(0, int(warning_bytes))
-    warning = threshold > 0 and size >= threshold
-    return {
-        "path": str(path),
-        "size_bytes": size,
-        "warning_bytes": threshold,
-        "size_warning": warning,
-        "quarantined_rows": max(0, int(quarantined_rows)),
-        "append_only": True,
-        "truncated": False,
-    }

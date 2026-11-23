@@ -185,7 +185,7 @@ class Retrieval:
         two focus tokens with the reply gets one more use. Counted in memory,
         written at most once a minute (`_flush_memory_counters`). The items it
         drew on ({id, text}), which the page lists under the reply."""
-        from . import person
+        from . import personview
         placed = getattr(self, "_last_recalled", {}).pop(conv, None)
         if not placed or not str(reply_text or "").strip():
             return []
@@ -204,7 +204,7 @@ class Retrieval:
                 row["uses"] = int(_num(row.get("uses"))) + 1
                 row["used"] = now
                 dirty.add(kind)
-                used.append({"id": item_id, "text": person.shown(row)})
+                used.append({"id": item_id, "text": personview.shown(row)})
         self._flush_memory_counters()
         return used
 
@@ -225,8 +225,8 @@ class Retrieval:
     def _person_block(self, conv: str, focus_text: str, budget: float) -> tuple[str, list[tuple[str, str, str]]]:
         """What a page chat's prompt knows of its one person (person.py), within `budget` estimated tokens: the
         same block in every chat of theirs, the facts ranked by `focus_text`."""
-        from . import person, profile, today
-        block, ids = person.recall_block(self.person_store, focus_text, time.time(), self._prompt_tz(),
+        from . import personview, profile, today
+        block, ids = personview.recall_block(self.person_store, focus_text, time.time(), self._prompt_tz(),
                                          self.chat_lang, budget, manner=profile.manner_lines(today.runtime_of(self)))
         return block, [(conv, "person", i) for i in ids]
 

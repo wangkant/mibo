@@ -1,6 +1,6 @@
 """How much of a person store reaches the reply prompt.
 
-Builds person.recall_block for the 20 recall probes of the memory acceptance
+Builds personview.recall_block for the 20 recall probes of the memory acceptance
 life (asked on 11-30 and 12-04) and counts, for each store given:
 the active facts placed, the health / dislike / form facts placed (these
 must never be missing), whether the talk made it in, and the block size.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mibo import person, profile
+from mibo import person, personview, profile
 
 TZ = timezone(timedelta(hours=-8))
 # Estimated tokens (context.text_tokens): about what the memory block is left at a 64k window (prompt.py).
@@ -41,7 +41,7 @@ def measure(path: Path) -> dict:
     placed_n, must_n, talk_n, sizes, missed = [], [], 0, [], {}
     for (month, day), hour, words in PROBES:
         now = datetime(2026, month, day, hour, 0, tzinfo=TZ).timestamp()
-        block, ids = person.recall_block(store, words, now, TZ, "zh", BUDGET, manner=manner)
+        block, ids = personview.recall_block(store, words, now, TZ, "zh", BUDGET, manner=manner)
         got = set(ids)
         placed_n.append(len(got & {f["id"] for f in facts}))
         must_n.append(len(got & must))

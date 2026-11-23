@@ -8,8 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from harness import app, attacks
 
-from mibo import settingsfile, welcome
-from mibo.agent import Agent
+from mibo import memgate, settingsfile, welcome
 
 NOTES = attacks.load("memory")
 TOKEN = "test-local-capability"
@@ -19,7 +18,7 @@ HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 @pytest.mark.parametrize("note", NOTES)
 def test_the_memory_gate_refuses_instructions_and_keeps_facts(note: dict) -> None:
     # Every memory write (a 记住, an import, an edit, the fold) passes its note through this gate.
-    assert bool(Agent._validate_memory_candidate(note["text"])) is not note["refused"]
+    assert bool(memgate.validate(note["text"])) is not note["refused"]
 
 
 @pytest.mark.slow

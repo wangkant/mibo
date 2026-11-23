@@ -209,7 +209,7 @@ def like(runtime: Path, what: str, now: float, *, words: str = "") -> None:
         return
     likes = [x for x in rows if str(x.get("topic")).casefold() != key]
     said = {"topic": topic, "words": _clip(words), "at": now, **({"until": now + WISH_S} if passing else {})}
-    state["likes"] = (likes + [said])[-LIKES_MAX:]
+    state["likes"] = [*likes, said][-LIKES_MAX:]
     state["rules"] = [r for r in state.get("rules") or []
                       if not (r.get("kind") == "topic" and str(r.get("topic")).casefold() == key)]
     if not passing and len(topic) <= _walk_len(topic):
@@ -225,12 +225,14 @@ def dislike(runtime: Path, what: str, about: str, now: float, *, words: str = ""
     does any walk word holding it."""
     what = _clip(what, WORD_LEN)
     if not what:
-        return None
+        return
     if about == "kind" and _kind(what):
-        return form(runtime, None, "text" if _kind(what) == "video" else "video", now, words=words or what)
+        form(runtime, None, "text" if _kind(what) == "video" else "video", now, words=words or what)
+        return
     if about == "length":
         # "Too long" wants short things; "too short", long ones.
-        return form(runtime, not _SHORT.search(what), None, now, words=words or what)
+        form(runtime, not _SHORT.search(what), None, now, words=words or what)
+        return
     key = what.casefold()
     said = {"by": "chat", "words": _clip(words), "at": now}
     new = []
@@ -272,7 +274,7 @@ def manner(runtime: Path, text: str, now: float) -> None:
     pinned = [p for p in state.get("pinned") or [] if isinstance(p, dict)]
     rows = [p for p in pinned if p.get("field") == "manner" and p["text"] != line]
     others = [p for p in pinned if p.get("field") != "manner"]
-    state["pinned"] = (others + (rows + [{"field": "manner", "text": line, "at": now}])[-MANNER_MAX:])[-PINNED_MAX:]
+    state["pinned"] = [*others, *[*rows, {"field": "manner", "text": line, "at": now}][-MANNER_MAX:]][-PINNED_MAX:]
     if _FEWER.search(line):
         state["pace"] = "less"
     _said(runtime, state, now)
@@ -402,7 +404,10 @@ def forget(runtime: Path, tokens: list[str]) -> list[str]:
 
 class _Model(drafting._Client):
     """The configured model, outside the service; keeps the usage the last answer reported."""
-    usage: dict = {}
+
+    def __init__(self, values: dict, usage_path: Path) -> None:
+        super().__init__(values, usage_path)
+        self.usage: dict = {}
 
     def _count_usage(self, model: str, body: dict) -> None:
         try:
@@ -507,7 +512,7 @@ def _history(runtime: Path) -> tuple[list[str], list[str], list[str]]:
     marks = feed._marks(events)[0]
     items = {item.id: item for item in Library(runtime).items()}
     liked, disliked, seen = [], [], {}
-    for at, ident, action, *_ in reversed(events):
+    for _at, ident, action, *_ in reversed(events):
         item = items.get(ident)
         if item is None or ident in seen or action == "seen":
             continue
@@ -690,24 +695,25 @@ async def answer(runtime: Path, home: Path, text: str, now: float | None = None)
     if not text or len(text) > FREE_MAX:
         raise ValueError("profile_invalid")
     state = _state(runtime)
-    _save(runtime, {**state, "free_text": text, "edits": (state.get("edits") or [])[-EDITS_MAX:]
-                    + [{"at": time.time() if now is None else now, "field": "free_text"}]})
+    _save(runtime, {**state, "free_text": text, "edits": [*(state.get("edits") or [])[-EDITS_MAX:],
+                                                          {"at": time.time() if now is None else now,
+                                                           "field": "free_text"}]})
     return await rewrite(runtime, home, now)
 
 
-def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
-    """The owner's own changes. A line they add to a text is pinned; a removed pinned line is unpinned.
-    Returns whether a text changed, so the caller can ask for a rewrite that turns a "not this" into a rule."""
-    now = time.time() if now is None else now
-    state = _state(runtime)
-    current = load(runtime)
-    pinned = current["pinned"]
-    changed = False
+def _check(ok: bool) -> None:
+    if not ok:
+        raise ValueError("profile_invalid")
+
+
+def _edit_texts(state: dict, current: dict, payload: dict) -> tuple[list[dict], bool]:
+    """The owner text, the character's lines and the pinned list as edited: (the pinned lines, whether a text
+    changed). A line added to a text is pinned; a pinned line removed from it is unpinned."""
+    pinned, changed = current["pinned"], False
     for field in FIELDS:
         if field not in payload:
             continue
-        if not isinstance(payload[field], str) or len(payload[field]) > OWNER_MAX * 2:
-            raise ValueError("profile_invalid")
+        _check(isinstance(payload[field], str) and len(payload[field]) <= OWNER_MAX * 2)
         lines = _lines(payload[field])
         if field == "character_learned":
             lines = lines[:LEARNED_LINES]
@@ -718,14 +724,17 @@ def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
         changed = changed or bool(added) or lines != current[field].splitlines()
     if "pinned" in payload:
         rows = payload["pinned"]
-        if not isinstance(rows, list) or not all(isinstance(p, dict) and p.get("field") in (*FIELDS, "manner")
-                                                 and isinstance(p.get("text"), str) for p in rows):
-            raise ValueError("profile_invalid")
+        _check(isinstance(rows, list) and all(isinstance(p, dict) and p.get("field") in (*FIELDS, "manner")
+                                              and isinstance(p.get("text"), str) for p in rows))
         pinned = [{"field": p["field"], "text": p["text"][:LINE_MAX]} for p in rows]
+    return pinned, changed
+
+
+def _edit_tastes(runtime: Path, state: dict, current: dict, payload: dict, now: float) -> None:
+    """The likes, the form wish, the source leans and the walk words as the owner set them."""
     if "likes" in payload:
         likes = payload["likes"]
-        if not isinstance(likes, list) or not all(isinstance(t, str) for t in likes):
-            raise ValueError("profile_invalid")
+        _check(isinstance(likes, list) and all(isinstance(t, str) for t in likes))
         # A like already there keeps the words it was said in.
         before = {str(x["topic"]).casefold(): x for x in current["likes"]}
         state["likes"] = [before.get(t.casefold()) or {"topic": t, "words": "", "at": now}
@@ -734,30 +743,30 @@ def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
         shape = payload["form"]
         if shape is None:
             state.pop("form", None)
-        elif (not isinstance(shape, dict) or shape.get("short") not in (True, False, None)
-              or shape.get("kind") not in ("video", "text", None)):
-            raise ValueError("profile_invalid")
         else:
+            _check(isinstance(shape, dict) and shape.get("short") in (True, False, None)
+                   and shape.get("kind") in ("video", "text", None))
             state["form"] = {**current["form"], "short": shape.get("short"), "kind": shape.get("kind"), "at": now}
     if "source_lean" in payload:
         lean = payload["source_lean"]
-        if not isinstance(lean, dict) or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
-                                                 for v in lean.values()):
-            raise ValueError("profile_invalid")
+        _check(isinstance(lean, dict) and all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                                              for v in lean.values()))
         keys = set(readable_sources(runtime))
         state["source_lean"] = {k: max(-1.0, min(1.0, float(v))) for k, v in lean.items() if k in keys}
     if "walk_words" in payload:
         words = payload["walk_words"]
-        if not isinstance(words, list) or not all(isinstance(w, str) for w in words):
-            raise ValueError("profile_invalid")
+        _check(isinstance(words, list) and all(isinstance(w, str) for w in words))
         state["walk_words"] = [w for w in (" ".join(x.split())[:WORD_LEN] for x in words) if w][:WORDS_MAX]
+
+
+def _edit_rules(state: dict, current: dict, payload: dict) -> None:
+    """The rules and the leans on the taste model's features as the owner set them."""
     if "rules" in payload:
         rules = payload["rules"]
-        if not isinstance(rules, list) or not all(
-                isinstance(r, dict) and ((r.get("kind") == "hide_source" and isinstance(r.get("key"), str))
-                                         or (r.get("kind") == "topic" and isinstance(r.get("topic"), str)))
-                for r in rules):
-            raise ValueError("profile_invalid")
+        _check(isinstance(rules, list) and all(
+            isinstance(r, dict) and ((r.get("kind") == "hide_source" and isinstance(r.get("key"), str))
+                                     or (r.get("kind") == "topic" and isinstance(r.get("topic"), str)))
+            for r in rules))
         # A rule already there keeps who made it, so removing one rule does not make the rewrite's rules the owner's.
         before = {(r.get("kind"), r.get("key"), r.get("topic")): r for r in current["rules"]}
         state["rules"] = [before.get((r.get("kind"), r.get("key"), r.get("topic")))
@@ -766,23 +775,36 @@ def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
     if "leans" in payload:
         # {feature: 1 | -1 | 0 | None}: merged into the leans there are; None takes one out.
         leans = payload["leans"]
-        if not isinstance(leans, dict) or not all(
-                isinstance(k, str) and k.partition(":")[0] in ("topic", "like", "subj", "origin", "kind")
-                and len(k) <= 120 and (v is None or (v in LEANS and not isinstance(v, bool))) for k, v in leans.items()):
-            raise ValueError("profile_invalid")
+        _check(isinstance(leans, dict) and all(
+            isinstance(k, str) and k.partition(":")[0] in ("topic", "like", "subj", "origin", "kind")
+            and len(k) <= 120 and (v is None or (v in LEANS and not isinstance(v, bool))) for k, v in leans.items()))
         state["leans"] = {k: v for k, v in {**current["leans"], **leans}.items() if v is not None}
+
+
+def _edit_pacing(state: dict, payload: dict) -> None:
+    """The pace and the quiet hours as Settings set them."""
     if "pace" in payload:
-        if payload["pace"] not in PACES:
-            raise ValueError("profile_invalid")
+        _check(payload["pace"] in PACES)
         state["pace"] = payload["pace"]
     if "quiet_hours" in payload:
         # {"from": "23:00", "to": "08:00"}, or None for none.
         hours = payload["quiet_hours"]
-        if hours is not None and not (isinstance(hours, dict) and all(
-                isinstance(hours.get(k), str) and _CLOCK.fullmatch(hours[k]) for k in ("from", "to"))
-                and hours["from"] != hours["to"]):
-            raise ValueError("profile_invalid")
+        _check(hours is None or (isinstance(hours, dict) and all(
+            isinstance(hours.get(k), str) and _CLOCK.fullmatch(hours[k]) for k in ("from", "to"))
+            and hours["from"] != hours["to"]))
         state["quiet_hours"] = hours and {"from": hours["from"], "to": hours["to"]}
+
+
+def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
+    """The owner's own changes. A line they add to a text is pinned; a removed pinned line is unpinned.
+    Returns whether a text changed, so the caller can ask for a rewrite that turns a "not this" into a rule."""
+    now = time.time() if now is None else now
+    state = _state(runtime)
+    current = load(runtime)
+    pinned, changed = _edit_texts(state, current, payload)
+    _edit_tastes(runtime, state, current, payload, now)
+    _edit_rules(state, current, payload)
+    _edit_pacing(state, payload)
     state["pinned"] = pinned[-PINNED_MAX:]
     # Every edit is a sign that inference or the rewrite was wrong; kept to look back on.
     state["edits"] = (state.get("edits") or [])[-EDITS_MAX:] + [

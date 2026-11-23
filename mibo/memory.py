@@ -9,7 +9,20 @@ import sqlite3
 import time
 from collections.abc import Callable, Iterable
 
-from . import channels, chatlangs, chatlog, db, memstate, memstore, person, timewords
+from . import (
+    channels,
+    chatlangs,
+    chatlog,
+    db,
+    memgate,
+    memstate,
+    memstore,
+    person,
+    personsaid,
+    personview,
+    secretwords,
+    timewords,
+)
 from .addressing import _HAS_CJK, names_regex
 from .channels import PAGE_PLATFORM
 from .context import CHECKPOINT
@@ -32,7 +45,7 @@ def _is_question(content: str, spec: chatlangs.Spec) -> bool:
 
 def _asks(content: str, spec: chatlangs.Spec) -> bool:
     """A question, whole or in its first clause: "记住了吗，别叫我鱼片"."""
-    return _is_question(content, spec) or _is_question(re.split(r"[，,。;；]", content.strip(), 1)[0], spec)
+    return _is_question(content, spec) or _is_question(re.split(r"[，,。;；]", content.strip(), maxsplit=1)[0], spec)
 
 
 def _forget_query(content: str, spec: chatlangs.Spec) -> str:
@@ -67,141 +80,6 @@ _SENTENCE_END = re.compile(r"(?<=[.!?;])\s+|(?<=[。！？；\n])\s*")
 
 # Beside memory.json, so a home moved by MEMORY_FILE keeps them together.
 STATE_FILE = "memory_state.json"
-
-
-def _shapes(*patterns: str) -> tuple[re.Pattern, ...]:
-    return tuple(re.compile(p, re.IGNORECASE) for p in patterns)
-
-
-# What `_validate_memory_candidate` refuses: narrow lexical gates for
-# control-plane shapes (hijacking, role swaps, triggers, extraction,
-# poisoning), not content moderation. Compiled once: every note, lesson and
-# tidy step passes through them.
-_POISON_SHAPES = _shapes(
-    r"\b(?:ignore|disregard|override)\b.{0,40}\b(?:instruction|prompt|rule)s?\b",
-    r"\b(?:system|developer)\s+(?:prompt|message|instruction)s?\b",
-    r"\b(?:follow|obey)\b.{0,30}\b(?:command|instruction|prompt|rule)s?\b",
-    r"\b(?:ignore|disregard|override|forget|reset|discard)\b.{0,60}"
-    r"\b(?:everything|anything|instruction|prompt|rule|told|conversation|memory)\b",
-    r"^(?:always|never|must|should)\b.{0,40}"
-    r"\b(?:reply|respond|answer|say|output|reveal|expose|send|follow|"
-    r"obey|ignore|stay|remain|act|pretend)\b",
-    r"\b(?:you|the\s+assistant|assistant|chatbot|bot|model)\b.{0,20}"
-    r"\b(?:always|never|must|should)\b.{0,40}"
-    r"\b(?:reply|respond|answer|say|output|act|pretend|stay|remain)\b",
-    r"\byou\b.{0,15}\b(?:need\s+to|will|shall|have\s+to)\b.{0,25}"
-    r"\b(?:reply|respond|answer|say|output|speak|write|use)\b.{0,20}"
-    r"\b(?:only|always|exclusively)\b",
-    # Conditional triggers, each within one sentence and only with the
-    # verb as consequence ("gets defensive when..." is a fact).
-    # Opening a sentence: "when he says banana, answer ...".
-    r"(?:^|[.;!?]\s*)(?:when|whenever|if)\b[^.;!?]{0,80}"
-    r"\b(?:answer|reply|respond|say|output|reveal|expose|send|act)\b",
-    # After a comma or "then": "if he types ping, reply pong".
-    r"\b(?:when|whenever|if)\b[^.;!?]{0,80}(?:,|\bthen\b)\s*"
-    r"(?:(?:you|the\s+assistant|assistant|chatbot|bot|model)\s+)?"
-    r"(?:(?:must|should|will|shall|always|only|just|please)\s+)*"
-    r"(?:answer|reply|respond|say|output|reveal|expose|send|act)\b",
-    # The assistant as subject: "if he says banana you answer in haiku".
-    r"\b(?:when|whenever|if)\s+\S[^.;!?]{0,80}?\s"
-    r"(?:you|the\s+assistant|assistant|chatbot|bot|model)\s+"
-    r"(?:(?:must|should|will|shall|always|only|just)\s+)*"
-    r"(?:answer|reply|respond|say|output|reveal|expose|send|act)\b",
-    r"\b(?:reveal|print|show|expose)\b.{0,30}"
-    r"\b(?:secret|private|memory|prompt|instruction)s?\b",
-    # Assistant/persona identity stated as a supposed fact.
-    r"\byour\s+(?:(?:real|actual|true)\s+)?"
-    r"(?:name|identity|persona|role)\s+(?:is|=)\b",
-    # Within one sentence, like the triggers.
-    r"\byou\s+(?:are|are\s+not|aren't|were)\b[^.;!?]{0,60}"
-    r"\b(?:human|person|sentient|ai|bot|assistant|model|character|persona)\b",
-    r"\byou\s+identify\s+as\b.{0,20}"
-    r"\b(?:human|person|sentient|ai|bot|assistant|model|character|persona)\b",
-    r"\b(?:the\s+)?(?:assistant|chatbot|bot|model|persona|character)"
-    r"(?:'s)?\b.{0,35}\b(?:real\s+name|identity|persona|role)\b",
-    r"^(?:the\s+)?(?:assistant|chatbot|bot|model|persona|character)'s\s+"
-    r"(?:(?:real|actual|true)\s+)?name\s+(?:is|=)\b",
-    r"\b(?:this|the)\s+(?:assistant|chatbot|bot|model)\b.{0,20}"
-    r"\b(?:is|are|was|were)\b.{0,15}"
-    r"\b(?:human|person|sentient|ai|assistant|bot|model|character)\b",
-    r"\b(?:correct|right|required|expected)\s+answer\b.{0,80}"
-    r"\b(?:ai|bot|assistant|model|human|identity)\b",
-    r"\bno\s+(?:topic|subject)\b.{0,30}\boff[- ]limits\b",
-    r"\b(?:promised|agreed|swore)\b.{0,50}"
-    r"\b(?:stay|remain|act|pretend|reply|answer)\b",
-    r"(?:\u5ffd\u7565|\u65e0\u89c6|\u8986\u76d6|\u5fd8\u6389).{0,30}"
-    r"(?:\u6307\u4ee4|\u63d0\u793a|\u89c4\u5219|\u4e4b\u524d\u7684\u4e00\u5207)",
-    r"^(?:\u4ece\u73b0\u5728\u5f00\u59cb|\u4ee5\u540e|\u4eca\u540e|\u6c38\u8fdc)?\s*(?:\u8bf7)?\s*"
-    r"(?:\u626e\u6f14|\u5047\u88c5|\u5145\u5f53|\u4f5c\u4e3a)",
-    r"^(?:\u4ee5\u540e|\u4eca\u540e|\u8bf7)?\s*(?:\u4e00\u76f4|\u53ea|\u6c38\u8fdc|\u5fc5\u987b|\u603b\u662f)"
-    r".{0,18}(?:\u56de\u590d|\u56de\u7b54|\u8f93\u51fa|\u8bf4)",
-    r"(?:\u52a9\u624b|\u804a\u5929\u673a\u5668\u4eba|\u673a\u5668\u4eba|\u6a21\u578b|\u89d2\u8272).{0,20}"
-    r"(?:\u771f\u6b63\u7684\u540d\u5b57|\u771f\u5b9e\u59d3\u540d|\u771f\u540d)",
-    r"\u4f60(?:\u7684)?(?:\u771f\u6b63\u7684\u540d\u5b57|\u771f\u5b9e\u59d3\u540d|\u771f\u540d).{0,8}"
-    r"(?:\u662f|\u53eb)",
-    r"^\u4f60\u53eb.{1,20}$",
-    r"\u4f60.{0,4}(?:\u8981|\u5fc5\u987b|\u5e94\u8be5|\u603b\u662f|\u6c38\u8fdc|\u4f1a).{0,18}"
-    r"(?:\u5047\u88c5|\u626e\u6f14|\u56de\u590d|\u56de\u7b54|\u53ea\u7528|\u8f93\u51fa|\u8bf4)",
-    r"\u4f60.{0,4}(?:\u662f|\u4e0d\u662f).{0,12}"
-    r"(?:\u4eba\u7c7b|\u771f\u4eba|AI|\u4eba\u5de5\u667a\u80fd|\u673a\u5668\u4eba|\u6a21\u578b)",
-    r"(?:\u52a9\u624b|\u804a\u5929\u673a\u5668\u4eba|\u673a\u5668\u4eba|\u6a21\u578b).{0,15}"
-    r"\u662f.{0,12}(?:\u4eba\u7c7b|\u771f\u4eba|AI|\u4eba\u5de5\u667a\u80fd|\u673a\u5668\u4eba)",
-    r"(?:AI|\u4eba\u5de5\u667a\u80fd|\u673a\u5668\u4eba|\u4eba\u7c7b).{0,30}"
-    r"(?:\u6b63\u786e\u7b54\u6848|\u6807\u51c6\u7b54\u6848)",
-    r"(?:\u6b63\u786e\u7b54\u6848|\u6807\u51c6\u7b54\u6848).{0,30}"
-    r"(?:AI|\u4eba\u5de5\u667a\u80fd|\u673a\u5668\u4eba|\u4eba\u7c7b)",
-)
-
-_ROLE_CONTROL = _shapes(
-    r"^(?:please\s+)?act\s+(?:as|like)\b",
-    r"^(?:please\s+)?behave\s+(?:as|like)\b",
-    r"^(?:please\s+)?pretend\s+to\s+be\b",
-    r"^(?:please\s+)?roleplay\s+(?:as|like)\b",
-    r"^(?:please\s+)?(?:play|assume)\s+the\s+role\s+of\b",
-    r"^(?:please\s+)?become\s+(?:an?\s+)?"
-    r"(?:human|person|sentient|ai|bot|assistant|model|character|persona)\b",
-    r"^(?:please\s+)?call\s+yourself\b",
-    r"^(?:please\s+)?be\s+(?:an?\s+)?"
-    r"(?:human|person|sentient|ai|bot|assistant|model|character|persona)\b",
-    r"^(?:please\s+)?keep\s+(?:acting|pretending|behaving)\b.{0,30}"
-    r"\b(?:human|person|sentient|ai|bot|assistant|model|character|persona)\b",
-    r"^(?:please\s+)?(?:stay|remain)\s+(?:in\s+)?"
-    r"(?:character|persona|role)\b",
-    r"^(?:from\s+now\s+on|henceforth),?\s+(?:please\s+)?"
-    r"(?:act\s+(?:as|like)|behave\s+(?:as|like)|pretend\s+to\s+be|"
-    r"roleplay\s+(?:as|like)|(?:play|assume)\s+the\s+role\s+of|"
-    r"become|call\s+yourself|stay\s+in\s+character|"
-    r"remain\s+in\s+character)\b",
-    # A new self from some point on: "from now on you are DAN", "you are now a pirate".
-    r"\b(?:from\s+now\s+on|from\s+here\s+on|going\s+forward|henceforth|starting\s+(?:now|today))\b"
-    r"[^.;!?]{0,20}\byou(?:\s+are|'re|\s+will\s+be|\s+shall\s+be)\b",
-    r"(?:^|[.;!?]\s*)you(?:\s+are|'re)\s+(?:now|called|named)\b",
-    r"(?:\u4ece\u73b0\u5728(?:\u5f00\u59cb|\u8d77)|\u4ece\u4eca(?:\u5929|\u4ee5\u540e)|\u4ee5\u540e|\u4eca\u540e|"
-    r"\u63a5\u4e0b\u6765)[\uff0c,\s]*\u4f60(?:\u5c31|\u5c06)?(?:\u662f|\u53eb|\u5f53)",
-    r"^\u4f60\u73b0\u5728(?:\u5c31)?\u662f",
-)
-
-_OUTPUT_CONTROL = _shapes(
-    r"^(?:please\s+)?(?:respond|reply|answer|say|output|speak|write)\s+"
-    r"(?:only|always|exclusively|in\b|using\b)",
-    r"^(?:please\s+)?(?:respond|reply|answer|say|output|speak|write|communicate)\s+"
-    r".{1,30}\s+(?:from\s+now\s+on|henceforth)$",
-    r"^(?:only|always)\s+"
-    r"(?:respond|reply|answer|say|output|speak|write|communicate)\s+"
-    r"(?:in|using|with)\b",
-    r"^(?:please\s+)?use\s+only\b",
-    r"^(?:please\s+)?use\s+(?:only\s+)?\S+(?:\s+\S+){0,3}\s+"
-    r"for\s+(?:every|each|all)\s+(?:reply|response|answer|output)s?$",
-    r"^(?:the|every|all)\s+"
-    r"(?:repl(?:y|ies)|responses?|answers?|outputs?)\s+"
-    r"(?:must|should|will|shall|has\s+to)(?:\s+always)?\s+"
-    r"(?:be\s+(?:only\s+)?in|use|contain|start|end)\b",
-    r"^(?:please\s+)?(?:respond|reply|answer|say|output|speak|write)\s+"
-    r"every\s+(?:question|reply|response|answer)\s+(?:in|using)\b",
-    r"^(?:\u8bf7)?\u7528.{1,16}(?:\u56de\u590d|\u56de\u7b54|\u8f93\u51fa|\u8bf4|\u8bf4\u8bdd)$",
-    r"^(?:\u4ee5\u540e|\u4eca\u540e)\u7528.{1,16}(?:\u56de\u590d|\u56de\u7b54|\u8f93\u51fa|\u8bf4|\u8bf4\u8bdd)$",
-    r"^\u6240\u6709(?:\u56de\u590d|\u56de\u7b54|\u8f93\u51fa)\u90fd\u7528.{1,16}$",
-)
 
 
 class Memory:
@@ -281,7 +159,7 @@ class Memory:
         by_conv: dict[str, list[dict]] = {}
         for row in rows:
             if row.get("conv"):
-                by_conv.setdefault(row["conv"], []).append({"id": row["id"], "text": person.shown(row)})
+                by_conv.setdefault(row["conv"], []).append({"id": row["id"], "text": personview.shown(row)})
         for conv, items in by_conv.items():
             if told is not None:
                 told(channels.dm_user(conv).split(":", 1)[-1], items)
@@ -384,14 +262,14 @@ class Memory:
         return removed
 
     def _mask_lines(self, conv: str, values: dict[str, str]) -> int:
-        """Hide ID and card numbers, passwords and codes (person.mask, with the turn's `values`) in this chat's recent
+        """Hide ID and card numbers, passwords and codes (secretwords.mask, with the turn's `values`) in this chat's recent
         lines, wherever _purge_lines walks, and in the steps its replies keep; how many lines changed."""
-        changed = self._purge_lines(conv, lambda text: person.mask(text, values)[1],
-                                    lambda text: person.mask(text, values)[0])
+        changed = self._purge_lines(conv, lambda text: secretwords.mask(text, values)[1],
+                                    lambda text: secretwords.mask(text, values)[0])
         # A step of the reply (dm.py keeps its words with it) may carry the number too.
         for row in getattr(self, "dm_history", {}).get(channels.dm_user(conv), []):
             if row.get("steps"):
-                row["steps"] = [person.mask(step, values)[0] for step in row["steps"]]
+                row["steps"] = [secretwords.mask(step, values)[0] for step in row["steps"]]
         return changed
 
     def _log_forget(self, conv: str, gone: Callable[[dict], object]) -> int:
@@ -539,7 +417,7 @@ class Memory:
         """After a sent reply: the plans it asked about (person.apply_turn); a turn they asked not to keep
         leaves its words only as hashes. What they said of themselves is the fold's. A number or a code said in
         it is masked in the chat's record: this turn saw it, no later one does."""
-        values = {**person.secret_values(said), **person.secret_values(reply)}
+        values = {**secretwords.secret_values(said), **secretwords.secret_values(reply)}
         if values:
             self._mask_lines(conv, values)
         store = self.person_store
@@ -581,10 +459,10 @@ class Memory:
             refused, kept = self._person_keep(conv, content, code, "command")
             if refused:
                 return say(refused)
-            colon, sep = person.marks(code)
-            return say("noted") + colon + sep.join(person.second_person(words, code) for words in kept)
+            colon, sep = personview.marks(code)
+            return say("noted") + colon + sep.join(personsaid.second_person(words, code) for words in kept)
         if kind == "recall":
-            lines = person.listing(store, code)
+            lines = personview.listing(store, code)
             if not lines:
                 return say("empty")
             lines = [_FULL_STOP_RE.sub(" ", line).strip() for line in lines]
@@ -599,8 +477,8 @@ class Memory:
             if not (gone or lines):
                 return say("nothing_to_forget")
             # What went, named: the kept things it took, else the words it took from the chats.
-            colon, sep = person.marks(code)
-            named = [person.second_person(r["text"], code) for r in gone][:3] or [query]
+            colon, sep = personview.marks(code)
+            named = [personsaid.second_person(r["text"], code) for r in gone][:3] or [query]
             return say("forgotten") + colon + sep.join(named)
         # forget_that: what they said just before.
         lines = self._last_said(conv)
@@ -614,8 +492,8 @@ class Memory:
         words = self._telling_words([r["text"] for r in rows], conv, [t for _s, t in lines])
         replies = self._replies_after(conv, {seq for seq, _t in lines})
         gone, _lines = self._forget_everywhere(conv, words, texts, now, replies, code=code)
-        colon, sep = person.marks(code)
-        named = [person.second_person(r["text"], code) for r in gone][:3]
+        colon, sep = personview.marks(code)
+        named = [personsaid.second_person(r["text"], code) for r in gone][:3]
         return say("forgotten") + (colon + sep.join(named) if named else "")
 
     def _replies_after(self, conv: str, seqs: set[int]) -> list[str]:
@@ -724,15 +602,15 @@ class Memory:
         store = self.person_store
         if not store.on:
             return "paused", []
-        if person.secret(content):
+        if secretwords.secret(content):
             logger.info("[Agent] person: a secret not kept")
             return "secret", []
-        content = self._validate_memory_candidate(content)
+        content = memgate.validate(content)
         if not content:
             return "not_instructions", []
         now = time.time()
         facts, kept = [], []
-        for fact_kind, slot, text in person.command_facts(content):
+        for fact_kind, slot, text in personsaid.command_facts(content):
             if not store.keeps(fact_kind, text):
                 continue
             due = fact_kind == "other" and timewords.resolve_future(text, now, self._prompt_tz(), (code,))
@@ -786,9 +664,9 @@ class Memory:
         store = self.person_store
         texts = {f["text"] for f in store.facts()}
         out = []
-        for line in person.pasted_lines(text):
+        for line in personsaid.pasted_lines(text):
             words = person.neutral(line)
-            why = ("secret" if person.secret(line) else "not_instructions" if not self._validate_memory_candidate(line)
+            why = ("secret" if secretwords.secret(line) else "not_instructions" if not memgate.validate(line)
                    else "kept" if words in texts
                    else "health_off" if not store.data["use"]["health"] and person.health("", words) else "")
             out.append({"text": words, "ok": not why, "why": why})
@@ -804,11 +682,11 @@ class Memory:
         rows = []
         for line in lines:
             words = person.neutral(line)
-            if not words or person.secret(words) or not self._validate_memory_candidate(words):
+            if not words or secretwords.secret(words) or not memgate.validate(words):
                 continue
             # Typed by what the person's own 记住 would say: Chinese "喜欢爬山" reads as "我喜欢爬山".
             chinese = re.match(r"[一-鿿]", words) and not re.search(r"[぀-ヿ가-힯]", words)
-            kind, slot = person._command_kind(("我" + words) if chinese else words)
+            kind, slot = personsaid._command_kind(("我" + words) if chinese else words)
             if store.keeps(kind, words):
                 row, _old = store.put_fact(kind, slot, words, now, src="import", conv=conv, imp=3)
                 rows.append(row)
@@ -841,14 +719,14 @@ class Memory:
             return None
         texts = [row["text"]] + ([row["said"]] if row.get("said") else [])
         # In the chats, also the lines that name its thing ("芒果" of "我对芒果过敏").
-        words = texts + ([person.thing_of(row)] if chats and person.thing_of(row) else [])
+        words = texts + ([personsaid.thing_of(row)] if chats and personsaid.thing_of(row) else [])
         self._forget_everywhere(conv, words, texts, time.time(), chats=chats)
         return self.__dict__.get("_page_scrub", {}).pop(conv, {})
 
     def _person_edit(self, item_id: str, text: str) -> dict | None:
         """The person's own words for one fact or plan; the old ones go to
         the trash, to be put back. None when the item or the words fail."""
-        text = self._validate_memory_candidate(text, max_chars=person.TEXT_MAX)
+        text = memgate.validate(text, max_chars=person.TEXT_MAX)
         if not text:
             return None
         now = time.time()
@@ -923,103 +801,3 @@ class Memory:
             }))
         self._mem_cmd_pats = (names, table)
         return table
-
-    @staticmethod
-    def _validate_memory_candidate(text: str, *, max_chars: int = 200) -> str:
-        """Accept short user facts; reject durable prompt or persona controls.
-        Memory reaches every later prompt, so claims about the assistant's
-        identity or permissions are refused like imperatives."""
-        note = str(text or "").strip().replace("\r", " ").replace("\n", " ")
-        note = re.sub(r"\s+", " ", note)[:max_chars]
-        if not note or any(token in note for token in ("<", ">", "{", "}", "[", "]")):
-            return ""
-        # An ID or card number, a password or a code is never kept, whoever writes it.
-        if person.secret(note):
-            logger.info("[Agent] a secret not kept")
-            return ""
-        if Memory._reads_as_instruction(note):
-            logger.warning("[Agent] rejected prompt-like memory candidate")
-            return ""
-        return note
-
-    @staticmethod
-    def _reads_as_instruction(text: str) -> bool:
-        """Whether `text` reads as a control of the character: an imperative, a role, a reply language or format, a
-        standing rule, or a claim of unrestricted access (what the memory gate refuses, and what the chat's
-        checkpoint drops, dm.py)."""
-        note = re.sub(r"\s+", " ", str(text or "").strip())
-        low = note.lower()
-        matches_poison_shape = any(
-            shape.search(low) for shape in _POISON_SHAPES
-        ) or any(
-            re.search(spec.instruction, low, re.IGNORECASE)
-            for spec in chatlangs.SPECS.values() if spec.instruction
-        )
-
-        # "Act as If is the title of..." describes a work, not a role.
-        title_or_plot_declaration = bool(re.search(
-            r"\bis\s+(?:the\s+)?(?:title|plot|name|theme)\s+of\b",
-            low,
-        ))
-        role_control = any(
-            shape.search(low) for shape in _ROLE_CONTROL
-        ) and not title_or_plot_declaration
-
-        output_control = any(shape.search(low) for shape in _OUTPUT_CONTROL)
-
-        # Only claims of unrestricted access or waived content boundaries;
-        # ordinary permissions stay memorable.
-        grants_unrestricted_access = bool(re.search(
-            r"(?:"
-            r"\b(?:you|assistant|chatbot|bot|model)\b.{0,20}"
-            r"\b(?:allowed|authorized|permitted)\s+to\s+"
-            r"(?:hear|know|access|receive|see|read|be\s+told)\b.{0,35}"
-            r"\b(?:anything|everything|content)\b"
-            r"|"
-            r"\b(?:allowed|authorized|permitted)\s+to\s+"
-            r"(?:hear|know|access|receive|see|read|be\s+told)\b.{0,35}"
-            r"\b(?:secret|private|unrestricted)\b"
-            r")",
-            low,
-            re.IGNORECASE,
-        ))
-        explicit_consent = bool(re.search(
-            r"\bconsent(?:ed|s|ing)?\b.{0,35}"
-            r"\b(?:explicit|sexual|adult|unrestricted)\s+content\b",
-            low,
-            re.IGNORECASE,
-        ))
-        media_context = bool(re.search(
-            r"\b(?:watch|view|read|film|movie|show|book|scene|play)\b",
-            low,
-            re.IGNORECASE,
-        ))
-
-        # An output modal before an output verb anywhere ("rule: always reply
-        # in English"), unless that sentence's subject is a third person ("He
-        # should reply to Alice tomorrow"), judged per occurrence. A capitalised
-        # name counts only before must/should (case-sensitive); pronouns,
-        # quantifiers and role nouns are not such a subject.
-        subject = (r"(?:(?i:he|she|they)|(?!(?i:you|i|we|it|this|that|these|"
-                   r"those|everyone|everybody|anyone|anybody|someone|somebody|"
-                   r"nobody|all|each|every|people|members?|admins?|"
-                   r"(?:persona|character|assistant|chatbot|bot|model|rule|"
-                   r"note|user|owner)s?)\b)"
-                   r"[A-Z][\w'-]*)")
-
-        def _said_of_a_third_person(hit: re.Match) -> bool:
-            before = re.split(r"[.;:!?]", note[:hit.start()])[-1]
-            if hit.group(1).lower() in ("must", "should"):
-                return bool(re.fullmatch(rf"\s*{subject}\s+", before))
-            return bool(re.fullmatch(
-                rf"\s*(?:(?i:he|she|they)|{subject}\s+(?i:must|should))\s+",
-                before))
-
-        modal_output = any(
-            not _said_of_a_third_person(hit) for hit in re.finditer(
-                r"\b(always|never|must|should)\s+"
-                r"(?:reply|respond|say|output|reveal|expose|send|follow|obey|ignore)\b",
-                note, re.IGNORECASE))
-
-        return bool(matches_poison_shape or role_control or output_control or modal_output
-                    or grants_unrestricted_access or (explicit_consent and not media_context))

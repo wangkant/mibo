@@ -9,7 +9,7 @@ import logging
 import time
 from datetime import datetime
 
-from . import abilities, catalog, channels, context, db, person, today
+from . import abilities, catalog, channels, context, db, memgate, person, secretwords, today
 from .decision import PASS, SEND
 from .llm import FROM_BUDGET, ProviderError, answer_text, purpose
 from .loop import ANSWER_NOW, ChatLookups, stopped_reply
@@ -376,8 +376,8 @@ class DirectMessages:
     def _checked_checkpoint(self, text: str) -> str:
         """The summary as it may be kept: nothing invisible, a line that reads as an instruction (the memory gate's
         shapes, its bullet aside) dropped, and an ID or card number, password or code masked."""
-        lines = [person.mask(line, {})[0] for line in scrub_third_party_text(text).splitlines()
-                 if not self._reads_as_instruction(line.strip().lstrip("-*•·").strip())]
+        lines = [secretwords.mask(line, {})[0] for line in scrub_third_party_text(text).splitlines()
+                 if not memgate.reads_as_instruction(line.strip().lstrip("-*•·").strip())]
         return "\n".join(lines).strip()
 
     def _cut_without_summary(self, span: list[dict]) -> str:

@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import channels, db, person, ranking, timewords
+from . import channels, db, ranking, secretwords, timewords
 from .textproc import _focus_tokens
 
 NAME = "search_past_chats"
@@ -44,8 +44,8 @@ def page_chats(runtime: Path) -> dict[str, tuple[str, str]]:
 
 def _quote(row: dict) -> str:
     who = "you" if row.get("self") else "they"
-    # A number or a code said in it never comes back, whenever the line was logged (person.mask).
-    return f"{who} said: {json.dumps(person.mask(row['text'])[0][:LINE_CHARS], ensure_ascii=False)}"
+    # A number or a code said in it never comes back, whenever the line was logged (secretwords.mask).
+    return f"{who} said: {json.dumps(secretwords.mask(row['text'])[0][:LINE_CHARS], ensure_ascii=False)}"
 
 
 def scope(agent, here: str) -> dict:
@@ -91,7 +91,7 @@ def search(at: dict, query: str, when: str, hits: int = HITS) -> tuple[str, list
         pair = [row, near] if near is not None and not row.get("self") else [near, row] if near is not None else [row]
         day = datetime.fromtimestamp(row["t"], tz)
         ident, title = chats[row["conv"].rsplit(":", 1)[-1]]
-        title = person.mask(title)[0]
+        title = secretwords.mask(title)[0]
         named = f'chat "{title}"' if title else "the main chat" if ident == "main" else "an untitled chat"
         days = (datetime.fromtimestamp(now, tz).date() - day.date()).days
         lines.append(f"- {day:%Y-%m-%d %H:%M} ({days} days ago), {named}: " + " / ".join(map(_quote, pair)))

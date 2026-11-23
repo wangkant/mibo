@@ -14,6 +14,8 @@ fails closed; an unusable answer changes nothing and is tried again later."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import functools
 import json
 import logging
 import re
@@ -24,7 +26,7 @@ from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
 
-from . import chatlangs, memstate, quiet, ranking, timewords
+from . import chatlangs, memgate, memstate, person, quiet, ranking, timewords
 from .llm import purpose
 from .memory import _SENTENCE_END
 from .textproc import _clean_prompt_source, _fence_user_data, _strip_web_desc, salvage_json_object, strip_json_fences
@@ -280,6 +282,211 @@ def _said_when(lines: list, when: str):
                     yield row, when[i:i + size]
 
 
+class _FoldAnswer:
+    """One fold answer applied op by op (`Consolidation._apply_person_fold`): what each op may stand on is a line
+    of theirs, and `done` counts what was applied and each refusal with its reason."""
+
+    def __init__(self, agent, store, lines: dict, facts: dict, plans: dict, now: float):
+        self.agent, self.store, self.lines, self.facts, self.plans, self.now = agent, store, lines, facts, plans, now
+        self.tz = agent._prompt_tz()
+        self.mine = [r for r in lines.values() if not agent._own_line(r)]
+        self.lang = _their_lang([r["text"] for r in self.mine], agent.chat_lang)
+        self.langs = tuple(dict.fromkeys(c for c in (self.lang, agent.chat_lang) if c))
+        self.done: Counter = Counter()
+        self.todo: list = []
+
+    def run(self, ops: list, apply: Callable[[dict], None]) -> None:
+        """Each op in order; a refused re-asked op puts the one it stands for next."""
+        self.todo[:] = reversed(ops)
+        while self.todo:
+            apply(self.todo.pop())
+
+    def refuse(self, why: str, op: dict | None = None) -> None:
+        if op is not None and isinstance(op.get("instead"), dict):
+            self.todo.append(op["instead"])
+            return
+        self.done["refused"] += 1
+        self.done[f"refused.{why}"] += 1
+
+    def cited(self, op: dict) -> list:
+        ids = op.get("from") if isinstance(op.get("from"), list) else []
+        return [self.lines[i] for i in ids if i in self.lines and not self.agent._own_line(self.lines[i])]
+
+    def theirs(self, op: dict) -> str:
+        return "\n".join(r["text"] for r in self.cited(op))
+
+    def text_of(self, op: dict) -> str:
+        text = memgate.validate(_clean_prompt_source(op.get("text") or ""), max_chars=person.TEXT_MAX)
+        return "" if not text or self.store.tombed(text) else text
+
+    def source(self, op: dict, ok: Callable[[str], bool]) -> list:
+        """The cited lines when they say it; else the one line of theirs that does, newest first, for a
+        model that cites the wrong line."""
+        src = self.cited(op)
+        if src and ok("\n".join(r["text"] for r in src)):
+            return src
+        return next(([r] for r in reversed(self.mine) if ok(r["text"])), [])
+
+    def quoted(self, op: dict) -> list:
+        """The line of theirs that holds the op's quote word for word: a cited one, else any (a model that
+        cites the wrong line). A line of the character's, a page or a file never holds it."""
+        quote = str(op.get("quote") or "")
+        return ([r for r in self.cited(op) if person.holds(r["text"], quote)]
+                or next(([r] for r in reversed(self.mine) if person.holds(r["text"], quote)), []))
+
+    def unsaid(self, text: str, src: list) -> str:
+        """Why a text no line of theirs says was refused: written in another language, or never said."""
+        return "language" if _off(text, _their_lang([r["text"] for r in src or self.mine], self.lang)) else "unsaid"
+
+    # ---- facts ----------------------------------------------------------------
+
+    def pair_changes(self, ops: list) -> None:
+        """An end and an add from the same line about the same thing are one change: the add is the new value,
+        in the ended fact's kind and slot, and leaves it as past ("室友小雅…吵了一架" and "和小雅和好了")."""
+        for end in ops:
+            row = self.facts.get(str(end.get("id") or ""))
+            if str(end.get("op")) != "end" or row is None:
+                continue
+            for add in ops:
+                if str(add.get("op") or "add") == "add" \
+                        and set(map(str, add.get("from") or [])) & set(map(str, end.get("from") or [])) \
+                        and (person._share(row["text"], str(add.get("text") or "")) > 0
+                             or person.slot_key(add.get("slot")) == person.slot_key(row.get("slot"))):
+                    add.update(kind=row.get("kind", "other"), slot=row.get("slot", ""), changes=row)
+                    end["op"] = "changed"
+                    break
+
+    def fact_op(self, op: dict) -> None:
+        # An object with words and no op is an add: a weak model leaves the op out.
+        kind, row = str(op.get("op") or ("add" if op.get("text") else "")), self.facts.get(str(op.get("id") or ""))
+        if kind == "end" and row is not None and row.get("status", "active") == "active":
+            said = self.theirs(op)
+            # Only on a cited line of theirs that does not just say it again; it may name the thing in other
+            # words ("咖啡我戒了" for "美式，每天早上来一杯").
+            again = person.grounded(row["text"], said) and not timewords.has_negation(said)
+            if said and not again:
+                self.store.end_fact(row, self.now)
+                self.done["end"] += 1
+            else:
+                self.refuse("end")
+        elif kind == "add":
+            self.add_fact(op)
+
+    @staticmethod
+    def _says(text: str, kept: str, said: str) -> bool:
+        """Their line says it, or its new part beside what still holds of the fact it changes."""
+        return person._share(text, said) > 0 and bool(
+            person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}")))
+
+    def add_fact(self, op: dict) -> None:
+        store, now = self.store, self.now
+        text = self.text_of(op)
+        if not text:
+            self.refuse("rule", op)
+            return
+        slot = person.slot_key(op.get("slot"))
+        kept = "\n".join(f["text"] for f in store.facts() if slot and person.slot_key(f.get("slot")) == slot)
+        says = functools.partial(self._says, text, kept)
+        # The line holding its quote when it says it, else a line of theirs that does.
+        held = self.quoted(op)
+        src = held if held and says("\n".join(r["text"] for r in held)) else self.source(op, says)
+        if not src:
+            self.refuse(self.unsaid(text, held or self.cited(op)), op)
+            return
+        said = "\n".join(r["text"] for r in src)
+        text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}"))
+        if not store.keeps(str(op.get("kind") or ""), text):
+            self.refuse("kept")
+            return
+        at = _t(src[-1]) or now
+        # Day words copied from the line count from its day, the model's own from the day it was shown.
+        text, day = person.dated(text, at, self.tz, self.langs, said=said, now=now)
+        put, _old = store.put_fact(str(op.get("kind") or "other"), str(op.get("slot") or ""), text, at,
+                                   conv=src[-1]["conv"], refs=[_seq(r) for r in src], day=day)
+        changed = op.get("changes")
+        if changed is not None and changed is not put and changed.get("status", "active") == "active":
+            store.end_fact(changed, now, "replaced")
+        # A fact their line denies is past: one about the same thing (same kind, or the same head of the
+        # slot: "home" of "home.city") where the line names it with a "not" ("不是高三"), or any fact
+        # whose first words the line says with a "not" ("不住闵行了"), whatever it was filed under.
+        head = put.get("slot", "").split(".")[0]
+        for f in store.facts():
+            same = f.get("kind") == put.get("kind") or (head and f.get("slot", "").split(".")[0] == head)
+            if f is not put and ((same and person.denies(f["text"], said)) or person.denied(f, said)):
+                store.end_fact(f, now, "replaced")
+        self.agent._tell_profile([put], now)
+        self.done["add"] += 1
+
+    # ---- plans, the summary, the topics ---------------------------------------
+
+    def plan_op(self, op: dict) -> None:
+        kind, row = str(op.get("op") or ("add" if op.get("text") else "")), self.plans.get(str(op.get("id") or ""))
+        if kind in ("done", "cancel") and row is not None:
+            # Only on lines of theirs about it, as for an ended fact; and done only from its day on.
+            said_on = max((datetime.fromtimestamp(_t(r), self.tz).date().isoformat() for r in self.cited(op)),
+                          default="")
+            if person._share(row["text"], self.theirs(op)) > 0 \
+                    and (kind == "cancel" or str(row.get("due") or "") <= said_on):
+                row["status"] = "done" if kind == "done" else "cancelled"
+                self.done[kind] += 1
+            else:
+                self.refuse("plan")
+        elif kind in ("add", "move"):
+            self.dated_plan(op, kind, row)
+
+    def dated_plan(self, op: dict, kind: str, row: dict | None) -> None:
+        """An added plan, or a kept one moved, on the day their own words for it say."""
+        text = self.text_of(op) if kind == "add" else (row or {}).get("text", "")
+        when = str(op.get("when") or "")
+        if not text or not self.store.keeps("", text):
+            self.refuse("rule", op)
+            return
+        # In their words on any of their lines here ("博士申请文书截止" from "申请博士" and "文书…DDL").
+        held = self.quoted(op) if kind == "add" else []
+        if kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in self.mine)):
+            self.refuse(self.unsaid(text, held or self.cited(op)), op)
+            return
+        # The day's words in the line holding its quote or the cited lines, else in a line of theirs about
+        # the plan that has them.
+        groups = [held, self.cited(op)] + [[r] for r in reversed(self.mine) if person._share(text, r["text"]) > 0]
+        found = next(((line, words) for group in groups for line, words in _said_when(group, when)
+                      if timewords.resolve_future(words, _t(line), self.tz, self.langs)), None)
+        if found is None:
+            self.refuse("when", op)
+            return
+        said, words = found
+        due = timewords.resolve_future(words, _t(said), self.tz, self.langs)
+        if kind == "move" and row is not None:
+            self.store._trash("plan", row, "replaced", self.now)
+            row.update(due=due.due, due_kind=due.kind, until=due.until, said=due.words,
+                       said_at=_t(said), status="open", asked_at=0.0)
+        else:
+            self.store.put_plan(text, due, _t(said), conv=said["conv"], refs=[_seq(said)])
+        self.done[kind] += 1
+
+    def summary(self, summary) -> None:
+        if not (isinstance(summary, str) and summary.strip()):
+            return
+        parts = [p for p in _SENTENCE_END.split(_clean_prompt_source(summary)) if p.strip()]
+        # Sentences of a language with spaces are put back with one.
+        text = ("" if person._CJK.search(summary) else " ").join(
+            p.strip() for p in parts if not self.store.tombed(p))[:person.SUMMARY_MAX]
+        if memgate.validate(text, max_chars=person.SUMMARY_MAX):
+            self.store.data["talk"].update(summary=text, at=self.now)
+            self.done["summary"] += 1
+
+    def topics(self, said: list) -> None:
+        heard = "\n".join(r["text"] for r in self.lines.values())
+        day = datetime.fromtimestamp(self.now, self.tz).date().isoformat()
+        topics = self.store.data["talk"]["topics"]
+        for words in said[:PERSON_TOPICS]:
+            words = _clean_prompt_source(words if isinstance(words, str) else "")[:40]
+            if words and person.grounded(words, heard) and not self.store.tombed(words) \
+                    and not any(t.get("words") == words and t.get("day") == day for t in topics):
+                topics.append({"day": day, "words": words})
+                self.done["topic"] += 1
+
+
 class Consolidation:
     # ---- when ----------------------------------------------------------------
 
@@ -405,46 +612,16 @@ class Consolidation:
             asked = [{"role": "user", "content": _person_prompt(lang)
                       + _fence_user_data(json.dumps(payload, ensure_ascii=False))}]
             asked_at = time.time()
-
-            async def ask() -> tuple[str, object]:
-                with purpose("memory"):
-                    raw = await asyncio.wait_for(self._call_llm(
-                        "", asked, model=self.llm_judge_model, max_tokens=MAX_TOKENS,
-                        json_object=True, disable_thinking=True),
-                        max(1.0, float(self.llm_timeout_s) * 2))
-                return raw, salvage_json_object(strip_json_fences(raw))
             try:
-                raw, plan = await ask()
+                raw, plan = await self._ask_fold(asked)
                 if not isinstance(plan, dict):
                     raise ValueError("not a person fold answer")
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                starved = float(self.__dict__.get("_starved_at") or 0.0) >= asked_at
-                fold["failed"] = int(fold.get("failed") or 0) + 1
-                fold["why"] = "length" if starved else type(e).__name__
-                self._save_person()
-                next_at = budget.failed(PERSON_KEY, time.time(), e)
-                self._save_memory_state(force=False)
-                logger.warning("[Agent] person fold failed (%s): %s; next try in %d min",
-                               reason, fold["why"], max(0, int((next_at - time.time()) // 60)))
+                self._fold_failed(budget, fold, reason, e, asked_at)
                 return
-            off = _off_items(plan, lang)
-            # Once more for what came back in another language, rather than refusing it line by line; a call like
-            # any other, so not past the day's cap.
-            if off and not budget.allowed(PERSON_KEY, time.time(), int(self.settings.memory_calls_per_day),
-                                          min_gap_s=0.0):
-                asked += [{"role": "assistant", "content": raw}, {"role": "user", "content": _PERSON_AGAIN.substitute(
-                    language=EXAMPLES[lang][0], items=json.dumps(off, ensure_ascii=False))}]
-                try:
-                    budget.record_call(PERSON_KEY, time.time())
-                    _raw, again = await ask()
-                    if isinstance(again, dict):
-                        plan = _merged(plan, again, off, lang)
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    logger.warning("[Agent] person fold: asking again in %s failed: %s", lang, type(e).__name__)
+            plan = await self._fold_again(budget, asked, raw, plan, lang)
             if any(self._memory_gen(c) != g for c, g in gens.items()):
                 logger.info("[Agent] person fold dropped: something was forgotten meanwhile")
                 return
@@ -464,6 +641,48 @@ class Consolidation:
         finally:
             self._folding.discard(PERSON_KEY)
 
+    async def _ask_fold(self, asked: list[dict]) -> tuple[str, object]:
+        """The judge model's answer to `asked`, as written and as the JSON object read from it."""
+        with purpose("memory"):
+            raw = await asyncio.wait_for(self._call_llm(
+                "", asked, model=self.llm_judge_model, max_tokens=MAX_TOKENS,
+                json_object=True, disable_thinking=True),
+                max(1.0, float(self.llm_timeout_s) * 2))
+        return raw, salvage_json_object(strip_json_fences(raw))
+
+    def _fold_failed(self, budget: memstate.CallBudget, fold: dict, reason: str, error: Exception,
+                     asked_at: float) -> None:
+        """A fold whose answer did not come or could not be read: counted, and tried again after the budget's wait."""
+        starved = float(self.__dict__.get("_starved_at") or 0.0) >= asked_at
+        fold["failed"] = int(fold.get("failed") or 0) + 1
+        fold["why"] = "length" if starved else type(error).__name__
+        self._save_person()
+        next_at = budget.failed(PERSON_KEY, time.time(), error)
+        self._save_memory_state(force=False)
+        logger.warning("[Agent] person fold failed (%s): %s; next try in %d min",
+                       reason, fold["why"], max(0, int((next_at - time.time()) // 60)))
+
+    async def _fold_again(self, budget: memstate.CallBudget, asked: list[dict], raw: str, plan: dict,
+                          lang: str) -> dict:
+        """Once more for what came back in another language, rather than refusing it line by line; a call like
+        any other, so not past the day's cap. `plan` with what came back the second time merged in."""
+        off = _off_items(plan, lang)
+        if not off or budget.allowed(PERSON_KEY, time.time(), int(self.settings.memory_calls_per_day),
+                                     min_gap_s=0.0):
+            return plan
+        asked = [*asked, {"role": "assistant", "content": raw}, {"role": "user", "content": _PERSON_AGAIN.substitute(
+            language=EXAMPLES[lang][0], items=json.dumps(off, ensure_ascii=False))}]
+        try:
+            budget.record_call(PERSON_KEY, time.time())
+            _raw, again = await self._ask_fold(asked)
+            if isinstance(again, dict):
+                plan = _merged(plan, again, off, lang)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("[Agent] person fold: asking again in %s failed: %s", lang, type(e).__name__)
+        return plan
+
     def _apply_person_fold(self, store, plan: dict, lines: dict, facts: dict, plans: dict,
                            now: float) -> Counter:
         """Each operation on its own: a fact made of the words of the line of
@@ -472,181 +691,15 @@ class Consolidation:
         line denies becomes past; plan days worked out in code from their words
         and the day of the line that said them. Each refusal is counted with its
         reason; a re-asked op that is not said gives way to the one it stands for."""
-        from . import person
-        done = Counter()
-        tz = self._prompt_tz()
-        mine = [r for r in lines.values() if not self._own_line(r)]
-        lang = _their_lang([r["text"] for r in mine], self.chat_lang)
-        langs = tuple(dict.fromkeys(c for c in (lang, self.chat_lang) if c))
-        todo: list = []
-
-        def refuse(why: str, op: dict | None = None) -> None:
-            if op is not None and isinstance(op.get("instead"), dict):
-                todo.append(op["instead"])
-                return
-            done["refused"] += 1
-            done[f"refused.{why}"] += 1
-
-        def cited(op) -> list:
-            ids = op.get("from") if isinstance(op.get("from"), list) else []
-            return [lines[i] for i in ids if i in lines and not self._own_line(lines[i])]
-
-        def theirs(op) -> str:
-            return "\n".join(r["text"] for r in cited(op))
-
-        def text_of(op) -> str:
-            text = self._validate_memory_candidate(_clean_prompt_source(op.get("text") or ""),
-                                                   max_chars=person.TEXT_MAX)
-            return "" if not text or store.tombed(text) else text
-
-        def source(op, ok: Callable[[str], bool]) -> list:
-            """The cited lines when they say it; else the one line of theirs that does, newest first, for a
-            model that cites the wrong line."""
-            src = cited(op)
-            if src and ok("\n".join(r["text"] for r in src)):
-                return src
-            return next(([r] for r in reversed(mine) if ok(r["text"])), [])
-
-        def quoted(op) -> list:
-            """The line of theirs that holds the op's quote word for word: a cited one, else any (a model that
-            cites the wrong line). A line of the character's, a page or a file never holds it."""
-            quote = str(op.get("quote") or "")
-            return ([r for r in cited(op) if person.holds(r["text"], quote)]
-                    or next(([r] for r in reversed(mine) if person.holds(r["text"], quote)), []))
-
-        def unsaid(text: str, src: list) -> str:
-            """Why a text no line of theirs says was refused: written in another language, or never said."""
-            return "language" if _off(text, _their_lang([r["text"] for r in src or mine], lang)) else "unsaid"
-
+        answer = _FoldAnswer(self, store, lines, facts, plans, now)
         ops = [op for op in (plan.get("facts") or [])[:PERSON_FOLD_OPS] if isinstance(op, dict)]
-        # An end and an add from the same line about the same thing are one change: the add is the new value,
-        # in the ended fact's kind and slot, and leaves it as past ("室友小雅…吵了一架" and "和小雅和好了").
-        for end in ops:
-            row = facts.get(str(end.get("id") or ""))
-            if str(end.get("op")) != "end" or row is None:
-                continue
-            for add in ops:
-                if str(add.get("op") or "add") == "add" and set(map(str, add.get("from") or [])) & set(map(str, end.get("from") or [])) \
-                        and (person._share(row["text"], str(add.get("text") or "")) > 0
-                             or person.slot_key(add.get("slot")) == person.slot_key(row.get("slot"))):
-                    add.update(kind=row.get("kind", "other"), slot=row.get("slot", ""), changes=row)
-                    end["op"] = "changed"
-                    break
-        todo[:] = reversed(ops)
-        while todo:
-            op = todo.pop()
-            # An object with words and no op is an add: a weak model leaves the op out.
-            kind, row = str(op.get("op") or ("add" if op.get("text") else "")), facts.get(str(op.get("id") or ""))
-            said = theirs(op)
-            if kind == "end" and row is not None and row.get("status", "active") == "active":
-                # Only on a cited line of theirs that does not just say it again; it may name the thing in other
-                # words ("咖啡我戒了" for "美式，每天早上来一杯").
-                again = person.grounded(row["text"], said) and not timewords.has_negation(said)
-                if said and not again:
-                    store.end_fact(row, now)
-                    done["end"] += 1
-                else:
-                    refuse("end")
-            elif kind == "add":
-                text = text_of(op)
-                if not text:
-                    refuse("rule", op)
-                    continue
-                slot = person.slot_key(op.get("slot"))
-                kept = "\n".join(f["text"] for f in store.facts() if slot and person.slot_key(f.get("slot")) == slot)
-
-                def says(s: str) -> bool:
-                    # Their line says it, or its new part beside what still holds of the fact it changes.
-                    return person._share(text, s) > 0 and bool(
-                        person.said_part(text, lambda t: person.grounded(t, f"{s}\n{kept}")))
-                # The line holding its quote when it says it, else a line of theirs that does.
-                held = quoted(op)
-                src = held if held and says("\n".join(r["text"] for r in held)) else source(op, says)
-                if not src:
-                    refuse(unsaid(text, held or cited(op)), op)
-                    continue
-                said = "\n".join(r["text"] for r in src)
-                text = person.said_part(text, lambda t: person.grounded(t, f"{said}\n{kept}"))
-                if not store.keeps(str(op.get("kind") or ""), text):
-                    refuse("kept")
-                    continue
-                at = _t(src[-1]) or now
-                # Day words copied from the line count from its day, the model's own from the day it was shown.
-                text, day = person.dated(text, at, tz, langs, said=said, now=now)
-                put, _old = store.put_fact(str(op.get("kind") or "other"), str(op.get("slot") or ""), text, at,
-                                           conv=src[-1]["conv"], refs=[_seq(r) for r in src], day=day)
-                changed = op.get("changes")
-                if changed is not None and changed is not put and changed.get("status", "active") == "active":
-                    store.end_fact(changed, now, "replaced")
-                # A fact their line denies is past: one about the same thing (same kind, or the same head of the
-                # slot: "home" of "home.city") where the line names it with a "not" ("不是高三"), or any fact
-                # whose first words the line says with a "not" ("不住闵行了"), whatever it was filed under.
-                head = put.get("slot", "").split(".")[0]
-                for f in store.facts():
-                    same = f.get("kind") == put.get("kind") or (head and f.get("slot", "").split(".")[0] == head)
-                    if f is not put and ((same and person.denies(f["text"], said)) or person.denied(f, said)):
-                        store.end_fact(f, now, "replaced")
-                self._tell_profile([put], now)
-                done["add"] += 1
-        todo[:] = reversed([op for op in (plan.get("plans") or [])[:PERSON_FOLD_OPS] if isinstance(op, dict)])
-        while todo:
-            op = todo.pop()
-            kind, row = str(op.get("op") or ("add" if op.get("text") else "")), plans.get(str(op.get("id") or ""))
-            if kind in ("done", "cancel") and row is not None:
-                # Only on lines of theirs about it, as for an ended fact; and done only from its day on.
-                said_on = max((datetime.fromtimestamp(_t(r), tz).date().isoformat() for r in cited(op)), default="")
-                if person._share(row["text"], theirs(op)) > 0 and (kind == "cancel" or str(row.get("due") or "") <= said_on):
-                    row["status"] = "done" if kind == "done" else "cancelled"
-                    done[kind] += 1
-                else:
-                    refuse("plan")
-            elif kind in ("add", "move"):
-                text = text_of(op) if kind == "add" else (row or {}).get("text", "")
-                when = str(op.get("when") or "")
-                if not text or not store.keeps("", text):
-                    refuse("rule", op)
-                    continue
-                # In their words on any of their lines here ("博士申请文书截止" from "申请博士" and "文书…DDL").
-                held = quoted(op) if kind == "add" else []
-                if kind == "add" and not person.grounded(text, "\n".join(r["text"] for r in mine)):
-                    refuse(unsaid(text, held or cited(op)), op)
-                    continue
-                # The day's words in the line holding its quote or the cited lines, else in a line of theirs about
-                # the plan that has them.
-                groups = [held, cited(op)] + [[r] for r in reversed(mine) if person._share(text, r["text"]) > 0]
-                found = next(((line, words) for group in groups for line, words in _said_when(group, when)
-                              if timewords.resolve_future(words, _t(line), tz, langs)), None)
-                if found is None:
-                    refuse("when", op)
-                    continue
-                said, words = found
-                due = timewords.resolve_future(words, _t(said), tz, langs)
-                if kind == "move" and row is not None:
-                    store._trash("plan", row, "replaced", now)
-                    row.update(due=due.due, due_kind=due.kind, until=due.until, said=due.words,
-                               said_at=_t(said), status="open", asked_at=0.0)
-                else:
-                    store.put_plan(text, due, _t(said), conv=said["conv"], refs=[_seq(said)])
-                done[kind] += 1
-        summary = plan.get("summary")
-        if isinstance(summary, str) and summary.strip():
-            parts = [p for p in _SENTENCE_END.split(_clean_prompt_source(summary)) if p.strip()]
-            # Sentences of a language with spaces are put back with one.
-            text = ("" if person._CJK.search(summary) else " ").join(
-                p.strip() for p in parts if not store.tombed(p))[:person.SUMMARY_MAX]
-            if self._validate_memory_candidate(text, max_chars=person.SUMMARY_MAX):
-                store.data["talk"].update(summary=text, at=now)
-                done["summary"] += 1
-        heard = "\n".join(r["text"] for r in lines.values())
-        day = datetime.fromtimestamp(now, tz).date().isoformat()
-        topics = store.data["talk"]["topics"]
-        for words in (plan.get("topics") or [])[:PERSON_TOPICS]:
-            words = _clean_prompt_source(words if isinstance(words, str) else "")[:40]
-            if words and person.grounded(words, heard) and not store.tombed(words) \
-                    and not any(t.get("words") == words and t.get("day") == day for t in topics):
-                topics.append({"day": day, "words": words})
-                done["topic"] += 1
-        return done
+        answer.pair_changes(ops)
+        answer.run(ops, answer.fact_op)
+        answer.run([op for op in (plan.get("plans") or [])[:PERSON_FOLD_OPS] if isinstance(op, dict)],
+                   answer.plan_op)
+        answer.summary(plan.get("summary"))
+        answer.topics(plan.get("topics") or [])
+        return answer.done
 
     # ---- the background loop -------------------------------------------------
 
@@ -677,10 +730,8 @@ class Consolidation:
                 await asyncio.sleep(TICK_S)
                 if quiet.active():
                     # Little changes during a game: written when it ends, or now and then.
-                    try:
+                    with contextlib.suppress(asyncio.TimeoutError):
                         await asyncio.wait_for(quiet.wait(), QUIET_TICK_S)
-                    except asyncio.TimeoutError:
-                        pass
             except asyncio.CancelledError:
                 return
             except Exception as e:

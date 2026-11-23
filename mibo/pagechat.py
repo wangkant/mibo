@@ -94,16 +94,16 @@ class PageChat:
         return channels.private_chat(self.conversation)
 
     def _mask(self, messages: list[dict]) -> None:
-        """No ID or card number, password or code is kept in the page's copy (person.mask): not in a line, its
+        """No ID or card number, password or code is kept in the page's copy (secretwords.mask): not in a line, its
         steps or the chat's title, nor where a reply repeats a password of theirs without its word."""
-        from . import person
+        from . import secretwords
 
         def masked(text: str) -> str:
-            return person.mask(text, self._secrets)[0]
+            return secretwords.mask(text, self._secrets)[0]
 
         for m in messages:
             if m.get("role") == "user" and isinstance(m.get("text"), str):
-                self._secrets.update(person.secret_values(m["text"]))
+                self._secrets.update(secretwords.secret_values(m["text"]))
         self.title = masked(self.title)
         for m in messages:
             if isinstance(m.get("text"), str):
