@@ -966,12 +966,6 @@
   width: 22px;
   height: 22px;
 }
-.mp-mark-empty {
-  border-style: dashed;
-  border-color: var(--pa-line-strong);
-  background: transparent;
-  color: var(--pa-faint);
-}
 
 /* What is in use: the mark, the model and its service, the state; the actions at the end. */
 .mp-now {
@@ -1312,8 +1306,6 @@
 .mp-tile-more {
   justify-content: center;
   gap: 6px;
-  border-style: dashed;
-  background: none;
 }
 .mp-tile-more .mp-tile-name {
   flex: none;

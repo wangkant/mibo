@@ -590,7 +590,7 @@
 .onboard-quiet {
   margin: 28px 0 0;
   padding-top: 14px;
-  border-top: 1px dashed var(--pa-line);
+  border-top: 1px solid var(--pa-line);
   color: var(--pa-faint);
   font-size: 12.5px;
 }
@@ -1033,9 +1033,7 @@
 }
 .onboard-none {
   padding: 16px 18px;
-  border: 1px dashed var(--pa-line-strong);
   border-radius: var(--pa-r-lg);
-  background: var(--pa-canvas);
 }
 .onboard-none-title {
   margin: 0 0 4px;

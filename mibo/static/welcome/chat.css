@@ -196,9 +196,6 @@
 }
 .pic.gone {
   padding: 8px 14px;
-  border-style: dashed;
-  background: transparent;
-  color: var(--pa-faint);
   font-size: var(--pa-fs-sm);
 }
 /* The typing mark: three dots where the next words will be. */
@@ -501,9 +498,6 @@ button.att-file:hover {
   overflow-wrap: anywhere;
 }
 .att-text.gone {
-  border-style: dashed;
-  background: transparent;
-  color: var(--pa-faint);
   font-family: inherit;
 }
 /* A find answered: the first line inside the bubble. */
@@ -1049,10 +1043,6 @@ button.find-why:hover,
 }
 .find.folded {
   display: block;
-  border-style: dashed;
-  border-color: var(--pa-line-strong);
-  background: transparent;
-  box-shadow: none;
 }
 .find-folded-line {
   display: flex;
@@ -1389,9 +1379,9 @@ button.find-why:hover,
   z-index: 5;
   display: none;
   place-items: center;
-  border: 2px dashed var(--pa-accent);
+  border: 2px solid color-mix(in srgb, var(--pa-accent) 60%, transparent);
   border-radius: var(--pa-r-2xl);
-  background: color-mix(in srgb, var(--pa-canvas) 88%, transparent);
+  background: color-mix(in srgb, var(--pa-accent-soft) 88%, transparent);
   color: var(--pa-accent-ink);
   font-size: var(--pa-fs-lg);
   font-weight: 500;
@@ -1808,9 +1798,7 @@ button.find-why:hover,
   padding: 6px 12px;
   width: fit-content;
   max-width: 100%;
-  border: 1px dashed var(--pa-line-strong);
   border-radius: var(--pa-r-md);
-  color: var(--pa-muted);
   font-size: var(--pa-fs-xs);
   line-height: 18px;
   text-align: center;

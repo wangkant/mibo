@@ -609,13 +609,9 @@ body.beside-over #chat-view {
 }
 .browse-context-add {
   padding: 0 11px 0 7px;
-  border: 1px dashed var(--pa-line-strong);
-  background: none;
-  color: var(--pa-muted);
   cursor: pointer;
 }
 .browse-context-add:hover {
-  background: var(--pa-hover);
   color: var(--pa-ink);
 }
 /* The mode beside the chip: how much the character may do in the page by itself. */

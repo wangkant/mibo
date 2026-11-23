@@ -11,6 +11,8 @@
   const SVG = "http://www.w3.org/2000/svg";
   const CROSS = ["M7 7l10 10", "M17 7L7 17"];
   const PLUS = ["M12 5v14", "M5 12h14"];
+  const GLOBE = ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M2 12h20", "M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"];
+  const LOCK = ["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"];
   // While a sign-in waits in the pane, the list is asked again this often, for at most this long.
   const POLL_MS = 2000;
   const POLL_MAX_MS = 11 * 60 * 1000;
@@ -50,6 +52,12 @@
       svg.append(path);
     }
     return svg;
+  }
+  // An empty list: a quiet panel with its icon and one line.
+  function empty(cls, paths, text) {
+    const node = el("p", `places-empty ${cls}`);
+    node.append(icon(paths, "pa-empty-icon"), el("span", "", text));
+    return node;
   }
   function button(cls, text, run, paths) {
     const node = el("button", `places-btn ${cls}`);
@@ -115,7 +123,7 @@
   function paint() {
     if (!data) return;
     list.replaceChildren(...data.sites.map(rowOf));
-    if (!data.sites.length) list.append(el("p", "places-empty sites-empty", t.empty));
+    if (!data.sites.length) list.append(empty("sites-empty", GLOBE, t.empty));
     const name = data.waiting && (data.picks.find((p) => p.site === data.waiting)?.name || data.waiting);
     waitLine.hidden = !data.waiting;
     waitLine.textContent = data.waiting ? paI18n.t("sites.waiting", { name }) : "";
@@ -216,7 +224,7 @@
       rows.append(node);
     }
     if (data.kept.length) kept.append(rows);
-    else kept.append(el("p", "places-empty sites-kept-none", t.keptNone));
+    else kept.append(empty("sites-kept-none", LOCK, t.keptNone));
     if (data.others) kept.append(el("p", "sites-faint", paI18n.t("sites.others", { count: data.others })));
     const all = button("places-btn-secondary places-btn-sm", t.clearSessions, async () => {
       if (await ctx.confirm(t.sureSessions)) change({ op: "clear", what: "sessions" }, all);

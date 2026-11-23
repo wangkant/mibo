@@ -318,12 +318,16 @@
   text-align: center;
 }
 .places-empty {
-  padding: 14px 16px;
-  border: 1px dashed var(--pa-line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 16px 18px;
   border-radius: var(--pa-r-md);
-  color: var(--pa-faint);
   font-size: var(--pa-fs-sm);
-  text-align: center;
+  line-height: 1.5;
+  text-align: left;
 }
 .places-switch {
   flex: none;
@@ -546,6 +550,13 @@
 }
 .sites-empty {
   margin: 0;
+}
+/* With no sites the list is not a card around a panel: the panel stands alone. */
+.sites-list:has(> .sites-empty) {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
 }
 .sites-fresh {
   padding: 10px var(--pa-s4);

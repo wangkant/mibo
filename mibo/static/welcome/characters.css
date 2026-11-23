@@ -70,12 +70,9 @@
   width: 30px;
   height: 30px;
   fill: none;
-  stroke: var(--pa-faint);
+  stroke: var(--pa-muted);
   stroke-width: 1.6;
   stroke-linecap: round;
-}
-.pac-own .pac-stage:has(.pac-plus) {
-  border: 1.5px dashed var(--pa-line-strong);
 }
 /* One's own character on its card: its picture, or the first letter of its name. */
 .pac-face {
