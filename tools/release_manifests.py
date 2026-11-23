@@ -20,7 +20,7 @@ from pathlib import Path
 REPO = "https://github.com/wangkant/mibo"
 IDENTIFIER = "wangkant.Mibo"
 PUBLISHER = "Qiankang Wang"
-SHORT = "An AI companion on your desktop that talks with you, remembers you and acts for you"
+SHORT = "A personal AI agent on your own computer that gets things done across the web, your files and your programs"
 LICENSE = "Apache-2.0"
 UNSIGNED = ("Mibo is not signed yet. The first time, right-click mibo.app and choose Open, or allow it in "
             "System Settings > Privacy & Security.")
@@ -92,7 +92,7 @@ def winget(version: str, digest: str) -> dict[str, str]:
             f"{head}PackageLocale: en-US\nPublisher: {PUBLISHER}\nPublisherUrl: https://github.com/wangkant\n"
             f"PublisherSupportUrl: {REPO}/issues\nPackageName: Mibo\nPackageUrl: {REPO}\nLicense: {LICENSE}\n"
             f"LicenseUrl: {REPO}/blob/main/LICENSE\nShortDescription: {SHORT}\nMoniker: mibo\nTags:\n- ai\n"
-            f"- assistant\n- companion\n- desktop\nReleaseNotesUrl: {REPO}/releases/tag/v{version}\n"
+            f"- agent\n- assistant\n- desktop\n- companion\nReleaseNotesUrl: {REPO}/releases/tag/v{version}\n"
             "ManifestType: defaultLocale\nManifestVersion: 1.10.0\n"),
     }
 

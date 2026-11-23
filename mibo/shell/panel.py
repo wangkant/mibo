@@ -36,6 +36,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ..cardwait import Card
+from ..crossing import downloaded
 from . import checkpoint, files, office, words
 from . import read as reading
 from . import run as running
@@ -59,8 +60,9 @@ REVIEWED = ("program", "outside", "move_out")
 
 
 def _reviewed(act) -> bool:
-    """A program run, a step outside the granted folders, or a web address opened for the person to see."""
-    return act.kind in REVIEWED or (act.kind, act.what) == ("network", "browse")
+    """A program run, a step outside the granted folders, a delete to the Recycle Bin, or a web address opened for the
+    person to see."""
+    return act.kind in REVIEWED or (act.kind, act.what) in (("network", "browse"), ("delete", "delete"))
 
 
 def _fetch(act) -> bool:
@@ -144,6 +146,32 @@ class Shell:
                 return None
         exe = exes.pop()
         return {"key": f"program:{exe}@{root}", "program": exe, "shown": words.program_name(runs[0]), "root": root}
+
+    @staticmethod
+    def _risk(verdict: reading.Verdict, command: str, job: dict | None, from_outside: bool) -> str:
+        """The risk a step that asks is asked as (cardwait.py): "delete" for an overwrite of a file the turn's
+        checkpoint cannot keep, "system" for an install, a send over the network, a step the app cannot read, or a
+        command whose program or switches delete, overwrite or send (review.costly_command): all costly, asked every
+        time. Else a command that came verbatim from material the turn read (crossing.py), asked for that once;
+        "recycle" for a delete the Recycle Bin gives back, "delete" for one it cannot hold; "act" for the rest."""
+        from ..cardwait import CROSS
+        from ..review import costly_command
+        overwrites = [p for a in verdict.reasons if a.kind == "overwrite" for p in a.paths] + verdict.overwrites
+        if any(os.path.isfile(p) and os.path.getsize(p) > checkpoint.KEEP_MAX for p in overwrites):
+            return "delete"
+        removed = verdict.deletes
+        if removed and (any(d.get("more") for d in removed) or not files.bin_keeps(
+                [d["path"] for d in removed], sum(d.get("bytes") or 0 for d in removed))):
+            return "delete"
+        if any(a.kind == "install" or (a.kind == "unknown" and a.what not in ("unresolved", "from_outside"))
+               or (a.kind == "network" and a.sends and a.what != "browse") for a in verdict.reasons) or (
+                not job and costly_command(command)):
+            return "system"
+        if from_outside:
+            return CROSS + "command"
+        if verdict.deletes or any(a.kind == "delete" for a in verdict.reasons):
+            return "recycle"
+        return "act"
 
     def _passed(self, scope: dict | None, mode: str) -> str:
         """How a question is skipped: "auto_edit" (the mode, for changes each turn's checkpoint can put back),
@@ -229,10 +257,12 @@ class Shell:
         return None
 
     async def judged(self, command: str, conversation: str, folder: str, card: dict | None = None,
-                     job: dict | None = None, turn: str = "") -> tuple:
+                     job: dict | None = None, turn: str = "", from_outside: bool = False) -> tuple:
         """Reads and judges `command` in `folder`, asks for a folder and for the yes a step needs: (outcome,
         context), the outcome None when it may run now. A file tool's `job` is judged by its own acts (files.acts),
-        `command` being its call; `card` gives its own title and lines."""
+        `command` being its call; `card` gives its own title and lines. `from_outside`: the service found the
+        command's text, or a script it runs, in material the turn read (crossing.py); it is asked even when it
+        would run."""
         cwd, ask_first = self.cwd_for(folder)
         if not cwd:
             return {"status": "bad_folder"}, {}
@@ -308,26 +338,34 @@ class Shell:
             self.last = cwd
         # The step as a no holds it: a write or an edit by what it would write too.
         step = ("step", command, cwd, hashlib.sha256(job["bytes"]).hexdigest()[:16] if job and "bytes" in job else "")
+        if from_outside and verdict.action == "run":
+            # A command or script taken from a page, a message or a file is asked even when it only reads.
+            verdict = reading.Verdict("ask", [reading.Act("unknown", "from_outside",
+                                                          "its text comes from material read this turn, not from them")])
         if verdict.action == "ask" and step in no:
             # Before any reviewer or mode passes it: what they declined does not run later in the turn.
             return {"status": "declined", "again": True, "said": asked_said,
                     "asked": {lang: [asked_said[lang]] for lang in ("zh", "en")}}, context
-        scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" else None
+        risk = self._risk(verdict, command, job, from_outside) if verdict.action == "ask" else "act"
+        mild = risk in ("act", "recycle")
+        scope = self._scope(read_, verdict, cwd) if verdict.action == "ask" and mild else None
         context["how"] = self._passed(scope, mode)
         if no and context["how"] == "auto_edit":
             # After a no in this turn, only what the person allowed themselves (an always-allow rule) skips a question.
             context["how"] = ""
         passed = None
-        if verdict.action == "ask" and not context["how"] and mode == "auto" and not no and all(
+        if verdict.action == "ask" and mild and not context["how"] and mode == "auto" and not no and all(
                 _reviewed(a) or _fetch(a) for a in verdict.reasons):
-            # A program run, a step outside the granted folders, a page opened for them or a request that only
-            # fetches: the reviewer first, on the person's own words of this turn. A delete, sending or uploading,
-            # an install and what cannot be told ask each time.
+            # A program run, a step outside the granted folders, a delete to the Recycle Bin, a page opened for them
+            # or a request that only fetches: the reviewer first, on the person's own words of this turn. A costly
+            # step (cardwait.COSTLY) and a command from material the turn read are asked each time.
             from .. import acting, review
+            from ..crossing import turn_read
             passed = await review.decide("commands", await asyncio.to_thread(acting.asked, self.workspace), {
                 "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6],
-                "only_reads": all(a.kind == "read" and not a.write for a in read_.acts)},
-                ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"))
+                "only_reads": all(a.kind == "read" and not a.write for a in read_.acts), "undo": True},
+                ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"),
+                read=turn_read(self.workspace))
             # The reviewer's decision and reason go with the log row, so a question that came can be read from it.
             context["review"] = {"decision": passed.decision, "by": passed.by, "reason": passed.reason}
             if passed.decision == "go":
@@ -338,10 +376,7 @@ class Shell:
                 return {"status": "refused", "said": asked_said, "why": {"zh": passed.reason, "en": passed.reason},
                         "reasons": [passed.reason], "declined": passed.declined()}, context
         if verdict.action == "ask" and not context["how"]:
-            # Said in the chat in the app's own reading of the step; a delete or a send is its own risk, which a yes
-            # to another kind of step earlier in the turn does not reach (cardwait.reaches).
-            risk = "delete" if verdict.deletes or any(a.kind == "delete" for a in verdict.reasons) else \
-                "send" if any(a.kind == "network" and a.sends for a in verdict.reasons) else "act"
+            # Said in the chat in the app's own reading of the step, asked as its risk (`_risk`, cardwait.reaches).
             asked = {"type": "command", "command": words.visible(command), "cwd": words.visible(cwd),
                      "where": {lang: words.folder_name(cwd, lang) for lang in ("zh", "en")},
                      **{lang: {"title": asked_said[lang],
@@ -374,7 +409,7 @@ class Shell:
                 return {"status": status, "said": asked_said, "asked": lines}, context
             # What was said in the chat must still be what runs.
             again = await asyncio.to_thread(lambda: reading.judge(read_now(), self.grants))
-            if again.action != "ask" or (
+            if again.action != context["verdict"].action or (
                     sorted(d["path"] for d in again.deletes) != sorted(d["path"] for d in verdict.deletes)
                     or [d["files"] for d in again.deletes] != [d["files"] for d in verdict.deletes]
                     or sorted(again.overwrites) != sorted(verdict.overwrites)):
@@ -384,14 +419,14 @@ class Shell:
         return None, context
 
     async def do(self, command: str, conversation: str, folder: str, limit_s: float, turn: str,
-                 said_no: bool = False) -> dict:
+                 said_no: bool = False, from_outside: bool = False) -> dict:
         not_now = self.ready(conversation)
         if not_now:
             return not_now
         if said_no:
             self.said_no.setdefault(turn, set()).add(ELSEWHERE)
         async with self.busy:
-            outcome, context = await self.judged(command, conversation, folder, turn=turn)
+            outcome, context = await self.judged(command, conversation, folder, turn=turn, from_outside=from_outside)
             if outcome:
                 return outcome
             # The files its reading names are kept first; what Remove-Item moved to the bin is listed as it runs.
@@ -453,7 +488,7 @@ class Shell:
         return found[0] if len(found) == 1 else ""
 
     async def file(self, op: str, args: dict, conversation: str, folder: str, turn: str,
-                   said_no: bool = False) -> dict:
+                   said_no: bool = False, from_outside: bool = False) -> dict:
         """One file tool: made ready and checked here, judged by its paths (files.acts: the same folder question,
         question and refusal as a command doing it), then done in Python (files.py)."""
         not_now = self.ready(conversation)
@@ -475,9 +510,14 @@ class Shell:
                 return {"status": "error", "message": str(e)}
             if job.get("answer"):
                 return {"status": "done", "out": job["answer"], "said": {}, "cwd": base}
+            if job["op"] == "open" and downloaded(job["path"]):
+                # A program or script that came from the web is never opened by the character.
+                said = {lang: words.REFUSED["downloaded"][0 if lang == "zh" else 1] for lang in ("zh", "en")}
+                self.grants.log({"command": f"open {job['path']}", "outcome": "refused", "why": ["downloaded"]})
+                return {"status": "refused", "said": said, "why": said, "reasons": ["it came from the web"]}
             command = files.call(job)
             outcome, context = await self.judged(command, conversation, folder, card=job.get("card"), job=job,
-                                                 turn=turn)
+                                                 turn=turn, from_outside=from_outside)
             if outcome:
                 return outcome
             kept = self.checkpoints.turn(turn)
@@ -711,7 +751,8 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/shell")
     async def shell_change(request: Request):
         """Settings: the switch, the mode (read only, automatic review), a folder granted (a read-only one made
-        sortable) or taken back, an always-allow rule taken back. Only on the computer the app runs on."""
+        sortable, or one set to read only) or taken back, an always-allow rule taken back. Only on the computer the
+        app runs on."""
         from ..acting import Modes
         payload = await body(request)
         grants = shell().grants
@@ -724,7 +765,9 @@ def mount(app, workspace, body) -> None:
             rule = payload["forget"]
             await asyncio.to_thread(grants.forget, str(rule.get("program") or ""), str(rule.get("folder") or ""))
         elif isinstance(payload.get("add"), str) and payload["add"].strip():
-            why = await asyncio.to_thread(grants.add, os.path.expandvars(payload["add"].strip().strip('"')))
+            # "read_only": true grants it, or sets one granted already, the person's own folders too, to read only.
+            why = await asyncio.to_thread(grants.add, os.path.expandvars(payload["add"].strip().strip('"')),
+                                          payload.get("read_only") is True)
             if why:
                 return _error(f"folder_{why}")
             await asyncio.to_thread(grants.log, {"granted": payload["add"].strip(), "outcome": "granted_in_settings"})
@@ -796,7 +839,8 @@ def mount(app, workspace, body) -> None:
         limit = payload.get("limit")
         limit_s = float(limit) if isinstance(limit, (int, float)) and not isinstance(limit, bool) else running.TIME_LIMIT_S
         return await shell().do(command.strip(), conversation, str(payload.get("folder") or ""),
-                                max(5.0, min(limit_s, running.TIME_MAX_S)), turn, payload.get("said_no") is True)
+                                max(5.0, min(limit_s, running.TIME_MAX_S)), turn, payload.get("said_no") is True,
+                                payload.get("from_outside") is True)
 
     @app.post("/api/shell/file")
     async def shell_file(request: Request):
@@ -807,7 +851,7 @@ def mount(app, workspace, body) -> None:
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(conversation, str) or                 not isinstance(turn, str) or not TURN.fullmatch(turn):
             return _error("generic")
         return await shell().file(op, args, conversation, str(payload.get("folder") or ""), turn,
-                                  payload.get("said_no") is True)
+                                  payload.get("said_no") is True, payload.get("from_outside") is True)
 
     @app.get("/api/shell/changes")
     async def shell_changes(turn: str = ""):

@@ -450,10 +450,12 @@ class Desk:
         """Auto mode's reviewer on one action, on the worker thread: the person's own messages of the turn under
         way, never the window."""
         from .. import acting, review
+        from ..crossing import turn_read
         window = getattr(self.app.state, "window", None)
         return asyncio.run(review.decide("programs", acting.asked(self.workspace), action,
                                          ask=acting.reviewer(self.workspace),
-                                         attended=window is not None and window.attended(), lang=self.lang))
+                                         attended=window is not None and window.attended(), lang=self.lang,
+                                         read=turn_read(self.workspace)))
 
     def _pictures(self, hands, look: bool) -> dict:
         """On the worker thread, before the first picture of a task goes to the model service the person chose: the
@@ -468,7 +470,7 @@ class Desk:
         name = hands.program["name"]
         title = win32.title_of(hands.view.hwnd) if hands.view else ""
         if acting.sensitive_window(name, os.path.basename(hands.program["exe"]), title) or not when.Switch(
-                self.desktop).on(service):
+                self.desktop).on():
             answer = self.ask({"id": secrets.token_urlsafe(8), "type": "see_grant", "program": name,
                                "exe": hands.program["exe"], "window": name, "task": hands.task,
                                "text": words.say(words.LOOK if look else words.ASK, self.lang, window=name,
@@ -514,7 +516,7 @@ class Desk:
             "mode": Modes(self.desktop).mode(),
             "block": self.grants.blocked(),
             # Pictures of a window only a picture can work: sent with no question unless turned off here.
-            "pictures": {"on": when.Switch(self.desktop).on(service),
+            "pictures": {"on": when.Switch(self.desktop).on(),
                          "sentence": {lang: when.Switch.sentence(lang, who, service) for lang in ("zh", "en")}},
             "switch": {lang: {k: v.format(who=who) for k, v in g.SWITCH[lang].items()} for lang in ("zh", "en")},
             "grants": [{**{k: row.get(k, "") for k in ("key", "name", "exe", "since")},
@@ -579,7 +581,7 @@ def mount(app, workspace, body) -> None:
             return await asyncio.to_thread(state.view)
         if isinstance(payload.get("pictures"), bool):
             from ..see import when
-            await asyncio.to_thread(when.Switch(state.desktop).set, state.service() if payload["pictures"] else "")
+            await asyncio.to_thread(when.Switch(state.desktop).set, payload["pictures"])
             state.grants.log({"do": "switch", "line": f"pictures turned {'on' if payload['pictures'] else 'off'}"})
         elif isinstance(payload.get("on"), bool):
             # The switch is the one acting mode: on is automatic review, off stops every acting place.

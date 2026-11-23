@@ -185,6 +185,7 @@
       const tools = el("div", "setup-history-tools");
       tools.append(range, clear);
       const wipe = kit.optionRow(t.historyTitle, t.historyText, tools);
+      kit.item("history", wipe.row);
       const done = el("p", "setup-option-now", t.cleared);
       done.hidden = true;
       wipe.about.after(done);
@@ -343,7 +344,7 @@
     // each taken back with its cross (the site is asked again next time). Read once unfolded.
     function buildPermits() {
       const fold = kit.fold(t.permitsFold);
-      fold.node.classList.add("setup-permits");
+      kit.item("permits", fold.node).classList.add("setup-permits");
       const list = el("div", "setup-sites-list");
       const error = kit.errorLine();
       fold.body.append(list, error);
@@ -386,7 +387,7 @@
     // ---- Per site: what the character may do there without asking, the feed read in the background, the ways kept.
     function buildSites() {
       const fold = kit.fold(paI18n.t("setup_privacy.sitesFold", { count: 0 }));
-      fold.node.classList.add("setup-sites");
+      kit.item("sites", fold.node).classList.add("setup-sites");
       const list = el("div", "setup-sites-list");
       const error = kit.errorLine();
       fold.body.append(list, error);

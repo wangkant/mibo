@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from ..crossing import downloaded
 from . import run as running
 from .grants import Grants, known_folders, norm, under
 
@@ -1630,6 +1631,12 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
             refused.append(Act("secrets", "secrets", f"{act.why}, which reaches {reached}, which is protected",
                                paths=[reached]))
     for act in reading.acts:
+        # A program or script that came from the web is never run or opened by the character (crossing.py).
+        if act.kind in ("program", "install") or act.args is not None or act.what == "open":
+            for path in dict.fromkeys(act.paths + [os.path.join(reading.cwd, a) for a in act.args or []]):
+                if downloaded(path):
+                    refused.append(Act("hidden", "downloaded", f"runs {path}, which was downloaded from the web",
+                                       paths=[path]))
         for path in act.paths + ([act.dest] if act.dest else []):
             why = places.blocked(norm(path), act.write or path == act.dest)
             # A program's own file (user installs live in AppData) is run, not read: only the app's own refuse.

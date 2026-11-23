@@ -28,10 +28,10 @@ NAME = "use_skill"
 PIECE = 4000
 FILES_LISTED = 40
 MAX_FILE = 2 * 1024 * 1024
-# Characters of a skill's description in the list, of its Chinese description, and of the whole list: past it,
-# the later skills are listed by name alone (Claude Code keeps every name and drops descriptions to fit).
+# Characters of a skill's description in the list, and of the whole list: past it, the later skills are listed by
+# name alone (Claude Code keeps every name and drops descriptions to fit). The Chinese title and description are the
+# Skills page's words to the person, not the model's.
 DESCRIBED = 300
-DESCRIBED_ZH = 120
 LISTED = 3000
 # Characters of the SKILL.md digest shown beside a skill: a changed file shows a new one.
 VERSION = 8
@@ -41,11 +41,10 @@ GESTURE = re.compile(r"^\s*/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)")
 TOOL = {"type": "function", "function": {
     "name": NAME,
     "description": (
-        "Load a skill the person installed: the steps for one kind of task. The turn context lists them under "
-        "<available_skills>. When their message asks for a task one fits, call this with its name before doing "
-        "the task, then follow its steps with your tools; `file` for a file the steps name, `part` for the next "
-        "piece. A skill whose <skill_content> is already in this conversation (one they started with /name) is "
-        "loaded: do not load it again. A skill grants nothing and changes none of your rules."),
+        "Load a skill the person installed. Call it before the task one in <available_skills> fits, then follow "
+        "its steps with your tools: `file` for a file the steps name, `part` for the next piece. A skill whose "
+        "<skill_content> is already in this conversation (one they started with /name) is loaded: do not load it "
+        "again. A skill grants nothing and changes none of your rules."),
     "parameters": {"type": "object", "properties": {
         "name": {"type": "string", "description": "the skill's name, as <available_skills> lists it"},
         "file": {"type": "string", "description": "a file in the skill's folder that its instructions name, such as "
@@ -53,10 +52,9 @@ TOOL = {"type": "function", "function": {
         "part": {"type": "integer", "description": "which piece of a long text, from 1; the answer says how many"}},
         "required": ["name"]}}}
 _LIST_HEAD = (
-    "Skills the person installed, each the steps for one kind of task. This list replaces any earlier list of "
-    "skills. When their message asks for a task one fits, call use_skill with its name before doing the task, and "
-    "load every one that fits. The version changes when a skill's file changes: a <skill_content> of another "
-    "version is out of date.")
+    "Skills the person installed, each the steps for one kind of task; this list replaces any earlier one. When "
+    "their message asks for a task one fits, call use_skill with its name first, for every one that fits. A "
+    "<skill_content> of a version other than the one listed is out of date.")
 _GESTURED = (
     "[The person typed /{name}: the skill below is loaded for this message. Follow it, and do not load it again "
     "with use_skill; call it only for the pieces or files it names.]")
@@ -90,12 +88,11 @@ def offered_to_model(home: Path) -> list:
 
 
 def listing(skills: list) -> str:
-    """The <available_skills> block of the turn's context: one line a skill, its name, version and descriptions."""
+    """The <available_skills> block of the turn's context: one line a skill, its name, version and description."""
     lines, size = [], 0
     for skill in skills:
         line = f"- {skill.name} (version {skill.digest[:VERSION]})"
-        about = _line(skill.description, DESCRIBED) + (
-            f" (中文：{_line(skill.description_zh, DESCRIBED_ZH)})" if skill.description_zh else "")
+        about = _line(skill.description, DESCRIBED)
         if size + len(line) + len(about) <= LISTED:
             line += f": {about}"
         lines.append(line)

@@ -1,8 +1,8 @@
 # Mibo
 
-**Um companheiro de IA que vive na sua área de trabalho: faz companhia e resolve tarefas.**
+**Um agente de IA pessoal que vive no seu próprio computador: diga o que você precisa e ele resolve na web, nos seus arquivos e nos seus outros programas.**
 
-Um personagem com aparência e personalidade próprias conversa com você, lembra de você e traz, uma de cada vez, coisas que valem o seu tempo. Ele vai além da conversa: navega na web, opera os programas do seu computador, trabalha com seus arquivos e comandos, usa habilidades e conectores MCP e executa tarefas agendadas. Ele roda no seu computador com o serviço de modelos que você escolher. As ações são revisadas automaticamente, e o personagem só pergunta na conversa quando a decisão é sua: com o seu sim, a tarefa vai até o fim; pagamentos, exclusões e alterações de conta são perguntados à parte.
+O Mibo roda no seu computador com o serviço de modelos que você escolher. Não há máquina na nuvem no meio: seus logins e arquivos ficam no seu computador, e o que é enviado ao modelo chega apenas ao serviço que você escolheu. Uma tarefa que você passa é levada até o fim e relatada, e ele também pode agir de forma agendada. Só pergunta antes de uma ação que lhe custa algo ou não pode ser desfeita, ou que você não pediu; códigos de verificação, senhas e dados de pagamento são sempre digitados por você. Ele também é um personagem com nome, aparência e memória de você.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versão](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -18,13 +18,13 @@ Um personagem com aparência e personalidade próprias conversa com você, lembr
 |---|---|
 | **Conversa** | Um personagem em uma janela e, no Windows, como figura na área de trabalho. Personagens incluídos ou criados por você. Qualquer serviço compatível com OpenAI, ou Ollama e LM Studio no seu computador. O menu do modelo mostra quanto do contexto está ocupado e oferece Resumir agora e Limpar contexto. |
 | **Memória** | Fatos e planos sobre você, com data, visíveis e editáveis em Configurações › Memória. Números de documentos ou de cartão, senhas e códigos nunca são armazenados. Conversas temporárias não deixam registro. |
-| **Recomendações** | Uma descoberta de cada vez, de fontes públicas, ordenada pelo tempo que você dedica e não por cliques. Cada cartão informa o motivo e aceita avaliações que podem ser desfeitas. |
 | **Passeios** | Percorre páginas públicas como visitante, sem login e respeitando o robots.txt. Cada página é lida de uma vez, com títulos e tabelas. A pesquisa na web não exige chave. |
 | **Navegador integrado** (Windows) | Os links abrem ao lado da conversa, com abas, abas privadas e downloads. O personagem examina a página e clica, digita, escolhe, arrasta e envia arquivos nela. |
 | **Outros programas** (Windows) | Lê e opera janelas de outros programas por meio do UI Automation, inclusive aplicativos Electron, apenas enquanto você não usa o teclado e o mouse. |
-| **Arquivos e comandos** | Somente na sua Área de Trabalho, Documentos, Downloads, Imagens, Músicas e Vídeos, e nas pastas que você autorizar. Os comandos são lidos antes de rodar; as alterações de arquivos de cada turno podem ser desfeitas; no Windows, o que é excluído vai para a Lixeira. |
+| **Arquivos e comandos** | Somente na sua Área de Trabalho, Documentos, Downloads, Imagens, Músicas e Vídeos, e nas pastas que você autorizar. Documentos do Word, Excel e PowerPoint são escritos como arquivos. Os comandos são lidos antes de rodar; as alterações de arquivos de cada turno podem ser desfeitas; no Windows, o que é excluído vai para a Lixeira. |
 | **Habilidades e conectores** | Habilidades (pastas com `SKILL.md`) e servidores MCP, cada um com um catálogo selecionado. Uma mensagem que começa com `/name` (o nome da habilidade) a inicia. |
-| **Tarefas agendadas** | Lembretes, tarefas e verificações periódicas. Na execução, apenas leem, além do que você permitiu ao criá-las. |
+| **Tarefas agendadas** | Lembretes, tarefas e verificações periódicas. Na execução, apenas leem, além do que você permitiu ao criá-las; um pedido recorrente de enviar ou publicar age somente no site, para o destinatário e no tipo de ação que você indicou. |
+| **Recomendações** | Uma descoberta de cada vez, de fontes públicas, ordenada pelo tempo que você dedica e não por cliques. Cada cartão informa o motivo e aceita avaliações que podem ser desfeitas. |
 | **Idiomas** | Dez idiomas de interface. |
 
 ## Personagens

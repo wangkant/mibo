@@ -73,7 +73,7 @@ FILE_TOOLS = [
           {"text": {"type": "string", "description": "the words to look for, as they are written"},
            "path": {"type": "string", "description": "the folder to search in; empty for `folder`"},
            "pattern": {"type": "string", "description": "only names like this, such as *.md"}}, ["text"]),
-    _tool("write_file", "Write a file whole: text (UTF-8), or a .docx, .xlsx or .pptx made from the Markdown you "
+    _tool("write_file", "Write a whole file, text (UTF-8) or a .docx, .xlsx or .pptx made from the Markdown you "
                         "give. A document, sheet or slides they ask for (\"做成 Word\", \"整理成表格\", \"做个 PPT\") is written so, "
                         "never typed into Word, Excel or PowerPoint. Making a new file runs at once; replacing one "
                         "that is there shows them the difference to confirm first.",
@@ -99,8 +99,9 @@ FILE_TOOLS = [
 PLAN_TOOL = {"type": "function", "function": {
     "name": "update_plan",
     "description": (
-        "For a task on this computer of several steps (tidying a folder, renaming a batch): write the short plan "
-        "first, then call it again to tick steps off, the whole list each time. They see it under your reply."),
+        "Keep the short plan of a task on this computer of several steps (tidying a folder, renaming a batch): "
+        "write it first, then call it again to tick steps off, the whole list each time. They see it under your "
+        "reply."),
     "parameters": {"type": "object", "properties": {
         "steps": {"type": "array", "items": {"type": "object", "properties": {
             "step": {"type": "string", "description": "a short line, in their language"},
@@ -114,7 +115,8 @@ OPS = {"read_file": "read", "list_files": "list", "search_files": "search", "wri
 NAMES = {NAME, PLAN_TOOL["function"]["name"], *OPS}
 
 _STATUS = {
-    "off": "Error: working on this computer is turned off. Tell them in a sentence; it is in Settings.",
+    "off": "Error: working on this computer is turned off. Tell them in a sentence; the settings tool opens it for "
+           "them at shell/shell-on.",
     "elevated": "Not done: this app itself runs as administrator, and nothing is run with those rights. Tell them "
                 "to open the app normally.",
     "unwatched": "Not done: this runs only during a turn they started in the app's chat.",
@@ -123,9 +125,10 @@ _STATUS = {
     "folder_declined": "Not done: they said no to letting you use that folder. Do not ask for it again this turn; "
                        "other steps of their request go on as usual.",
     "read_mode": "Not done: they set commands and files to read only in Settings, so nothing is made, moved, changed "
-                 "or run. Tell them in one sentence; they can change the mode there.",
+                 "or run. Tell them in one sentence; the settings tool opens the mode for them at shell/shell-mode.",
     "read_only": "Not done: they allowed that folder for reading only, so nothing in it may be made, moved or changed. "
-                 "Tell them; they can allow sorting in it when you ask again, or in Settings.",
+                 "Tell them; they can allow sorting in it when you ask again, or at shell/folders, which the settings "
+                 "tool opens.",
     "unanswered": "Not done: the app asked them in the chat and ten minutes passed with no answer. Say in one sentence "
                   "that it still needs their yes and that 继续 under this reply asks again; then stop.",
     "declined": "Not done: they answered the app's question about this step with something other than a yes, so "
@@ -277,12 +280,15 @@ async def use(agent, args: dict, lookups) -> str:
     lookups.doing("shell", ing)
     seconds = args.get("seconds")
     limit = int(seconds) if isinstance(seconds, int) and not isinstance(seconds, bool) else 60
+    # A command taken from material the turn read, or one that runs a script written from it, is asked (crossing.py).
+    from_outside = lookups.crossing.verbatim(command, lookups.said) or lookups.crossing.runs_written(command)
     ticker = asyncio.create_task(_progress(home, lookups, ing, lang))
     try:
         outcome = await _away(lookups, asyncio.to_thread(
             _ask, home, "POST", "/api/shell/do", 2 * WAIT_S + 300 + 60,
             json={"command": command, "folder": folder, "conversation": lookups.conversation, "limit": limit,
-                  "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None))}))
+                  "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None)),
+                  "from_outside": from_outside}))
     finally:
         ticker.cancel()
     _changed(lookups, outcome or {})
@@ -340,10 +346,15 @@ async def use_file(agent, name: str, args: dict, lookups) -> str:
     from .words import file_doing
     lookups.doing("shell", file_doing(op, args, lang))
     folder = str(args.get("folder") or "").strip()
+    path = str(args.get("path") or "")
+    if op == "write":
+        # A script written from material the turn read is remembered, so running it later is asked (crossing.py).
+        lookups.crossing.wrote(path, str(args.get("content") or ""), lookups.said)
     outcome = await _away(lookups, asyncio.to_thread(
         _ask, home, "POST", "/api/shell/file", 2 * WAIT_S + 120,
         json={"op": op, "args": args, "folder": folder, "conversation": lookups.conversation,
-              "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None))}))
+              "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None)),
+              "from_outside": op == "open" and lookups.crossing.runs_written(path)}))
     _changed(lookups, outcome or {})
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or file_doing(op, args, lang, done=True)

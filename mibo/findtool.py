@@ -27,9 +27,8 @@ TOOLS = [
             "Recommend one of your own finds, shown as a card under your reply: when they ask for something to "
             "watch or read, or for another one. Without pick it lists your finds for the wish; then call it again "
             "with pick, the id of one that is on what they asked (its subject, not only its site or its kind), or "
-            "pick none for no card. The last pick is the card. Things on a site they name (\"去抖音找点好玩的视频\") "
-            "are find_on_site's, not this. " + LOOK + " A find you name comes from a tool only, never from "
-            "memory."),
+            "pick none for no card. The last pick is the card. Things on a site they name are find_on_site's. "
+            + LOOK + " A find you name comes from a tool only, never from memory."),
         "parameters": {"type": "object", "properties": {
             "wish": {"type": "string", "description": "what they asked for, in their words and in English "
                                                       "(烘焙 baking); empty when they named nothing"},
@@ -64,7 +63,8 @@ WALK_SAID = {
     "": "A walk goes out for it now; its finds come as cards when it is back.",
     "out": "A walk is out now; this one goes right after it, and its finds come as cards.",
     "limit": "Today's walks are used up; it goes on tomorrow's first walk.",
-    "walks_off": "Walks are off in Settings › 外出, so nothing goes now; the wish waits until they turn walks on.",
+    "walks_off": "Walks are off (walks/walks-on, which the settings tool opens or turns on when they ask), so "
+                 "nothing goes now; the wish waits until they turn walks on.",
 }
 
 

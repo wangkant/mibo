@@ -559,12 +559,13 @@ class Hub:
         """The reviewer's verdict on one call: the person's own messages of the turn under way, the tool's name and
         its maker's description as data, the arguments as the text it sends."""
         from . import acting, review
+        from .crossing import turn_read
         request = await asyncio.to_thread(acting.asked, self.workspace)
         return await review.decide("tools", request, {
             "kind": "tool", "where": server, "target": [tool["title"] or tool["name"]], "effects": [],
             "text": json.dumps(arguments, ensure_ascii=False)[:2000], "page_says": tool["description"][:200]},
             ask=acting.reviewer(self.workspace), attended=True,
-            lang=str(self.workspace.config().get("AGENT_LANG") or "zh"))
+            lang=str(self.workspace.config().get("AGENT_LANG") or "zh"), read=turn_read(self.workspace))
 
     def _log(self, server: str, tool: str, arguments: dict, outcome: str, how: str = "", out: str = "") -> None:
         self.grants.log({"server": server, "tool": tool, "outcome": outcome, "how": how,

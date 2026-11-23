@@ -280,7 +280,10 @@
     adv.node.classList.add("mp-advanced");
     const noteLine = el("p", "setup-help");
     adv.body.append(noteLine);
-    base.addEventListener("input", () => baseField.error(""));
+    base.addEventListener("input", () => {
+      baseField.error("");
+      paintSends();
+    });
     modelInput.addEventListener("input", () => modelField.error(""));
 
     const foot = el("div", "setup-foot mp-foot");
@@ -294,8 +297,17 @@
     error.setAttribute("role", "alert");
     error.hidden = true;
     const stays = el("p", "setup-fine", t.keyStays);
+    // Where page text, window pictures and file text go: said once for each service's host (see/when.py), never
+    // asked per action. The host last told comes from /api/model/notice; a save tells the new one.
+    const sends = el("p", "setup-fine mp-sends");
+    sends.hidden = true;
+    let told = null;
+    env.api("model/notice").then((value) => {
+      told = value.host;
+      if (selected) paintSends();
+    }).catch(() => {});
 
-    details.append(local, signinBox, keyField.wrap, open, adv.node, foot, error, stays);
+    details.append(local, signinBox, keyField.wrap, open, adv.node, foot, error, stays, sends);
     root.append(foundBox, grid, details);
     details.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -422,7 +434,21 @@
       // Nothing to go back to before a first connection.
       cancel.hidden = !s.configured;
       stays.hidden = isLocal;
+      paintSends();
       paintWorking();
+    }
+
+    // A program on this computer keeps everything here; a service at a host not yet told about is named.
+    function paintSends() {
+      const spec = n.spec(selected);
+      let host = "";
+      try {
+        host = new URL(base.value.trim() || spec.baseUrl).hostname;
+      } catch {
+        host = "";
+      }
+      sends.textContent = fill(t.sendsTo, { host });
+      sends.hidden = told === null || !host || spec.local || host === told;
     }
 
     function paintWorking() {
@@ -462,6 +488,8 @@
       paintWorking();
       try {
         const state = await env.api("config", { ...env.who(), ...payload });
+        // The save told the person about this service's host.
+        told = (await env.api("model/notice")).host;
         key.value = "";
         replacing = false;
         working = false;
@@ -690,10 +718,10 @@
     });
     chooseCard.append(chooseTitle, picker.node);
 
-    node.append(now, chooseCard);
+    node.append(kit.item("service", now), chooseCard);
     // What the model can do, measured, and what it spent (modelbar.js).
     const info = window.paModelBar.settings(kit, node);
-    node.append(buildMore());
+    node.append(kit.item("more", buildMore()));
 
     function openChooser(focusKey = false) {
       view.choosing = true;

@@ -37,7 +37,7 @@ def test_a_sensitive_windows_picture_asks_every_time(attack, tmp_path, monkeypat
                                 config=lambda: {"LLM_BASE_URL": "https://openrouter.ai/api/v1"})
     desk = panel.Desk(SimpleNamespace(state=SimpleNamespace(window=SimpleNamespace(attended=lambda: True))),
                       workspace)
-    when.Switch(desk.desktop).set("openrouter.ai")
+    when.Switch(desk.desktop).set(True)
     desk.conversation, desk.turn_on = "c1", lambda conversation: True
     desk.ask = lambda card: cards.append(card) or {"yes": False}
     monkeypatch.setattr(acting, "reviewer", lambda ws: reviewer)

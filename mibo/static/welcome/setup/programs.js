@@ -32,16 +32,17 @@
     modeSelect.disabled = true;
     modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
     const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
-    main.append(sw.row, modeRow.row, pic.row);
+    main.append(sw.row, kit.item("programs-mode", modeRow.row), pic.row);
 
     // ---- The programs granted always.
-    const granted = kit.card(t.grantsTitle);
+    const granted = kit.item("grants", kit.card(t.grantsTitle));
     const list = el("div", "setup-options");
     const grantError = kit.errorLine();
     granted.append(el("p", "setup-help", t.grantsText), list, grantError);
 
     // ---- Never operated, and the record.
     const never = kit.fold(t.neverFold);
+    kit.item("never", never.node);
     const blockInput = kit.input("setup-input-sm");
     blockInput.placeholder = t.blockHint;
     blockInput.setAttribute("aria-label", t.blockHint);
@@ -52,6 +53,7 @@
     });
     const blockList = el("div", "setup-options");
     const record = kit.fold(paI18n.t("setup_programs.logFold", { count: 0 }));
+    kit.item("record", record.node);
     const logList = el("div", "setup-shell-log");
     const clear = kit.button("setup-button-secondary setup-button-sm", t.logClear, clearLog);
     const logError = kit.errorLine();

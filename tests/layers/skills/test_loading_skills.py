@@ -59,9 +59,10 @@ def test_installing_switching_and_editing_a_skill_changes_its_listed_line_and_ne
     assert "weekly-reading-digest" not in _listed(bodies[2])
     # The same skill, its file changed: a new version on its line.
     assert _listed(bodies[3])["packing-list"] != _listed(bodies[2])["packing-list"]
-    # Its description is on its line, in full and with the Chinese one where the skill has it.
+    # Its description is on its line, in full. The Chinese one is the Skills page's words to the person ("是否删除由你
+    # 决定"), which the model would read as said to itself, so it is not listed.
     assert "Pack for a trip. Use when they ask what to pack." in _context(bodies[1])
-    assert "依据最新来源" in _context(bodies[0])
+    assert "Compare a few options" in _context(bodies[0]) and "依据最新来源" not in _context(bodies[0])
 
 
 def test_use_skill_loads_a_skill_by_name_and_an_unknown_or_switched_off_name_names_the_installed_ones(app, turn):

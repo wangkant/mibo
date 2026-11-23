@@ -12,13 +12,14 @@ made while a task runs holds from its next step.
            the reviewer (review.py) then judges what is left of the reviewable kinds, and the chat asks the
            person (cardwait.py) only where it does not pass or code says always ask
 
-What no mode loosens, decided here in code: paying or buying, deleting, an account's security or access (`HARD`)
-are asked in the chat, with no always-allow and no reviewer, and a yes to another kind of step earlier in the turn
-does not reach them (cardwait.reaches); a password, payment detail or code is never typed or read by the character
-(the gates); an outward act skips the question only by the person's always-allow for that site, a yes earlier in
-the turn or the reviewer's pass, never the reviewer's on a sensitive site (`sensitive`: banks and payment, health,
-mail and accounts), where every kind asks. The reviewer passes nothing while no request of the person's own is under
-way.
+What no mode loosens, decided here in code: a costly act (`HARD`, cardwait.COSTLY: paying or spending, a deletion
+nothing restores, the account itself, access or private details handed over, a binding submission, settings, a
+command past the checkpoint) is asked in the chat every time, with no always-allow and no reviewer, and no earlier
+yes reaches it (cardwait.reaches); a password, payment detail or code is never typed or read by the character (the
+gates); an outward act skips the question only by the person's always-allow for that site, a yes earlier in the turn
+or the reviewer's pass, never the reviewer's on a sensitive site (`sensitive`: banks and payment, health, mail and
+accounts), where every kind asks, and never after the turn read material when it goes to a place the person did not
+name (crossing.held). The reviewer passes nothing while no request of the person's own is under way.
 
 Claude Code's auto mode with its classifier, Claude in Chrome's act-without-asking with its plan, Codex's
 approvals reviewer and Qwen Code's approval modes are what this follows.
@@ -32,11 +33,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from .cardwait import COSTLY
+
 MODES = ("off", "read", "auto")
 DEFAULT = "auto"
 FILE = "acting.json"
-# The kinds that ask in every mode, each time.
-HARD = frozenset({"order", "delete", "account", "grant"})
+# The kinds that ask in every mode, each time: the costly ones.
+HARD = COSTLY
 # Sites where every kind asks and nothing is let through: banks, payment, brokers, health, mail and accounts.
 SENSITIVE = re.compile(
     r"(?:^|\.)(?:bank|banking|pay|wallet|alipay|paypal|stripe|venmo|broker|securities|stock|fund|insurance|health|"

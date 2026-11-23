@@ -893,7 +893,29 @@
     "proposals": "Not done in this run; these need your confirmation:",
     "doIt": "Do it now",
     "asked": "Asked in the chat",
-    "askText": "Please do this: {what}"
+    "askText": "Please do this: {what}",
+    "offerScope": "Each time",
+    "scopeRule": "What is inside the scope is done with no question; what a page or a message asks beyond it is not done and is told in the chat; paying, deleting and other costly steps, and passwords, are still confirmed by you every time.",
+    "acts": {
+      "send": "Send a message",
+      "post": "Post",
+      "comment": "Comment",
+      "like": "Like",
+      "submit": "Submit",
+      "upload": "Upload",
+      "outward": "Outward act"
+    },
+    "scopeSep": "; ",
+    "scopeDone": "Scheduled task “{title}” did as set up: {acts}.",
+    "scopeBeyond": "Beyond the set scope, not done: {acts}.",
+    "inScope": "Inside the scheduled task's scope, so it goes ahead.",
+    "beyondScope": "Beyond the scheduled task's scope, so it is not done."
+  },
+  "appmap": {
+    "ask": "Set “{name}” to {value}?",
+    "widens": "This change lets the character do more; it takes effect only after your yes in the chat.",
+    "on": "on",
+    "off": "off"
   },
   "setup": {
     "title": "Settings",
@@ -1126,6 +1148,7 @@
     }
   },
   "setup_model": {
+    "sendsTo": "Once connected, page text, pictures of windows and file text are sent to {host} to be read.",
     "noneTitle": "No model connected",
     "noneText": "The character needs a model to talk.",
     "states": {
@@ -1691,6 +1714,13 @@
     "running": "Running",
     "retry": "Tries again {at}",
     "browserBadge": "Works in the browser",
+    "scopeLine": "Each run: {what}",
+    "scopeActs": {
+      "send": "Send a message",
+      "post": "Post",
+      "comment": "Comment",
+      "like": "Like"
+    },
     "last": "Last: {at} · {state}",
     "never": "Not run yet",
     "runNow": "Run now",
@@ -2128,7 +2158,7 @@
     "fix": "Check what you filled in."
   },
   "cli": {
-    "about": "Mibo: a character on your desktop that chats with you, remembers you and acts for you.",
+    "about": "Mibo: a personal agent on your computer that carries out tasks for you across the web, your files and other programs, and also a character that remembers you.",
     "noCommand": "Run it with no command to open the app.",
     "home": "the folder holding settings.json, persona.txt and runtime/ (default: AGENT_HOME, this checkout, or ~/mibo)",
     "command": "one of the commands below",

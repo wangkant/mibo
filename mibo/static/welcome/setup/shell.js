@@ -29,10 +29,10 @@
     modeSelect.disabled = true;
     modeSelect.addEventListener("change", () => change({ mode: modeSelect.value }, onError));
     const modeRow = kit.optionRow(t.modeName, t.modeText, modeSelect);
-    main.append(sw.row, modeRow.row);
+    main.append(sw.row, kit.item("shell-mode", modeRow.row));
 
     // ---- The folders.
-    const folders = kit.card(t.foldersTitle);
+    const folders = kit.item("folders", kit.card(t.foldersTitle));
     const foldersText = el("p", "setup-help", t.foldersText);
     const list = el("div", "setup-shell-folders");
     const input = kit.input();
@@ -49,13 +49,14 @@
     folders.append(foldersText, list, addRow, folderError);
 
     // ---- The programs always allowed in a folder, from the card's 对此程序在此文件夹始终允许 ({forget} takes one back).
-    const rules = kit.card(t.rulesTitle);
+    const rules = kit.item("rules", kit.card(t.rulesTitle));
     const rulesList = el("div", "setup-shell-folders");
     rules.append(el("p", "setup-help", t.rulesText), rulesList);
 
     // ---- Never run, and the record.
     const never = kit.fold(t.neverFold);
     const record = kit.fold(paI18n.t("setup_shell.logFold", { count: 0 }));
+    kit.item("record", record.node);
     const logList = el("div", "setup-shell-log");
     const clear = kit.button("setup-button-secondary setup-button-sm", t.logClear, clearLog);
     const logError = kit.errorLine();

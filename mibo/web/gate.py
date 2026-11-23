@@ -5,15 +5,17 @@ Reading, scrolling and going to an address are free. Typing into a field is
 allowed, but never into a secret field (password, payment, one-time code: see
 pageops.secret). Two sorts of rule decide the rest.
 
-The floor, which always asks the person in the chat (`_by_name` and the rules beside it):
-paying (PAY_WORDS, a confirm next to an amount, CHECKOUT's link only going to
-the cart), deleting (DELETE_WORDS, DELETE_CLASSES), granting access
-(GRANT_WORDS, an affirmative on a consent page), an account's security
-(ACCOUNT_WORDS, a submit in a form that holds a password, a switch that saves a
-setting). These kinds ask whatever the mode or the reviewer, and a yes to another
-kind of step earlier in the turn does not reach them (cardwait.reaches). The
-word sets are the whole app's: a program's controls (desk/gate.py) and MCP
-tools (mcp_tools.hard) are sorted by them too.
+The floor, the costly kinds (cardwait.COSTLY), which ask the person in the chat
+every time (`_by_name` and the rules beside it): paying or spending (PAY_WORDS,
+a confirm next to an amount, CHECKOUT's link only going to the cart; adding to
+a cart is not), deleting (DELETE_WORDS, DELETE_CLASSES: a platform's own delete
+is never restored by the app), granting access (GRANT_WORDS, an affirmative on
+a consent page) or handing over private details (`hands_over`, decided where a
+form is sent), the account itself (ACCOUNT_WORDS, a submit in a form that holds
+a password, a switch that saves a setting), a binding submission (BIND_WORDS).
+These kinds ask whatever the mode or the reviewer, and no earlier yes reaches
+them (cardwait.reaches). The word sets are the whole app's: a program's
+controls (desk/gate.py) and MCP tools (mcp_tools.hard) are sorted by them too.
 
 The judgment, which the reviewer makes: any other press, Enter or form that
 sends something out of the page is one kind, "outward" (review.judged). What
@@ -66,7 +68,7 @@ from urllib.parse import urlsplit
 # The readings an outward act may carry, by its words or its form (press: a control whose words say nothing and
 # whose press sent something); the floor kinds; then the page's own asks, going to another site, and a run's plan.
 KINDS = ("send", "comment", "like", "post", "submit", "press", "outward", "order", "delete", "account", "grant",
-         "upload", "download", "dialog", "leave", "plan")
+         "bind", "upload", "download", "dialog", "leave", "plan")
 # The readings the person may let through without asking, per site.
 SKIPPABLE = ("send", "comment", "like", "post")
 ALLOW_FILE = "browser-allow.json"
@@ -84,20 +86,27 @@ def _words(english: list[str], chinese: list[str]) -> re.Pattern:
 # (desk/gate.py), and an MCP tool's name, description and arguments (mcp_tools.hard). Per kind: phrases in English
 # and other Latin-script languages, matched on word boundaries; phrases in other scripts, matched anywhere.
 # nanobrowser classify.ts, ported; 提交订单 and 确认订单, the other languages and the words after "top up" are ours.
+# Adding to a cart, comparing prices and a daily check-in spend nothing, and are not here.
 PAY = ["pay", "payment", "pay now", "buy", "buy now", "purchase", "checkout", "check out", "place order",
        "place the order", "order now", "complete order", "complete purchase", "complete booking", "book now",
-       "subscribe", "donate", "confirm and pay", "transfer money", "top up", "add to cart",
-       "pagar", "comprar", "acheter", "bezahlen", "kaufen", "оплатить", "купить", "оплата"]
+       "subscribe", "donate", "confirm and pay", "transfer money", "top up", "send a tip", "tip now", "send gift",
+       "start free trial", "start my free trial", "start trial", "try it free", "auto-renew", "auto renew",
+       "turn on auto-renew", "renew now", "upgrade now", "become a member", "redeem", "redeem points",
+       "use points", "use balance", "apply coupon",
+       "pagar", "comprar", "acheter", "bezahlen", "kaufen", "abonnieren", "s'abonner", "suscribirse", "оплатить",
+       "купить", "оплата"]
 # A tool's words only: on a page these name a section or a product more often than an act ("Sell", "Deposit" in a
 # site's menu), and the press that pays there is caught by its own name.
 PAY_TOOLS = ["payout", "reserve", "withdraw", "deposit", "remit", "sell", "payer", "commander"]
 # French for paying and ordering, which English uses for other things (Total Commander): on a page, only as a
 # control's first word.
 PAY_LEADING = ("payer", "commander")
-PAY_OTHER = ["付款", "支付", "购买", "下单", "结账", "结算", "充值", "订阅", "转账", "捐款", "立即购买", "加入购物车",
-             "投币", "充电", "打赏", "提交订单", "确认订单", "購買", "結帳", "訂閱", "轉帳",
-             "購入", "注文する", "注文を確定", "支払", "決済", "振込", "振り込み", "送金",
-             "결제", "구매", "주문하기", "송금", "이체"]
+PAY_OTHER = ["付款", "支付", "购买", "下单", "结账", "结算", "充值", "订阅", "转账", "捐款", "立即购买",
+             "投币", "充电", "打赏", "提交订单", "确认订单", "开通会员", "立即开通", "续费", "自动续费", "连续包月",
+             "免费试用", "兑换", "使用积分", "积分抵扣", "使用优惠券", "余额支付", "赠送礼物", "送礼物",
+             "購買", "結帳", "訂閱", "轉帳", "開通會員", "續費", "自動續費",
+             "購入", "注文する", "注文を確定", "支払", "決済", "振込", "振り込み", "送金", "定期購入", "自動更新",
+             "ポイントを使う", "결제", "구매", "주문하기", "송금", "이체", "충전", "구독", "자동 갱신", "포인트 사용"]
 DELETE = ["delete", "remove", "discard", "deactivate", "destroy", "erase", "purge", "trash", "unsubscribe",
           "cancel subscription", "cancel my subscription", "cancel account", "cancel membership", "cancel order",
           "close account", "wipe", "uninstall", "unlink", "empty trash", "clear history", "clear data",
@@ -106,13 +115,38 @@ DELETE = ["delete", "remove", "discard", "deactivate", "destroy", "erase", "purg
 DELETE_TOOLS = ["rm", "rmdir"]
 DELETE_OTHER = ["删除", "移除", "清空", "注销", "取消订阅", "撤回", "刪除", "註銷", "取消訂閱",
                 "削除", "解約", "退会", "삭제", "탈퇴", "해지"]
-ACCOUNT = ["sign out", "log out", "logout", "signout", "change password", "update password", "save settings",
-           "save changes", "update profile", "cerrar sesión", "se déconnecter", "déconnexion", "abmelden"]
-ACCOUNT_OTHER = ["退出登录", "退出账号", "登出", "修改密码", "更改密码", "保存设置", "保存修改", "保存资料",
-                 "拉黑", "屏蔽", "举报", "退出登入", "修改密碼", "更改密碼", "封鎖", "檢舉",
-                 "ログアウト", "パスワードを変更", "ブロック", "通報", "로그아웃", "비밀번호 변경", "차단", "신고"]
+# The account itself: its password, bound phone or email, two-step verification, its keys, its sessions. An avatar,
+# a nickname or a bio is not here ("update profile" and 保存资料 are a form's ordinary submit).
+ACCOUNT = ["sign out", "log out", "logout", "signout", "sign out of all devices", "sign out everywhere",
+           "change password", "update password", "reset password", "save settings", "save changes",
+           "change email", "update email", "change phone", "change phone number", "verify phone",
+           "two-step verification", "two-factor authentication", "turn off two-step", "generate token",
+           "cerrar sesión", "cambiar contraseña", "se déconnecter", "déconnexion", "changer le mot de passe",
+           "abmelden", "passwort ändern", "alterar senha", "сменить пароль", "изменить пароль"]
+ACCOUNT_OTHER = ["退出登录", "退出账号", "登出", "修改密码", "更改密码", "重置密码", "保存设置", "保存修改",
+                 "退出所有设备", "修改手机号", "更换手机号", "修改邮箱", "更换邮箱", "绑定手机", "绑定邮箱", "解绑",
+                 "换绑", "两步验证", "二次验证", "双重验证", "生成密钥", "创建令牌",
+                 "拉黑", "屏蔽", "举报", "退出登入", "修改密碼", "更改密碼", "更換手機號", "兩步驟驗證", "封鎖", "檢舉",
+                 "ログアウト", "パスワードを変更", "二段階認証", "メールアドレスを変更", "電話番号を変更", "ブロック",
+                 "通報", "로그아웃", "비밀번호 변경", "2단계 인증", "이메일 변경", "전화번호 변경", "차단", "신고"]
 GRANT = ["authorize", "authorise", "allow access", "grant access", "give access", "revoke access"]
 GRANT_OTHER = ["授权", "允许访问", "授予访问", "授權", "允許存取", "アクセスを許可", "권한 부여", "액세스 허용"]
+# Ours: a binding submission, signing an agreement or sending a formal application (tax, visa, school). Never "sign"
+# alone, which signs in or up. An ordinary form, a survey and a search are not here.
+BIND = ["e-sign", "esign", "sign now", "sign here", "sign document", "sign the document", "sign contract",
+        "sign the contract", "sign agreement", "sign the agreement", "sign and submit", "submit signature",
+        "adopt and sign", "finish signing", "submit application", "submit my application", "submit your application",
+        "submit the application", "send application", "finalize application", "file return", "file tax return",
+        "file my return", "submit return", "e-file", "efile",
+        "unterschreiben", "unterzeichnen", "antrag stellen", "antrag absenden", "vertrag abschließen", "signer",
+        "signer le contrat", "soumettre la demande", "envoyer la demande", "déposer la demande", "firmar",
+        "firmar contrato", "enviar solicitud", "presentar solicitud", "assinar contrato", "assinar documento",
+        "enviar inscrição", "enviar candidatura", "enviar solicitação", "подписать", "подписать договор",
+        "подать заявление", "отправить заявку"]
+BIND_OTHER = ["签署", "签约", "确认签署", "电子签名", "签名并提交", "同意并签署", "提交申请", "确认提交申请", "提交报名",
+              "确认报名", "确认申报", "提交申报", "立即申报", "簽署", "簽約", "提交申請", "確認申報",
+              "署名する", "契約する", "申請する", "申請を送信", "申込を確定", "서명하기", "계약하기", "신청하기",
+              "신청서 제출"]
 # Acts done to a person: a page names one by its verb alone, as a button beside someone's post ("Block"); a tool's
 # name names the person too (ban_member), so those words count there only with one of PEOPLE.
 TO_PEOPLE = ["block", "report", "mute"]
@@ -137,7 +171,9 @@ PAIRS = (
     ("account", EDITS + ("enable", "disable", "turn on", "turn off", "require", "enforce", "configure", "enroll"),
      ("password", "two-factor", "two factor", "2fa", "mfa", "totp", "passkey", "security key", "sso", "recovery")),
     ("account", ("update", "change", "modify", "set", "reset", "disable", "enable", "deactivate", "suspend", "lock",
-                 "unlock"), ("user", "account", "profile", "member")),
+                 "unlock"), ("user", "account", "member")),
+    # A profile's picture, nickname or bio is no loss; the profile itself shut or locked is.
+    ("account", ("deactivate", "suspend", "lock", "unlock", "close"), ("profile",)),
     ("account", ("create", "add", "rotate", "regenerate", "generate", "revoke"),
      ("ssh key", "api key", "access token", "deploy key", "gpg key", "personal access token")),
     ("account", TO_PEOPLE_NAMED, PEOPLE),
@@ -182,11 +218,31 @@ GENERIC_CONFIRM = re.compile(r"^(?:confirm|ok|okay|continue|next|proceed|agree|s
 AFFIRM = re.compile(r"^(?:confirm|ok|okay|yes|sure|continue|确认|确定|好的|好|是|是的|继续)(?:\b|$)", re.I)
 DELETE_CLASSES = re.compile(r"(^|[\s_-])(delete|remove|destroy|trash|discard)([\s_-]|$)", re.I)
 ACCOUNT_WORDS = _words(ACCOUNT + TO_PEOPLE + _paired("account"), ACCOUNT_OTHER)
+BIND_WORDS = _words(BIND, BIND_OTHER)
 # What a tool's name or description says: the same, but an act done to a person only with the person named.
 EVERY_PAIR = PAIRS + TOOL_PAIRS
 TOOL_WORDS = (("order", _words(PAY + PAY_TOOLS + _paired("order", EVERY_PAIR), PAY_OTHER)), ("grant", GRANT_WORDS),
               ("delete", _words(DELETE + DELETE_TOOLS + _paired("delete", EVERY_PAIR), DELETE_OTHER)),
-              ("account", _words(ACCOUNT + _paired("account", EVERY_PAIR), ACCOUNT_OTHER)))
+              ("account", _words(ACCOUNT + _paired("account", EVERY_PAIR), ACCOUNT_OTHER)), ("bind", BIND_WORDS))
+# Ours: what a form hands over that is the person's own private record: an identity number, a passport, a home
+# address, a bank account, by the field's label (in a card's "label: value" lines) or by a value written as one (a
+# Chinese resident identity number, a US social security number).
+PRIVATE_LABELS = _words(["id number", "identity number", "national id", "passport", "passport number", "ssn",
+                         "social security", "tax id", "home address", "street address", "bank account", "iban",
+                         "routing number", "date of birth"],
+                        ["身份证", "证件号", "护照", "住址", "家庭地址", "详细地址", "银行卡", "银行账号", "开户行", "社保",
+                         "身分證", "護照", "住所", "マイナンバー", "パスポート", "주민등록", "여권", "계좌"])
+PRIVATE_VALUES = re.compile(r"(?<!\d)\d{17}[\dXx](?![\dXx])|(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)")
+
+
+def hands_over(text: str) -> bool:
+    """Whether what a form sends hands over the person's private record: a field labelled so, with a value, or an
+    identity number in it."""
+    for line in str(text or "").splitlines():
+        field = re.match(r"([^:：]*)[:：](.*)", line)
+        if (field and field.group(2).strip() and PRIVATE_LABELS.search(field.group(1))) or PRIVATE_VALUES.search(line):
+            return True
+    return False
 # What holds a secret: a tool named for one reads or changes the account's security (a page's secret fields are
 # pageops.secret's).
 SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "totp", "credential", "credentials",
@@ -338,6 +394,8 @@ def _by_name(name: str, facts: dict, url: str) -> tuple[str, str] | None:
         return "delete", f"the name {name!r} is destructive vocabulary"
     if ACCOUNT_WORDS.search(name):
         return "account", f"the name {name!r} changes the account"
+    if BIND_WORDS.search(name):
+        return "bind", f"the name {name!r} signs or files a binding submission"
     # A confirm is the act its box asks about (the item it sits in, as FACTS_JS reads it).
     row = " ".join(str(facts.get("row") or "").split())
     placed = _by_name(row, {}, url) if row and AFFIRM.match(name.strip()) else None

@@ -1,8 +1,8 @@
 # Mibo
 
-**Un compañero de IA que vive en su escritorio: le acompaña y además resuelve tareas.**
+**Un agente de IA personal que vive en su propio equipo: dígale lo que necesita y lo resuelve en la web, en sus archivos y en sus otros programas.**
 
-Un personaje con aspecto y carácter propios conversa con usted, le recuerda y le trae, una cada vez, cosas que merecen su tiempo. No se queda en la conversación: navega por la web, maneja los programas de su equipo, trabaja con sus archivos y comandos, usa habilidades y conectores MCP, y ejecuta tareas programadas. Se ejecuta en su equipo con el servicio de modelos que usted elija. Las acciones se revisan automáticamente y el personaje le pregunta en el chat solo cuando hace falta su decisión: con su sí, la tarea se completa; los pagos, las eliminaciones y los cambios de cuenta se preguntan por separado.
+Mibo se ejecuta en su equipo con el servicio de modelos que usted elija. No hay ningún equipo en la nube de por medio: sus sesiones iniciadas y sus archivos permanecen en su equipo, y lo que se envía al modelo llega solo al servicio que usted eligió. Una tarea que usted le encarga se lleva hasta el final y se le informa del resultado, y también puede actuar según un horario. Solo pregunta antes de una acción que le cuesta algo o no se puede deshacer, o que usted no pidió; los códigos de verificación, las contraseñas y los datos de pago los introduce siempre usted. Además, es un personaje con nombre, aspecto y memoria de usted.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Versión](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -18,13 +18,13 @@ Un personaje con aspecto y carácter propios conversa con usted, le recuerda y l
 |---|---|
 | **Conversación** | Un personaje en una ventana y, en Windows, como figura en el escritorio. Personajes incluidos o propios. Cualquier servicio compatible con OpenAI, u Ollama y LM Studio en su equipo. El menú del modelo muestra cuánto contexto está ocupado y ofrece Resumir ahora y Borrar contexto. |
 | **Memoria** | Hechos y planes sobre usted, con fecha, visibles y editables en Configuración › Memoria. Nunca se guardan números de identidad o de tarjeta, contraseñas ni códigos. Los chats temporales no dejan registro. |
-| **Recomendaciones** | Un hallazgo cada vez, de fuentes públicas, ordenado por el tiempo que usted le dedica y no por los clics. Cada tarjeta indica su motivo y admite valoraciones que se pueden deshacer. |
 | **Salidas** | Recorre páginas públicas como visitante, sin iniciar sesión y respetando robots.txt. Lee cada página de una vez, con sus títulos y tablas. La búsqueda web no requiere clave. |
 | **Navegador integrado** (Windows) | Los enlaces se abren junto a la conversación, con pestañas, pestañas privadas y descargas. El personaje examina la página y hace clic, escribe, elige, arrastra y sube archivos en ella. |
 | **Otros programas** (Windows) | Lee y maneja ventanas de otros programas mediante UI Automation, también aplicaciones Electron, y solo mientras usted no usa el teclado ni el ratón. |
-| **Archivos y comandos** | Solo en su Escritorio, Documentos, Descargas, Imágenes, Música y Vídeos, y en las carpetas que usted autorice. Los comandos se analizan antes de ejecutarse; los cambios de archivos de cada turno se pueden deshacer; en Windows, lo eliminado va a la Papelera de reciclaje. |
+| **Archivos y comandos** | Solo en su Escritorio, Documentos, Descargas, Imágenes, Música y Vídeos, y en las carpetas que usted autorice. Los documentos de Word, Excel y PowerPoint se escriben como archivos. Los comandos se analizan antes de ejecutarse; los cambios de archivos de cada turno se pueden deshacer; en Windows, lo eliminado va a la Papelera de reciclaje. |
 | **Habilidades y conectores** | Habilidades (carpetas con `SKILL.md`) y servidores MCP, cada uno con un catálogo seleccionado. Un mensaje que empieza por `/name` (el nombre de la habilidad) la activa. |
-| **Tareas programadas** | Recordatorios, tareas y comprobaciones periódicas. Al ejecutarse solo leen, además de lo que usted permitió al crearlas. |
+| **Tareas programadas** | Recordatorios, tareas y comprobaciones periódicas. Al ejecutarse solo leen, además de lo que usted permitió al crearlas; un encargo periódico de enviar o publicar actúa solo en el sitio, para el destinatario y con el tipo de acción que usted indicó. |
+| **Recomendaciones** | Un hallazgo cada vez, de fuentes públicas, ordenado por el tiempo que usted le dedica y no por los clics. Cada tarjeta indica su motivo y admite valoraciones que se pueden deshacer. |
 | **Idiomas** | Diez idiomas de interfaz. |
 
 ## Personajes

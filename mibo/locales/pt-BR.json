@@ -893,7 +893,29 @@
     "proposals": "Não foi feito nesta execução; isto precisa da sua confirmação:",
     "doIt": "Fazer agora",
     "asked": "Pedido na conversa",
-    "askText": "Por favor, faça isto: {what}"
+    "askText": "Por favor, faça isto: {what}",
+    "offerScope": "A cada vez",
+    "scopeRule": "O que está dentro do escopo é feito sem perguntar; o que uma página ou mensagem pedir além dele não é feito e é informado no chat; pagamentos, exclusões e outras etapas importantes, assim como senhas, continuam confirmados por você a cada vez.",
+    "acts": {
+      "send": "Enviar mensagem",
+      "post": "Publicar",
+      "comment": "Comentar",
+      "like": "Curtir",
+      "submit": "Enviar formulário",
+      "upload": "Enviar arquivo",
+      "outward": "Ação externa"
+    },
+    "scopeSep": "; ",
+    "scopeDone": "Tarefa agendada “{title}” feita conforme configurado: {acts}.",
+    "scopeBeyond": "Fora do escopo configurado, não feito: {acts}.",
+    "inScope": "Dentro do escopo da tarefa agendada, então é feito.",
+    "beyondScope": "Fora do escopo da tarefa agendada, então não é feito."
+  },
+  "appmap": {
+    "ask": "Definir “{name}” como {value}?",
+    "widens": "Esta mudança amplia o que o personagem pode fazer; ela vale somente após a sua confirmação no chat.",
+    "on": "ativado",
+    "off": "desativado"
   },
   "setup": {
     "title": "Configurações",
@@ -1125,6 +1147,7 @@
     }
   },
   "setup_model": {
+    "sendsTo": "Depois de conectar, o texto das páginas, as imagens das janelas e o texto dos arquivos são enviados para {host} para leitura.",
     "noneTitle": "Nenhum modelo conectado",
     "noneText": "O personagem precisa de um modelo para conversar.",
     "states": {
@@ -1693,6 +1716,13 @@
     "running": "Em execução",
     "retry": "Nova tentativa {at}",
     "browserBadge": "Trabalha no navegador",
+    "scopeLine": "A cada execução: {what}",
+    "scopeActs": {
+      "send": "Enviar mensagem",
+      "post": "Publicar",
+      "comment": "Comentar",
+      "like": "Curtir"
+    },
     "last": "Última: {at} · {state}",
     "never": "Ainda não executada",
     "runNow": "Executar agora",
@@ -2134,7 +2164,7 @@
     "fix": "Verifique o que você preencheu."
   },
   "cli": {
-    "about": "Mibo: um personagem na sua área de trabalho que conversa com você, se lembra de você e age por você.",
+    "about": "Mibo: um agente pessoal no seu computador que realiza tarefas por você na web, nos arquivos e em outros programas, e também é um personagem que se lembra de você.",
     "noCommand": "Execute sem nenhum comando para abrir o aplicativo.",
     "home": "a pasta que contém settings.json, persona.txt e runtime/ (padrão: AGENT_HOME, esta cópia ou ~/mibo)",
     "command": "um dos comandos abaixo",

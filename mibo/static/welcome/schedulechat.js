@@ -104,7 +104,14 @@ window.paScheduleChat = (() => {
     const fact = (name, value) => facts.append(el("dt", "", name), el("dd", "", value));
     fact(t.offerRhythm, [note.rhythm, note.next && fill(t.next, note)].filter(Boolean).join(" · "));
     if (note.perDay) fact(t.offerRuns, fill(t.offerRunsText, { n: note.perDay }));
-    fact(t.offerActs, (note.acts || []).includes("browser") ? t.browser : t.readOnly);
+    const scope = note.scope || {};
+    if (scope.act) {
+      // An act each time, as their message gave it: site, act, recipient, then the words or what to write about.
+      fact(t.offerScope, [scope.site, t.acts[scope.act], scope.to, scope.text || scope.about].filter(Boolean).join(" · "));
+      fact(t.offerActs, t.scopeRule);
+    } else {
+      fact(t.offerActs, (note.acts || []).includes("browser") ? t.browser : t.readOnly);
+    }
     node.append(head, facts);
     const buttons = el("div", "op-card-buttons");
     const told = (text) => {

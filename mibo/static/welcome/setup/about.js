@@ -17,7 +17,7 @@
     link.append(el("span", "", t.licenceLink), kit.icon("out", "setup-icon setup-icon-sm"));
     const licences = kit.optionRow(t.licences, t.licenceText);
     licences.words.append(link);
-    box.append(version.row, licences.row);
+    box.append(kit.item("version", version.row), kit.item("licences", licences.row));
     node.append(box);
 
     function show() {

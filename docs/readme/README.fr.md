@@ -1,8 +1,8 @@
 # Mibo
 
-**Un compagnon IA qui vit sur votre bureau : il vous tient compagnie et agit pour vous.**
+**Un agent IA personnel qui vit sur votre propre ordinateur : dites-lui ce dont vous avez besoin, il s'en charge sur le web, dans vos fichiers et dans vos autres programmes.**
 
-Un personnage doté d'une apparence et d'un caractère propres converse avec vous, se souvient de vous et vous apporte, une à la fois, des choses qui méritent votre temps. Il ne se limite pas à la conversation : il navigue sur le web, utilise les programmes de votre ordinateur, travaille avec vos fichiers et vos commandes, emploie des compétences et des connecteurs MCP, et exécute des tâches planifiées. Il s'exécute sur votre ordinateur avec le service de modèles de votre choix. Les actions sont vérifiées automatiquement, et le personnage ne vous sollicite dans la discussion que lorsqu'une décision vous revient : avec votre accord, la tâche va jusqu'au bout ; les paiements, les suppressions et les modifications de compte sont demandés à part.
+Mibo s'exécute sur votre ordinateur avec le service de modèles de votre choix. Aucune machine dans le cloud n'intervient : vos connexions et vos fichiers restent sur votre ordinateur, et ce qui est envoyé au modèle n'atteint que le service que vous avez choisi. Une tâche confiée est menée jusqu'au bout puis rapportée, et il peut aussi agir selon un calendrier. Il ne demande qu'avant une action qui vous coûte quelque chose ou qui est irréversible, ou que vous n'avez pas demandée ; les codes de vérification, les mots de passe et les informations de paiement restent toujours à saisir par vous. C'est aussi un personnage doté d'un nom, d'une apparence et d'une mémoire de vous.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -18,13 +18,13 @@ Un personnage doté d'une apparence et d'un caractère propres converse avec vou
 |---|---|
 | **Conversation** | Un personnage dans une fenêtre et, sous Windows, sous forme de figurine sur le bureau. Personnages fournis ou personnels. Tout service compatible OpenAI, ou Ollama et LM Studio sur votre ordinateur. Le menu du modèle indique l'occupation du contexte et propose Résumer maintenant et Effacer le contexte. |
 | **Mémoire** | Faits et projets datés vous concernant, consultables et modifiables dans Paramètres › Mémoire. Les numéros d'identité ou de carte, mots de passe et codes ne sont jamais conservés. Les discussions temporaires ne laissent aucune trace. |
-| **Recommandations** | Une trouvaille à la fois, issue de sources publiques, classée selon le temps que vous y passez plutôt que selon les clics. Chaque carte indique sa raison et accepte un avis annulable. |
 | **Sorties** | Parcourt les pages publiques en tant que visiteur, sans connexion et dans le respect de robots.txt. Une page est lue en une fois, titres et tableaux compris. La recherche web ne demande aucune clé. |
 | **Navigateur intégré** (Windows) | Les liens s'ouvrent à côté de la conversation, avec onglets, onglets privés et téléchargements. Le personnage examine la page et y clique, saisit, choisit, fait glisser et téléverse des fichiers. |
 | **Autres programmes** (Windows) | Lit et pilote les fenêtres d'autres programmes via UI Automation, applications Electron comprises, uniquement lorsque vous n'utilisez ni le clavier ni la souris. |
-| **Fichiers et commandes** | Limités à vos dossiers Bureau, Documents, Téléchargements, Images, Musique et Vidéos, et aux dossiers que vous autorisez. Les commandes sont analysées avant exécution ; les modifications de fichiers de chaque tour peuvent être annulées ; sous Windows, les suppressions vont dans la Corbeille. |
+| **Fichiers et commandes** | Limités à vos dossiers Bureau, Documents, Téléchargements, Images, Musique et Vidéos, et aux dossiers que vous autorisez. Les documents Word, Excel et PowerPoint sont écrits sous forme de fichiers. Les commandes sont analysées avant exécution ; les modifications de fichiers de chaque tour peuvent être annulées ; sous Windows, les suppressions vont dans la Corbeille. |
 | **Compétences et connecteurs** | Compétences (dossiers `SKILL.md`) et serveurs MCP, chacun avec un catalogue sélectionné. Un message commençant par `/name` (le nom de la compétence) la lance. |
-| **Tâches planifiées** | Rappels, tâches et vérifications périodiques. À l'exécution, elles ne font que lire, en plus de ce que vous avez autorisé à leur création. |
+| **Tâches planifiées** | Rappels, tâches et vérifications périodiques. À l'exécution, elles ne font que lire, en plus de ce que vous avez autorisé à leur création ; une demande récurrente d'envoi ou de publication n'agit que sur le site, pour le destinataire et selon le type d'action que vous avez indiqués. |
+| **Recommandations** | Une trouvaille à la fois, issue de sources publiques, classée selon le temps que vous y passez plutôt que selon les clics. Chaque carte indique sa raison et accepte un avis annulable. |
 | **Langues** | Dix langues d'interface. |
 
 ## Personnages

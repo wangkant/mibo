@@ -2,9 +2,13 @@
 itself and what goes to the reviewer or the person.
 
 Reading, scrolling, moving the focus and typing into a document or a field are
-free. The floor asks the person in the chat: deleting or throwing away
-work, buying, changing an account or access, changing a setting of the program,
-and opening a file (which starts its program). The browser gate's floor
+free. The floor, the costly kinds (cardwait.COSTLY), asks the person in the chat
+every time: a delete nothing restores (Shift+Delete, a program's own delete,
+emptying the Recycle Bin) or throwing away unsaved work, buying, changing an
+account, granting access, a binding submission, changing a setting of the
+program. A delete in a file view goes to the Recycle Bin ("recycle") and opening
+a file starts its program ("open"): each is asked as its own risk unless the
+reviewer passes it. The browser gate's floor
 vocabularies (web/gate.py) decide those by a control's name; the rest are rules
 for desktop programs: Enter and the Delete key by where the focus is, the
 shell's file views, a dialog's confirming button by what the dialog says, and
@@ -30,7 +34,8 @@ import re
 
 from ..web import gate as web
 
-KINDS = ("send", "post", "delete", "file", "open", "order", "account", "setting", "print", "submit", "press")
+KINDS = ("send", "post", "delete", "recycle", "file", "open", "order", "account", "grant", "bind", "setting", "print",
+         "submit", "press")
 # Buttons that send nothing typed: they close, go back, browse or explain.
 NO_EFFECT = re.compile(r"^(?:cancel|close|back|previous|browse|help|minimi[sz]e|maximi[sz]e|restore|"
                        r"取消|关闭|返回|上一步|浏览|帮助|最小化|最大化|还原)(?:\b|$|\s*\()", re.I)
@@ -57,6 +62,9 @@ REPLACE_IN_TEXT = re.compile(r"(?:replace(?: all)?|全部替换|替换)(?:\s*\(&
 FIND_FIELD = re.compile(r"find what|查找内容", re.I)
 # The menu item that opens that dialog ("Replace...", "替换(R)..."): it changes nothing by itself.
 OPENS_REPLACE = re.compile(r"(?:replace|替换)(?:\s*\(&?\w\))?\s*(?:\.\.\.|…)", re.I)
+# A delete past the Recycle Bin, by its words; one into it.
+FOR_GOOD = re.compile(r"permanent|for good|永久|彻底|徹底", re.I)
+TO_BIN = re.compile(r"\b(?:move|send)\b.{0,60}\bto\s+the\s+recycle\s+bin|(?:移动?到|移至|放入)回收站", re.I)
 # The shell's views of files and folders (File Explorer and the common file dialog).
 SHELL_CLASSES = {"UIItem", "UIItemsView", "UIProperty", "SysTreeView32", "DirectUIHWND", "ShellTabWindowClass"}
 
@@ -86,10 +94,16 @@ def by_name(name: str) -> tuple[str, str] | None:
         return "order", f"the name {name!r} is payment vocabulary"
     if DISCARD_WORDS.search(name):
         return "delete", f"{name!r} throws away unsaved work"
+    if TO_BIN.search(name) and not FOR_GOOD.search(name):
+        return "recycle", f"{name!r} moves files to the Recycle Bin"
     if web.DELETE_WORDS.search(name) or re.search(r"recycle bin|回收站", name, re.I):
         return "delete", f"the name {name!r} is destructive vocabulary"
-    if web.ACCOUNT_WORDS.search(name) or web.GRANT_WORDS.search(name):
-        return "account", f"the name {name!r} changes an account or access"
+    if web.ACCOUNT_WORDS.search(name):
+        return "account", f"the name {name!r} changes an account"
+    if web.GRANT_WORDS.search(name):
+        return "grant", f"the name {name!r} grants access"
+    if web.BIND_WORDS.search(name):
+        return "bind", f"the name {name!r} signs or files a binding submission"
     if PRINT_WORDS.search(name):
         return "print", f"the name {name!r} prints"
     if FILE_WORDS.search(name):
@@ -120,6 +134,9 @@ def press(node, title: str, main: bool, dialog_text: str, folder_item: bool | No
     if in_settings(node, title) and (node.role in ("checkbox", "radio", "combobox", "slider", "listitem")
                                      or CONFIRM.search(name) or FILE_WORDS.search(name)):
         return "setting", f"{name!r} in the program's settings ({title[:60]!r})"
+    if (program == "explorer.exe" or in_shell_view(node)) and web.DELETE_WORDS.search(name) and not (
+            FOR_GOOD.search(name) or re.search(r"recycle bin|回收站", name, re.I)):
+        return "recycle", f"{name!r} in File Explorer moves the selected files to the Recycle Bin"
     if not main and REPLACE_IN_TEXT.fullmatch(name) and FIND_FIELD.search(dialog_text) and _common_dialog(node.top):
         return "", "it replaces words inside the document, from the find and replace dialog"
     if node.role == "menuitem" and OPENS_REPLACE.fullmatch(name) and not in_shell_view(node):
@@ -159,8 +176,10 @@ def key(keys: str, focused, title: str, main: bool, dialog_text: str) -> tuple[s
     if k == "ctrl+p":
         return "print", f"{keys} prints"
     if focused is not None and in_shell_view(focused):
-        if k in ("delete", "shift+delete", "ctrl+d"):
-            return "delete", f"{keys} deletes the selected files"
+        if k == "shift+delete":
+            return "delete", f"{keys} deletes the selected files for good, past the Recycle Bin"
+        if k in ("delete", "ctrl+d"):
+            return "recycle", f"{keys} moves the selected files to the Recycle Bin"
         if k in ("ctrl+v", "ctrl+shift+v", "ctrl+z", "ctrl+y"):
             return "file", f"{keys} in a file view pastes, moves back or redoes files"
         if k == "enter" and role == "textbox":

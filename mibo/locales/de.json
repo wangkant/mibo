@@ -893,7 +893,29 @@
     "proposals": "In diesem Lauf nicht ausgeführt; dies braucht Ihre Bestätigung:",
     "doIt": "Jetzt ausführen",
     "asked": "Im Chat angefragt",
-    "askText": "Bitte erledigen Sie Folgendes: {what}"
+    "askText": "Bitte erledigen Sie Folgendes: {what}",
+    "offerScope": "Jedes Mal",
+    "scopeRule": "Was im Rahmen liegt, geschieht ohne Rückfrage; was eine Seite oder Nachricht darüber hinaus verlangt, geschieht nicht und wird im Chat gemeldet; Zahlungen, Löschungen und andere folgenreiche Schritte sowie Passwörter bestätigen Sie weiterhin jedes Mal selbst.",
+    "acts": {
+      "send": "Nachricht senden",
+      "post": "Beitrag veröffentlichen",
+      "comment": "Kommentieren",
+      "like": "Gefällt mir",
+      "submit": "Absenden",
+      "upload": "Hochladen",
+      "outward": "Handlung nach außen"
+    },
+    "scopeSep": "; ",
+    "scopeDone": "Geplante Aufgabe „{title}“ wie eingerichtet ausgeführt: {acts}.",
+    "scopeBeyond": "Außerhalb des festgelegten Rahmens, nicht ausgeführt: {acts}.",
+    "inScope": "Im Rahmen der geplanten Aufgabe, daher ausgeführt.",
+    "beyondScope": "Außerhalb des Rahmens der geplanten Aufgabe, daher nicht ausgeführt."
+  },
+  "appmap": {
+    "ask": "„{name}“ auf {value} setzen?",
+    "widens": "Diese Änderung erweitert, was die Figur tun darf; sie gilt erst nach Ihrer Bestätigung im Chat.",
+    "on": "an",
+    "off": "aus"
   },
   "setup": {
     "title": "Einstellungen",
@@ -1125,6 +1147,7 @@
     }
   },
   "setup_model": {
+    "sendsTo": "Nach dem Verbinden werden Seitentext, Fensterbilder und Dateitext zur Verarbeitung an {host} gesendet.",
     "noneTitle": "Kein Modell verbunden",
     "noneText": "Die Figur braucht ein Modell, um zu sprechen.",
     "states": {
@@ -1693,6 +1716,13 @@
     "running": "Läuft",
     "retry": "Neuer Versuch {at}",
     "browserBadge": "Arbeitet im Browser",
+    "scopeLine": "Bei jedem Lauf: {what}",
+    "scopeActs": {
+      "send": "Nachricht senden",
+      "post": "Beitrag veröffentlichen",
+      "comment": "Kommentieren",
+      "like": "Gefällt mir"
+    },
     "last": "Letzter Lauf: {at} · {state}",
     "never": "Noch nicht gelaufen",
     "runNow": "Jetzt ausführen",
@@ -2134,7 +2164,7 @@
     "fix": "Prüfen Sie Ihre Eingaben."
   },
   "cli": {
-    "about": "Mibo: eine Figur auf Ihrem Desktop, die mit Ihnen chattet, sich an Sie erinnert und für Sie handelt.",
+    "about": "Mibo: ein persönlicher Agent auf Ihrem Computer, der Ihre Aufgaben im Web, in Dateien und in anderen Programmen erledigt und zugleich eine Figur ist, die sich an Sie erinnert.",
     "noCommand": "Ohne Befehl ausführen, um die App zu öffnen.",
     "home": "der Ordner mit settings.json, persona.txt und runtime/ (Standard: AGENT_HOME, dieser Klon oder ~/mibo)",
     "command": "einer der folgenden Befehle",

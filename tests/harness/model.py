@@ -34,7 +34,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from mibo import consolidate, context, ingestion, review
-from mibo.web import pagejudge
+from mibo.web import inbox, pagejudge
 
 MODEL = "scripted"
 # What each purpose's request sends first: the router reads it, in this order.
@@ -43,6 +43,7 @@ SYSTEM_OF = {
     "judge": pagejudge.SYSTEM,
     "fold": consolidate._PERSON_PROMPT,
     "vision": ingestion.ContentIngestion.VISION_READ_PROMPT,
+    "inbox": inbox.DIGEST,
 }
 PURPOSES = ("reply", "probe", "compact", *SYSTEM_OF)
 

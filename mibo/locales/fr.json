@@ -893,7 +893,29 @@
     "proposals": "Non effectué lors de cette exécution ; ceci nécessite votre confirmation :",
     "doIt": "Le faire maintenant",
     "asked": "Demandé dans la discussion",
-    "askText": "Merci de faire ceci : {what}"
+    "askText": "Merci de faire ceci : {what}",
+    "offerScope": "À chaque fois",
+    "scopeRule": "Ce qui entre dans le périmètre se fait sans question ; ce qu'une page ou un message demande au-delà ne se fait pas et vous est signalé dans le chat ; les paiements, les suppressions et les autres étapes importantes, ainsi que les mots de passe, restent confirmés par vous à chaque fois.",
+    "acts": {
+      "send": "Envoyer un message",
+      "post": "Publier",
+      "comment": "Commenter",
+      "like": "J'aime",
+      "submit": "Soumettre",
+      "upload": "Téléverser",
+      "outward": "Action vers l'extérieur"
+    },
+    "scopeSep": "; ",
+    "scopeDone": "Tâche planifiée « {title} » effectuée comme prévu : {acts}.",
+    "scopeBeyond": "Hors du périmètre prévu, non effectué : {acts}.",
+    "inScope": "Dans le périmètre de la tâche planifiée, donc effectué.",
+    "beyondScope": "Hors du périmètre de la tâche planifiée, donc non effectué."
+  },
+  "appmap": {
+    "ask": "Régler « {name} » sur {value} ?",
+    "widens": "Ce changement élargit ce que le personnage peut faire ; il s'applique après votre confirmation dans le chat.",
+    "on": "activé",
+    "off": "désactivé"
   },
   "setup": {
     "title": "Paramètres",
@@ -1125,6 +1147,7 @@
     }
   },
   "setup_model": {
+    "sendsTo": "Une fois connecté, le texte des pages, les images des fenêtres et le texte des fichiers sont envoyés à {host} pour être lus.",
     "noneTitle": "Aucun modèle connecté",
     "noneText": "Le personnage a besoin d'un modèle pour parler.",
     "states": {
@@ -1693,6 +1716,13 @@
     "running": "En cours",
     "retry": "Nouvel essai {at}",
     "browserBadge": "Agit dans le navigateur",
+    "scopeLine": "À chaque exécution : {what}",
+    "scopeActs": {
+      "send": "Envoyer un message",
+      "post": "Publier",
+      "comment": "Commenter",
+      "like": "J'aime"
+    },
     "last": "Dernière : {at} · {state}",
     "never": "Pas encore exécutée",
     "runNow": "Exécuter maintenant",
@@ -2134,7 +2164,7 @@
     "fix": "Vérifiez ce que vous avez saisi."
   },
   "cli": {
-    "about": "Mibo : un personnage sur votre bureau qui discute avec vous, se souvient de vous et agit pour vous.",
+    "about": "Mibo : un agent personnel sur votre ordinateur qui mène vos tâches sur le web, dans vos fichiers et dans d'autres programmes, et qui est aussi un personnage qui se souvient de vous.",
     "noCommand": "Lancez-le sans commande pour ouvrir l'application.",
     "home": "le dossier contenant settings.json, persona.txt et runtime/ (par défaut : AGENT_HOME, ce clone ou ~/mibo)",
     "command": "l'une des commandes ci-dessous",

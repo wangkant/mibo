@@ -21,11 +21,10 @@ TOOL = {"type": "function", "function": {
     "description": (
         "Connect a website for them: when they ask to connect, link, bind, sign in or log in to a site or a "
         # copy: voice (what a person says)
-        "mailbox (\"帮我链接一下抖音\", \"登录一下 b 站\", \"connect my Gmail\", \"ログインして\"), by its name or "
-        "address. Its sign-in page comes up in the app's own browser and they sign in there themselves; this "
-        "returns once they are in. Never open a website with a command, a program or another browser for this, "
-        "and never ask them to switch anything on first; a mailbox on the web (Gmail, QQ 邮箱, Outlook, 163) is a "
-        "site like any other."),
+        "mailbox (\"帮我链接一下抖音\", \"connect my Gmail\"), by its name or address. Its sign-in page comes up "
+        "in the app's own browser and they sign in there themselves; this returns once they are in. Never open a "
+        "website with a command, a program or another browser for this, and never ask them to switch anything on "
+        "first; a web mailbox (QQ 邮箱, 163) is a site like any other."),
     "parameters": {"type": "object", "properties": {
         "site": {"type": "string", "description": "the site as they named it (\"抖音\", \"Gmail\") or its address"}},
         "required": ["site"]}}}

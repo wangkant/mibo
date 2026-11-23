@@ -55,7 +55,8 @@ SAID = {
            "acts": {"send": ("发送消息", "发送给 {to}"), "comment": ("发表评论", "发表评论：{to}"),
                     "like": ("按「{button}」", "按「{button}」"), "post": ("公开发布", "公开发布：{to}"),
                     "order": ("下单", "下单：{to}"), "delete": ("删除", "删除：{to}"),
-                    "account": ("更改账号设置", "更改账号设置：{to}"), "grant": ("授权访问", "授权给 {to}"),
+                    "account": ("更改账号设置", "更改账号设置：{to}"), "grant": ("授权访问或提交个人信息", "授权给 {to}"),
+                    "bind": ("签署或提交正式申请", "签署或提交：{to}"),
                     "submit": ("提交表单", "提交「{to}」"), "upload": ("上传文件", "上传「{to}」"),
                     "download": ("下载文件", "下载「{to}」"), "dialog": ("确认网页的询问", "确认网页的询问"),
                     "leave": ("前往其他网站", "前往 {to}"), "press": ("按「{button}」", "按「{button}」")}},
@@ -64,7 +65,9 @@ SAID = {
            "acts": {"send": ("Send the message", "Send to {to}"), "comment": ("Post a comment", "Comment on {to}"),
                     "like": ("Press “{button}”", "Press “{button}”"), "post": ("Post publicly", "Post to {to}"),
                     "order": ("Place the order", "Order {to}"), "delete": ("Delete", "Delete {to}"),
-                    "account": ("Change account settings", "Change {to}"), "grant": ("Grant access", "Grant {to} access"),
+                    "account": ("Change account settings", "Change {to}"),
+                    "grant": ("Grant access or hand over private details", "Grant {to} access"),
+                    "bind": ("Sign or submit a formal application", "Sign or submit: {to}"),
                     "submit": ("Submit the form", "Submit “{to}”"), "upload": ("Give the page a file", "Upload “{to}”"),
                     "download": ("Download a file", "Download “{to}”"), "dialog": ("Answer the page", "Answer the page"),
                     "leave": ("Go to another site", "Go to {to}"), "press": ("Press “{button}”", "Press “{button}”")}},
@@ -87,7 +90,10 @@ def act_of(card: dict, lang: str) -> str:
     plain, aimed = SAID[lang]["acts"].get(card.get("kind"), SAID[lang]["acts"]["submit"])
     to = " ".join(str(card.get("to") or "").split())[:40]
     button = " ".join(str(card.get("button") or "").split())[:30]
-    return (aimed if to else plain).format(to=to, button=button)
+    said = (aimed if to else plain).format(to=to, button=button)
+    # What a payment costs, as the page shows it beside the control.
+    amount = " ".join(str(card.get("amount") or "").split())[:30]
+    return (f"{said}（{amount}）" if lang == "zh" else f"{said} ({amount})") if amount else said
 
 
 class Operating:
@@ -226,11 +232,18 @@ class Operating:
             self.showing = self.stopping = False
 
     async def review(self, action: dict):
-        """The reviewer on one action: the person's own messages of the turn under way, never the page."""
+        """The reviewer on one action: the person's own messages of the turn under way, never the page. In a scheduled
+        run of a standing request, its stored scope decides in the reviewer's place (schedule_tool.standing)."""
         from .. import acting, review
+        from ..crossing import turn_read
+        board = self.workspace.schedule
+        if board is not None and board.running:
+            verdict = board.standing(action, self.lang)
+            if verdict is not None:
+                return verdict
         request = await asyncio.to_thread(acting.asked, self.workspace)
         return await review.decide("browser", request, action, ask=acting.reviewer(self.workspace),
-                                   attended=self.window.attended(), lang=self.lang)
+                                   attended=self.window.attended(), lang=self.lang, read=turn_read(self.workspace))
 
     async def ask(self, card: dict, tab: int) -> dict | None:
         """The act is said in the chat and shown beside the page, its control ringed on the page, until the person
@@ -239,11 +252,12 @@ class Operating:
         no question. A tab worked on out of sight comes to the middle for it. Time up with the question still up:
         {"waiting": the act}, and it stays (`left`). An upload with no file named opens the system's Open dialog
         on their yes: the files they choose there are the answer."""
-        from ..cardwait import asking, risk_of, turn_of
+        from ..cardwait import CROSS, asking, risk_of, turn_of
         from ..web.operate import CARD_S
         pane = self.window.pane
         everyone, turn = asking(self.workspace), turn_of(self.workspace)
-        risk = "send" if card.get("kind") == "upload" else risk_of(str(card.get("kind") or ""))
+        # A file of this computer handed to a page is asked for that site; a costly act every time (cardwait.reaches).
+        risk = CROSS + str(card.get("site") or "") if card.get("kind") == "upload" else risk_of(str(card.get("kind") or ""))
         if card.get("kind") != "upload" and everyone.carried(turn, risk):
             return {"yes": True}
         async with self.one:

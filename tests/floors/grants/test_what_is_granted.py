@@ -10,10 +10,11 @@ import sys
 
 import pytest
 
+from harness.folders import Profile
 from harness.model import call, say
 from mibo import acting
 from mibo.shell import files, read as reading
-from mibo.shell.grants import Grants
+from mibo.shell.grants import Grants, norm
 
 ASKED = "Write a short note called plan.txt there"  # copy: voice
 
@@ -92,6 +93,23 @@ def test_no_file_tool_reaches_the_home_a_key_file_or_an_ungranted_folder(tmp_pat
     job["folder"] = os.path.dirname(job.get("path", ""))
     verdict = reading.judge(reading.Reading(files.call(job), str(folder), files.acts(job, str(folder)), []), grants)
     assert verdict.action == want, [a.why for a in verdict.reasons]
+
+
+def test_the_persons_own_folder_set_to_read_only_or_taken_back_in_settings_stays_so(app, turn, tmp_path, monkeypatch):
+    Profile(tmp_path / "profile", monkeypatch)
+    documents, desktop = tmp_path / "profile" / "Documents", tmp_path / "profile" / "Desktop"
+    assert app.post("/api/shell", {"add": str(documents), "read_only": True}).status_code == 200
+    assert app.post("/api/shell", {"remove": str(desktop)}).status_code == 200
+    grants = Grants(app.home / "runtime" / "desktop", app.home)
+    assert str(desktop) not in grants.folders() and str(documents) in grants.folders()
+    write = call("write_file", path=str(documents / "plan.txt"), content="buy milk")
+    read = call("read_file", path=str(desktop / "待办.txt"))
+    done = turn(ASKED, write, read, say("I left it."), cards="no")
+    assert [(c["card"]["type"], c["card"]["write"]) for c in done.cards] == [("folder", True), ("folder", False)]
+    assert not (documents / "plan.txt").exists()
+    # Granted again, it is theirs to change in once more.
+    assert app.post("/api/shell", {"add": str(documents)}).status_code == 200
+    assert norm(str(documents)) in grants.roots(write=True)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the app operates other programs on Windows only")

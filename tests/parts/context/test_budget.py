@@ -62,3 +62,16 @@ def test_the_window_comes_from_the_setting_then_the_host_then_an_overflow_then_a
 ])
 def test_the_window_an_overflow_error_states_is_read_from_its_words(said, window):
     assert context.stated_window(said) == window
+
+
+@pytest.mark.parametrize("said, counted", [
+    ("This model's maximum context length is 16384 tokens. However, you requested 18432 tokens (10240 in the "
+     "messages, 8192 in the completion).", 10240),
+    ("This model's maximum context length is 16385 tokens. However, your messages resulted in 17,210 tokens. Please "
+     "reduce the length of the messages.", 17210),
+    ("prompt is too long: 208310 tokens > 200000 maximum", 208310),
+    ("request (9000 tokens) exceeds the available context size (8192 tokens), try increasing it", 9000),
+    ("This endpoint's maximum context length is 163,840 tokens. However, you requested about 200000 tokens", 0),
+])
+def test_what_a_refused_request_counted_is_read_from_the_errors_words(said, counted):
+    assert context.stated_input(said) == counted

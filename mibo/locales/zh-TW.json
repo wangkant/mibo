@@ -885,7 +885,29 @@
     "proposals": "以下操作需要你確認，此次執行未進行：",
     "doIt": "立即執行",
     "asked": "已在對話中發出請求",
-    "askText": "請執行：{what}"
+    "askText": "請執行：{what}",
+    "offerScope": "每次的操作",
+    "scopeRule": "範圍內的操作直接執行；網頁或訊息要求的範圍外操作不執行，並在對話中告知；付款、刪除等關鍵操作及密碼類資訊仍每次由你確認。",
+    "acts": {
+      "send": "傳送訊息",
+      "post": "發布",
+      "comment": "留言",
+      "like": "按讚",
+      "submit": "提交",
+      "upload": "上傳",
+      "outward": "對外操作"
+    },
+    "scopeSep": "；",
+    "scopeDone": "定時任務「{title}」已依設定執行：{acts}。",
+    "scopeBeyond": "以下操作超出設定範圍，未執行：{acts}。",
+    "inScope": "屬於定時任務設定的範圍，直接執行。",
+    "beyondScope": "超出定時任務設定的範圍，未執行。"
+  },
+  "appmap": {
+    "ask": "將「{name}」設為{value}？",
+    "widens": "此項變更將擴大角色的權限，在聊天中確認後生效。",
+    "on": "開啟",
+    "off": "關閉"
   },
   "setup": {
     "title": "設定",
@@ -1117,6 +1139,7 @@
     }
   },
   "setup_model": {
+    "sendsTo": "連接後，網頁文字、視窗截圖和檔案內容將傳送至 {host} 處理。",
     "noneTitle": "尚未連接模型",
     "noneText": "角色需要連接模型才能對話。",
     "states": {
@@ -1682,6 +1705,13 @@
     "running": "執行中",
     "retry": "將於 {at} 重試",
     "browserBadge": "可操作瀏覽器",
+    "scopeLine": "每次執行：{what}",
+    "scopeActs": {
+      "send": "傳送訊息",
+      "post": "發布",
+      "comment": "留言",
+      "like": "按讚"
+    },
     "last": "上次：{at} · {state}",
     "never": "尚未執行",
     "runNow": "立即執行",
@@ -2118,7 +2148,7 @@
     "fix": "請檢查填寫內容。"
   },
   "cli": {
-    "about": "Mibo：常駐桌面的角色，可與你聊天、記住你的偏好，並代你執行操作。",
+    "about": "Mibo：執行在你電腦上的個人智慧體，可在網頁、檔案和其他程式中代你完成任務，同時是記得你的角色。",
     "noCommand": "不帶命令執行即可開啟應用程式。",
     "home": "存放 settings.json、persona.txt 和 runtime/ 的資料夾（預設：AGENT_HOME、目前的程式碼目錄或 ~/mibo）",
     "command": "下列指令之一",

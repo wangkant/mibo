@@ -43,6 +43,7 @@ from . import recommend
 from . import updates
 from . import window as appwindow
 from .panels import modelbar
+from .see import when
 from .character import PERSON_ACTIONS, Character, NotReady
 from .endpoints import model_problem
 from .library import Library, item_id
@@ -1524,7 +1525,15 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
 
     @app.post("/api/config")
     async def config(request: Request):
-        return await asyncio.to_thread(workspace.save, await body(request))
+        saved = await asyncio.to_thread(workspace.save, await body(request))
+        # The chooser said where page text, window pictures and file text go before this save (setup/model.js).
+        await asyncio.to_thread(when.tell, workspace.home / "runtime" / "desktop", when.host_of(workspace.config()))
+        return saved
+
+    @app.get("/api/model/notice")
+    async def model_notice():
+        """The model service's host the person was last told about, so the chooser says it once per host."""
+        return {"host": await asyncio.to_thread(when.told, workspace.home / "runtime" / "desktop")}
 
     @app.get("/api/avatar")
     async def own_avatar():
@@ -1741,6 +1750,9 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
     # The person's typed yes to a step waiting in the chat, for every place that asks (cardwait.py).
     from . import cardwait
     cardwait.mount(app, workspace, body)
+    # The app's own settings and abilities, looked up, opened and changed by the character (appmap.py).
+    from . import appmap
+    appmap.mount(app, workspace, body, token)
     # Skills: Settings' section, adding and removing them (skills/panel.py).
     from .skills import panel as skills_panel
     skills_panel.mount(app, workspace, body)

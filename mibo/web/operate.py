@@ -684,6 +684,10 @@ class Hands:
         else:
             what = (f"the page sent {card['text'][:60]!r} by itself ({label})",
                     f"the page tried to send {card['text'][:60]!r} by itself ({label})")
+        if card["kind"] not in ("delete", "leave") and gate.hands_over(
+                "\n".join(f"{c['field']}: {c['text']}" for c in carried if c["text"])):
+            # What was typed holds an identity number, a home address or a bank account: handed over, costly.
+            card["kind"] = "grant"
         # The act this request belongs to: one question for it, and the answer kept for the turn.
         act = ("held", card["kind"], site, card["button"] if first.get("watch") else card["text"])
         card["act"] = act
@@ -1284,7 +1288,8 @@ class Hands:
                 if not signin.chose(self.allowed.path.parent, url, "task"):
                     # Settings › 连接: the person turned off the character opening this site by itself.
                     return {"status": "failed", "line": f"[refused] the person turned off opening {site} on your own "
-                                                        f"(Settings › 连接); nothing was opened. Ask them"}
+                                                        f"(connect/sites, which the settings tool opens); nothing "
+                                                        f"was opened. Ask them"}
                 carried = _carried(url, "\n".join(self.read), self.said()) if site not in self.sites else ""
                 if carried:
                     # A page's words in an address to another site: what a page said would leave by the address.
@@ -1827,6 +1832,16 @@ class Hands:
                 "text": (said or (str(facts.get("row") or "") if kind in ("like", "delete") else
                                   self._fields(facts) if kind in ("submit", "account", "order") else ""))[:2000],
                 "skippable": kind in gate.SKIPPABLE and not acting.sensitive(site) and why != gate.FRAME_WHY}
+        # Whatever was typed on this site in this run and not let out yet may leave with the press, not only the
+        # box beside the button: the reviewer and code's floor (an address or number they never gave) see it all.
+        typed = [f"{t['field']}: {t['text']}" for t in self.typed if not t["out"] and t["site"] == site
+                 and _squeeze(t["text"]) not in _squeeze(card["text"])]
+        if kind not in acting.HARD and gate.hands_over("\n".join([card["text"], *typed])):
+            # Handing over an identity number, a home address or a bank account is costly, whatever the button says.
+            kind = card["kind"] = "grant"
+            card["skippable"] = False
+        if kind == "order" and facts.get("money"):
+            card["amount"] = str(facts["money"])[:40]
         # The act, for its one question in this turn: the person's answer to it before stands.
         card["act"] = act = ("outside", kind, site, button[:120], said, card["to"])
         kept = self.kept.get(act)
@@ -1834,12 +1849,9 @@ class Hands:
             return {"status": "declined", "kind": kind, "line": f"[declined] the person said no to {kind} "
                                                                 f"({button[:40]}) before in this turn; nothing was pressed"}
         skipped = card["skippable"] and self.attended() and self.allowed.skips(site, kind)
-        # Whatever was typed on this site in this run and not let out yet may leave with the press, not only the
-        # box beside the button: the reviewer and code's floor (an address or number they never gave) see it all.
-        typed = [f"{t['field']}: {t['text']}" for t in self.typed if not t["out"] and t["site"] == site
-                 and _squeeze(t["text"]) not in _squeeze(card["text"])]
-        # A press or Enter in another site's frame is the floor: the card, never the reviewer.
-        decision, passed, does = ("kept", "", "") if kept else ("ask", "", "") if (
+        # A press or Enter in another site's frame is the floor: the card, never the reviewer. A yes to a costly act
+        # before carries no second one (cardwait.reaches).
+        decision, passed, does = ("kept", "", "") if kept and kind not in acting.HARD else ("ask", "", "") if (
             skipped or why == gate.FRAME_WHY) else await self._decided(
             kind, site, {"target": [card["to"]] if card["to"] else [],
                          "text": "\n".join([card["text"], *typed]).strip()[:2000], "page_says": button[:120],

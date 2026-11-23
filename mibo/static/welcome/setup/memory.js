@@ -44,10 +44,11 @@
 
     const empty = kit.card();
     empty.append(el("p", "setup-help", t.none));
-    const groups = el("div", "setup-memory-groups");
+    const groups = kit.item("items", el("div", "setup-memory-groups"));
 
     // ---- Export and import, folded.
     const more = kit.fold(t.moreTitle);
+    kit.item("transfer", more.node);
     const exportRow = kit.optionRow(t.exportTitle, t.exportText, (() => {
       const buttons = el("div", "setup-memory-tools setup-memory-export");
       buttons.append(
@@ -72,7 +73,7 @@
     importBox.append(el("p", "setup-option-name", t.importTitle), el("p", "setup-option-text", t.importText), paste, read, offered, keep, importNote);
     more.body.append(exportRow.row, importBox);
 
-    const all = kit.card();
+    const all = kit.item("all", kit.card());
     const allButton = kit.button("setup-button-secondary setup-button-sm", t.allTitle, forgetAll);
     all.append(kit.optionRow(t.allTitle, t.allText, allButton).row);
     switches.hidden = adding.hidden = empty.hidden = more.node.hidden = all.hidden = true;

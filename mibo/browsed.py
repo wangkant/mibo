@@ -20,6 +20,7 @@ them in the database.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import threading
@@ -40,9 +41,13 @@ ROW_TITLE_MAX = 300
 ROWS_NOTED = 10
 ITEM_S = 30.0
 ITEM_TEXT_MAX = 20_000
-# Reading with the person's session: a pause between reads, and how many a host gets in a day.
+# Reading with the person's session: a pause between reads of one site, how many a site gets in a day, and how many
+# sites are read side by side (a messages read of several sites at once, web/inbox.py).
 READ_GAP_S = 20.0
 HOST_DAY_MAX = 20
+SIDE_BY_SIDE = 3
+# What is new on each site's message pages is told by this file: short hashes of what was seen, never its text.
+SEEN_FILE = "messages-seen.json"
 # A wall stays remembered this long; the person may sign in again meanwhile.
 WALL_S = 7 * 86400
 # The address bar's suggestions from the pages read: how many, and what a visit counts for by its age in days
@@ -208,10 +213,11 @@ def delete(desktop: Path, url: str, day: str) -> None:
 
 
 def clear(desktop: Path, since: float = 0.0) -> None:
-    """The history from `since` on; with 0 all of it, and the walls the Reader met."""
+    """The history from `since` on; with 0 all of it, the walls the Reader met and what the messages reads saw."""
     _drop(desktop, lambda row: float(row.get("at") or 0) >= since)
     if not since:
         (Path(desktop) / WALLS_FILE).unlink(missing_ok=True)
+        (Path(desktop) / SEEN_FILE).unlink(missing_ok=True)
 
 
 def _drop(desktop: Path, gone) -> None:
@@ -236,15 +242,26 @@ def _drop(desktop: Path, gone) -> None:
 # ---------------------------------------------------------------- reading with the session
 
 class Pace:
-    """One read at a time, READ_GAP_S between reads, HOST_DAY_MAX a day for a site, and none for a site
-    whose check or sign-in wall stopped a read (remembered WALL_S)."""
+    """One read of a site at a time with READ_GAP_S between them, SIDE_BY_SIDE sites read side by side, HOST_DAY_MAX
+    a day for a site, and none for a site whose check or sign-in wall stopped a read (remembered WALL_S). A read
+    holds its site's `slot` from the refusal check to `done`."""
 
     def __init__(self, desktop: Path, clock=time.time):
         self.path = Path(desktop) / WALLS_FILE
         self.clock = clock
         self.lock = threading.Lock()
-        self.last = 0.0
+        self.room = threading.BoundedSemaphore(SIDE_BY_SIDE)
+        self.sites: dict[str, threading.Lock] = {}
+        self.last: dict[str, float] = {}
         self.counts: dict[tuple[str, str], int] = {}
+
+    @contextlib.contextmanager
+    def slot(self, url: str):
+        site = site_of(urlsplit(url).hostname or "")
+        with self.lock:
+            one = self.sites.setdefault(site, threading.Lock())
+        with one, self.room:
+            yield
 
     def walls(self) -> dict:
         try:
@@ -268,20 +285,21 @@ class Pace:
             return "host_day_cap"
         return ""
 
-    def wait(self) -> None:
-        gap = self.last + READ_GAP_S - self.clock()
+    def wait(self, url: str) -> None:
+        gap = self.last.get(site_of(urlsplit(url).hostname or ""), 0.0) + READ_GAP_S - self.clock()
         if gap > 0:
             time.sleep(gap)
 
     def done(self, url: str, wall: str = "") -> None:
-        self.last = self.clock()
         site = site_of(urlsplit(url).hostname or "")
         day = (time.strftime("%Y-%m-%d"), site)
-        self.counts[day] = self.counts.get(day, 0) + 1
-        if wall:
-            walls = self.walls()
-            walls[site] = {"at": round(self.clock()), "why": wall}
-            atomic_write_text(self.path, json.dumps(walls))
+        with self.lock:
+            self.last[site] = self.clock()
+            self.counts[day] = self.counts.get(day, 0) + 1
+            if wall:
+                walls = self.walls()
+                walls[site] = {"at": round(self.clock()), "why": wall}
+                atomic_write_text(self.path, json.dumps(walls))
 
 
 # ---------------------------------------------------------------- the character's tools

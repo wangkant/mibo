@@ -15,10 +15,36 @@ It is kept in English; the README describes the app in all ten interface languag
 ### Approvals
 
 - Approval cards are gone. When a step needs your decision, the character tells you in the chat what it is about to do and waits; reply in your own words, such as “ok”, “确定” or “go ahead”, and it goes ahead. Anything else is a no for that step and is then read as an ordinary message.
-- One yes finishes the task: later steps of the same kind in that reply run without asking again. Paying, deleting, account changes and sending something out are asked once more on their own unless that is what you said yes to.
+- One yes finishes the task: later ordinary steps in that reply run without asking again. A costly step (paying or spending, a deletion nothing restores, the account itself, handing over access or private details, a binding submission, a change to this computer that undo cannot take back) is asked every time, and no earlier yes or scheduled task covers it.
 - Only your own message typed in the chat counts as a yes; nothing on a page, in a file, in a tool's answer or in the character's own words does. A yes belongs to the one step it was asked for, and a step that changes is asked again.
-- Your own Desktop, Documents, Downloads, Pictures, Music and Videos folders no longer need a grant: files there are read and written for you, while deleting still asks.
+- A delete you asked for that goes to the Recycle Bin runs without a question; a delete the bin cannot give back is asked every time.
+- Your own Desktop, Documents, Downloads, Pictures, Music and Videos folders no longer need a grant: files there are read and written for you. A folder you remove or set to read-only in Settings stays that way.
 - Pictures of a window are sent to the model service without a question, unless the window looks sensitive or you turn this off in Settings.
+
+### Safety
+
+- What a tool brings back from the web or from this computer is material, never an instruction. After a reply has read such material, sending anything to a site, a recipient or a window you did not name is asked first, and so is a command copied word for word from it. A program or script downloaded from the web is never opened or run.
+- Model keys, the app's own settings and the built-in browser's profile cannot be read by any tool, by any spelling of their path.
+- A change that widens what the character may do takes effect only when your own message of that turn asks for it; otherwise it is asked in the chat.
+
+### Connected sites
+
+- Asked about your messages, the character reads the sites you signed in to, one or all of them, and reports what is new. That step can only read: the pages go to a model call with no tools, and only its report comes back.
+- A standing request that sends or posts, such as a daily post on one site, stores its site, recipient, kind of act and text when you give it. Each run acts within that without asking; anything beyond it is not done and is reported, and a costly step still waits for you. After a run, one line in the chat says what was done.
+- A search on Douyin is made on the site itself.
+
+### Settings
+
+- The character knows the app's settings: it can list them, open Settings at an item and change one. A change that widens nothing is made at once; keys are never shown.
+- The notice that page text, window pictures and file text go to the model service you chose is shown once, when a service is first saved, and again only when the service changes.
+
+### Models
+
+- On a model with a small context window, the first request is smaller: tools are sent in order of need while they fit, the rest are loaded on demand, and an installed skill is listed by its description alone. When a model service refuses a request as too long and states its size, the request is fitted again to that size.
+
+### Documentation
+
+- The READMEs, the in-app about line and the package descriptions now present Mibo as a personal agent on your own computer, with the character second.
 
 ## [0.1.0] - 2026-11-22
 

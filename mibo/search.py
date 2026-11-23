@@ -105,10 +105,9 @@ TOOLS = [
         "name": "web_search",
         "description": (
             "Search the web before answering anything current (news, prices, releases) or any name, product, "
-            "slang or event you are not sure of. Turn slang and nicknames into the real name first, and leave old years out: recent means this year. Not for small talk or "
-            "questions about you, not when they want something else to watch or read (\"还有别的吗\"): "
-            "that is bring_find, and not for things on a site they name (\"去抖音找点好玩的视频\"): that is "
-            "find_on_site."),
+            "slang or event you are not sure of. Turn slang and nicknames into the real name first, and leave old "
+            "years out: recent means this year. Not for small talk or questions about you; more to watch or read "
+            "(\"还有别的吗\") is bring_find, and things on a site they name find_on_site."),
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string", "description": "what you would type into a search engine"}},
             "required": ["query"]}}},
@@ -120,32 +119,27 @@ TOOLS = [
             "outline and the lines that match their question; read on with section or look_for."),
         "parameters": {"type": "object", "properties": {
             "url": {"type": "string", "description": "the page's full http(s) address"},
-            "section": {"type": "integer", "description": "a long page's section to read whole, by its number in "
-                                                          "the outline a read of it gave"},
+            "section": {"type": "integer", "description": "a section's number in the outline a read gave"},
             "look_for": {"type": "string", "description": "words to find in a long page, besides their question"}},
             "required": ["url"]}}},
     {"type": "function", "function": {
         "name": "read_with_their_session",
         "description": (
-            "Read one address as they see it signed in, out of sight in the app's browser: their own feed on a "
-            "site (\"帮我看看我小红书首页有什么\"), messages, notifications or orders, which a web search never "
-            "reaches. A sign-in the site asks for comes up for them in the app's browser and the read goes on "
-            "after; never go round a sign-in or a check. Read only, a few times a day per site. For public pages, "
-            "read_page."),
+            "Read one address as they see it signed in, out of sight in the app's browser: their own feed or "
+            "orders on a site (\"我小红书首页有什么\"), which a web search never reaches. A sign-in the site asks for "
+            "comes up for them in the app's browser and the read goes on after; never go round a sign-in or a "
+            "check. Read only, a few times a day per site. For public pages, read_page."),
         "parameters": {"type": "object", "properties": {
             "url": {"type": "string", "description": "the full http(s) address, such as the site's home page"},
-            "section": {"type": "integer", "description": "a long page's section to read whole, by its number in "
-                                                          "the outline a read of it gave"},
+            "section": {"type": "integer", "description": "a section's number in the outline a read gave"},
             "look_for": {"type": "string", "description": "words to find in a long page, besides their question"}},
             "required": ["url"]}}},
     {"type": "function", "function": {
         "name": FIND_ON_SITE,
         "description": (
-            "Go to a site they name and bring back what is on it: \"去抖音找些好玩的视频\", \"B站上有什么讲烘焙的\", "
-            "\"find me a guitar lesson on YouTube\". It reads the site's own search, or its front page, in the app's "
-            "browser with their session, and searches the web within that site; it gives the items with their "
-            "titles and links. Answer with those items, never with kinds of things described in general, and never "
-            "send them to search the site themselves."),
+            "Bring back what is on a site they name (\"去抖音找些好玩的视频\", \"B站上有什么讲烘焙的\"): the site's own "
+            "search or front page, read in the app's browser with their session, and a web search within the site. "
+            "It gives the items by title and link."),
         "parameters": {"type": "object", "properties": {
             "site": {"type": "string", "description": "the site as they named it (抖音, B站, YouTube) or its web "
                                                       "address"},

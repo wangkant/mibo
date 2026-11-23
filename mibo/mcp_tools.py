@@ -684,8 +684,10 @@ def _arguments_kind(tool: dict, arguments: dict) -> str:
 
 def hard(tool: dict, arguments: dict | None = None) -> str:
     """The floor kind of a tool (and of one call of it, given its `arguments`): "order" (pays, buys, books or
-    changes a payment), "delete", "account" (its security, sign-in or details) or "grant" (who may reach what);
-    "" for anything else. A floor kind is asked in the chat as its own risk (cardwait.risk_of). Hints are not read: a tool that says it only reads is judged by what it is."""
+    changes a payment), "delete", "account" (its security, sign-in or details), "grant" (who may reach what) or
+    "bind" (signs or files a binding submission); "" for anything else. A floor kind is costly (cardwait.COSTLY):
+    asked in the chat every time, as its own risk. Hints are not read: a tool that says it only reads is judged by
+    what it is."""
     words = _words(tool["name"])
     kind = _name_kind(words)
     if kind:

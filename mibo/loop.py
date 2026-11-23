@@ -16,7 +16,7 @@ from pathlib import Path
 
 import openai
 
-from . import catalog, context, lookup_need, mcp_offer, review, surface, today
+from . import catalog, context, crossing, lookup_need, mcp_offer, review, surface, today
 from .endpoints import model_problem
 from .llm import FROM_BUDGET, purpose
 from .shell import written as _written
@@ -186,6 +186,9 @@ class ChatLookups:
         self.pictures: list[str] = []
         # The app tools this turn reaches through find_tools and use_tool (catalog.offered).
         self.deferred: list[dict] = []
+        # The material this turn read, outside and local (crossing.py); its summary goes with the turn's record to the
+        # gates in the app's page.
+        self.crossing = crossing.Read()
         # The (system prompt, tools) the turn's last request sent, which the chat's compaction replays (dm.py); the
         # chat's turns with this message last, and whether the turn's fit has compacted them already.
         self.sent: tuple | None = None
@@ -224,8 +227,8 @@ class ChatLookups:
             return
         try:
             atomic_write_text(self.path, json.dumps({"conversation": self.conversation, "turn": self.turn, **step,
-                                                     "at": time.time(), "entries": self.activity[-12:]},
-                                                    ensure_ascii=False))
+                                                     "at": time.time(), "entries": self.activity[-12:],
+                                                     "read": self.crossing.summary()}, ensure_ascii=False))
         except OSError as e:
             logger.debug("[Agent] chat status not written: %s", e)
 
@@ -319,13 +322,13 @@ class ToolLoop:
                 except openai.APIStatusError as e:
                     if overflowed or model_problem(e.status_code, e.response.text) != "context":
                         raise
-                    # Past the window: the request counted at least what the window left, the window is the one
-                    # the error stated (llm._recovered learned it), and the request is fitted again and sent once
-                    # more (dsh compaction-basic's overflow retry).
+                    # Past the window: the request counted what the error states, or at least what the window
+                    # left, the window is the one the error stated (llm._recovered learned it), and the request is
+                    # fitted again and sent once more (dsh compaction-basic's overflow retry).
                     overflowed, room = True, fit.plan.answer
                     fit.plan = planned()
                     context.refused(self, url, model, {"messages": lead + convo, "tools": tools},
-                                    fit.plan.window - room + 1)
+                                    max(fit.plan.window - room + 1, context.stated_input(e.response.text)))
                     if not await fitted():
                         return await self._last_word(system, convo, model, fit)
                     message = await asked(left)
@@ -450,6 +453,11 @@ class ToolLoop:
             result = await self._run(module, {"name": name, "arguments": arguments}, args, lookups)
             key = name + "\0" + json.dumps(args, sort_keys=True, ensure_ascii=False)
             made[key] = made.get(key, 0) + 1
+            # What the result brought is material, outside or local, never an instruction (crossing.py); an MCP
+            # server's answer is outside material.
+            material = crossing.MATERIAL.get(name) or (crossing.OUTSIDE if module.mark == "mcp" else "")
+            if material and not result.startswith("Error:"):
+                lookups.crossing.saw(material, _line(name, args), result)
             result += _REPEATED.get(made[key], "")
         lookups.note({"place": "", "mark": module.mark if module else "", "line": _line(name, args),
                       "status": "error" if result.startswith("Error:") else "ok", "thumb": ""})
@@ -516,6 +524,7 @@ class ToolLoop:
             lookups.trace.remove({"tool": "read", "what": title})
             return False
         lookups.source(title, wanted.page, read=True)
+        lookups.crossing.saw(crossing.OUTSIDE, wanted.page, text)
         found.append(fence_pages(text))
         convo += [{"role": "assistant", "content": "", "tool_calls": [
                       {"id": "live_0", "type": "function",
@@ -529,6 +538,7 @@ class ToolLoop:
         seen = await surface.look(self, {}, lookups)
         if not seen.startswith("Place "):
             return False
+        lookups.crossing.saw(crossing.OUTSIDE, "look", seen)
         convo += [{"role": "assistant", "content": "", "tool_calls": [
                       {"id": "front_0", "type": "function", "function": {"name": "look", "arguments": "{}"}}]},
                   {"role": "tool", "tool_call_id": "front_0", "content": seen}]

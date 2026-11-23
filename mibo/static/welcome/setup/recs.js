@@ -23,6 +23,7 @@
     paceCard.classList.add("setup-options");
     const pace = kit.choices(t.paceName, PACES.map((key) => [key, t.pace[key]]), (key) => change({ pace: key }));
     const paceRow = kit.optionRow(t.paceName, "", pace.group);
+    kit.item("pace", paceRow.row);
     const quiet = kit.switchRow("recs-quiet", t.quietName, "", (box) =>
       change({ quiet_hours: box.checked ? view.quiet_hours || QUIET_DEFAULT : null }));
     const hours = el("div", "setup-recs-hours");
@@ -33,7 +34,7 @@
     paceCard.append(paceRow.row, quiet.row);
 
     // ---- Preferences.
-    const tasteCard = kit.card(t.tasteTitle);
+    const tasteCard = kit.item("taste", kit.card(t.tasteTitle));
     const topicList = el("div", "setup-recs-topics");
     const offered = el("div", "setup-chips setup-recs-offered");
     const typed = kit.input("setup-word-input");

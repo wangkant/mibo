@@ -1,8 +1,8 @@
 # Mibo
 
-**An AI companion that lives on your desktop, keeps you company and gets things done.**
+**A personal AI agent that lives on your own computer: tell it what you need, and it gets it done across the web, your files and your other programs.**
 
-A character with its own look and personality talks with you, remembers you and brings you one thing worth your time. It does more than chat: it browses the web, operates the programs on your computer, works with your files and commands, uses skills and MCP connectors, and runs tasks on a schedule. It runs on your computer with a model service you choose. Actions are reviewed automatically, and the character asks you in the chat only when one needs your decision: reply yes and the task runs to the end; paying, deleting and account changes are asked on their own.
+Mibo runs on your computer with a model service you choose. There is no cloud machine in between: your sign-ins and files stay on your computer, and what is sent to the model reaches only the service you chose. A task you give it is carried through to the end and reported back, and it can act on a schedule. It asks only before an action that costs you something or cannot be undone, or one you did not ask for; verification codes, passwords and payment details are always yours to enter. It is also a character with a name, a look and a memory of you.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -18,13 +18,13 @@ A character with its own look and personality talks with you, remembers you and 
 |---|---|
 | **Conversation** | One character, in a window and, on Windows, as a figure on the desktop. Built-in characters or your own. Any OpenAI-compatible service, or Ollama and LM Studio on your computer. The model menu shows how full the context is, with Summarize now and Clear context. |
 | **Memory** | Dated facts and plans about you, shown and edited in Settings › Memory. Identity numbers, card numbers, passwords and codes are never stored. Temporary chats leave no record. |
-| **Recommendations** | One find at a time from public sources, ranked by how long you stay rather than by clicks. Each card states its reason and takes feedback with undo. |
 | **Going out** | Walks on public pages as a visitor, signed out and honouring robots.txt. A page is read at once, with its headings and tables. Web search needs no key. |
 | **Built-in browser** (Windows) | Links open beside the chat, with tabs, private tabs and downloads. The character looks at a page and clicks, types, chooses, drags and uploads on it. |
 | **Other programs** (Windows) | Reads and operates other programs' windows through UI Automation, Electron apps included, only while you leave the keyboard and mouse alone. |
-| **Files and commands** | Your own Desktop, Documents, Downloads, Pictures, Music and Videos, and the folders you grant. Commands are read before they run; each turn's file changes can be undone; on Windows, deletions go to the Recycle Bin. |
+| **Files and commands** | Your own Desktop, Documents, Downloads, Pictures, Music and Videos, and the folders you grant. Word, Excel and PowerPoint files are written as files. Commands are read before they run; each turn's file changes can be undone; on Windows, deletions go to the Recycle Bin. |
 | **Skills and connectors** | Skills (`SKILL.md` folders) and MCP servers, each with a curated market. `/name` starts a skill. |
-| **Scheduled tasks** | Reminders, tasks and checks on a rhythm. A run only reads, plus what you allowed when you made the task. |
+| **Scheduled tasks** | Reminders, tasks and checks on a rhythm. A run only reads, plus what you allowed when you made the task; a standing request to send or post acts only on the site, for the recipient and in the kind of act you named. |
+| **Recommendations** | One find at a time from public sources, ranked by how long you stay rather than by clicks. Each card states its reason and takes feedback with undo. |
 | **Languages** | Ten interface languages. |
 
 ## Characters

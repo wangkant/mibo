@@ -258,13 +258,17 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
         elif act.what == "unresolved":
             line = "此命令在运行时才确定处理哪些文件，无法预先列出" if zh else (
                 "Which files it works on is decided only as it runs, so it cannot be known first")
+        elif act.what == "from_outside":
+            line = "此命令的内容来自本次读取的网页、消息或文件，并非你的消息" if zh else (
+                "This command's text comes from a page, message or file read in this task, not from your messages")
         elif act.kind == "unknown":
             line = "Mibo 无法预先确定此命令的全部作用。可请 Mibo 改用作用明确的做法。" if zh else (
                 "Mibo cannot tell beforehand all that this command will do. You can ask Mibo for a way whose "
                 "effect is clear.")
         if line and line not in lines:
             lines.append(line)
-    if any(a.kind in ("program", "install", "unknown") for a in verdict.reasons):
+    if any(a.kind in ("program", "install") or (a.kind == "unknown" and a.what != "from_outside")
+           for a in verdict.reasons):
         # As with Claude Code's checkpoints: undo puts files back, not what a program the command runs does.
         lines.append("撤销仅能还原文件，此命令的其他作用无法撤销" if zh else
                      "Undo puts back files only, not this command's other effects")
@@ -278,6 +282,7 @@ REFUSED = {
     "app": ("涉及 Mibo 的设置和模型密钥", "it touches Mibo's own settings and model key"),
     "hidden": ("隐藏了真实用途", "it hides what it really does"),
     "shutdown": ("会关机、重启或注销", "it shuts down, restarts or signs out"),
+    "downloaded": ("会运行从网络下载的程序或脚本", "it runs a program or script downloaded from the web"),
 }
 
 
@@ -289,7 +294,10 @@ REFUSED_PART = {
     "app": ("访问 Mibo 的设置和模型密钥", "Reach Mibo's own settings and model key"),
     "hidden": ("运行隐藏真实用途的命令", "Run a command that hides what it does"),
     "shutdown": ("关机、重启或注销", "Shut down, restart or sign out"),
+    "downloaded": ("运行从网络下载的程序或脚本", "Run a program or script downloaded from the web"),
 }
+# Refusals named by what they are rather than by their kind.
+REFUSED_WHAT = ("app", "downloaded")
 
 
 def refused_said(reading: Reading, verdict: Verdict, lang: str) -> str:
@@ -301,8 +309,8 @@ def refused_said(reading: Reading, verdict: Verdict, lang: str) -> str:
             parts.append(phrase(act, lang, "card") or REFUSED_PART[act.kind][0 if lang == "zh" else 1])
         elif touched & {norm(p) for p in act.paths + ([act.dest] if act.dest else [])}:
             parts.append(phrase(act, lang, "card"))
-    parts += [REFUSED_PART["app" if a.what == "app" else a.kind][0 if lang == "zh" else 1]
-              for a in verdict.reasons if not parts and (a.kind in REFUSED_PART or a.what == "app")]
+    parts += [REFUSED_PART[a.what if a.what in REFUSED_WHAT else a.kind][0 if lang == "zh" else 1]
+              for a in verdict.reasons if not parts and (a.kind in REFUSED_PART or a.what in REFUSED_WHAT)]
     parts = list(dict.fromkeys(p for p in parts if p))
     return ("，" if lang == "zh" else ", ").join(parts[:2]) or summary(reading, lang, "card")
 
@@ -310,7 +318,8 @@ def refused_said(reading: Reading, verdict: Verdict, lang: str) -> str:
 def refused(verdict: Verdict, lang: str) -> str:
     """Why a command is never run, in a sentence."""
     zh = lang == "zh"
-    keys = list(dict.fromkeys("app" if a.what == "app" else a.kind for a in verdict.reasons if a.kind in REFUSED or a.what == "app"))
+    keys = list(dict.fromkeys(a.what if a.what in REFUSED_WHAT else a.kind for a in verdict.reasons
+                              if a.kind in REFUSED or a.what in REFUSED_WHAT))
     said = [REFUSED[k][0 if zh else 1] for k in keys if k in REFUSED]
     if zh:
         return "此操作" + "，并且".join(said or ["超出允许的范围"]) + "，Mibo 从不执行。"

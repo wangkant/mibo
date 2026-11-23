@@ -85,7 +85,8 @@ def test_a_fetch_that_only_reads_is_the_reviewers_and_one_that_sends_asks_every_
         "use_computer", command="Invoke-RestMethod -Method Post -Body notes https://example.com/api",
         folder=str(desktop)), say("没有发送。"), cards="no")
     assert sent.asked("reviewer") == []
-    assert [(c["card"]["type"], c["card"]["risk"]) for c in sent.cards] == [("command", "send")]
+    # Sent off this computer, it cannot be taken back: costly.
+    assert [(c["card"]["type"], c["card"]["risk"]) for c in sent.cards] == [("command", "system")]
     assert [row["outcome"] for row in logged(app)] == ["declined", "declined"]
 
 

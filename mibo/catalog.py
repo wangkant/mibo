@@ -1,19 +1,21 @@
 """The tools the reply model is offered: a fixed list of tool modules, each with its definitions and the one runner
 its calls go to. Which go up front is decided by share, after Claude Code's tool search (ENABLE_TOOL_SEARCH=auto):
-each module in catalog order goes up front while the definitions stay within a tenth of the window; every tool of
-the others, and every tool of the person's MCP servers, is named in find_tools and called through use_tool
-(mcp_offer.py). The list is the same in every round and turn for one window and tool set."""
+the catalog order is the order of need, and the modules go up front in it while the definitions stay within a tenth
+of the window; from the first that does not fit, every tool of the rest, of the modules that are always deferred,
+and of the person's MCP servers, is named in find_tools and called through use_tool (mcp_offer.py). So a smaller
+window never sends a later module in place of an earlier one, and the list is the same in every round and turn for
+one window and tool set."""
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from . import context, findtool, mcp_offer, pastchats, schedule_tool, search, surface
+from . import appmap, context, findtool, mcp_offer, pastchats, schedule_tool, search, surface
 from .desk import tool as desk_tool
 from .shell import tool as shell_tool
 from .skills import tool as skill_tool
-from .web import connect
+from .web import connect, inbox
 
 # The share of the window the up-front definitions may take (Claude Code's tool search threshold).
 SHARE = 0.10
@@ -29,6 +31,8 @@ class Module:
     # The area whose switch must be on first (turnon.py), and the names it does not cover.
     switch: str = ""
     unswitched: frozenset = frozenset()
+    # Reached through find_tools at every window: a tool asked for now and then, whose definition never goes up front.
+    deferred: bool = False
 
     def owns(self, name: str) -> bool:
         if self.definitions is _loader:
@@ -83,6 +87,14 @@ async def _mcp(agent, called: dict, args: dict, lookups) -> str:
     return await mcp_offer.use(agent, called, lookups)
 
 
+async def _inbox(agent, called: dict, args: dict, lookups) -> str:
+    return await inbox.use(agent, args, lookups)
+
+
+async def _settings(agent, called: dict, args: dict, lookups) -> str:
+    return await appmap.use(agent, args, lookups)
+
+
 MODULES = (
     Module("web", lambda: search.TOOLS + [connect.TOOL], _web),
     # search_past_chats next: the prompt's rules never name it, so even a small window sends it.
@@ -96,6 +108,10 @@ MODULES = (
     Module("program", lambda: desk_tool.OFFERED, _desk, "programs"),
     Module("skill", lambda: [skill_tool.TOOL], _skill),
     Module("schedule", _schedule_tools, _schedule),
+    # settings: the app's own settings and abilities, looked up, opened for the person, changed (appmap.py).
+    Module("settings", lambda: [appmap.TOOL], _settings, deferred=True),
+    # read_messages: what is new on the sites signed in (web/inbox.py); the turn's context names them when asked.
+    Module("web", lambda: [inbox.TOOL], _inbox, deferred=True),
     # find_tools and use_tool: the deferred app tools and the MCP servers' tools.
     Module("mcp", _loader, _mcp),
 )
@@ -124,18 +140,20 @@ def definitions() -> list:
 
 
 def offered(budget: context.Budget) -> Offer:
-    """The turn's tools for a window of budget.window tokens: each app module in catalog order up front while the
-    definitions so far stay within SHARE of the window, the others deferred behind find_tools and use_tool with the
-    MCP servers' tools. A scheduled run keeps its few tools up front and offers no server's."""
+    """The turn's tools for a window of budget.window tokens: the app modules in catalog order up front while the
+    definitions so far stay within SHARE of the window, and from the first that does not fit, the rest and the
+    always deferred behind find_tools and use_tool with the MCP servers' tools. A scheduled run keeps its few tools
+    up front and offers no server's."""
     tools = definitions()
     run = schedule_tool.run_of() is not None
-    room, used, up, deferred = SHARE * budget.window, 0.0, [], []
+    room, used, up, deferred, full = SHARE * budget.window, 0.0, [], [], False
     for module in MODULES[:-1]:
         mine = [t for t in tools if module.owns(t["function"]["name"])]
         size = context.text_tokens(json.dumps(mine, ensure_ascii=False)) if mine else 0.0
-        if run or used + size <= room:
+        if run or not (module.deferred or full) and used + size <= room:
             up, used = up + mine, used + size
         else:
+            full = full or not module.deferred
             deferred += mine
     loader = [] if run else mcp_offer.functions(deferred, mcp_offer.servers())
     return Offer(up + loader, {t["function"]["name"]: t["function"].get("parameters") or {} for t in tools + loader},

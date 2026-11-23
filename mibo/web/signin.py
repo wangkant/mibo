@@ -18,8 +18,10 @@ the site's sign-in in the pane and the site's session cookies changed, or the
 site's own account cookies are there: cookie names, by presence only), and
 it stops counting when those cookies are gone or the site sends a page of it
 to its sign-in. SITES (signin_sites.json) holds hints about the big platforms
-and webmail: where they sign in, which cookie names only an account has. A
-hint that proves wrong is dropped for that site on this computer.
+and webmail: where they sign in, which cookie names only an account has, and
+where an account's messages are (web/inbox.py reads them; `connected` lists the
+sites signed in). A hint that proves wrong is dropped for that site on this
+computer.
 
 Cookies and saved passwords stay in the pane's WebView2 profile: nothing here
 reads a value out. What is kept per site, in FILE under the desktop folder:
@@ -321,6 +323,31 @@ def auto(desktop: Path, url: str) -> str:
 def signed_in(desktop: Path, url: str) -> bool:
     entry = load(desktop).get(key(url)) or {}
     return entry.get("state") == "in" and not entry.get("gone")
+
+
+def connected(desktop: Path, lang: str = "en") -> list[dict]:
+    """The sites signed in to here that the character may read on its own (their "task" choice), each as
+    `platform` gives it. Hint rows that share a site (Google and Gmail): the one the person connected, by its home
+    or its name, else the first that says where messages are."""
+    out = []
+    for site, entry in load(desktop).items():
+        if entry.get("state") != "in" or entry.get("gone") or entry.get("task") is False:
+            continue
+        rows = [row for row in hints() if row["site"] == bare(site)]
+        host = urlsplit(str(entry.get("home") or "")).hostname
+        row = next((r for r in rows if urlsplit(r["home"]).hostname == host or entry.get("name") in r["name"].values()),
+                   None) or next((r for r in rows if r.get("messages")), rows[0] if rows else {})
+        out.append(platform(site, entry, row, lang))
+    return out
+
+
+def platform(site: str, entry: dict, row: dict, lang: str = "en") -> dict:
+    """{"site", "name", "home", "pages"}: `pages` the hint's addresses of its messages ({"what", "url"}), empty
+    where no hint says."""
+    first = "zh" if str(lang).startswith("zh") else "en"
+    return {"site": site, "name": (row.get("name") or {}).get(first) or entry.get("name") or bare(site),
+            "home": row.get("home") or entry.get("home") or f"https://{bare(site)}/",
+            "pages": [page for page in row.get("messages") or [] if isinstance(page, dict) and page.get("url")]}
 
 
 def kept_out(desktop: Path, url: str) -> bool:

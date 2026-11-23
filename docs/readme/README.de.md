@@ -1,8 +1,8 @@
 # Mibo
 
-**Ein KI-Begleiter, der auf Ihrem Desktop lebt: Er leistet Ihnen Gesellschaft und erledigt Aufgaben.**
+**Ein persönlicher KI-Agent, der auf Ihrem eigenen Computer lebt: Sagen Sie ihm, was Sie brauchen, und er erledigt es im Web, in Ihren Dateien und in Ihren anderen Programmen.**
 
-Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen, merkt sich, was Sie betrifft, und bringt Ihnen jeweils eine Sache, die Ihre Zeit wert ist. Sie kann mehr als plaudern: Sie surft im Web, bedient die Programme auf Ihrem Computer, arbeitet mit Ihren Dateien und Befehlen, nutzt Skills und MCP-Connectoren und führt geplante Aufgaben aus. Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Aktionen werden automatisch geprüft, und die Figur fragt Sie nur dann im Chat, wenn Ihre Entscheidung nötig ist: Mit Ihrem Ja läuft die Aufgabe bis zum Ende; Zahlungen, Löschungen und Kontoänderungen werden eigens erfragt.
+Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Es gibt keinen Cloud-Rechner dazwischen: Ihre Anmeldungen und Dateien bleiben auf Ihrem Computer, und was an das Modell gesendet wird, erreicht nur den von Ihnen gewählten Dienst. Eine Aufgabe, die Sie ihm geben, führt es bis zum Ende aus und meldet das Ergebnis; es kann auch nach Zeitplan handeln. Es fragt nur vor einer Handlung, die Sie etwas kostet oder sich nicht rückgängig machen lässt, oder die Sie nicht verlangt haben; Bestätigungscodes, Passwörter und Zahlungsdaten geben immer Sie selbst ein. Es ist außerdem eine Figur mit Namen, Aussehen und Erinnerung an Sie.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/wangkant/mibo/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/wangkant/mibo/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/release/wangkant/mibo?style=flat-square&label=Release)](https://github.com/wangkant/mibo/releases/latest)
@@ -18,13 +18,13 @@ Eine Figur mit eigenem Aussehen und eigenem Charakter unterhält sich mit Ihnen,
 |---|---|
 | **Unterhaltung** | Eine Figur im Fenster und unter Windows auch auf dem Desktop. Mitgelieferte oder eigene Figuren. Jeder OpenAI-kompatible Dienst oder Ollama und LM Studio auf Ihrem Computer. Das Modellmenü zeigt, wie voll der Kontext ist, und bietet „Jetzt zusammenfassen“ und „Kontext leeren“. |
 | **Gedächtnis** | Datierte Fakten und Pläne über Sie, einsehbar und bearbeitbar unter Einstellungen › Gedächtnis. Ausweis- und Kartennummern, Passwörter und Codes werden nie gespeichert. Temporäre Chats hinterlassen keine Aufzeichnung. |
-| **Empfehlungen** | Jeweils ein Fund aus öffentlichen Quellen, gereiht nach der Verweildauer statt nach Klicks. Jede Karte nennt ihren Grund und nimmt Rückmeldungen an, die sich rückgängig machen lassen. |
 | **Ausflüge** | Besucht öffentliche Seiten als Gast, ohne Anmeldung und unter Beachtung von robots.txt. Eine Seite wird in einem Zug gelesen, mit Überschriften und Tabellen. Die Websuche braucht keinen Schlüssel. |
 | **Integrierter Browser** (Windows) | Links öffnen sich neben der Unterhaltung, mit Tabs, privaten Tabs und Downloads. Die Figur sieht sich die Seite an und klickt, tippt, wählt aus, zieht und lädt Dateien hoch. |
 | **Andere Programme** (Windows) | Liest und bedient Fenster anderer Programme über UI Automation, auch Electron-Apps, und nur, solange Sie Tastatur und Maus ruhen lassen. |
-| **Dateien und Befehle** | Nur in Ihren eigenen Ordnern Desktop, Dokumente, Downloads, Bilder, Musik und Videos und in Ordnern, die Sie freigeben. Befehle werden vor der Ausführung gelesen; die Dateiänderungen jedes Durchgangs lassen sich rückgängig machen; unter Windows landet Gelöschtes im Papierkorb. |
+| **Dateien und Befehle** | Nur in Ihren eigenen Ordnern Desktop, Dokumente, Downloads, Bilder, Musik und Videos und in Ordnern, die Sie freigeben. Word-, Excel- und PowerPoint-Dokumente werden als Dateien geschrieben. Befehle werden vor der Ausführung gelesen; die Dateiänderungen jedes Durchgangs lassen sich rückgängig machen; unter Windows landet Gelöschtes im Papierkorb. |
 | **Skills und Connectoren** | Skills (Ordner mit `SKILL.md`) und MCP-Server, jeweils mit einem kuratierten Katalog. Eine Nachricht, die mit `/name` (dem Namen des Skills) beginnt, startet ihn. |
-| **Geplante Aufgaben** | Erinnerungen, Aufgaben und regelmäßige Prüfungen. Bei der Ausführung wird nur gelesen, dazu kommt, was Sie beim Anlegen erlaubt haben. |
+| **Geplante Aufgaben** | Erinnerungen, Aufgaben und regelmäßige Prüfungen. Bei der Ausführung wird nur gelesen, dazu kommt, was Sie beim Anlegen erlaubt haben; ein wiederkehrender Auftrag zum Senden oder Veröffentlichen handelt nur auf der genannten Seite, für den genannten Empfänger und in der genannten Art. |
+| **Empfehlungen** | Jeweils ein Fund aus öffentlichen Quellen, gereiht nach der Verweildauer statt nach Klicks. Jede Karte nennt ihren Grund und nimmt Rückmeldungen an, die sich rückgängig machen lassen. |
 | **Sprachen** | Zehn Oberflächensprachen. |
 
 ## Charaktere

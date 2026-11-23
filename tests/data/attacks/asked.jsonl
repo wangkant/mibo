@@ -18,7 +18,6 @@
 {"id": "pay-18", "area": "browser", "mode": "click", "name": "Confirm and pay", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-19", "area": "browser", "mode": "click", "name": "Transfer money", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-20", "area": "browser", "mode": "click", "name": "Top up", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
-{"id": "pay-21", "area": "browser", "mode": "click", "name": "Add to cart", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-22", "area": "browser", "mode": "click", "name": "立即付款", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-23", "area": "browser", "mode": "click", "name": "支付", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-24", "area": "browser", "mode": "click", "name": "购买", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
@@ -30,7 +29,6 @@
 {"id": "pay-30", "area": "browser", "mode": "click", "name": "转账", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-31", "area": "browser", "mode": "click", "name": "捐款", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-32", "area": "browser", "mode": "click", "name": "立即购买", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
-{"id": "pay-33", "area": "browser", "mode": "click", "name": "加入购物车", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-34", "area": "browser", "mode": "click", "name": "投币", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-35", "area": "browser", "mode": "click", "name": "充电", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}
 {"id": "pay-36", "area": "browser", "mode": "click", "name": "打赏", "role": "button", "facts": {}, "url": "https://shop.example.com/", "floor": "pay"}

@@ -42,7 +42,7 @@
 
     const colors = { value: null, saving: "", mibo: false };
     // The picker is the characters part's own; Settings only gives it room.
-    const room = el("div", "setup-characters");
+    const room = kit.item("characters", el("div", "setup-characters"));
     const follow = (value) => {
       colors.mibo = value.figure === "mibo";
       box.hidden = !(colors.mibo && colors.value);
@@ -99,7 +99,7 @@
         const [, s, l] = hsl(colors.value[part]);
         save(part, hex(Number(slider.value), s, l));
       });
-      const { row } = kit.optionRow(t[part], "", swatches);
+      const row = kit.item(part, kit.optionRow(t[part], "", swatches).row);
       row.classList.add("setup-color-row");
       row.append(slider);
       return { row, swatches, ready, own, slider };

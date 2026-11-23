@@ -103,16 +103,13 @@ _STEP = {"type": "object", "properties": {
 ACT = {"type": "function", "function": {
     "name": "act",
     "description": (
-        "Do steps in a page place, by the refs of your latest look of it: click, type (submit presses Enter), "
-        "select_option, key, hover, drag (from a ref or a point to a ref or a point: sliders, sorting, drawing), "
-        "select_text, scroll_to, wait_for, upload_file (a full path they named or a tool "
-        "found), go (an address), back, read (the page's whole text for a question). Each step answers in one "
-        "line with what changed; after the steps you get what the app noticed (what a press sent, the address and "
-        "title now, the page's own dialogs) and the page now, whose refs the next act takes. You decide whether "
-        "the task is done. Sending, posting, submitting, uploading, ordering and deleting are checked by the app first and "
-        "may wait for their yes; a step it declined is not tried another way. Out of sight unless the place is "
-        "in front of them. A point is taken from a ref's top left (a drawing lists its shapes with theirs) or from "
-        "a picture a look returned."),
+        "Do steps in a page place, by the refs of your latest look of it; drag is for sliders, sorting and "
+        "drawing, read for a question on the page's whole text. Each step answers in one line with what changed; "
+        "after the steps you get what the app noticed (what a press sent, the address and title now, the page's "
+        "own dialogs) and the page now, whose refs the next act takes. You decide whether the task is done. "
+        "Sending, posting, submitting, uploading, ordering and deleting are checked by the app first and may wait "
+        "for their yes; a step it declined is not tried another way. Out of sight unless the place is in front of "
+        "them."),
     "parameters": {"type": "object", "properties": {
         "place": {"type": "string", "description": "the place id; left out for the page in front"},
         "steps": {"type": "array", "items": _STEP, "minItems": 1, "maxItems": 8}},

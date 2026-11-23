@@ -10,9 +10,14 @@ Only the app's own page can answer (/api/confirm, the window's key), and only wi
 box: page text, tool results, files, MCP output and the model's words never reach that route. A yes answers the one
 question it was typed under, by its id; a step whose content changes after it is asked again (shell/panel.py checks).
 
-One yes finishes the job (`reaches`): after it, the rest of that turn runs to the end without asking again for steps
-of the kind that was described, and for every ordinary step. A later step of another kind of risk (paying, deleting,
-an account or access, sending to a place not described) is asked once more in the chat.
+The asking rule, decided here and in the gates, never by the model:
+- A costly step (`COSTLY`: what Mibo's own undo cannot give back: paying, a deletion nothing restores, the account
+  itself, handing over access or private details, a binding submission, this computer past the checkpoint) is asked
+  every time, each on its own: no earlier yes, no standing request and no reviewer covers it. Secrets (passwords,
+  codes, payment details) are typed by the person alone; the gates never type them.
+- A step the person did not ask for, or one whose place the person did not name after the turn read outside or
+  local material (crossing.py), is asked once; that yes reaches the rest of the turn for its own kind (`reaches`).
+- Every other step the person asked for runs to the end with no question.
 
 Presence is the app running with the person's own chat turn under way for that conversation, not the page in view.
 A question stays until it is answered or the turn is stopped. When the app window is not in front the system
@@ -37,23 +42,37 @@ TICK_S = 0.5
 
 NOTICE = {"zh": "等待在聊天中确认：{what}", "en": "Waiting for your yes in the chat: {what}"}
 
-# The kinds of risk a step is asked about as. "act" is every ordinary step (a command, a file written, a program's
-# control pressed, a folder granted, a tool called, a page's form sent); the others are the floors no mode loosens.
-RISKS = ("act", "pay", "delete", "account", "send")
-# The floor kinds of the gates (acting.HARD, mcp_tools.hard, web/gate.py) as the risk they are asked about as.
-FLOOR_RISK = {"order": "pay", "delete": "delete", "account": "account", "grant": "account"}
+# The gates' kinds that are costly, wherever they are decided (web/gate.py, desk/gate.py, mcp_tools.hard, the shell's
+# panel): money paid or spent ("order"), a deletion nothing restores ("delete"), the account itself ("account"), access
+# or private details handed over ("grant"), a binding submission ("bind"), a program's or the system's settings
+# ("setting"), and this computer past what the turn's checkpoint and the Recycle Bin give back ("system": an install,
+# a command that deletes, overwrites or sends by a program or a switch, a step the app cannot read).
+COSTLY = frozenset({"order", "delete", "account", "grant", "bind", "setting", "system"})
+# Risks asked each on their own, every time: the costly kinds, and a change that widens the character's own
+# permissions (crossing.widening).
+ALONE = COSTLY | {"widen"}
+# Kinds that are not costly but are asked as their own risk, which a yes to an ordinary step does not reach: a delete
+# the Recycle Bin gives back ("recycle"), and opening a file in its program ("open").
+OWN = frozenset({"recycle", "open"})
+# A risk that names its place ("cross:<site>"): a step whose place the person did not name; a yes reaches that place.
+CROSS = "cross:"
+
+
+def costly(kind: str) -> bool:
+    """Whether a gate's kind of act is costly: Mibo's own undo cannot give back what it takes."""
+    return kind in COSTLY
 
 
 def risk_of(kind: str) -> str:
-    """The risk a gate's kind of act is asked about as: a floor kind's own, else an ordinary step."""
-    return FLOOR_RISK.get(kind, "act")
+    """The risk a gate's kind of act is asked about as: a costly kind or one of OWN as itself, else an ordinary
+    step."""
+    return kind if kind in COSTLY | OWN else "act"
 
 
 def reaches(answered: str, step: str) -> bool:
-    """How far one yes reaches in the rest of its turn: a step of the risk that was described, and every ordinary
-    step. A step of another risk (paying, deleting, an account or access, sending somewhere not described) is asked
-    again. The one place that boundary is drawn."""
-    return step in (answered, "act")
+    """How far one yes reaches in the rest of its turn: a step of the risk that was answered, and every ordinary step;
+    never a costly step or a widening, which are asked each time. The one place that boundary is drawn."""
+    return step not in ALONE and step in (answered, "act")
 
 
 # What counts as a plain yes, by language: the whole message, split at punctuation, must be made of these (a
@@ -117,6 +136,8 @@ class Asking:
         return bool(turn[1]) and any(reaches(answered, risk) for answered in self.said.get(turn, ()))
 
     def yes_given(self, turn: tuple, risk: str) -> None:
+        if risk in ALONE:
+            return
         self.said.setdefault(turn, set()).add(risk)
         while len(self.said) > 16:
             self.said.pop(next(iter(self.said)))
@@ -178,8 +199,8 @@ class Card:
     async def ask(self, card: dict, conversation: str, what: dict, ended=None, *, yes=True, no=False,
                   risk: str = "act", typed: bool = True):
         """Says `card` in the chat and waits: `yes` on the person's typed yes (or at once when a yes earlier in the
-        turn reaches this risk), `no` on any other message, None when the turn ended, `ended()` says the task did,
-        or WAIT_S passed. `what` names it for the notification, {"zh", "en"}. With `typed` false it is something
+        turn reaches this risk; never for a costly one), `no` on any other message, None when the turn ended,
+        `ended()` says the task did, or WAIT_S passed. `what` names it for the notification, {"zh", "en"}. With `typed` false it is something
         they fill in rather than confirm (an MCP server's form), answered by `press` alone."""
         everyone, turn = asking(self.workspace), turn_of(self.workspace)
         if typed and everyone.carried(turn, risk):

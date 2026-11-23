@@ -83,6 +83,7 @@
     function buildLinks() {
       const choice = kit.choices(t.linksTitle, t.links, setLinks);
       const { row, words, about } = kit.optionRow(t.linksTitle, t.linksOnlyWindow, choice.group);
+      kit.item("links", row);
       const error = kit.errorLine();
       words.append(error);
       // Shown once read.
@@ -207,6 +208,7 @@
       const buttons = el("div", "setup-option-actions");
       buttons.append(check);
       const { row, about } = kit.optionRow(t.updateTitle, "", buttons);
+      kit.item("updates", row);
       row.hidden = true;
       const release = el("a", "setup-link");
       release.target = "_blank";
@@ -263,7 +265,7 @@
     }
 
     function buildData() {
-      const card = kit.card(t.dataTitle);
+      const card = kit.item("data", kit.card(t.dataTitle));
       card.classList.add("setup-options");
       // Where the settings and the keys are kept, and names in settings.json that change nothing (desk.Desk.settings).
       const keptRow = kit.optionRow(t.keptTitle, "");

@@ -45,6 +45,11 @@ RATIO_FIRST, RATIO_LOW, RATIO_HIGH, RATIO_WEIGHT = 1.25, 0.5, 2.0, 0.2
 # An overflow error's own statement of the window ("maximum context length is 8192 tokens").
 _STATED = re.compile(r"(?:context(?:[ _](?:length|window|size))?|maximum (?:input )?length)\D{0,24}?(\d[\d,]{2,})",
                      re.IGNORECASE)
+# Its statement of what the refused request counted, as vLLM and DeepSeek ("10240 in the messages"), OpenAI
+# ("messages resulted in 10240 tokens"), Anthropic ("prompt is too long: 10240 tokens") and llama.cpp ("request
+# (10240 tokens) exceeds") put it.
+_STATED_INPUT = re.compile(r"(\d[\d,]*) in the messages|messages resulted in (\d[\d,]*) tokens|prompt is too long: "
+                           r"(\d[\d,]*) tokens|request \((\d[\d,]*) tokens\) exceeds", re.IGNORECASE)
 # One tool result at ingestion at most (dsh spill-policy's 12,500), and an older one once cut past the ceiling:
 # head and tail kept four to one, the characters left out counted where the cut is.
 RESULT_TOKENS, SMALL_TOKENS, HEAD_SHARE = 12_500, 1250, 0.8
@@ -79,6 +84,12 @@ def stated_window(text: str) -> int:
     """The window an overflow error names, or 0."""
     found = _STATED.search(text or "")
     return int(found.group(1).replace(",", "")) if found else 0
+
+
+def stated_input(text: str) -> int:
+    """The tokens an overflow error says the refused request counted, or 0."""
+    found = _STATED_INPUT.search(text or "")
+    return int(next(g for g in found.groups() if g).replace(",", "")) if found else 0
 
 
 @dataclass(frozen=True)
@@ -197,8 +208,9 @@ def overflowed(caller, url: str, model: str, text: str) -> None:
 
 
 def refused(caller, url: str, model: str, payload: dict, least: int) -> None:
-    """A request refused as past the window: it counted at least `least` tokens (what the window left beside the
-    answer's room it asked for), so the anchor is raised to that and the next fit of it cuts what it must."""
+    """A request refused as past the window: it counted at least `least` tokens (what the error states, else what
+    the window left beside the answer's room it asked for), so the anchor is raised to that and the next fit of it
+    cuts what it must."""
     seen = max(count(caller, url, model, payload), least)
     _learned(caller).setdefault((url, model), {})["anchor"] = (seen, estimate(payload))
 

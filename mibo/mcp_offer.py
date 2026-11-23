@@ -38,8 +38,8 @@ _STATUS = {
                 "another way.",
     "unanswered": "Error: the question about {tool} waited with no answer, so nothing was done. Say in one sentence that it "
                   "still needs their confirmation and that 继续 under this reply asks again; then stop.",
-    "never": "Error: they set {tool} to never in Settings › Connectors, so it was not called. Tell them so; do not try "
-             "another tool to get round it.",
+    "never": "Error: they set {tool} to never in Settings (abilities/tools, which the settings tool opens), so it was "
+             "not called. Tell them so; do not try another tool to get round it.",
     "changed": "Error: {tool} changed between the question and their yes, so it was not called.",
     "refused": "Error: the app's review declined: {reason}; do not try another way",
     "secret": "Error: {tool} was not called: its arguments hold a password, a code, a key or a card number, which "
@@ -59,10 +59,12 @@ _STATUS = {
 }
 # Why a server is not connected, by its state, for a call or a search that needed it.
 _NOT_CONNECTED = {
-    "signin": "Error: {server} needs them to sign in first (Settings › Connectors, Sign in), so nothing was done. "
-              "Tell them in one sentence.",
-    "off": "Error: {server} is switched off in Settings › Connectors, so nothing was done. Tell them.",
-    "failed": "Error: {server} is not running ({error}); Settings › Connectors shows why. Nothing was done; tell them.",
+    "signin": "Error: {server} needs them to sign in first (abilities/tools, which the settings tool opens), so "
+              "nothing was done. Tell them in one sentence.",
+    "off": "Error: {server} is switched off at abilities/tools, which the settings tool opens, so nothing was done. "
+           "Tell them.",
+    "failed": "Error: {server} is not running ({error}); abilities/tools, which the settings tool opens, shows why. "
+              "Nothing was done; tell them.",
 }
 
 
@@ -151,8 +153,10 @@ def _server_lines(offer: dict) -> str:
 
 
 def _line(tool: dict) -> str:
-    """A tool's name and the first sentence of its description, within LINE_CHARS."""
-    about = re.split(r"(?<=[.!?])\s", " ".join(str(tool["function"].get("description") or "").split()), maxsplit=1)[0]
+    """A tool's name and the first clause of its description (to its first sentence end, colon or semicolon),
+    within LINE_CHARS."""
+    words = " ".join(str(tool["function"].get("description") or "").split())
+    about = re.split(r"(?<=[.!?])\s|[:;]\s", words, maxsplit=1)[0]
     return f"- {tool['function']['name']}: " + (about if len(about) <= LINE_CHARS else about[:LINE_CHARS - 1] + "…")
 
 
@@ -162,8 +166,8 @@ def functions(deferred: list[dict], names: list[str]) -> list[dict]:
         return []
     listed = []
     if deferred:
-        listed.append("Tools of the app that are not in your list (any tool your instructions name and your list "
-                      "lacks is one of these):\n" + "\n".join(_line(t) for t in deferred))
+        listed.append("The app's tools found this way, among them any your instructions name that your list lacks:\n"
+                      + "\n".join(_line(t) for t in deferred))
     if names:
         listed.append("The MCP servers they added to the app (programs and services of theirs: files, notes, "
                       "calendars and the like), by the names they gave: "

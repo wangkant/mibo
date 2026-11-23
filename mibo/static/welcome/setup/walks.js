@@ -29,10 +29,11 @@
     on.about.classList.add("setup-walks-status");
     const walks = kit.choices(t.walksName, WALKS.map((n) => [n, n]), (n) => change({ walks: Number(n) }));
     const walksRow = kit.optionRow(t.walksName, "", walks.group);
-    main.append(on.row, walksRow.row);
+    main.append(on.row, kit.item("walks-count", walksRow.row));
 
     // ---- Folded: the sites to keep off and to favour, and the web search.
     const more = kit.fold(t.moreTitle);
+    kit.item("sites", more.node);
     more.node.classList.add("setup-card");
     const hosts = el("datalist");
     hosts.id = "setup-walks-hosts";
@@ -40,7 +41,7 @@
     const favour = siteBlock("favour", t.favour);
 
     // Web search: the keyless engines, or a search API whose key the person brings.
-    const searchBlock = el("div", "setup-recs-block");
+    const searchBlock = kit.item("search-key", el("div", "setup-recs-block"));
     searchBlock.append(el("p", "setup-option-name", t.searchTitle));
     const remove = kit.button("setup-button-secondary setup-button-sm", t.searchRemove, () =>
       send(() => ctx.api("walks", { search: "" })));
@@ -70,7 +71,7 @@
     more.body.append(hosts, avoid.box, favour.box, searchBlock);
 
     // ---- The record, newest first.
-    const recordCard = kit.card(t.recordTitle);
+    const recordCard = kit.item("record", kit.card(t.recordTitle));
     const entries = el("div", "setup-walks-entries");
     const empty = el("p", "setup-help", t.recordNone);
     recordCard.append(entries, empty);

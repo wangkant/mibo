@@ -1,11 +1,13 @@
 """The person's permissions for commands: the granted folders, the never list, the log.
 
 All of it lives in the desktop folder of the app's home, which no command may
-read or change (`blocked` names the home as the app's own). Whether commands
-run at all is the one acting mode (acting.py). A fresh home may read the person's
+read or change (`blocked` names the home as the app's own, which holds the model
+keys' file, the settings and the browser pane's profile). Whether commands run
+at all is the one acting mode (acting.py). A fresh home is granted the person's
 own folders (Desktop, Documents, Downloads, Pictures, Music, Videos); other
-folders are granted from a card in the chat or in Settings, and any is taken
-back in Settings.
+folders are granted from a question in the chat or in Settings. Any is set to
+read only or taken back in Settings, the person's own folders too, and that
+holds until they grant it again.
 """
 from __future__ import annotations
 
@@ -42,10 +44,10 @@ NEVER = (
     ("关机、重启或注销", "Shutting down, restarting or signing out"),
 )
 
-# The person's own folders, by Windows' own ids for them. They are theirs to work in: reading, listing and making
-# or changing a file there needs no grant and no question (deleting, and replacing a file outside what the turn's
-# checkpoint can put back, still asks), as a product asks nobody before saving the document they asked for in
-# Documents or on the Desktop.
+# The person's own folders, by Windows' own ids for them. They are granted from the start: reading, listing and
+# making or changing a file there needs no grant (what the asking rule asks, it still asks), as a product asks
+# nobody before saving the document they asked for in Documents or on the Desktop. Settings may set one to read only
+# or take it back.
 KNOWN = (
     ("downloads", "{374DE290-123F-4565-9164-39C4925E467B}", "下载", "Downloads"),
     ("documents", "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}", "文档", "Documents"),
@@ -211,9 +213,12 @@ class Grants:
         atomic_write_text(self.desktop / SETTINGS_FILE, json.dumps(data, ensure_ascii=False, indent=1))
 
     def folders(self) -> list[str]:
-        """Granted folders: the ones they chose and the person's own (own_folders), those still grantable."""
-        kept = [str(p) for p in self._read().get("folders") or [] if isinstance(p, str)]
-        seen, out = set(), []
+        """Granted folders: the ones they chose and the person's own (own_folders) unless they took one back in
+        Settings, those still grantable."""
+        data = self._read()
+        kept = [str(p) for p in data.get("folders") or [] if isinstance(p, str)]
+        removed = {norm(p) for p in data.get("removed") or [] if isinstance(p, str)}
+        seen, out = set(removed), []
         for place in kept + own_folders():
             if norm(place) not in seen and not self.places.grantable(norm(place)):
                 seen.add(norm(place))
@@ -221,10 +226,9 @@ class Grants:
         return out
 
     def read_only(self) -> set[str]:
-        """The granted folders, `norm`ed, where files may be read but nothing made, moved or changed: never the
-        person's own."""
-        own = {norm(p) for p in own_folders()}
-        return {norm(p) for p in self._read().get("read_only") or [] if isinstance(p, str)} - own
+        """The granted folders, `norm`ed, where files may be read but nothing made, moved or changed: the person's
+        own among them when they set one so in Settings."""
+        return {norm(p) for p in self._read().get("read_only") or [] if isinstance(p, str)}
 
     def roots(self, write: bool = False) -> list[str]:
         """The granted folders, `norm`ed; with `write`, only those that may be changed."""
@@ -250,17 +254,21 @@ class Grants:
             data = self._read()
             kept = [p for p in data.get("folders") or [] if isinstance(p, str) and norm(p) != norm(real)]
             data["folders"] = [*kept, real]
-            data["read_only"] = [p for p in data.get("read_only") or [] if isinstance(p, str) and norm(p) != norm(real)]
+            for key in ("read_only", "removed"):
+                data[key] = [p for p in data.get(key) or [] if isinstance(p, str) and norm(p) != norm(real)]
             if read_only:
                 data["read_only"].append(real)
             self._write(data)
         return ""
 
     def remove(self, folder: str) -> None:
+        """Takes a folder back; one of the person's own stays taken back (`removed`) until it is granted again."""
         with self.lock:
             data = self._read()
-            for key in ("folders", "read_only"):
+            for key in ("folders", "read_only", "removed"):
                 data[key] = [p for p in data.get(key) or [] if isinstance(p, str) and norm(p) != norm(folder)]
+            if norm(folder) in {norm(p) for p in own_folders()}:
+                data["removed"].append(folder)
             data["rules"] = [r for r in self._rules(data) if norm(r["folder"]) != norm(folder)]
             self._write(data)
 

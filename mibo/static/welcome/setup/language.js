@@ -25,7 +25,7 @@
     pick.value = paI18n.lang;
     pick.setAttribute("aria-label", t.display);
     const shownError = kit.errorLine();
-    shown.append(kit.optionRow(t.display, t.displayText, pick).row, shownError);
+    shown.append(kit.item("display", kit.optionRow(t.display, t.displayText, pick).row), shownError);
     node.append(shown);
     pick.addEventListener("change", async () => {
       pick.disabled = true;
@@ -41,7 +41,7 @@
       ctx.relang();
     });
 
-    const box = kit.card();
+    const box = kit.item("readable", kit.card());
     const title = el("p", "setup-label", t.canRead);
     title.id = "setup-langs-readable";
     const chips = el("div", "setup-chips");

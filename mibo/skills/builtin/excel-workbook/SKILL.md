@@ -1,6 +1,6 @@
 ---
 name: excel-workbook
-description: Put figures, lists or records into an Excel workbook (.xlsx) - a budget, an expense list, a schedule, a sign-up list, a comparison - with a header row, plain numbers and live formulas, one table per sheet; or change cells of one they have. Use when they ask for a spreadsheet or for something made into a table file ("整理成表格", "做个 Excel", "导出成 xlsx").
+description: Put figures, lists or records (a budget, a schedule, a sign-up list) into an Excel workbook (.xlsx), one table per sheet with live formulas, or change cells of one they have. Use when they ask for a spreadsheet or a table file ("整理成表格", "做个 Excel", "导出成 xlsx").
 license: Apache-2.0
 metadata:
   mibo-title-zh: 制作 Excel 表格

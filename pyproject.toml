@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mibo"
 version = "0.1.0"
-description = "An AI companion that lives on your desktop: a character that talks with you, remembers you, and acts for you on the web, in other programs and in your files, asking only when an action needs your decision."
+description = "A personal AI agent that lives on your own computer: tell it what you need, and it gets it done across the web, your files and your other programs, asking only before what costs you something."
 readme = "README.md"
 requires-python = ">=3.10"
 # Code taken from MIT and BSD projects keeps their licence (NOTICE), and the three
@@ -14,8 +14,8 @@ license = "Apache-2.0 AND MIT AND BSD-2-Clause AND CC-BY-NC-SA-4.0"
 license-files = ["LICENSE", "NOTICE", "mibo/static/characters/LICENSE.md", "mibo/static/welcome/markdown-it.LICENSE.txt"]
 authors = [{ name = "Qiankang Wang" }]
 keywords = [
-    "llm", "agent", "desktop", "companion", "persona", "memory", "recommender",
-    "browser-automation", "computer-use", "mcp", "skills",
+    "agent", "ai-agent", "llm", "browser-automation", "computer-use", "desktop", "mcp", "skills",
+    "memory", "companion", "persona", "recommender",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

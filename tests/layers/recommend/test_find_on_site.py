@@ -45,7 +45,8 @@ def _row(url: str, title: str, snippet: str = "") -> dict:
 
 
 def test_a_signed_out_site_brings_its_items_from_a_search_within_it_and_one_becomes_the_card(turn, platforms):
-    platforms.pages["https://www.douyin.com/"] = {"error": "sign_in_overlay"}
+    searched = "https://www.douyin.com/search/%E6%90%9E%E7%AC%91"
+    platforms.pages[searched] = {"error": "sign_in_overlay"}
     platforms.results["site:douyin.com 搞笑"] = [
         *(_row(url, title, "抖音视频") for url, title in VIDEOS),
         _row("https://www.douyin.com/", "抖音-记录美好生活"),
@@ -56,8 +57,8 @@ def test_a_signed_out_site_brings_its_items_from_a_search_within_it_and_one_beco
                 [call("bring_find", url=first)],
                 say(f"《{title}》 {first}"))
     got = _result(done)
-    # The site's own page was tried first, then the web search kept to the site.
-    assert platforms.read == ["https://www.douyin.com/"] and platforms.searched == ["site:douyin.com 搞笑"]
+    # The site's own search was tried first, then the web search kept to the site.
+    assert platforms.read == [searched] and platforms.searched == ["site:douyin.com 搞笑"]
     for url, name in VIDEOS:
         assert url in got and name in got
     # A page about the site, and its front page, are no items on it.
@@ -86,12 +87,13 @@ def test_a_site_with_a_known_search_is_read_there_with_their_session(turn, platf
 
 
 def test_a_check_and_a_thin_search_bring_one_sentence_and_an_offer_to_open_the_site(turn, platforms):
-    platforms.pages["https://www.douyin.com/"] = {"error": "verification"}
+    searched = "https://www.douyin.com/search/%E5%A5%BD%E7%8E%A9"
+    platforms.pages[searched] = {"error": "verification"}
     done = turn("去抖音找点好玩的", [call("find_on_site", site="抖音", words="好玩")], say("要不要我打开抖音？"))
     got = _result(done)
     assert "(nothing found)" in got
     assert "own pages were not read: it asked for a check (a CAPTCHA), which is theirs to do" in got
-    assert "ask whether they want you to open 抖音 for them (open with name https://www.douyin.com/ and show true" in got
+    assert f"ask whether they want you to open 抖音 for them (open with name {searched} and show true" in got
     assert done.sources == []
 
 

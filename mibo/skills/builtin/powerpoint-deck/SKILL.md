@@ -1,6 +1,6 @@
 ---
 name: powerpoint-deck
-description: Make a PowerPoint deck (.pptx) for a talk, a report, a class or a pitch - a cover, one point per slide with a title and short items, a table where figures are compared, and speaker notes - or change the text of one they have. Use when they ask for slides or a presentation ("做个 PPT", "做成幻灯片", "演示文稿").
+description: Make a PowerPoint deck (.pptx) for a talk, a report, a class or a pitch, one point per slide with speaker notes, or change the text of one they have. Use when they ask for slides or a presentation ("做个 PPT", "做成幻灯片", "演示文稿").
 license: Apache-2.0
 metadata:
   mibo-title-zh: 制作 PPT 演示文稿

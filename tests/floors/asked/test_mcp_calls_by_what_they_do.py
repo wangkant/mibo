@@ -106,9 +106,10 @@ def test_paying_and_account_calls_ask_every_time_with_no_reviewer_even_when_set_
     asked = "Pay the rent of 1000 to US133000000121212121212, move my rent to the new account and fix my address"  # copy: voice
     done = turn(asked, use("mcp-send-money"), use("mcp-update-scheduled-transaction"), use("mcp-update-user-info"),
                 use("mcp-free-get-balance"), say("Done."), cards="yes")
-    # The yes to the payment carries the second payment of the turn; the account change is asked on its own.
+    # Each costly call is asked on its own: the yes to the payment carries neither the second payment nor the
+    # account change.
     assert [(c["card"]["type"], c["card"]["hard"], c["card"]["risk"]) for c in done.cards] == [
-        ("mcp_tool", "order", "pay"), ("mcp_tool", "account", "account")]
+        ("mcp_tool", "order", "order"), ("mcp_tool", "order", "order"), ("mcp_tool", "account", "account")]
     assert done.asked("reviewer") == []
     assert received(log) == ["send_money", "update_scheduled_transaction", "update_user_info", "get_balance"]
     # The yes held for that turn alone: the same payment asks again, and on no the server gets no call.

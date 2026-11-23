@@ -136,6 +136,13 @@
   font-size: var(--pa-fs-md);
   font-weight: 600;
 }
+/* The item Settings was opened at (setup.js bring): ringed a moment. */
+.setup-spot {
+  outline: 2px solid var(--pa-accent);
+  outline-offset: 4px;
+  border-radius: var(--pa-r-lg);
+  transition: outline-color 0.6s;
+}
 .setup-sr {
   position: absolute;
   width: 1px;

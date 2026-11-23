@@ -169,13 +169,13 @@ def test_a_windows_pictures_go_to_their_model_service_with_no_question(desk, mon
 
 def test_with_the_settings_switch_off_every_window_asks_in_the_chat_first(desk, monkeypatch):
     from mibo.see import when
-    when.Switch(desk.desktop).set("")
+    when.Switch(desk.desktop).set(False)
     done = allow_pictures(desk, Reviewer("go"), "Grok Bot", "Grok Bot — 主界面", monkeypatch)
     assert done["status"] == "declined" and desk.pictured is None
     ((card,),) = [desk.cards_seen]
     assert card["type"] == "see_grant"
-    # Turned back on for their service, it goes with no question.
-    when.Switch(desk.desktop).set("openrouter.ai")
+    # Turned back on, it goes with no question.
+    when.Switch(desk.desktop).set(True)
     assert allow_pictures(desk, Reviewer("go"), "Grok Bot", "Grok Bot — 主界面", monkeypatch)["status"] == "ok"
 
 

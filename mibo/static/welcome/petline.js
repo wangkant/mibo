@@ -10,7 +10,8 @@
   const STEP_MS = 1200;
   const W = paI18n.words("petline");
   // Steps whose card waits on the person, and where that card is read.
-  const CARDS = { operate: "/api/browser/confirm", shell: "/api/shell/card", desk: "/api/programs/card", mcp: "/api/mcp/card" };
+  const CARDS = { operate: "/api/browser/confirm", shell: "/api/shell/card", desk: "/api/programs/card", mcp: "/api/mcp/card",
+    settings: "/api/settings/card" };
   const QUIET = new Set(["write", "recall"]);
   const line = uxEl("div", "pet-line");
   const open = uxEl("button", "line-open");

@@ -17,6 +17,7 @@ import mimetypes
 import os
 import re
 import shutil
+import sys
 import time
 import zipfile
 from urllib.parse import urlsplit
@@ -567,6 +568,42 @@ def recycle(paths: list[str]) -> bool:
     op = SHFILEOPSTRUCTW(None, 3, "\0".join(os.path.abspath(p) for p in paths) + "\0\0", None,
                          0x0004 | 0x0010 | 0x0040 | 0x0400, False, None, None)
     return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0 and not op.fAnyOperationsAborted
+
+
+# The share of a drive its Recycle Bin holds when the person never set it (Windows' own default).
+BIN_SHARE = 0.05
+BIN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume"
+
+
+def bin_keeps(paths: list[str], size: int) -> bool:
+    """Whether the Recycle Bin takes these `size` bytes back whole: each path on a fixed drive of this computer whose
+    bin is not set to delete at once, and the bytes within what that bin holds. Past that Windows deletes for good,
+    without a word, so such a delete is costly (cardwait.COSTLY)."""
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    import winreg
+    for path in paths:
+        root = os.path.splitdrive(os.path.abspath(path))[0] + "\\"
+        if ctypes.windll.kernel32.GetDriveTypeW(root) != 3:  # DRIVE_FIXED
+            return False
+        volume = ctypes.create_unicode_buffer(64)
+        if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(root, volume, 64):
+            return False
+        guid = volume.value[volume.value.find("{"):volume.value.find("}") + 1]
+        set_to = {"NukeOnDelete": 0, "MaxCapacity": shutil.disk_usage(root).total * BIN_SHARE / 1024 / 1024}
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BIN_KEY}\\{guid}") as key:
+                for name in set_to:
+                    try:
+                        set_to[name] = winreg.QueryValueEx(key, name)[0]
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+        if set_to["NukeOnDelete"] or size > set_to["MaxCapacity"] * 1024 * 1024:
+            return False
+    return True
 
 
 def move(moves: list[dict], copy: bool) -> list[str]:

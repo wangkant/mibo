@@ -147,6 +147,11 @@
       const state = task.running ? t.running : task.offer ? t.offer : task.retry ? fill(t.retry, { at: task.retry })
         : task.active ? fill(t.next, { next: task.nextText }) : task.nextText ? t.paused : t.finished;
       words.append(title, el("p", "setup-option-text", `${task.rhythm} · ${state}`));
+      const scope = task.scope || {};
+      if (scope.act) {
+        const what = [scope.site, t.scopeActs[scope.act], scope.to, scope.text || scope.about].filter(Boolean).join(" · ");
+        words.append(el("p", "setup-option-text", fill(t.scopeLine, { what })));
+      }
       const sw = el("input", "setup-switch");
       sw.type = "checkbox";
       sw.setAttribute("role", "switch");

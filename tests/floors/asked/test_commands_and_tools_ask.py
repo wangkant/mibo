@@ -1,6 +1,7 @@
-"""A delete, an install, a push and an MCP tool its maker marks destructive ask in the chat in a whole turn, even
-with a reviewer that would pass anything: the reviewer is never asked, a yes holds for that turn alone, and on no
-nothing happens, as the files on disk and the server's own record show."""
+"""An install, a push, a delete past what undo restores and an MCP tool its maker marks destructive ask in the chat
+in a whole turn, even with a reviewer that would pass anything: the reviewer is never asked, a yes holds for that
+step alone, and on no nothing happens, as the files on disk and the server's own record show. A delete to the
+Recycle Bin they asked for is not costly: it goes to the reviewer and runs with no question."""
 from __future__ import annotations
 
 import json
@@ -17,9 +18,18 @@ from mibo.shell import files as file_tools
 from mibo.shell.grants import LOG_FILE, Grants
 
 ROWS = {row.values[0]["id"]: row.values[0] for row in attacks.load("asked")}
-COMMANDS = [pytest.param(row, id=row["id"], marks=pytest.mark.skipif(
-    row.get("only", sys.platform) != sys.platform, reason="read.py reads commands with Windows PowerShell's parser"))
-    for row in ROWS.values() if row["area"] == "commands"]
+# Deletes that go to the Recycle Bin, which undo gives back: not costly. The reviewer judges whether they are what
+# the person asked for (a bin past its size is costly: shell/files.bin_keeps).
+RECYCLED = ("cmd-delete-files", "cmd-remove-item", "cmd-recursive-delete-desktop")
+
+
+def commands(recycled: bool) -> list:
+    return [pytest.param(row, id=row["id"], marks=pytest.mark.skipif(
+        row.get("only", sys.platform) != sys.platform, reason="read.py reads commands with Windows PowerShell's parser"))
+        for row in ROWS.values() if row["area"] == "commands" and (row["id"] in RECYCLED) == recycled]
+
+
+COMMANDS, BIN = commands(False), commands(True)
 # What a reviewer that passes everything answers, a few times over.
 PASSES = [text(json.dumps({"kind_asked": True, "target_named": True, "text_given": True, "nothing_added": True,
                            "decision": "go", "reason": "They asked for exactly this."}))] * 3
@@ -54,6 +64,15 @@ def test_a_delete_an_install_or_a_push_asks_every_time_and_on_no_nothing_happens
     logged = [json.loads(line) for line in (app.home / "runtime" / "desktop" / LOG_FILE).read_text(
         encoding="utf-8").splitlines()]
     assert [row["outcome"] for row in logged] == ["declined"]
+
+
+@pytest.mark.parametrize("attack", BIN)
+def test_a_delete_to_the_recycle_bin_they_asked_for_goes_to_the_reviewer_and_runs_with_no_question(
+        app, turn, folder, attack):
+    app.model.script(PASSES[0], purpose="reviewer")
+    done = turn(ASKED, call(attack["tool"], **attack["args"], folder=str(folder)), say("Done."))
+    assert done.cards == [] and len(done.asked("reviewer")) == 1
+    assert not (folder / "notes.txt").exists()
 
 
 # A stdio MCP server whose tools carry their maker's marks; it writes each call it receives to its log.

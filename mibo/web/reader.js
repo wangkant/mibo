@@ -585,7 +585,7 @@
 
   // ---------- what the site offers a visitor: its search and its hot lists ----------
   const sameSite = (u) => { try { const a = new URL(u).hostname.split('.').slice(-2).join('.'); return a === location.hostname.split('.').slice(-2).join('.'); } catch (e) { return false; } };
-  const discovery = {opensearch: [], searchaction: [], forms: [], feeds: links.feeds || [], trends: []};
+  const discovery = {opensearch: [], searchaction: [], forms: [], feeds: links.feeds || [], trends: [], inbox: []};
   for (const l of document.querySelectorAll('link[rel~="search" i][href]')) {
     if (/opensearchdescription/i.test(l.getAttribute('type') || '')) discovery.opensearch.push(abs(l.getAttribute('href')));
   }
@@ -605,6 +605,9 @@
     discovery.forms.push({action: abs(f.getAttribute('action') || here), input: texts[0].name, hidden});
   }
   const TREND = /热门|热榜|排行|榜|热搜|trending|popular|explore|discover|rank|ranking|\btop\b|ランキング|人気|인기|랭킹|популярн|тренд/i;
+  // Where a signed-in account's messages, notifications or mail are: links named so, or with such a path.
+  const INBOX = /消息|私信|通知|提醒|站内信|收件箱|邮件|信箱|訊息|私訊|郵件|^messages?$|inbox|notifications?|^dms?$|^mail$|メッセージ|お知らせ|受信|메시지|알림|쪽지|nachrichten|benachrichtigungen|posteingang|mensajes|notificaciones|bandeja|mensagens|notificações|caixa de entrada|сообщения|уведомления|входящие/i;
+  const INBOX_PATH = /\/(messages?|inbox|notifications?|direct|dms?|mail|msg|notice)(\/|$)/i;
   const seenLinks = new Set();
   for (const a of document.querySelectorAll('a[href]')) {
     const h = realHref(a);
@@ -612,6 +615,7 @@
     const t = clean(a.innerText || a.getAttribute('aria-label') || a.getAttribute('title')).slice(0, 40);
     let path = ''; try { path = new URL(h).pathname; } catch (e) {}
     if (discovery.trends.length < 20 && (TREND.test(t) || TREND.test(path))) { discovery.trends.push({href: h, text: t}); seenLinks.add(h); }
+    else if (discovery.inbox.length < 6 && (INBOX.test(t) || INBOX_PATH.test(path))) { discovery.inbox.push({href: h, text: t}); seenLinks.add(h); }
   }
   const ldText = [...document.querySelectorAll('script[type="application/ld+json"]')].slice(0, 10).map(s => (s.textContent || '').slice(0, 100000));
 

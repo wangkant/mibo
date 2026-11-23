@@ -179,9 +179,15 @@
     if (title) node.append(el("h3", "setup-card-title", title));
     return node;
   }
-  // One line with a switch: its name, what it does, the switch at the end.
+  // An item of the character's catalogue of Settings (mibo/appmap.py, by the same key): Settings opened at
+  // "setup/<section>/<key>" brings it into view.
+  function item(key, node) {
+    node.dataset.item = key;
+    return node;
+  }
+  // One line with a switch: its name, what it does, the switch at the end. Its id is its item's key.
   function switchRow(id, name, text, changed) {
-    const row = el("div", "setup-option");
+    const row = item(id, el("div", "setup-option"));
     const words = el("div", "setup-option-words");
     const label = el("label", "setup-option-name", name);
     label.htmlFor = `setup-switch-${id}`;
@@ -262,7 +268,7 @@
 
   // What the sections are handed: the helpers, and the app's state as the shell last read it.
   const kit = {
-    el, icon, fill, words, say, button, relabel, busy, field, input, section, card, switchRow, optionRow,
+    el, icon, fill, words, say, button, relabel, busy, field, input, section, card, item, switchRow, optionRow,
     choices, errorLine, failed, fold, iconButton,
     get ctx() {
       return ctx;
@@ -354,6 +360,22 @@
     }
     built[key].show(asked, place);
     root.parentElement.scrollTop = 0;
+    const spot = place && built[key].node.querySelector(`[data-item="${CSS.escape(place)}"]`);
+    if (spot) bring(spot, SPOT_TRIES);
+  }
+
+  // An item named by the link, in view and marked a moment, its folds open; a section draws some of its rows once
+  // its values are read, so it is looked for again a while.
+  const SPOT_TRIES = 20;
+  function bring(spot, tries) {
+    for (let fold = spot.closest("details"); fold; fold = fold.parentElement.closest("details")) fold.open = true;
+    if (!spot.offsetParent) {
+      if (tries) setTimeout(() => bring(spot, tries - 1), 100);
+      return;
+    }
+    spot.scrollIntoView({ block: "center" });
+    spot.classList.add("setup-spot");
+    setTimeout(() => spot.classList.remove("setup-spot"), 2400);
   }
 
   // A place in Settings by name, as app.js passes on a link like "setup/model" or "setup/tools/market/time".

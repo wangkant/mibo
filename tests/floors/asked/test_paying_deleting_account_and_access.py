@@ -1,6 +1,7 @@
-"""Paying, deleting, an account's security and access always ask the person, in every mode and whatever the
-reviewer would say: on a page (web/gate.py sorts the control, acting.decide gives the card), in another program
-(desk/gate.py), and in the one call every gate makes (review.decide), where code answers before any model."""
+"""Costly acts (cardwait.COSTLY: paying, a deletion nothing restores, the account itself, handing over access or
+private details, a binding submission) always ask the person, in every mode and whatever the reviewer would say: on
+a page (web/gate.py sorts the control, acting.decide gives the card), in another program (desk/gate.py), and in the
+one call every gate makes (review.decide), where code answers before any model."""
 from __future__ import annotations
 
 import asyncio
@@ -66,7 +67,7 @@ def test_an_act_that_sends_out_of_the_page_is_never_free_even_without_words():
 
 # The acts a gate sends review.decide that code must keep for the person, by area: whatever a reviewer says.
 FLOOR_ACTS = [
-    *({"area": "browser", "kind": kind, "where": SITES[0], "text": ""} for kind in (*acting.HARD, "download")),
+    *({"area": "browser", "kind": kind, "where": SITES[0], "text": ""} for kind in (*sorted(acting.HARD), "download")),
     *({"area": "programs", "kind": kind, "where": "订单 - 小程序", "text": ""}
       for kind in ("order", "delete", "account", "setting", "open")),
     {"area": "commands", "kind": "command", "where": "D:/proj", "text": "python tidy.py", "effects": ["deletes notes.txt"]},
@@ -115,12 +116,16 @@ def test_in_another_program_paying_deleting_settings_and_opening_ask_and_editing
         "确定 a delete": press(control("button", "确定"), main=False, dialog="确定要删除这 3 个文件吗？"),
         "a setting": desk.press(control("checkbox", "开机时启动", parent=options), "选项", True, "")[0],
         "a file": press(control("listitem", "报告.docx", parent=files), folder=False),
-        "Delete in a file view": desk.key("Delete", control("listitem", "报告.docx", parent=files), "下载", True, "")[0],
+        "shift+delete in a file view": desk.key("shift+delete", control("listitem", "报告.docx", parent=files), "下载",
+                                                True, "")[0],
     }
     assert {name: acting.decide("auto", kind, "", "programs") for name, kind in floor.items()} == \
         dict.fromkeys(floor, "ask"), floor
-    # What a name does not tell goes to the reviewer, never through by itself.
-    unsaid = {"提交 after typing": press(control("button", "提交", parent=window), typed=True),
+    # What a name does not tell goes to the reviewer, never through by itself; so does a delete the Recycle Bin
+    # gives back, which is not costly.
+    unsaid = {"Delete in a file view": desk.key("Delete", control("listitem", "报告.docx", parent=files), "下载", True,
+                                                "")[0],
+              "提交 after typing": press(control("button", "提交", parent=window), typed=True),
               "整理 in its own menu": press(control("menuitem", "整理", parent=control("menu", "工具")))}
     assert {name: acting.decide("auto", kind, "", "programs") for name, kind in unsaid.items()} == \
         dict.fromkeys(unsaid, "review"), unsaid

@@ -10,10 +10,14 @@ import os
 
 import pytest
 
-from harness.model import call, say
+from harness.model import call, say, text
 from mibo.shell import checkpoint
 from mibo.shell import files as file_tools
 from mibo.shell.grants import Grants
+
+# A reviewer that leaves a delete to the Recycle Bin to the person.
+REVIEWER_ASKS = text(json.dumps({"kind_asked": True, "target_named": False, "text_given": True,
+                                 "nothing_added": True, "decision": "ask", "reason": "stand-in"}))
 
 
 @pytest.fixture
@@ -34,6 +38,7 @@ def folder(app, tmp_path, monkeypatch):
 
 
 def test_a_no_stops_that_step_only_and_the_same_step_again_gets_no_second_question(app, turn, folder):
+    app.model.script(REVIEWER_ASKS, purpose="reviewer")
     delete = call("delete_files", paths=["old.txt"], folder=str(folder))
     write = call("write_file", path="new.txt", content="new\n", folder=str(folder))
     done = turn("Delete old.txt and write new.txt", delete, write, delete, say("Wrote new.txt; old.txt stays."),  # copy: voice
@@ -63,6 +68,7 @@ def test_a_declined_write_is_never_done_later_in_the_turn_and_other_text_asks_on
 
 def test_after_a_no_a_change_the_automatic_mode_would_pass_asks(app, turn, folder):
     (folder / "notes.txt").write_text("first\n", encoding="utf-8")
+    app.model.script(REVIEWER_ASKS, purpose="reviewer")
     delete = call("delete_files", paths=["old.txt"], folder=str(folder))
     write = call("write_file", path="notes.txt", content="second\n", folder=str(folder))
     done = turn("Tidy my work folder", delete, write, say("Changed notes.txt."), cards=["no", "yes"])  # copy: voice

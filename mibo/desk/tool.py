@@ -59,8 +59,8 @@ OFFERED = [TOOL] if sys.platform == "win32" else []
 _SAID = {
     "done": "done",
     "failed": "it did not work out",
-    "off": "not done: they have not turned on letting you operate other programs. Tell them it is in Settings › "
-           "Other programs (设置 › 电脑上的程序), and that it stays off until they turn it on",
+    "off": "not done: they have not turned on letting you operate other programs. Tell them it stays off until they "
+           "turn it on; the settings tool opens it for them at programs/programs-on",
     "unwatched": "not done: it runs only during a turn they started in the app's chat",
     "refused": "refused: the app never does this, whatever they allowed. Tell them in a sentence that you never "
                "operate it and why (the reason below), that it is theirs to do, and do not try it another way: no "

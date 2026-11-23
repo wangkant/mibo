@@ -255,11 +255,14 @@ def facts_script() -> str:
 
 
 def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int = TEXT_MAX) -> dict:
-    """What a read page gives: title, declared facts and readable text, as roam.py reads them, and for a list
-    its rows (title, link, author, time, counts). The text is the `most` characters from `start`."""
+    """What a read page gives: title, declared facts and readable text, as roam.py reads them, for a list its rows
+    (title, link, author, time, counts), and the page's own links to its messages or notifications ("inbox",
+    reader.js). The text is the `most` characters from `start`."""
     from .roam import facts_from
     data = data if isinstance(data, dict) else {}
     facts = facts_from(data, url)
+    inbox = [{"href": str(link["href"])[:2000], "text": str(link.get("text") or "")[:40]}
+             for link in (data.get("discovery") or {}).get("inbox") or [] if isinstance(link, dict) and link.get("href")]
     listed = [{k: str(row.get(k) or "")[:300] for k in ("title", "link", "author", "time") if row.get(k)}
               | ({"counts": row["counts"]} if isinstance(row.get("counts"), dict) and row["counts"] else {})
               for row in (data.get("rows") if rows is None else rows) or [] if isinstance(row, dict)]
@@ -269,7 +272,8 @@ def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int 
             "published": facts.get("published", ""), "description": facts.get("description", ""),
             "text": text[start:start + most],
             **({"rows": [row for row in listed if row.get("title")][:ROWS_MAX]}
-               if data.get("kind") == "list" else {})}
+               if data.get("kind") == "list" else {}),
+            **({"inbox": inbox[:6]} if inbox else {})}
 
 
 def _run(core, script: str):
@@ -1815,8 +1819,8 @@ class Reader:
     `form`, made for one site and disposed after (web/tabs.HiddenTab reads through it). Read only: it goes
     only to that site's addresses, and requests to other sites, and any but GET, are refused, so the
     person's cookies go to that site alone; a move to another site (a sign-in elsewhere) stops the read.
-    Pace (browsed.Pace): one read at a time, a pause between, a day's cap per site, and a site whose check
-    or sign-in wall showed is not read again for a while. Cookies and storage are never read out: only the
+    Pace (browsed.Pace): one read of a site at a time with a pause between, a few sites side by side, a day's
+    cap per site, and a site whose check or sign-in wall showed is not read again for a while. Cookies and storage are never read out: only the
     page's text leaves."""
 
     def __init__(self, folder: Path, form, *, ui: Callable[[Callable[[], None]], None], pace: browsed.Pace):
@@ -1836,11 +1840,11 @@ class Reader:
 
         from .web import read as reading
         from .web.tabs import HiddenTab
-        with self.pace.lock:
+        with self.pace.slot(url):
             refused = self.pace.refuse(url)
             if refused:
                 return {"error": refused}
-            self.pace.wait()
+            self.pace.wait(url)
             hidden = _Hidden(self, url)
             try:
                 if not hidden.made.wait(READ_WITHIN_S) or hidden.core is None:

@@ -1693,7 +1693,8 @@ window.paChat = (() => {
       if (!card || shellCard || !waiting) return;
       const said = card[ctx.lang] || card.en;
       const folder = card.type === "folder";
-      const own = card.type === "turn_on";
+      // The app's own questions: turning an ability on (turnon.py), a setting that widens what it may do (appmap.py).
+      const own = card.type === "turn_on" || card.type === "setting";
       const node = el("div", "op-card shell-card");
       node.dataset.id = card.id;
       node.append(folder ? cardHead(I.folder, said.title, card.folder)
@@ -1799,7 +1800,7 @@ window.paChat = (() => {
           // (shell/panel.py), turning a switched-off ability on (turnon.py), a task in another program
           // (desk/panel.py) or one of their MCP servers (mcp_hub.py, toolcard.js).
           const place = { operate: "browser/confirm", shell: "shell/card", turn_on: "turnon/card",
-            desk: "programs/card", mcp: "mcp/card" }[step?.tool];
+            desk: "programs/card", mcp: "mcp/card", settings: "settings/card" }[step?.tool];
           if (place && sending) {
             clearTimeout(turnLimit);
             turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
