@@ -190,9 +190,7 @@ def admitted(request: Request) -> bool:
     server = request.scope.get("server") or ("", 0)
     if request.headers.get("host", "").lower() != f"localhost:{server[1]}":
         return False
-    if any(request.headers.get(key) for key in ("x-forwarded-host", "forwarded", "x-forwarded-for")):
-        return False
-    return True
+    return not any(request.headers.get(key) for key in ("x-forwarded-host", "forwarded", "x-forwarded-for"))
 
 
 def mount(app, workspace, body) -> None:

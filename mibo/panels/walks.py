@@ -44,7 +44,7 @@ def _load(runtime: Path) -> list:
 def record(runtime: Path, row: dict) -> None:
     """One walk into the record, the oldest dropped past KEEP."""
     with _lock:
-        rows = (_load(runtime) + [row])[-KEEP:]
+        rows = [*_load(runtime), row][-KEEP:]
         path = Path(runtime) / FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_text(path, json.dumps(rows, ensure_ascii=False))

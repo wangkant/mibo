@@ -96,6 +96,30 @@ def act_of(card: dict, lang: str) -> str:
     return (f"{said}（{amount}）" if lang == "zh" else f"{said} ({amount})") if amount else said
 
 
+def _number(value) -> bool:
+    # A bool is an int to Python, never a number the page sends.
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _pixels(value) -> bool:
+    return _number(value) and 0 <= value < 100000
+
+
+def _scale(value) -> bool:
+    return _number(value) and 0.25 <= value <= 8
+
+
+def switch_feed(runtime, key: str, on: bool, home: str) -> None:
+    """A site's feed read in the background, on or off, from Settings; read at the address it has, else `home`."""
+    from ..web import sites
+
+    def switch(card: dict) -> None:
+        feed = card.setdefault("feed", {})
+        feed.update(on=on, url=feed.get("url") or home)
+        feed.pop("stopped", None)
+    sites._change(runtime, key, switch)
+
+
 class Operating:
     """The character's acts in the pane's tabs (surface.py's act): one Hands a tab, kept for the turn so its refs,
     its request watch and what it typed hold from one act call to the next, and closed when the turn ends; the
@@ -367,6 +391,9 @@ def mount(app, workspace, body) -> None:
             raise ValueError("invalid_links")
         return await asyncio.to_thread(choose, changes)
 
+    def address(url) -> bool:
+        return isinstance(url, str) and browsed.web(url) and len(url) <= 2000
+
     def window_or_none():
         window = getattr(app.state, "window", None)
         if window is None:
@@ -377,8 +404,7 @@ def mount(app, workspace, body) -> None:
     async def browser_read(request: Request):
         payload = await body(request)
         url, start = payload.get("url"), payload.get("from", 0)
-        if (not isinstance(url, str) or not browsed.web(url) or len(url) > 2000
-                or not isinstance(start, int) or isinstance(start, bool) or not 0 <= start < 10_000_000):
+        if not (address(url) and isinstance(start, int) and not isinstance(start, bool) and 0 <= start < 10_000_000):
             raise ValueError("browse_invalid")
         return await asyncio.to_thread(window_or_none().browse_read, url, start)
 
@@ -442,9 +468,7 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         box, scale, cuts = payload.get("box"), payload.get("scale"), payload.get("cuts", [])
         rects = [box, *cuts] if isinstance(cuts, list) and len(cuts) <= 4 else [None]
-        if not (all(isinstance(r, list) and len(r) == 4 and all(isinstance(v, (int, float)) and not isinstance(v, bool)
-                                                                and 0 <= v < 100000 for v in r) for r in rects)
-                and isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.25 <= scale <= 8):
+        if not (all(isinstance(r, list) and len(r) == 4 and all(map(_pixels, r)) for r in rects) and _scale(scale)):
             raise ValueError("browse_invalid")
         return {"ok": window.browse_place([float(v) for v in box], float(scale), [[float(v) for v in r] for r in cuts])}
 
@@ -455,8 +479,7 @@ def mount(app, workspace, body) -> None:
         window = own_window(request)
         payload = await body(request)
         wide, scale = payload.get("wide"), payload.get("scale")
-        if not (isinstance(wide, (int, float)) and not isinstance(wide, bool) and 0 <= wide < 100000
-                and isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.25 <= scale <= 8):
+        if not (_pixels(wide) and _scale(scale)):
             raise ValueError("browse_invalid")
         return {"ok": window.browse_room(float(wide), float(scale))}
 
@@ -514,7 +537,7 @@ def mount(app, workspace, body) -> None:
             # a new tab when the one in front has a page, with the window brought out.
             url = payload.get("url")
             window = window_or_none()
-            if not isinstance(url, str) or not browsed.web(url) or len(url) > 2000:
+            if not address(url):
                 raise ValueError("browse_invalid")
             if window.pane is None:
                 return {"status": "no_app"}
@@ -529,40 +552,43 @@ def mount(app, workspace, body) -> None:
             shown = browsed.web(url) and not pane.private and browsed.shared(desktop)
             return {"status": "ok", "url": url if shown else ""}
         if op in ("tabs", "place", "front", "place_look", "place_act"):
-            # The character's places in the pane (surface.py): its tabs, a page opened in front or out of sight,
-            # a tab brought to the front, a look at one, an act in one.
-            window = window_or_none()
-            pane = window.pane
-            if pane is None:
-                return {"status": "no_app"}
-            if op == "place":
-                url = payload.get("url")
-                if not isinstance(url, str) or not browsed.web(url) or len(url) > 2000:
-                    raise ValueError("browse_invalid")
-                if payload.get("show") is True:
-                    await asyncio.to_thread(window.show)
-                return {"status": "ok", **await asyncio.to_thread(pane.place_page, url, payload.get("show") is True)}
-            tabs = await asyncio.to_thread(pane.tabs)
-            if op == "tabs":
-                return {"status": "ok", "tabs": tabs}
-            tab = next((t for t in tabs if t["id"] == payload.get("tab")), None)
-            if tab is None:
-                return {"status": "gone"}
-            if op == "front":
-                await asyncio.to_thread(window.show)
-                await asyncio.to_thread(pane.front, tab["id"])
-                return {"status": "ok", "tabs": await asyncio.to_thread(pane.tabs)}
-            if tab["private"]:
-                return {"status": "private"}
-            if op == "place_look":
-                return await run.look_at(tab, payload)
-            from ..web.operate import STEPS_MAX
-            steps = payload.get("steps")
-            if not (isinstance(steps, list) and 0 < len(steps) <= STEPS_MAX and all(isinstance(x, dict) for x in steps)):
-                raise ValueError("browse_invalid")
-            return {**await run.place_act(tab, steps, str(payload.get("lang") or "zh")[:8],
-                                          str(payload.get("what") or "")[:200]), "tab": tab}
+            return await place_op(op, payload, run)
         raise ValueError("browse_invalid")
+
+    async def place_op(op: str, payload: dict, run: Operating) -> dict:
+        """The character's places in the pane (surface.py): its tabs, a page opened in front or out of sight,
+        a tab brought to the front, a look at one, an act in one."""
+        window = window_or_none()
+        pane = window.pane
+        if pane is None:
+            return {"status": "no_app"}
+        if op == "place":
+            url = payload.get("url")
+            if not address(url):
+                raise ValueError("browse_invalid")
+            if payload.get("show") is True:
+                await asyncio.to_thread(window.show)
+            return {"status": "ok", **await asyncio.to_thread(pane.place_page, url, payload.get("show") is True)}
+        tabs = await asyncio.to_thread(pane.tabs)
+        if op == "tabs":
+            return {"status": "ok", "tabs": tabs}
+        tab = next((t for t in tabs if t["id"] == payload.get("tab")), None)
+        if tab is None:
+            return {"status": "gone"}
+        if op == "front":
+            await asyncio.to_thread(window.show)
+            await asyncio.to_thread(pane.front, tab["id"])
+            return {"status": "ok", "tabs": await asyncio.to_thread(pane.tabs)}
+        if tab["private"]:
+            return {"status": "private"}
+        if op == "place_look":
+            return await run.look_at(tab, payload)
+        from ..web.operate import STEPS_MAX
+        steps = payload.get("steps")
+        if not (isinstance(steps, list) and 0 < len(steps) <= STEPS_MAX and all(isinstance(x, dict) for x in steps)):
+            raise ValueError("browse_invalid")
+        return {**await run.place_act(tab, steps, str(payload.get("lang") or "zh")[:8],
+                                      str(payload.get("what") or "")[:200]), "tab": tab}
 
     @app.get("/api/browser/confirm")
     async def browser_card():
@@ -634,13 +660,7 @@ def mount(app, workspace, body) -> None:
             # Where the feed is read: the address of that site read last, else its home page.
             seen = next((row["url"] for row in browsed.recent(desktop, 200) if sites.key_of(row["url"]) == key), "")
             parts = urlsplit(seen)
-            home = f"{parts.scheme}://{parts.netloc}/" if seen else f"https://{key}/"
-
-            def switch(card: dict) -> None:
-                feed = card.setdefault("feed", {})
-                feed.update(on=on, url=feed.get("url") or home)
-                feed.pop("stopped", None)
-            sites._change(runtime, key, switch)
+            switch_feed(runtime, key, on, f"{parts.scheme}://{parts.netloc}/" if seen else f"https://{key}/")
         elif payload.get("forget") == "all":
             sites.forget(runtime, f"https://{key}/")
             allowed = gate.Allowed(desktop)

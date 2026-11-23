@@ -18,6 +18,9 @@ logger = logging.getLogger("agent")
 
 ERRORS: frozenset[str] = frozenset({"invalid_effort", "invalid_limit", "invalid_told"})
 TOLD = ("near", "reached", "confirmed")
+# endpoints.model_problem's kinds as the save's error codes.
+PROBE_ERRORS = {"key": "key_rejected", "limited": "model_limited", "no_balance": "model_no_balance",
+                "not_found": "model_not_found"}
 # The checks running now, by (url, model); kept so a task is not collected mid-run.
 _checks: dict[tuple[str, str], asyncio.Task] = {}
 
@@ -99,6 +102,13 @@ async def model_list(workspace) -> dict:
             "free": sorted(free), "listed": bool(found)}
 
 
+def probe_error(probe) -> str:
+    """The code for a model probe that failed (an empty balance included); never the service's own text, which
+    may echo a key."""
+    problem = model_problem(probe.status, probe.detail) if probe.status else ""
+    return PROBE_ERRORS.get(problem, "model_unreachable")
+
+
 def switch(workspace, model: str) -> None:
     """Save another model of the saved service, as Settings saves one: tried first,
     then saved and the character built again to read it."""
@@ -115,10 +125,7 @@ def switch(workspace, model: str) -> None:
         except Exception:
             raise ValueError("model_unreachable") from None
         if not probe.ok:
-            # Never return an upstream response body: it may echo a key.
-            problem = model_problem(probe.status, probe.detail) if probe.status else ""
-            raise ValueError({"key": "key_rejected", "limited": "model_limited", "no_balance": "model_no_balance",
-                              "not_found": "model_not_found"}.get(problem, "model_unreachable"))
+            raise ValueError(probe_error(probe))
         settingsfile.write(workspace.home, {"LLM_MODEL": model})
         abilities.add_recent(_runtime(workspace), base, model)
         workspace.character.reload()

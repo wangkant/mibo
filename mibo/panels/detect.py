@@ -9,6 +9,7 @@ import os
 import httpx
 
 from .. import settingsfile
+from .models import capped
 
 ERRORS: frozenset[str] = frozenset()
 # Seconds; a closed local port refuses at once, so this only bounds a hung one.
@@ -57,16 +58,11 @@ def _names(answer) -> list[str]:
 
 async def _local(client: httpx.AsyncClient, row: tuple) -> dict | None:
     key, name, provider, base, listing = row
+
     async def read() -> list[str]:
         async with client.stream("GET", listing, timeout=PROBE_S) as answer:
-            if answer.status_code != 200:
-                return []
-            raw = bytearray()
-            async for chunk in answer.aiter_bytes():
-                raw.extend(chunk)
-                if len(raw) > MAX_ANSWER:
-                    return []
-        return _names(json.loads(raw))
+            raw = await capped(answer, MAX_ANSWER)
+        return _names(json.loads(raw)) if raw is not None else []
 
     try:
         # Each wait for a byte is bounded above; this bounds a program that drips them.

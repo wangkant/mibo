@@ -13,8 +13,8 @@ from fastapi import Request
 
 from .. import i18n, langs, settingsfile
 from .. import setup_wizard as sw
-from ..endpoints import model_problem
 from ..storage import atomic_write_text
+from .modelbar import probe_error
 
 ERRORS: frozenset[str] = frozenset({"invalid_figure", "invalid_lang", "custom_name", "custom_about",
                                     "custom_empty"})
@@ -247,12 +247,8 @@ def mount(app, workspace, body) -> None:
                                  timeout=CHECK_S)
         except Exception:
             return {"ok": False, "error": "model_unreachable"}
-        if probe.ok:
-            return {"ok": True, "error": ""}
-        # The codes the save gives for the same answers (an empty balance included); never the service's own text.
-        problem = model_problem(probe.status, probe.detail) if probe.status else ""
-        return {"ok": False, "error": {"key": "key_rejected", "limited": "model_limited", "no_balance": "model_no_balance",
-                                       "not_found": "model_not_found"}.get(problem, "model_unreachable")}
+        # The codes the save gives for the same answers.
+        return {"ok": True, "error": ""} if probe.ok else {"ok": False, "error": probe_error(probe)}
 
     @app.post("/api/look/check")
     async def check_model(request: Request):

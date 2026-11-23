@@ -100,8 +100,6 @@ class Waiting:
     def _asks(self, pane, url: str, found: dict) -> str:
         """What the page asks of the person now, "readable", "account", "check" or "box": the model's judgment of
         the page as it is, none asked on a page that plainly has content or within JUDGE_GAP_S of the last."""
-        import asyncio as aio
-
         from ..web import pagejudge, signin
         state, page = self.state, signin.page(pane.cdp)
         if not page:
@@ -111,7 +109,7 @@ class Waiting:
         if state["judged"] and time.monotonic() - state["at"] < JUDGE_GAP_S:
             return state["judged"]
         hints = {**found, "flow": signin.in_flow(url)}
-        verdict = aio.run(pagejudge.judge(page, hints, self.ask, state["lang"])) if self.ask else \
+        verdict = asyncio.run(pagejudge.judge(page, hints, self.ask, state["lang"])) if self.ask else \
             pagejudge.from_code(hints, url, state["lang"])
         state["judged"], state["at"] = verdict.asks, time.monotonic()
         return verdict.asks
@@ -229,6 +227,7 @@ class Waiting:
 def mount(app, workspace, body) -> None:
     from .. import acting, browsed, signwatch
     from ..web import gate, signin, sites
+    from .browser import switch_feed
     from .runtime import WINDOW_HEADER
     desktop = workspace.home / "runtime" / "desktop"
     runtime = desktop.parent
@@ -492,11 +491,7 @@ def mount(app, workspace, body) -> None:
                 and isinstance(payload.get("on"), bool):
             name, on = payload["name"], payload["on"]
             if name == "background":
-                def switch(card: dict) -> None:
-                    feed = card.setdefault("feed", {})
-                    feed.update(on=on, url=feed.get("url") or row["home"])
-                    feed.pop("stopped", None)
-                sites._change(runtime, sites.key_of(row["home"]), switch)
+                switch_feed(runtime, sites.key_of(row["home"]), on, row["home"])
             else:
                 value = ("always" if on else "never") if name == "auto" else on
                 signin.change(desktop, site, lambda entry: entry.update({name: value}))

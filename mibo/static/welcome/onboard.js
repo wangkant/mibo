@@ -405,7 +405,7 @@
   // ------------------------------------------- step 4, then: a few finds --
 
   // The topics are saved (which sends the sources out for them at once), then the finds are asked for
-  // (GET /api/feed/first, which waits for that round on a fresh install, feed.FIRST_WAIT_S at most); the wait
+  // (GET /api/feed/first, which waits for that round on a fresh install, feedpage.FIRST_WAIT_S at most); the wait
   // says so, and Skip leaves it. With none even then the step goes straight on.
   async function startFinds() {
     const mine = {};

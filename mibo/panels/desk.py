@@ -324,10 +324,9 @@ class Desk:
             folder = self.target(where)
             if folder is None or not folder.is_dir():
                 continue
-            for path in folder.glob(f"{PREFIX}*.zip"):
-                if BACKUP_NAME.fullmatch(path.name) and path.is_file():
-                    found.append({"place": where, "name": path.name, "size": _size(path),
-                                  "when": int(path.stat().st_mtime)})
+            found.extend({"place": where, "name": path.name, "size": _size(path), "when": int(path.stat().st_mtime)}
+                         for path in folder.glob(f"{PREFIX}*.zip")
+                         if BACKUP_NAME.fullmatch(path.name) and path.is_file())
         return sorted(found, key=lambda item: -item["when"])[:20]
 
     def backup(self, to: str, secrets: bool) -> dict:

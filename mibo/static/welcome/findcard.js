@@ -173,7 +173,7 @@ window.paFindCard = (() => {
       link.textContent = card.title || site;
       heading.append(link);
       body.append(top, heading);
-      // Why it was shown, in words (panels/feed.py page): the 推荐记录 list's rows carry it.
+      // Why it was shown, in words (panels/feedpage.py page): the 推荐记录 list's rows carry it.
       if (card.reason) body.append(el("p", "find-reason", card.reason));
       if (card.excerpt) body.append(el("p", "find-text", card.excerpt));
 

@@ -49,7 +49,7 @@ ASSETS = Path(__file__).with_name("static") / "welcome"
 # Parts of the page beyond its four first views. Each is a module in
 # mibo/panels with `mount(app, workspace, body)`, drawn by the app
 # page's own files (setup.js and its sections, chat.js).
-PANELS = ("runtime", "desk", "tuning", "detect", "signin", "feed", "sources", "look", "profile", "quiet", "remarks",
+PANELS = ("runtime", "desk", "tuning", "detect", "signin", "feedpage", "sources", "look", "profile", "quiet", "remarks",
           "browser", "colors", "compose", "links", "modelbar", "signins", "tools", "pet", "schedule", "walks")
 # The figures the pet can be, <key>.svg under the page's figures folder; the first is the
 # default, and a character of one's own is it too.

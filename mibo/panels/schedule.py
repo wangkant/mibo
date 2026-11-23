@@ -22,6 +22,7 @@ the character offered waits on; POST /api/schedule/undo takes back what a reply 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import traceback
 from datetime import datetime
@@ -40,8 +41,6 @@ ERRORS: frozenset[str] = frozenset({
 TICK_S = 30
 # Seconds a run may take: a task may read several pages.
 RUN_S = 600
-# A line the pet has not taken by then is stale (as remarks.STALE_S).
-PET_STALE_S = 180
 _PROBLEMS = {"past": "schedule_past", "too_often": "schedule_too_often", "none": "schedule_no_time"}
 # What the character's tool hears for each refusal: why, and what it may offer instead.
 _TOLD = {
@@ -515,7 +514,7 @@ class Board:
         return max(0.2, min([TICK_S, *(at - now for at in times)]))
 
     def _record(self, task: dict, run: dict) -> None:
-        task["runs"] = (task["runs"] + [run])[-sd.RUNS_KEPT:]
+        task["runs"] = [*task["runs"], run][-sd.RUNS_KEPT:]
 
     def _cost(self, spent: dict) -> tuple[int, float | None]:
         """A run's tokens and its cost in USD: as the service reported it, else at the listed price."""
@@ -594,23 +593,61 @@ class Board:
             raise RuntimeError("the model did not answer")
         return [i for i in items if i.get("type") != "spent"], spent
 
+    def _due_time(self, task: dict, retry: dict | None, by_hand: bool, now: float, tz) -> tuple[float, int]:
+        """When the run was due and how many earlier times were missed; a timed run moves the task's next time."""
+        if retry:
+            return retry["due"], 0
+        if by_hand:
+            return now, 0
+        due, count = sd.caught_up(task["rule"], task["next"], now, tz)
+        task["next"] = sd.next_after(task["rule"], now, tz)
+        if task["next"] is None:
+            task["active"] = False
+        return due, count - 1
+
+    async def _over_limit(self, task: dict, run: dict, now: float, due: float, late: bool, missed: int) -> bool:
+        """The monthly spending limit is reached: the run is recorded as stopped, said once a month."""
+        limit = await asyncio.to_thread(spend.limit_state, self.ws._runtime(), None, now)
+        if not (limit and limit["state"] == "reached"):
+            return False
+        run.update(state="stopped", text="", tokens=0, cost=0.0)
+        self._record(task, run)
+        month = spend.month_of(now)
+        told = self._store().data["told"].get("limit") == month
+        self._store().data["told"]["limit"] = month
+        self._save()
+        if not told:
+            line = LINES[self.lang()]["limit"]
+            await self._say([{"role": "assistant", "text": line,
+                              "task": self._mark(task, due, late, missed, notice=True)}], line)
+        return True
+
+    async def _failed(self, task: dict, run: dict, error: Exception, tries: int, due: float, late: bool,
+                      missed: int, tz) -> None:
+        """A run that raised: tried once more RETRY_S later, else recorded as failed and said in the chat. Called
+        with the chat's lock held."""
+        task.pop("running", None)
+        self._after_run(task, tz)
+        # A run that already acted is not tried again: the act would be done twice.
+        again = tries < 1 and not self.acted
+        run.update(state="retry" if again else "failed", text=type(error).__name__, tokens=0, cost=None)
+        self._record(task, run)
+        if again:
+            task["retry"] = {"at": life.clock() + sd.RETRY_S, "due": due, "tries": tries + 1}
+            self._save()
+            return
+        self._save()
+        line = " ".join(filter(None, [LINES[self.lang()]["failed"].format(title=task["title"]),
+                                      self._acted_line(task)]))
+        await self._say([{"role": "assistant", "text": line,
+                          "task": self._mark(task, due, late, missed, failed=True, quote=True)}], line, True)
+
     async def run(self, task: dict, now: float) -> None:
         """One due task, start to end."""
-        name, tz = self.zone(now)
-        lang = self.lang()
+        _name, tz = self.zone(now)
         retry = task.pop("retry", None)
         by_hand = task.pop("now", False)
-        missed = 0
-        if retry:
-            due = retry["due"]
-        elif by_hand:
-            due = now
-        else:
-            due, count = sd.caught_up(task["rule"], task["next"], now, tz)
-            missed = count - 1
-            task["next"] = sd.next_after(task["rule"], now, tz)
-            if task["next"] is None:
-                task["active"] = False
+        due, missed = self._due_time(task, retry, by_hand, now, tz)
         late = now - due > sd.LATE_S
         run = {"at": now, "due": due, "late": late, "missed": missed, "by": "hand" if by_hand else "time"}
         if task["kind"] == "remind":
@@ -620,17 +657,7 @@ class Board:
             await self._say([{"role": "assistant", "text": task["request"],
                               "task": self._mark(task, due, late, missed, quote=True)}], task["request"])
             return
-        limit = await asyncio.to_thread(spend.limit_state, self.ws._runtime(), None, now)
-        if limit and limit["state"] == "reached":
-            run.update(state="stopped", text="", tokens=0, cost=0.0)
-            self._record(task, run)
-            month = spend.month_of(now)
-            told = self._store().data["told"].get("limit") == month
-            self._store().data["told"]["limit"] = month
-            self._save()
-            if not told:
-                await self._say([{"role": "assistant", "text": LINES[lang]["limit"],
-                                  "task": self._mark(task, due, late, missed, notice=True)}], LINES[lang]["limit"])
+        if await self._over_limit(task, run, now, due, late, missed):
             return
         tries = (retry or {}).get("tries", 0)
         task["running"] = {"due": due, "at": now, "tries": tries}
@@ -642,21 +669,7 @@ class Board:
                 items, spent = await self._turn(task, self._frame(task, due, late, missed, tz))
             except Exception as error:
                 traceback.print_exc()
-                task.pop("running", None)
-                self._after_run(task, tz)
-                # A run that already acted is not tried again: the act would be done twice.
-                again = tries < 1 and not self.acted
-                run.update(state="retry" if again else "failed", text=type(error).__name__, tokens=0, cost=None)
-                self._record(task, run)
-                if again:
-                    task["retry"] = {"at": life.clock() + sd.RETRY_S, "due": due, "tries": tries + 1}
-                    self._save()
-                    return
-                self._save()
-                line = " ".join(filter(None, [LINES[lang]["failed"].format(title=task["title"]),
-                                              self._acted_line(task)]))
-                await self._say([{"role": "assistant", "text": line,
-                                  "task": self._mark(task, due, late, missed, failed=True, quote=True)}], line, True)
+                await self._failed(task, run, error, tries, due, late, missed, tz)
                 return
             finally:
                 self.running = None
@@ -720,10 +733,8 @@ class Board:
                 traceback.print_exc()
                 wait = TICK_S
             self.wake.clear()
-            try:
+            with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self.wake.wait(), wait)
-            except asyncio.TimeoutError:
-                pass
 
 
 def mount(app, workspace, body) -> None:

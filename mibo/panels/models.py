@@ -59,18 +59,26 @@ def parse(answer, openrouter: bool) -> list[dict] | None:
     return models or None
 
 
+async def capped(answer: httpx.Response, limit: int) -> bytearray | None:
+    """A streamed 200 answer's body, or None for another status or a body over `limit` bytes."""
+    if answer.status_code != 200:
+        return None
+    raw = bytearray()
+    async for chunk in answer.aiter_bytes():
+        raw.extend(chunk)
+        if len(raw) > limit:
+            return None
+    return raw
+
+
 async def _fetch(base: str, key: str, openrouter: bool) -> list[dict] | None:
     url = base.rstrip("/") + "/models"
     # A server on this computer must not go through a proxy, as in setup_wizard.probe_key.
-    async with httpx.AsyncClient(trust_env=not sw._is_loopback(url), timeout=TIMEOUT_S) as client:
-        async with client.stream("GET", url, headers={"Authorization": f"Bearer {key}"}) as answer:
-            if answer.status_code != 200:
-                return None
-            raw = bytearray()
-            async for chunk in answer.aiter_bytes():
-                raw.extend(chunk)
-                if len(raw) > MAX_BYTES:
-                    return None
+    async with (httpx.AsyncClient(trust_env=not sw._is_loopback(url), timeout=TIMEOUT_S) as client,
+                client.stream("GET", url, headers={"Authorization": f"Bearer {key}"}) as answer):
+        raw = await capped(answer, MAX_BYTES)
+    if raw is None:
+        return None
     try:
         return parse(json.loads(raw), openrouter)
     except (ValueError, RecursionError):
