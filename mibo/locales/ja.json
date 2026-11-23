@@ -1828,6 +1828,7 @@
     "count_other": "{count} 個のスキル",
     "none": "スキルはまだありません。",
     "builtin": "組み込み",
+    "mine": "自分で追加",
     "fromFolder": "フォルダーから",
     "fromZip": "zip ファイルから",
     "fromAddress": "{where} から",

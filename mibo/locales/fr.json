@@ -1842,6 +1842,7 @@
     "count_other": "{count} compétences",
     "none": "Aucune compétence pour l'instant.",
     "builtin": "Intégrée",
+    "mine": "Ajoutées",
     "fromFolder": "Depuis un dossier",
     "fromZip": "Depuis un fichier zip",
     "fromAddress": "Depuis {where}",

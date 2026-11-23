@@ -1828,6 +1828,7 @@
     "count_other": "스킬 {count}개",
     "none": "아직 스킬이 없습니다.",
     "builtin": "기본 제공",
+    "mine": "직접 추가",
     "fromFolder": "폴더에서",
     "fromZip": "zip 파일에서",
     "fromAddress": "{where}에서",

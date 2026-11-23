@@ -1,7 +1,8 @@
 "use strict";
-// Settings › Skills, two views. Installed: the skills the character may load when a request fits one (/api/skills),
-// a switch each, where each came from and its version, updates from the market, removing one, adding one from a
-// folder, a zip or an address on a public git host, and copying in the ones other agents keep in this profile.
+// Settings › Skills, two views, both a grid of tiles from one builder. Installed: the skills the character may load
+// when a request fits one (/api/skills), a switch on each tile, where it came from and its version, updates from the
+// market, removing one, adding one from a folder, a zip or an address on a public git host, and copying in the ones
+// other agents keep in this profile.
 // Market: the catalog of public skills (/api/skills/market), searched and sorted here, a detail view with what a
 // skill needs, its licence, its source and the scan's result, and its SKILL.md read from the source at that moment.
 // The catalog is data from the network: every string goes on the page as text, never as markup. What a skill may
@@ -20,6 +21,7 @@
     let shown = "installed";
     const query = { text: "", category: "", sub: "", sort: "popular" };
     let detailId = "";
+    let filter = "all";
 
     const short = (sha) => String(sha || "").slice(0, 7);
     function count(n) {
@@ -65,10 +67,12 @@
     importButtons.append(importGo, importClose);
     importCard.append(importHelp, importList, importError, importButtons);
 
-    const listCard = kit.card(t.listTitle);
-    const list = el("div", "setup-options");
+    // Built in or added: the two groups the rows already say, offered as filters once there are both.
+    const filters = el("div", "skm-chips");
+    filters.setAttribute("role", "toolbar");
+    filters.setAttribute("aria-label", t.listTitle);
+    const list = el("div", "skm-grid");
     const listError = kit.errorLine();
-    listCard.append(list, listError);
 
     const addFold = kit.fold(t.addTitle);
     addFold.node.classList.add("skm-add");
@@ -98,7 +102,7 @@
     const addDone = el("p", "setup-help");
     addDone.hidden = true;
     addFold.body.append(addText, picks, addressRow, addError, addDone);
-    installedPane.append(toolbar, installedNote, importCard, listCard, addFold.node);
+    installedPane.append(toolbar, filters, installedNote, importCard, list, listError, addFold.node);
 
     function marketOf(row) {
       return row.market && market ? market.skills.find((one) => one.id === row.market) : null;
@@ -118,41 +122,83 @@
       return row.origin === "zip" ? t.fromZip : t.fromFolder;
     }
 
+    // One tile, in both views: a mark, the title and a line under it, the description in a few lines, then the foot.
+    function tile(card, mark, name, by, text, foot, ...between) {
+      name.className = "skm-card-title";
+      name.title = name.textContent;
+      const names = el("div", "skm-card-names");
+      names.append(name, el("p", "skm-card-by", by));
+      const top = el("div", "skm-card-top");
+      top.append(mark, names);
+      const about = el("p", "skm-card-about", text);
+      about.title = text;
+      card.append(top, about, ...between, foot);
+      return card;
+    }
+
+    // A letter from the name on a calm tint of the page's own colours.
+    function monogram(row, name) {
+      const mark = el("span", "skm-mark skm-mark-sm skm-mono", Array.from(name.trim())[0]?.toUpperCase() || "");
+      mark.dataset.tint = String([...row.name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % 4);
+      mark.setAttribute("aria-hidden", "true");
+      return mark;
+    }
+
+    function skillTile(row) {
+      const usable = !row.problems.length;
+      const name = (zh && row.title_zh) || row.name;
+      const what = (zh && row.description_zh) || row.description;
+      const line = kit.switchRow(`skill-${row.folder}`, name, what, (box) => change({ name: row.name, on: box.checked }));
+      line.box.checked = row.on && usable;
+      line.box.disabled = !usable;
+      const label = line.words.firstChild;
+      line.row.className = `skm-card skm-card-static${line.box.checked ? "" : " skm-card-off"}`;
+      line.row.replaceChildren();
+      const by = [row.name !== name ? row.name : "", /^[0-9a-f]{7,}$/.test(row.ref) ? kit.fill(t.version, { ref: short(row.ref) }) : ""];
+      const origin = originOf(row);
+      const tag = el("span", "skm-badge skm-tag", origin);
+      tag.title = origin;
+      const foot = el("div", "skm-card-foot");
+      foot.append(tag, line.box);
+      const between = [];
+      const one = marketOf(row);
+      if (one?.update) {
+        const meta = el("div", "skm-meta");
+        const go = kit.button("setup-button-link", t.update, () => updateOne(one, go));
+        meta.append(el("span", "skm-badge skm-badge-new", t.updateReady), go);
+        between.push(meta);
+      }
+      if (!usable) {
+        const why = row.problems.map((code) => t.problems[code] || code).join(zh ? "；" : "; ");
+        between.push(el("p", "setup-error", kit.fill(t.unusable, { why })));
+      } else if (row.warnings.length) {
+        between.push(el("p", "setup-help", row.warnings.map((code) => t.warnings[code] || code).join(zh ? "；" : "; ")));
+      }
+      tile(line.row, monogram(row, name), label, by.filter(Boolean).join(" · "), what || "", foot, ...between);
+      // A quiet remove alone in the corner; built-in ones have none.
+      if (!row.builtin) line.row.append(kit.iconButton("setup-word-off", "cross", paI18n.t("setup_skills.remove", { name }), () => removeSkill(row, name)));
+      return line.row;
+    }
+
     function renderInstalled() {
+      const focused = document.activeElement?.id;
       const waiting = market ? market.skills.filter((one) => one.update) : [];
-      countLine.textContent = paI18n.t("setup_skills.count", { count: view.skills.length });
       updateAll.hidden = !waiting.length;
       kit.relabel(updateAll, paI18n.t("setup_skills.updateAll", { count: waiting.length }));
-      if (!view.skills.length) return list.replaceChildren(el("p", "setup-help", t.none));
-      list.replaceChildren(...view.skills.map((row) => {
-        const usable = !row.problems.length;
-        const name = (zh && row.title_zh) || row.name;
-        const what = (zh && row.description_zh) || row.description;
-        const line = kit.switchRow(`skill-${row.folder}`, name, what, (box) => change({ name: row.name, on: box.checked }));
-        line.box.checked = row.on && usable;
-        line.box.disabled = !usable;
-        line.about.classList.add("skm-clamp");
-        const meta = el("div", "skm-meta");
-        meta.append(el("span", "", [originOf(row), row.name !== name ? row.name : ""].filter(Boolean).join(" · ")));
-        if (/^[0-9a-f]{7,}$/.test(row.ref)) meta.append(el("span", "", kit.fill(t.version, { ref: short(row.ref) })));
-        const one = marketOf(row);
-        if (one?.update) {
-          meta.append(el("span", "skm-badge skm-badge-new", t.updateReady));
-          const go = kit.button("setup-button-link", t.update, () => updateOne(one, go));
-          meta.append(go);
-        }
-        line.words.append(meta);
-        if (!usable) {
-          const why = row.problems.map((code) => t.problems[code] || code).join(zh ? "；" : "; ");
-          line.words.append(el("p", "setup-error", kit.fill(t.unusable, { why })));
-        } else if (row.warnings.length) {
-          line.words.append(el("p", "setup-help", row.warnings.map((code) => t.warnings[code] || code).join(zh ? "；" : "; ")));
-        }
-        // Built-in ones have no remove button; the space keeps every switch in one column.
-        const off = row.builtin ? el("span", "skm-off-space") : kit.iconButton("setup-word-off", "cross", paI18n.t("setup_skills.remove", { name }), () => removeSkill(row, name));
-        line.row.append(off);
-        return line.row;
-      }));
+      const built = view.skills.filter((row) => row.builtin).length;
+      const both = built > 0 && built < view.skills.length;
+      if (!both) filter = "all";
+      filters.hidden = !both;
+      filters.replaceChildren(...[["all", t.allCategories, view.skills.length], ["builtin", t.builtin, built],
+        ["mine", t.mine, view.skills.length - built]].map(([key, text, n]) => chip(`${text} ${n}`, filter === key, () => {
+        filter = key;
+        renderInstalled();
+        filters.querySelector("[aria-pressed=true]").focus();
+      })));
+      const rows = view.skills.filter((row) => filter === "all" || (filter === "builtin") === row.builtin);
+      countLine.textContent = paI18n.t("setup_skills.count", { count: rows.length });
+      list.replaceChildren(...(rows.length ? rows.map(skillTile) : [el("p", "skm-empty", t.none)]));
+      if (focused) document.getElementById(focused)?.focus();
     }
 
     async function loadInstalled() {
@@ -440,23 +486,24 @@
       const button = el("button", "skm-chip", text);
       button.type = "button";
       button.setAttribute("aria-pressed", String(on));
-      button.addEventListener("click", () => {
-        pick();
-        renderChips();
-        renderGrid();
-      });
+      button.addEventListener("click", pick);
       return button;
     }
+    const picked = (change) => () => {
+      change();
+      renderChips();
+      renderGrid();
+    };
     function renderChips() {
       const places = market.categories || {};
       const used = new Set(market.skills.map((one) => `${one.category}/${one.sub}`));
       const keys = ["", ...Object.keys(places).filter((key) => market.skills.some((one) => one.category === key))];
       chips.replaceChildren(...keys.map((key) => chip(key ? t.categories[key] : t.allCategories, query.category === key,
-        () => { query.category = key; query.sub = ""; })));
+        picked(() => { query.category = key; query.sub = ""; }))));
       const inner = (places[query.category] || []).filter((sub) => used.has(`${query.category}/${sub}`));
       subChips.hidden = !inner.length;
       subChips.replaceChildren(...["", ...inner].map((sub) => chip(sub ? t.subs[sub] : t.allCategories,
-        query.sub === sub, () => { query.sub = sub; })));
+        query.sub === sub, picked(() => { query.sub = sub; }))));
     }
 
     // How well an entry fits what was typed, from its names, what it does, its tags and its publisher; 0 is no fit.
@@ -576,11 +623,6 @@
         return grid.replaceChildren(empty);
       }
       grid.replaceChildren(...rows.map((one) => {
-        const card = kit.pressable(el("article", "skm-card"), title(one), () => openDetail(one.id));
-        const top = el("div", "skm-card-top");
-        const names = el("div", "skm-card-names");
-        names.append(el("h4", "skm-card-title", title(one)), el("p", "skm-card-by", one.publisher));
-        top.append(publisherMark(one, "sm"), names);
         const foot = el("div", "skm-card-foot");
         const left = badges(one);
         if (popularity(one) >= 0) {
@@ -591,8 +633,8 @@
         foot.append(left);
         const action = actionFor(one, true);
         if (action) foot.append(action);
-        card.append(top, el("p", "skm-card-about", about(one)), foot);
-        return card;
+        const card = kit.pressable(el("article", "skm-card"), title(one), () => openDetail(one.id));
+        return tile(card, publisherMark(one, "sm"), el("h4", "", title(one)), one.publisher, about(one), foot);
       }));
     }
 

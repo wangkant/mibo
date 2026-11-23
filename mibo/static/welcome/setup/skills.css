@@ -1,4 +1,4 @@
-/* Settings › Skills (setup/skills.js): the installed list and the market, in setup.css's kit and app.css's tokens,
+/* Settings › Skills (setup/skills.js): the installed skills and the market, both tiles in one grid, in setup.css's kit and app.css's tokens,
    light and dark alike. Grey throughout; the accent only on the one action that matters and on what is chosen. */
 
 .skm-head {
@@ -62,10 +62,6 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-}
-.skm-off-space {
-  flex: none;
-  width: 28px;
 }
 .skm-check {
   flex: none;
@@ -224,13 +220,13 @@
 /* ---- Market: the cards */
 .skm-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr));
   gap: var(--pa-s3);
 }
 .skm-card {
   display: flex;
   flex-direction: column;
-  gap: var(--pa-s2);
+  gap: var(--pa-s3);
   min-width: 0;
   padding: var(--pa-s4);
   background: var(--pa-surface);
@@ -244,6 +240,33 @@
 .skm-card:hover {
   border-color: var(--pa-line-strong);
   box-shadow: var(--pa-shadow-1);
+}
+/* An installed tile opens nothing: its own switch and buttons are the controls. */
+.skm-card-static {
+  position: relative;
+  cursor: default;
+}
+.skm-card-static .skm-card-names {
+  padding-right: 20px;
+}
+/* Remove sits alone in the corner, quiet until the tile is looked at. */
+.skm-card-static > .setup-word-off {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.4;
+}
+.skm-card-static:hover > .setup-word-off,
+.skm-card-static > .setup-word-off:focus-visible {
+  opacity: 1;
+}
+.setup-section-skills .setup-section-hint {
+  max-width: 640px;
+}
+.skm-card-off .skm-mark,
+.skm-card-off .skm-card-title,
+.skm-card-off .skm-card-about {
+  opacity: 0.6;
 }
 .skm-card:focus-visible {
   outline: var(--pa-focus);
@@ -268,11 +291,12 @@
 }
 .skm-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--pa-s3);
   min-width: 0;
 }
 .skm-card-names {
+  flex: 1;
   min-width: 0;
 }
 .skm-card-title {
@@ -285,7 +309,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.skm-card-title {
+  display: block;
+  cursor: inherit;
+}
 .skm-card-by {
+  min-height: 1.3em;
   overflow: hidden;
   color: var(--pa-faint);
   font-size: var(--pa-fs-xs);
@@ -295,9 +324,10 @@
 .skm-card-about {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   min-height: 2.8em;
   overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--pa-muted);
   font-size: var(--pa-fs-sm);
   line-height: 1.4;
@@ -309,6 +339,18 @@
   gap: var(--pa-s2);
   margin-top: auto;
   min-height: 30px;
+}
+/* An installed tile's foot: where it came from, then the switch. */
+.skm-tag {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
+}
+.skm-card-foot .setup-switch {
+  flex: none;
+  margin: 0;
 }
 .skm-pop {
   display: inline-flex;
@@ -379,6 +421,24 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* The monogram: one of four tints of the page's own colours. */
+.skm-mono {
+  --tint: var(--pa-accent);
+  border-color: color-mix(in srgb, var(--tint) 22%, var(--pa-surface));
+  background: color-mix(in srgb, var(--tint) 12%, var(--pa-surface));
+  color: var(--tint);
+  font-size: var(--pa-fs-md);
+  font-weight: 600;
+}
+.skm-mono[data-tint="1"] {
+  --tint: var(--pa-amber700);
+}
+.skm-mono[data-tint="2"] {
+  --tint: var(--pa-green600);
+}
+.skm-mono[data-tint="3"] {
+  --tint: var(--pa-muted);
 }
 .skm-mark-icon {
   width: 55%;

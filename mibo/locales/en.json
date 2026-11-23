@@ -1838,6 +1838,7 @@
     "count_other": "{count} skills",
     "none": "No skills yet.",
     "builtin": "Built in",
+    "mine": "Added by you",
     "fromFolder": "From a folder",
     "fromZip": "From a zip file",
     "fromAddress": "From {where}",

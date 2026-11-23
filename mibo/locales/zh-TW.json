@@ -1828,6 +1828,7 @@
     "count_other": "共 {count} 個技能",
     "none": "尚無技能。",
     "builtin": "內建",
+    "mine": "自行新增",
     "fromFolder": "來自資料夾",
     "fromZip": "來自壓縮檔",
     "fromAddress": "來自 {where}",

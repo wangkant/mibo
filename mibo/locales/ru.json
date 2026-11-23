@@ -1868,6 +1868,7 @@
     "count_other": "{count} навыка",
     "none": "Навыков пока нет.",
     "builtin": "Встроенный",
+    "mine": "Добавленные",
     "fromFolder": "Из папки",
     "fromZip": "Из zip-файла",
     "fromAddress": "Из {where}",

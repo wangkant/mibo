@@ -13,12 +13,16 @@
   /* A mark on a solid green, red or accent: white in light, dark in dark. */
   --setup-on-solid: var(--pa-on-accent);
   display: grid;
-  grid-template-columns: 188px minmax(0, 640px);
+  --setup-w: 640px;
+  grid-template-columns: 188px minmax(0, var(--setup-w));
   justify-content: center;
   align-items: start;
   column-gap: var(--pa-s10);
   padding: var(--pa-s8) var(--pa-s6) 72px;
   color: var(--pa-text);
+}
+.setup-page:has(.setup-section-skills:not([hidden])) {
+  --setup-w: 1040px;
 }
 .setup-page p,
 .setup-page h1,

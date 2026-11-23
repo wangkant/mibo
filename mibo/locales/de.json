@@ -1842,6 +1842,7 @@
     "count_other": "{count} Skills",
     "none": "Noch keine Skills.",
     "builtin": "Integriert",
+    "mine": "Selbst hinzugefügt",
     "fromFolder": "Aus einem Ordner",
     "fromZip": "Aus einer ZIP-Datei",
     "fromAddress": "Von {where}",

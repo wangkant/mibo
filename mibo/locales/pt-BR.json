@@ -1842,6 +1842,7 @@
     "count_other": "{count} habilidades",
     "none": "Nenhuma habilidade ainda.",
     "builtin": "Integrada",
+    "mine": "Adicionadas",
     "fromFolder": "De uma pasta",
     "fromZip": "De um arquivo zip",
     "fromAddress": "De {where}",
