@@ -15,14 +15,17 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlsplit
 
-import feedparser
 import httpx
 
 from ..library import Item
 from ..pagefacts import site_name
 from ..players import player_for
+
+if TYPE_CHECKING:
+    import feedparser
 
 # Seconds one source has to answer; a slow one is skipped until the next round.
 TIMEOUT_S = 15
@@ -144,6 +147,8 @@ def feed_document(body: bytes, base_url: str, content_type: str = "") -> feedpar
     address or a file itself. ValueError when the bytes are no feed."""
     # The answer's type and charset weigh in as RFC 3023 says; its address is the base of relative links.
     # The HTML is never shown, only taken down to text (`plain`), so feedparser need not clean it.
+    # Imported here: it costs a fifth of a second, and no feed is read before the page is up.
+    import feedparser
     doc = feedparser.parse(io.BytesIO(body), resolve_relative_uris=False, sanitize_html=False,
                            response_headers={"content-location": base_url, "content-type": content_type})
     if not doc.version:

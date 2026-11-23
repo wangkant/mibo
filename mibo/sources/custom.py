@@ -11,16 +11,19 @@ from __future__ import annotations
 import asyncio
 import html
 import re
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
-import feedparser
 import httpx
 
 from ..ingestion import _PinnedAsyncHTTPTransport, _resolve_public_target
 from ..pagefacts import public_address, site_name
 from ..players import youtube_id
 from .base import PER_SOURCE, Find, Source, feed_document, feed_finds, plain
+
+if TYPE_CHECKING:
+    import feedparser
 
 # A pasted address can be a large download; a page or feed is far smaller.
 BODY_MAX = 10_000_000
