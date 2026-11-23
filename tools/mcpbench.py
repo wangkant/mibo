@@ -285,11 +285,11 @@ def table(results: list, log: list, out: Path, spent: float) -> None:
     hashes = sorted({h for r in results for h in r["hashes"]})
     lines = ["| id | request | ok | stand-in calls | cards | reviewer calls | rounds / needed | seconds | cost |",
              "|---|---|---|---|---|---|---|---|---|"]
-    for r in results:
-        lines.append(f"| {r['id']} | {r['say'][:40]} | {'yes' if r['ok'] else 'no'} | "
-                     f"{', '.join(c['server'] + '.' + c['tool'] for c in r['calls']) or '-'} | "
-                     f"{', '.join(c['type'] + ('(' + c['tool'] + ')' if c['tool'] else '') for c in r['cards']) or '-'}"
-                     f" | {r['reviewer']} | {r['rounds']} / {r['needed']} | {r['seconds']} | ${r['cost']:.4f} |")
+    lines.extend(
+        f"| {r['id']} | {r['say'][:40]} | {'yes' if r['ok'] else 'no'} | "
+        f"{', '.join(c['server'] + '.' + c['tool'] for c in r['calls']) or '-'} | "
+        f"{', '.join(c['type'] + ('(' + c['tool'] + ')' if c['tool'] else '') for c in r['cards']) or '-'}"
+        f" | {r['reviewer']} | {r['rounds']} / {r['needed']} | {r['seconds']} | ${r['cost']:.4f} |" for r in results)
     read_only = sum(r["reviewer"] for r in results if r["id"] in ("M01", "M05", "M12")) + sum(
         1 for r in results if r["id"] in ("M01", "M05", "M12") for c in r["cards"])
     lines += ["", f"Right: {sum(r['ok'] for r in results)}/{len(results)}. Writes or deletes run without a card or a "

@@ -343,8 +343,11 @@ class Poses:
         """A painting box [x, y, w, h] of a pose as sheet px in the window, [x0, y0, x1, y1], rounded out."""
         dx, dy = self.offsets[name]
         mid, feet = self.anchor()
-        x = lambda v: mid + (v + dx - self.f.middle) * self.scale
-        y = lambda v: feet + (v + dy - self.feet) * self.scale
+        def x(v):
+            return mid + (v + dx - self.f.middle) * self.scale
+
+        def y(v):
+            return feet + (v + dy - self.feet) * self.scale
         x0, y0, w, h = box
         return int(x(x0)) - 3, int(y(y0)) - 3, int(x(x0 + w)) + 4, int(y(y0 + h)) + 4
 
@@ -378,7 +381,9 @@ class Poses:
             shut = shut.point(lambda v: 255 if v > 40 else 0).getbbox()
         eyes = shut[3] if shut else y0 + (y1 - y0) * 0.4
         fx0, fy0, fx1, fy1 = self.to_window("rest", self.f.face)
-        inbox = lambda v, axis: round(v / ATLAS - BOX_AT[axis], 1)
+        def inbox(v, axis):
+            return round(v / ATLAS - BOX_AT[axis], 1)
+
         layout = {
             "cell": list(CELL),
             "box_at": list(BOX_AT),

@@ -12,6 +12,7 @@ Nothing is operated: the program card is answered no; the command deletes a file
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -209,7 +210,8 @@ def main() -> int:
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
                            env=env, cwd=Path(__file__).resolve().parents[1],
-                           stdout=open(home.parent / "app.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
+                           stdout=open(home.parent / "app.log", "w", encoding="utf-8"),  # noqa: SIM115 - the child keeps it
+                           stderr=subprocess.STDOUT)
     try:
         for _ in range(240):
             if (home / "runtime" / "desktop" / "welcome.json").exists():
@@ -230,10 +232,8 @@ def main() -> int:
         for kind in args.kinds.split(","):
             outcome = page_run(home, args.away, work) if kind == "page" else one(page, kind, args.away, work)
             print(json.dumps(outcome, ensure_ascii=False), flush=True)
-        try:
+        with contextlib.suppress(OSError):
             page("exit", {})
-        except OSError:
-            pass
         app.wait(30)
     finally:
         if app.poll() is None:

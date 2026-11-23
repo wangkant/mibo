@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from mibo import taste
-from mibo.panels import feed
+from mibo import taste  # noqa: E402 - after the path is set
+from mibo.panels import feed  # noqa: E402
 
 
 def week(at: float) -> str:

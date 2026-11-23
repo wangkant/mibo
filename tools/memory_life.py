@@ -26,6 +26,7 @@ person_day*.json and score.json.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import json
 import os
@@ -419,7 +420,7 @@ class Life:
         env = dict(os.environ, FAKECLOCK_FILE=str(self.clock), MEMCTL_DIR=str(self.ctl), PYTHONUTF8="1", **self.env)
         (self.ctl / "ready").unlink(missing_ok=True)
         (self.home / "runtime/desktop/welcome.json").unlink(missing_ok=True)
-        log = open(self.out / "app.log", "ab")
+        log = open(self.out / "app.log", "ab")  # noqa: SIM115 - the child keeps it
         self.proc = subprocess.Popen(
             [sys.executable, "-c", "import sys; from mibo import welcome; "
              f"sys.exit(welcome.main(['--no-browser','--port','{self.port}']))"],
@@ -440,10 +441,8 @@ class Life:
         print("started, control", (self.ctl / "ready").exists(), flush=True)
 
     def stop(self):
-        try:
+        with contextlib.suppress(OSError, ValueError):
             self.api("POST", "exit", {}, timeout=30)
-        except (OSError, ValueError):
-            pass
         if self.proc is not None:
             try:
                 self.proc.wait(60)
@@ -590,13 +589,13 @@ def score(life_spec, work: Path) -> dict:
     last = out / f"person_day{len(life_spec.DAYS)}.json"
     result = {"store": score_store(life_spec, json.loads(last.read_text(encoding="utf-8")))}
     if (out / "recall.jsonl").exists():
-        rows = [json.loads(l) for l in (out / "recall.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+        rows = [json.loads(line) for line in (out / "recall.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
         result["recall"] = score_recall(life_spec, rows)
         s, r = result["store"], result["recall"]
         result["gate"] = s["right"] >= life_spec.GATE[0] and r["hit"] >= life_spec.GATE[1] \
             and s["wrong"] == 0 and r["wrong"] == 0
     if (out / "calls.jsonl").exists():
-        calls = [json.loads(l) for l in (out / "calls.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+        calls = [json.loads(line) for line in (out / "calls.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
         by = {}
         for c in calls:
             u = c.get("usage") or {}

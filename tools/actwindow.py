@@ -28,6 +28,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -49,7 +50,7 @@ ASK = {"kind_asked": True, "target_named": True, "text_given": True, "nothing_ad
 
 
 class Site(BaseHTTPRequestHandler):
-    posts: list = []
+    posts: ClassVar[list] = []
 
     def do_GET(self):
         page = BOARD if self.path.startswith("/board") else FRONT
@@ -87,7 +88,7 @@ class Model(BaseHTTPRequestHandler):
     """The stand-in model: the reply's rounds as a reply model would take them, the reviewer asking, the rest a
     short line. Every act's answer is kept for the checks."""
     site = ""
-    acted: list[str] = []
+    acted: ClassVar[list[str]] = []
 
     def log_message(self, *args) -> None:
         pass

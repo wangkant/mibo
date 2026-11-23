@@ -194,7 +194,7 @@ class Bench:
             src.write_text(SOURCE, encoding="utf-8")
             for name, define in (("notes", "/define:NOTES"), ("order", "")):
                 (self.home / f"{name}.exe").unlink(missing_ok=True)
-                csc = Path(os.environ["SystemRoot"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+                csc = Path(os.environ["SYSTEMROOT"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
                 subprocess.run([str(csc), "/nologo", "/target:winexe", f"/out:{self.home / (name + '.exe')}",
                                 *([define] if define else []), "/r:System.Windows.Forms.dll", "/r:System.Drawing.dll",
                                 str(src)], check=True, capture_output=True)
@@ -280,6 +280,46 @@ def local(b: Bench, hands, hwnds: dict[str, int]):
 
 # --- the checks
 
+def _fake_program(state: str):
+    """A program with fixed looks, for the checks that run no window."""
+    screen = {"status": "ok", "state": state, "named": 20, "drawn": 0.0, "program": "Paint"}
+
+    class Fake:
+        async def begin(self, *a, **k):
+            return {"status": "ok", "program": "Paint", "line": "[ok] using it"}
+
+        async def look(self):
+            return dict(screen)
+
+        async def batch(self, actions, look=True):
+            return {"status": "ok", "results": [{"status": "ok", "line": f"[ok] press {a.get('name')} -> "
+                                                 f"\"Display is 1,776\" now reads \"Display is 0\""}
+                                                for a in actions],
+                    "look": dict(screen)}
+
+        async def step(self, *a):
+            return None
+
+        async def end(self, *a):
+            return None
+    return Fake()
+
+
+def _scripted(calls: list[str], answers: list[dict]):
+    async def model(system, messages):
+        calls.append(messages[-1]["content"])
+        return json.dumps(answers[min(len(calls), len(answers)) - 1], ensure_ascii=False)
+    return model
+
+
+def _recording(b: Bench, prompts: list[dict]):
+    async def model(system, messages):
+        answer = await asyncio.to_thread(b.complete, system, messages)
+        prompts.append({"prompt": messages[-1]["content"], "answer": answer})
+        return answer
+    return model
+
+
 def done(b: Bench) -> dict:
     """Fixed answers over a stand-in window: no windows, no model."""
     paint = ('[state] Untitled - Paint\n[1] menuitem "File" collapsed\n## Brushes\n[15] radio "Brushes" = "Brush"\n'
@@ -298,31 +338,9 @@ def done(b: Bench) -> dict:
     }
     out = {}
     for name, (task, state, answers) in cases.items():
-        calls = []
-
-        class Fake:
-            async def begin(self, *a, **k):
-                return {"status": "ok", "program": "Paint", "line": "[ok] using it"}
-
-            async def look(self):
-                return {"status": "ok", "state": state, "named": 20, "drawn": 0.0, "program": "Paint"}
-
-            async def batch(self, actions, look=True):
-                return {"status": "ok", "results": [{"status": "ok", "line": f"[ok] press {a.get('name')} -> "
-                                                     f"\"Display is 1,776\" now reads \"Display is 0\""}
-                                                    for a in actions],
-                        "look": {"status": "ok", "state": state, "named": 20, "drawn": 0.0, "program": "Paint"}}
-
-            async def step(self, *a):
-                return None
-
-            async def end(self, *a):
-                return None
-
-        async def model(system, messages):
-            calls.append(messages[-1]["content"])
-            return json.dumps(answers[min(len(calls), len(answers)) - 1], ensure_ascii=False)
-        outcome = asyncio.run(b.operate.run(model, Fake(), task, "Paint", lang="zh"))
+        calls: list[str] = []
+        model = _scripted(calls, answers)
+        outcome = asyncio.run(b.operate.run(model, _fake_program(state), task, "Paint", lang="zh"))
         out[name] = {"status": outcome["status"], "result": outcome["result"], "calls": outcome["calls"]}
     return out
 
@@ -363,10 +381,7 @@ def across(b: Bench) -> dict:
         source, target = NAMES[task["from"]], NAMES[task["to"]]
         prompts: list[dict] = []
 
-        async def model(system, messages):
-            answer = await asyncio.to_thread(b.complete, system, messages)
-            prompts.append({"prompt": messages[-1]["content"], "answer": answer})
-            return answer
+        model = _recording(b, prompts)
         began = time.monotonic()
         try:
             outcome = asyncio.run(b.operate.run(model, local(b, hands, {"便签": notes, "下单表": order}), task["say"],
@@ -463,10 +478,7 @@ def sight(b: Bench) -> dict:
         hands = b.hands("在下单表里点下一步")
         b.on(hands.use, hwnd, sight="anthropic/claude-haiku-5.5")
         b.on(hands.look)
-        if hasattr(hands, "sent_picture"):
-            card = b.on(hands.sent_picture)
-        else:
-            card = b.on(b.hands_mod.base64_jpeg, hands.view)
+        card = b.on(hands.sent_picture) if hasattr(hands, "sent_picture") else b.on(b.hands_mod.base64_jpeg, hands.view)
         sent = b.on(hands.see, "see_look", {})
         from mibo.see import frame as fr
         frame = fr.unpack(sent["frame"])

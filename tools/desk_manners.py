@@ -233,7 +233,7 @@ def testprog(b: Bench):
     exe, src = b.home / "DeskManners.exe", b.home / "DeskManners.cs"
     if not exe.exists() or not src.exists() or src.read_text(encoding="utf-8") != TEST_PROGRAM:
         src.write_text(TEST_PROGRAM, encoding="utf-8")
-        csc = Path(os.environ["SystemRoot"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+        csc = Path(os.environ["SYSTEMROOT"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
         subprocess.run([str(csc), "/nologo", "/target:winexe", f"/out:{exe}", "/r:System.Windows.Forms.dll",
                         "/r:System.Drawing.dll", str(src)], check=True, capture_output=True)
     log = b.home / "manners.log"

@@ -81,8 +81,7 @@ def problems(code: str) -> list[str]:
             lacking = need - theirs
             if lacking:
                 out.append(f"plural forms missing: {stem} ({', '.join(sorted(lacking))})")
-    for stem in families.keys() - english_families.keys():
-        out.append(f"not in English: {stem}")
+    out.extend(f"not in English: {stem}" for stem in families.keys() - english_families.keys())
     for key, value in there.items():
         stem = base(key, there)
         if stem not in english_families:

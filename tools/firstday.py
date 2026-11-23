@@ -17,6 +17,7 @@ by eye. The app is stopped through /api/exit at the end. Keys are never printed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -73,7 +74,7 @@ def main() -> None:
     env = {**os.environ, **scratchhome.make(home, key=keys["LLM_API_KEY"], LLM_BASE_URL=keys["LLM_BASE_URL"],
                                             LLM_MODEL=args.model, AGENT_LANG="zh", PAGE_PORT=args.port),
            "PYTHONIOENCODING": "utf-8"}
-    log = open(home / "firstday.app.log", "w", encoding="utf-8")
+    log = open(home / "firstday.app.log", "w", encoding="utf-8")  # noqa: SIM115 - the child keeps it
     app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
                             f"sys.exit(welcome.main(['--no-browser','--port','{args.port}']))"],
                            cwd=str(ROOT), env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -129,10 +130,8 @@ def main() -> None:
         print("first good card", report["first_good_card_s"], "s after the first run; bearing",
               report["cards_bearing"], "of", len(cards))
     finally:
-        try:
+        with contextlib.suppress(OSError, ValueError, KeyError, urllib.error.URLError):
             Page(home).call("exit", {}, timeout=30)
-        except (OSError, ValueError, KeyError, urllib.error.URLError):
-            pass
         try:
             app.wait(timeout=60)
         except subprocess.TimeoutExpired:

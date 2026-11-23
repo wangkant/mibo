@@ -228,6 +228,33 @@ def replay(args) -> int:
     return report(rows, args, model)
 
 
+def _open_hands(hands_mod, win32, home: Path, hwnd: int, cards: list[dict]):
+    win32.dpi_aware()
+    hands = hands_mod.Hands(home / "runtime" / "desktop", ask=lambda card: cards.append(card) or {"yes": True},
+                            who="Mibo", lang="zh")
+    hands.begin(TASK)
+    assert hands.use(hwnd)["status"] == "ok"
+    return hands
+
+
+class WorkerProgram:
+    """Hands as the operating loop sees a program: every call runs on the worker thread that owns the window."""
+
+    def __init__(self, worker, hands) -> None:
+        self.worker, self.hands = worker, hands
+
+    async def begin(self, task, program, sight="", also=()):
+        return {"status": "ok", "program": PROGRAM, "line": f"[ok] using {PROGRAM}"}
+
+    def _post(self, op, timeout, **fields):
+        return self.worker.submit(self.hands.picture).result() if op == "picture" else {"status": "ok"}
+
+    def __getattr__(self, op):
+        async def call(*a):
+            return await asyncio.wrap_future(self.worker.submit(getattr(self.hands, op), *a))
+        return call
+
+
 def window(args) -> int:
     """The fixture's real window, worked through Hands on its worker thread, as desk_manners works its programs."""
     from concurrent.futures import ThreadPoolExecutor
@@ -246,27 +273,8 @@ def window(args) -> int:
         proc, hwnd = chat_fixture.start(home, variant, log, corner=False)
         cards: list[dict] = []
         try:
-            def begin():
-                win32.dpi_aware()
-                h = hands_mod.Hands(home / "runtime" / "desktop", ask=lambda card: cards.append(card) or {"yes": True},
-                                    who="Mibo", lang="zh")
-                h.begin(TASK)
-                assert h.use(hwnd)["status"] == "ok"
-                return h
-            hands = worker.submit(begin).result()
-
-            class Local:
-                async def begin(self, task, program, sight="", also=()):
-                    return {"status": "ok", "program": PROGRAM, "line": f"[ok] using {PROGRAM}"}
-
-                def _post(self, op, timeout, **fields):
-                    return worker.submit(hands.picture).result() if op == "picture" else {"status": "ok"}
-
-                def __getattr__(self, op):
-                    async def call(*a):
-                        return await asyncio.wrap_future(worker.submit(getattr(hands, op), *a))
-                    return call
-            outcome = asyncio.run(operate.run(model or stub, Local(), TASK, PROGRAM, lang="zh"))
+            hands = worker.submit(_open_hands, hands_mod, win32, home, hwnd, cards).result()
+            outcome = asyncio.run(operate.run(model or stub, WorkerProgram(worker, hands), TASK, PROGRAM, lang="zh"))
             time.sleep(0.5)
             sent = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
             rows.append({"variant": variant, "status": outcome["status"], "calls": outcome["calls"], "log": sent,

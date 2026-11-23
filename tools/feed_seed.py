@@ -18,12 +18,12 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw  # noqa: E402 - after the path is set
 
-from mibo import settingsfile
-from mibo.home import looks_like_home
-from mibo.library import Item, Library, item_id
-from mibo.roam import player_for
+from mibo import settingsfile  # noqa: E402
+from mibo.home import looks_like_home  # noqa: E402
+from mibo.library import Item, Library, item_id  # noqa: E402
+from mibo.roam import player_for  # noqa: E402
 
 HOUR = 3600
 

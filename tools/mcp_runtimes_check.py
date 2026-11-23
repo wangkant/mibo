@@ -11,6 +11,7 @@ took, its size on disk, and how long until both servers were connected. The app 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -108,10 +109,8 @@ def main() -> int:
             view, took = wait_rows(base, token, lambda v: all(r["state"] == "connected" for r in v["servers"]), 300)
             report["after"] = {"rows": rows(view), "seconds_to_connected": took}
     finally:
-        try:
+        with contextlib.suppress(Exception):
             call(base, token, "exit", {}, timeout=30)
-        except Exception:
-            pass
         try:
             app.wait(30)
         except subprocess.TimeoutExpired:

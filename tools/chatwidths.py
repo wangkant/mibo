@@ -186,16 +186,16 @@ def main() -> int:
             routes(page)
             page.goto(f"{base}/#{fragment}&frame=measure")
             page.wait_for_selector(".chat-main .me", timeout=60000)
-            page.evaluate("paBrowse(%s)" % json.dumps({"open": True, "url": "https://example.com/shop/list", "host": "example.com",
-                                                      "title": "示例商店 - 商品列表", "back": False, "forward": False,
-                                                      "loading": False, "private": False}))
+            page.evaluate("paBrowse(" + json.dumps({"open": True, "url": "https://example.com/shop/list", "host": "example.com",
+                                                    "title": "示例商店 - 商品列表", "back": False, "forward": False,
+                                                    "loading": False, "private": False}) + ")")
             look(page, f"page-{wide}", f"page-{wide:04d}")
             # The chat asked for from the bar while the page is open: the button that brings it, pressed where the
             # chat is not in sight already.
             if results[f"page-{wide}"]["covered"]:
                 page.evaluate("(document.querySelector('.browse-beside') || document.querySelector('.browse-ask')).click()")
             look(page, f"chat-{wide}", f"chat-{wide:04d}")
-            page.evaluate("paBrowse(%s)" % json.dumps({"operating": OPERATING}))
+            page.evaluate(f"paBrowse({json.dumps({'operating': OPERATING})})")
             look(page, f"run-{wide}", f"run-{wide:04d}", more=False)
             page.close()
         browser.close()

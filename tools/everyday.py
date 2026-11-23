@@ -175,18 +175,17 @@ def prepare(home: Path, places: Path) -> None:
     marker = places / "marks" / "grok-bot.txt"
     # The shortcut's target: a script with no window that writes the marker.
     (binary / "grokbot.vbs").write_text(
-        'Set f = CreateObject("Scripting.FileSystemObject").CreateTextFile("%s", True)\r\nf.WriteLine Now\r\nf.Close\r\n'
-        % marker, encoding="utf-16")
-    shell = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%s'); $s.TargetPath = '%s'; "
-             "$s.Arguments = '\"%s\"'; $s.Save()" % (binary / "grok bot.lnk",
-                                                    Path(os.environ["SystemRoot"]) / "System32" / "wscript.exe",
-                                                    binary / "grokbot.vbs"))
+        f'Set f = CreateObject("Scripting.FileSystemObject").CreateTextFile("{marker}", True)\r\nf.WriteLine Now\r\nf.Close\r\n',
+        encoding="utf-16")
+    wscript = Path(os.environ["SYSTEMROOT"]) / "System32" / "wscript.exe"
+    shell = (f"$s = (New-Object -ComObject WScript.Shell).CreateShortcut('{binary / 'grok bot.lnk'}'); "
+             f"$s.TargetPath = '{wscript}'; $s.Arguments = '\"{binary / 'grokbot.vbs'}\"'; $s.Save()")
     subprocess.run(["powershell", "-NoProfile", "-Command", shell], check=True)
-    csc = Path(os.environ["SystemRoot"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+    csc = Path(os.environ["SYSTEMROOT"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
     subprocess.run([str(csc), "/nologo", "/target:winexe", f"/out:{binary / 'chat.exe'}", "/r:System.Windows.Forms.dll",
                     "/r:System.Drawing.dll", str(FIX / "chat.cs")], check=True)
     # A copy of the classic Notepad opens empty and keeps no session, unlike the one Start lists.
-    system = Path(os.environ["SystemRoot"]) / "System32"
+    system = Path(os.environ["SYSTEMROOT"]) / "System32"
     shutil.copy2(system / "notepad.exe", binary / "notepad.exe")
     for lang in ("zh-CN", "en-US"):
         if (system / lang / "notepad.exe.mui").exists():
@@ -263,7 +262,7 @@ def unwrapped(name: str, args: str) -> tuple[str, str]:
 
 
 def _wrote(c, folder: str, name: str) -> Path | None:
-    hits = [p for p in (c.places / folder).rglob(name)]
+    hits = list((c.places / folder).rglob(name))
     return hits[0] if hits else None
 
 
@@ -740,8 +739,8 @@ def children(parent: int) -> dict[int, str]:
 
 def window_text(hwnd: int) -> str:
     """The text of a window's edit control (WM_GETTEXT), for the classic Notepad."""
-    ctypes, wintypes, user32 = _win()
-    child = user32.FindWindowExW(hwnd, None, "Edit", None) or user32.FindWindowExW(hwnd, None, "RichEditD2DPT", None)
+    ctypes, _, user32 = _win()
+    child =user32.FindWindowExW(hwnd, None, "Edit", None) or user32.FindWindowExW(hwnd, None, "RichEditD2DPT", None)
     if not child:
         return ""
     buf = ctypes.create_unicode_buffer(8000)
@@ -758,7 +757,7 @@ def aside_x() -> int:
 
 def move_aside(hwnd: int) -> None:
     """Puts a window of this run at aside_x(), without bringing it forward."""
-    ctypes, wintypes, user32 = _win()
+    user32 = _win()[2]
     user32.SetWindowPos(hwnd, None, aside_x(), 140, 0, 0, 0x0001 | 0x0004 | 0x0010)
 
 
@@ -891,14 +890,18 @@ class Bench:
         if pane is None:
             return None
         # A tab opened a moment ago may not have its page yet (E19 once, after the pane was closed and opened).
-        for wait in range(20):
+        def evaluate():
+            answer = pane.cdp("Runtime.evaluate", {"expression": expression, "returnByValue": True})
+            return (answer.get("result") or {}).get("value")
+
+        for _ in range(19):
             try:
-                answer = pane.cdp("Runtime.evaluate", {"expression": expression, "returnByValue": True})
-                return (answer.get("result") or {}).get("value")
+                return evaluate()
             except RuntimeError as error:
-                if "closed" not in str(error) or wait == 19:
+                if "closed" not in str(error):
                     raise
                 time.sleep(0.5)
+        return evaluate()
 
     def open_page(self, path: str) -> None:
         self.d.app.open_link(self.site + path)
@@ -980,10 +983,9 @@ class Bench:
         return self._waiting(".browse-prompt", "!c.hidden")
 
     def _waiting(self, selector: str, test: str) -> list[dict]:
-        found = self.d.js("(() => [...document.querySelectorAll(%s)].filter(c => %s && c.querySelector("
-                          "'.op-card-buttons button:not([disabled])')).map((c, i) => { c.dataset.benchId = 'b' + "
-                          "Date.now() + i; return {id: c.dataset.benchId, text: c.innerText}; }))()"
-                          % (json.dumps(selector), test))
+        found = self.d.js(f"(() => [...document.querySelectorAll({json.dumps(selector)})].filter(c => {test} && "
+                          "c.querySelector('.op-card-buttons button:not([disabled])')).map((c, i) => { "
+                          "c.dataset.benchId = 'b' + Date.now() + i; return {id: c.dataset.benchId, text: c.innerText}; }))()")
         return found if isinstance(found, list) else []
 
     def press(self, card: dict, yes: bool) -> str:
@@ -995,7 +997,7 @@ class Bench:
             " const go = bs.find(b => b.classList.contains('pa-btn-primary') && b !== no) || bs.find(b => b !== no);"
             " const b = yes ? go : no; document.querySelectorAll('[data-bench-press]').forEach(x =>"
             " x.removeAttribute('data-bench-press')); b.setAttribute('data-bench-press', '1'); c.dataset.bench = '1';"
-            " return b.innerText; })(%s, %s)" % (json.dumps(card["id"]), json.dumps(yes)))
+            f" return b.innerText; }})({json.dumps(card['id'])}, {json.dumps(yes)})")
         if not self.d.click('[data-bench-press="1"]'):
             self.d.js("document.querySelector('[data-bench-press=\"1\"]')?.click()")
         return str(label or "")
@@ -1027,7 +1029,7 @@ class Bench:
         return rule if isinstance(rule, bool) else re.search(rule, flat) is not None
 
     def ask(self, text: str) -> None:
-        self.d.js("window.paAsk(%s)" % json.dumps(text))
+        self.d.js(f"window.paAsk({json.dumps(text)})")
         time.sleep(1.2)
         self.d.click(".chat-send")
 
@@ -1110,7 +1112,7 @@ class Bench:
             notepad = self.launch([str(self.places / "bin" / "notepad.exe")], show=7)
             move_aside(notepad)
         if request.get("signin"):
-            self.page_js("localStorage.setItem('member', '1'); location.href = %s; true" % json.dumps(request["signin"]))
+            self.page_js(f"localStorage.setItem('member', '1'); location.href = {json.dumps(request['signin'])}; true")
             time.sleep(3)
         tabs_before = len(getattr(self.pane(), "_tabs", []) or [])
         bright_before = brightness() if rid == "E29" else ""
@@ -1371,25 +1373,24 @@ def _walk(d, home, places, site, meter, out, real, wanted, args, box) -> None:
             continue
         if rid in left:
             continue
-        for n in (n,):
+        if meter.spent >= args.budget - 0.004:
+            left.append(rid if n == 1 else f"{rid} run {n}")
+            continue
+        if request.get("risky") and not args.risky:
+            d.log(f"== {rid} left out: Notepad's Save dialog may write to the person's own folders (--risky runs it)")
+            left.append(rid)
+            continue
+        if request.get("calculator") and bench.calc_before:
+            d.log(f"== {rid} left out: a Calculator of the person's is open")
+            left.append(rid)
+            continue
+        bench.run(request, n)
+        # A request that goes on in the same chat runs right after the first run of the one it follows.
+        for follow in (r for r in wanted if r.get("after") == rid and n == 1):
             if meter.spent >= args.budget - 0.004:
-                left.append(rid if n == 1 else f"{rid} run {n}")
-                break
-            if request.get("risky") and not args.risky:
-                d.log(f"== {rid} left out: Notepad's Save dialog may write to the person's own folders (--risky runs it)")
-                left.append(rid)
-                break
-            if request.get("calculator") and bench.calc_before:
-                d.log(f"== {rid} left out: a Calculator of the person's is open")
-                left.append(rid)
-                break
-            bench.run(request, n)
-            # A request that goes on in the same chat runs right after the first run of the one it follows.
-            for follow in (r for r in wanted if r.get("after") == rid and n == 1):
-                if meter.spent >= args.budget - 0.004:
-                    left.append(follow["id"])
-                    continue
-                bench.run(follow, 1, keep_chat=follow["id"] == "E27")
+                left.append(follow["id"])
+                continue
+            bench.run(follow, 1, keep_chat=follow["id"] == "E27")
     if left:
         d.log(f"== left out: {', '.join(left)} (budget spent ${meter.spent:.4f} of ${args.budget}, or a reason above)")
     (out / "left.json").write_text(json.dumps(left), encoding="utf-8")
@@ -1406,7 +1407,9 @@ def table(results: list[dict], out: Path, wanted: list[dict], spent: float) -> N
         if not rows:
             lines.append(f"| {request['id']} | {request['say']} | {request['needs']} | not run | | | | | | | |")
             continue
-        avg = lambda key: round(sum(r[key] for r in rows) / len(rows), 1)  # noqa: E731
+        def avg(key, rows=rows):
+            return round(sum(r[key] for r in rows) / len(rows), 1)
+
         wrong = sum(len(r["wrong"]) for r in rows)
         lines.append(f"| {request['id']} | {request['say']} | {request['needs']} | {sum(r['ok'] for r in rows)}/"
                      f"{len(rows)} | {avg('calls')} | {avg('in_tokens'):.0f} | {avg('cards')} | {wrong} | "

@@ -601,7 +601,7 @@ def notepad(b: Bench):
     win32 = b.win32
     copy = b.home / "np" / "notepad.exe"
     if not copy.exists():
-        system = Path(os.environ["SystemRoot"]) / "System32"
+        system = Path(os.environ["SYSTEMROOT"]) / "System32"
         copy.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(system / "notepad.exe", copy)
         for lang in ("zh-CN", "en-US"):
@@ -707,7 +707,7 @@ def testprog(b: Bench):
     src = b.home / "DeskCheck.cs"
     if not exe.exists() or not src.exists() or src.read_text(encoding="utf-8") != TEST_PROGRAM:
         src.write_text(TEST_PROGRAM, encoding="utf-8")
-        csc = Path(os.environ["SystemRoot"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
+        csc = Path(os.environ["SYSTEMROOT"]) / "Microsoft.NET" / "Framework64" / "v4.0.30319" / "csc.exe"
         subprocess.run([str(csc), "/nologo", "/target:winexe", f"/out:{exe}", "/r:System.Windows.Forms.dll",
                         "/r:System.Drawing.dll", str(src)], check=True)
     log = b.home / "deskcheck.log"
@@ -795,11 +795,11 @@ def paint(b: Bench):
         A = b.uia.automation()
         for el in b.uia.element(hwnd).FindAll(A.TreeScope.Descendants, A.Condition.TrueCondition):
             name = str(el.Current.Name)
-            if any(word in name for word in name_words):
-                if name.startswith("Using ") or (
-                        el.GetCurrentPropertyValue(A.AutomationElement.IsTogglePatternAvailableProperty)
-                        and str(el.GetCurrentPropertyValue(A.TogglePattern.ToggleStateProperty)) == "On"):
-                    return True
+            if any(word in name for word in name_words) and (
+                    name.startswith("Using ")
+                    or (el.GetCurrentPropertyValue(A.AutomationElement.IsTogglePatternAvailableProperty)
+                        and str(el.GetCurrentPropertyValue(A.TogglePattern.ToggleStateProperty)) == "On")):
+                return True
         return False
 
     def line(_ctx, out) -> tuple[bool, str]:
