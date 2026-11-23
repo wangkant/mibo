@@ -75,7 +75,7 @@ def test_the_turn_context_stays_within_its_share_memory_first_at_any_window(app,
     plan = agent._turn_plan(agent._dm_system(), tools=True)[0]
     held = _turn_context(body)
     # The lists modules add (the skills that can be loaded, the open places) come last and keep their own room.
-    added = "".join(f"\n\n{line}" for line in turnctx.lines("", _pkey(app)))
+    added = "".join(f"\n\n{line}" for line in turnctx.lines("", _pkey(app), plan.window))
     assert added and held.endswith(added)
     assert agent._chat_requests[_pkey(app)]["ratio"] * context.text_tokens(held.removesuffix(added)) <= plan.turn
     # The memory block is filled first: at the smallest window it still holds what they told it.

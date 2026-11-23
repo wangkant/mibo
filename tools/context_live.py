@@ -81,7 +81,7 @@ def main() -> None:
         users = [m["content"] for m in row["body"]["messages"] if m.get("role") == "user"]
         # Without the lists modules add (skills, open places), which come last and are not charged to the share.
         held = users[-1][users[-1].index(_TURN_CONTEXT_OPEN):].removesuffix(
-            "".join(f"\n\n{line}" for line in turnctx.lines("", pkey)))
+            "".join(f"\n\n{line}" for line in turnctx.lines("", pkey, plan.window)))
         ratio = agent._chat_requests[pkey]["ratio"]
         sent = "".join(str(m.get("content") or "") for m in row["body"]["messages"])
         print(json.dumps({

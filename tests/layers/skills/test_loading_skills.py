@@ -121,6 +121,7 @@ def test_every_built_in_skill_loads_under_its_folders_name_and_its_description_r
     assert len({s.description for s in skills}) == len(skills)
     # A description longer than the listing's cut would lose the pointer to the skill next to it.
     assert all(len(" ".join(s.description.split())) <= tool.DESCRIBED for s in skills)
-    listed = tool.listing(skills)
+    # A large window lists every description; a small one keeps the names and the first descriptions.
+    listed = tool.listing(skills, 131072)
     for s in skills:
         assert f"- {s.name} (version " in listed and tool._line(s.description, tool.DESCRIBED) in listed

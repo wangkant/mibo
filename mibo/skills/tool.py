@@ -28,11 +28,12 @@ NAME = "use_skill"
 PIECE = 4000
 FILES_LISTED = 40
 MAX_FILE = 2 * 1024 * 1024
-# Characters of a skill's description in the list, and of the whole list: past it, the later skills are listed by
-# name alone (Claude Code keeps every name and drops descriptions to fit). The Chinese title and description are the
-# Skills page's words to the person, not the model's.
+# Characters of a skill's description in the list, and of the whole list: a sixteenth of the model's window in
+# tokens, about a fiftieth of the window, within LISTED. Past it, the later skills are listed by name alone (Claude
+# Code keeps every name and drops descriptions to fit). The Chinese title and description are the Skills page's
+# words to the person, not the model's.
 DESCRIBED = 300
-LISTED = 8000
+LISTED = (1800, 8000)
 # Characters of the SKILL.md digest shown beside a skill: a changed file shows a new one.
 VERSION = 8
 # "/name" at the start of the person's message: the skill's name, as the spec spells names.
@@ -87,13 +88,14 @@ def offered_to_model(home: Path) -> list:
     return [s for s in store.usable(home) if s.model_invocable]
 
 
-def listing(skills: list) -> str:
-    """The <available_skills> block of the turn's context: one line a skill, its name, version and description."""
-    lines, size = [], 0
+def listing(skills: list, window: int) -> str:
+    """The <available_skills> block of the turn's context for a model whose window is `window` tokens: one line a
+    skill, its name, version and description."""
+    lines, size, room = [], 0, max(LISTED[0], min(LISTED[1], window // 16))
     for skill in skills:
         line = f"- {skill.name} (version {skill.digest[:VERSION]})"
         about = _line(skill.description, DESCRIBED)
-        if size + len(line) + len(about) <= LISTED:
+        if size + len(line) + len(about) <= room:
             line += f": {about}"
         lines.append(line)
         size += len(line)
@@ -107,7 +109,7 @@ def gestured(said: str, home: Path):
     return hit if hit is not None and hit[0].user_invocable else None
 
 
-def _provider(said: str, chat: str) -> list[str]:
+def _provider(said: str, chat: str, window: int) -> list[str]:
     """The turn's skills: the list, and a skill the person started with /name. None in a scheduled run, which is
     not offered use_skill."""
     from .. import schedule_tool
@@ -116,7 +118,7 @@ def _provider(said: str, chat: str) -> list[str]:
     if schedule_tool.run_of() is not None:
         return []
     shown = offered_to_model(ROOT)
-    lines = [listing(shown)] if shown else []
+    lines = [listing(shown, window)] if shown else []
     lookups = chat_lookups.get()
     hit = gestured(said, ROOT) if lookups is not None else None
     if hit is not None:

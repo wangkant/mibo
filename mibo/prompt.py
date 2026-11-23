@@ -210,11 +210,12 @@ class PromptBuilder:
         )
         return f"{static_block}\n\n{dm_output_protocol()}"
 
-    def _build_dm_prompt(self, history: list[dict], *, room: float, pkey: str = "",
+    def _build_dm_prompt(self, history: list[dict], *, room: float, window: int, pkey: str = "",
                          follow_up: str = "", pictures: int = 0) -> DMPrompt:
         """The system prompt and the framed turns of the chat, the turn context within `room` estimated tokens
         (context.text_tokens; the turn context's share C of the budget over the model's ratio). It is filled in a
-        fixed order, each part taking what the ones before it leave: the frame, the notes and the time; the memory
+        fixed order, each part taking what the ones before it leave (`window`, the model's, goes to the lines
+        modules add): the frame, the notes and the time; the memory
         block; the day; the finds; the steps of the latest replies. See `_chat_dm` for the other arguments."""
         last_user = self._last_user_text(history)
         follow_up_note = _follow_up_note(self.admin_name or "them") if follow_up else ""
@@ -230,7 +231,7 @@ class PromptBuilder:
         # The lines modules add for the turn (turnctx.py), in the order they registered: the skills that can be
         # loaded, the places that are open. Each is capped where it is built and is not charged to the turn
         # context's share, which is for what the turn knows of the person and the day.
-        added = "".join(f"\n\n{line}" for line in turnctx.lines(last_user, pkey))
+        added = "".join(f"\n\n{line}" for line in turnctx.lines(last_user, pkey, window))
         # The day says what they did with each find; its head, the truth that it stayed in or where it went, is
         # part of the frame.
         day = today.Day(self, last_user, time.time())

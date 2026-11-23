@@ -244,7 +244,7 @@ async def use(agent, args: dict, lookups) -> str:
     return fence_pages("\n".join(lines)) + NOTE
 
 
-def _provider(said: str, chat: str) -> list[str]:
+def _provider(said: str, chat: str, window: int) -> list[str]:
     """The sites signed in, for a turn whose message is about messages or names one of them."""
     from ..crossing import named
     own = _strip_web_desc(said)

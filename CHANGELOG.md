@@ -45,7 +45,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 
 ### Models
 
-- On a model with a small context window, the first request is smaller: tools are sent in order of need while they fit, the rest are loaded on demand, and an installed skill is listed by its description alone. When a model service refuses a request as too long and states its size, the request is fitted again to that size.
+- On a model with a small context window, the first request is smaller: tools are sent in order of need while they fit, the rest are loaded on demand, and an installed skill is listed by its description alone, and the list of skills is shorter: past its room for that window, a skill is listed by name. When a model service refuses a request as too long and states its size, the request is fitted again to that size.
 
 ### Documentation
 

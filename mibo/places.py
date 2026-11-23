@@ -83,7 +83,7 @@ def listing(conversation: str) -> list[str]:
     return ["<open_places>\n" +"\n".join(p.line() for p in places) + "\n</open_places>"] if places else []
 
 
-def _provider(said: str, chat: str) -> list[str]:
+def _provider(said: str, chat: str, window: int) -> list[str]:
     """The open places of the chat whose key `chat` is (prompt.py passes the routing key, dm.chat_key)."""
     from .dm import chat_key
     conversation = next((c for c in list(_places) if chat_key(c)[1] == chat), "")

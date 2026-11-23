@@ -163,7 +163,7 @@ def test_no_card_comes_before_a_reply(app, turn):
 
 def test_a_line_a_module_adds_reaches_the_turn_context(turn, monkeypatch):
     monkeypatch.setattr(turnctx, "_PROVIDERS", [])
-    turnctx.register(lambda said, chat: [f"[Weather] Rain all day where they are ({len(said)} characters said)."])
+    turnctx.register(lambda said, chat, window: [f"[Weather] Rain all day where they are ({len(said)} characters said)."])
     done = turn("hi", say("hi"))
     assert _context(done.asked()[0]).endswith("[Weather] Rain all day where they are (2 characters said).")
 

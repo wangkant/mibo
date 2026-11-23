@@ -570,8 +570,8 @@ class DirectMessages:
             raise ValueError("the model's window cannot hold the chat's system prompt and tools")
         if not follow_up:
             self._cut_message(history, plan, ratio)
-        prompt = self._build_dm_prompt(history, room=plan.turn / ratio, pkey=pkey, follow_up=follow_up,
-                                       pictures=len(pictures))
+        prompt = self._build_dm_prompt(history, room=plan.turn / ratio, window=plan.window, pkey=pkey,
+                                       follow_up=follow_up, pictures=len(pictures))
         # The turn context's size, for the gauge's parts (`chat_context`).
         self.__dict__.setdefault("_turn_sizes", {})[pkey] = context.text_tokens(prompt.turn_context)
         # A turn of the person's: the reply model looks things up itself (loop.py).
