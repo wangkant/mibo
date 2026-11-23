@@ -13,6 +13,7 @@ import uvicorn
 
 from mibo import paths, settingsfile, situation, welcome
 from mibo.panels import modelbar
+from mibo.sources import catalog
 from mibo.storage import atomic_write_text
 
 TOKEN = "harness-local-capability"
@@ -72,7 +73,10 @@ async def _no_probe(runtime, lang: str = "") -> None:
 
 
 def quiet_start(monkeypatch) -> None:
-    """What every app in a test leaves out: the first start's probe of public sites, and the start's measure of
-    the model (a test that wants it scripts it and calls modelbar.check_at_start)."""
+    """What every app in a test leaves out: the first start's probe of public sites, the sources' round that
+    starts by itself (twenty seconds in it would read public sites and take a scripted answer for its judgement; a
+    test that wants a round asks for one), and the start's measure of the model (a test that wants it scripts it
+    and calls modelbar.check_at_start)."""
     monkeypatch.setattr(situation, "probe", _no_probe)
+    monkeypatch.setattr(catalog, "FIRST_ROUND_S", 24 * 3600)
     monkeypatch.setattr(modelbar, "check_at_start", lambda workspace: None)
