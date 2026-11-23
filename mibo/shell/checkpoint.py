@@ -18,7 +18,7 @@ import zipfile
 from pathlib import Path
 
 from . import files, office
-from . import read as reading
+from .paths import _matches
 
 # A file larger than this is listed but not copied, so it cannot be put back.
 KEEP_MAX = 20 * 1024 * 1024
@@ -98,7 +98,7 @@ def _expand(act) -> list[str]:
         return list(act.paths)
     out = []
     for glob in act.globs:
-        out += reading._matches(glob, EXPAND_MOST) if any(c in glob for c in "*?[") else [glob]
+        out += _matches(glob, EXPAND_MOST) if any(c in glob for c in "*?[") else [glob]
     return out[:EXPAND_MOST]
 
 

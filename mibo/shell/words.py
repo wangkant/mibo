@@ -8,8 +8,9 @@ import shutil
 import sys
 
 from . import office
+from .acts import NEVER_KINDS, Act, Reading
 from .grants import known_folders, norm
-from .read import NEVER_KINDS, Act, Reading, Verdict
+from .read import Verdict
 
 _NAMES: dict = {}
 # Characters that turn text around or hide in it ("photo<RLO>gpj.exe" shows as "photoexe.jpg"): shown by code.

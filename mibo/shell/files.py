@@ -25,8 +25,11 @@ from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from . import office
+from .acts import Act
 from .grants import norm
-from .read import EXE_NEVER, EXE_OPEN, INSTALLERS, OPEN_RISKY, VERBED, Act, Sorter, _base, _copy_overwrites, _local_host
+from .paths import _base, _copy_overwrites, _local_host
+from .pssort import Sorter
+from .pstables import EXE_NEVER, EXE_OPEN, INSTALLERS, OPEN_RISKY, VERBED
 
 # Lines a read returns when no limit is given, and the most it may ask for; characters kept of one line.
 READ_LINES = 400
