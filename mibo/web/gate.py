@@ -347,7 +347,7 @@ EDITING = re.compile(r"^(?:(?:Control\+)?(?:Shift\+)?(?:[azyAZY]|Arrow\w+|Home|E
 
 
 def chord(keys: str, editing: bool) -> tuple[str, str]:
-    """How a key or chord, as pageops.chord spells it ("Control+Enter"), is pressed: "enter" or "click" when it
+    """How a key or chord, as pageinput.chord spells it ("Control+Enter"), is pressed: "enter" or "click" when it
     ends in Enter or Space (classify then decides as for that key alone: Control+Enter sends as Enter does),
     "refuse" for the clipboard, "watch" for a shortcut a page may act on (any chord with Control, Alt or Meta; a
     letter or Delete outside a field, as a mail page deletes on #), "" for moving about and editing a field.

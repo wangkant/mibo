@@ -672,7 +672,7 @@ def messages(request, action: dict, lang: str = "zh", now: float | None = None) 
         # Code's reading of a command: every part only lists or reads.
         pending["only_reads"] = True
     if action.get("request"):
-        # What the press sends: method, address and short values (operate._summary).
+        # What the press sends: method, address and short values (opcarry.summary_of).
         pending["request"] = action["request"]
     noticed = hints(request, action, now)
     if noticed:
