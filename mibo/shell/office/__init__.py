@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib
 import io
+import unicodedata
 import zipfile
 import zlib
 from xml.etree import ElementTree
@@ -28,6 +29,11 @@ _MAIN = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/off
 # The main part's content type for each kind (a template or a macro-enabled file has its own).
 _TYPES = {".docx": "wordprocessingml.document.main", ".xlsx": "spreadsheetml.sheet.main",
           ".pptx": "presentationml.presentation.main"}
+
+
+def text_width(text: str, wide: str = "WF") -> int:
+    """The text's width in half-ems: a character whose East Asian width is one of `wide` counts two, any other one."""
+    return sum(2 if unicodedata.east_asian_width(ch) in wide else 1 for ch in text)
 
 
 def _module(ext: str):

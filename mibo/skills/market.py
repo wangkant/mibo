@@ -69,10 +69,7 @@ _lock = asyncio.Lock()
 def folder_hash(files: dict[str, bytes]) -> str:
     """The hash a catalog entry records for a skill's folder: sha256 over one line per file, sorted by the file's
     path inside the folder (POSIX, UTF-8), each line `path NUL sha256-of-its-bytes-in-hex LF`."""
-    total = hashlib.sha256()
-    for path in sorted(files, key=lambda p: p.encode("utf-8")):
-        total.update(path.encode("utf-8") + b"\0" + hashlib.sha256(files[path]).hexdigest().encode() + b"\n")
-    return total.hexdigest()
+    return listed_hash({path: hashlib.sha256(data).hexdigest() for path, data in files.items()})
 
 
 def listed_hash(listed: dict[str, str]) -> str:
@@ -247,8 +244,13 @@ def _pair(value, limit: int) -> dict:
     return {"zh": _text(value.get("zh", ""), limit), "en": _text(value.get("en", ""), limit)}
 
 
+def _count(value) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
 def _https(url, host: str = "") -> str:
-    url = str(url or "") if isinstance(url, str) else ""
+    """The address when it is https (on `host`, when given), clipped; else ""."""
+    url = url if isinstance(url, str) else ""
     m = re.match(r"^https://([a-z0-9.-]+)(?:/[^\s\"'<>]*)?$", url, re.I)
     if not m or (host and m.group(1).lower().removeprefix("www.") != host):
         return ""
@@ -295,7 +297,6 @@ def entry(raw) -> dict | None:
     category = raw.get("category") if raw.get("category") in places else ""
     sub = raw.get("sub") if raw.get("sub") in places.get(category, ()) else ""
     spdx = _text(licence.get("spdx", ""), 60) or "NONE"
-    count = lambda v: v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
     return {
         "id": ident, "name": name, "title": _pair(raw.get("title"), 60), "about": _pair(raw.get("about"), 300),
         "publisher": _text(raw.get("publisher", ""), 80) or repo.split("/")[0],
@@ -311,7 +312,7 @@ def entry(raw) -> dict | None:
                   "tools": [_text(t, 40) for t in (needs.get("tools") or [])[:12] if _text(t, 40)]
                   if isinstance(needs.get("tools"), list) else []},
         "fit": raw["fit"], "fit_note": _text(raw.get("fit_note", ""), 300),
-        "popularity": {"stars": count(popular.get("stars")), "installs": count(popular.get("installs")),
+        "popularity": {"stars": _count(popular.get("stars")), "installs": _count(popular.get("installs")),
                        "as_of": _text(popular.get("as_of", ""), 30)},
         "hash": raw["hash"], "files": dict(listed),
         "scan": {"risk": found["risk"], "notes": [_text(n, 300) for n in (found.get("notes") or [])[:12]
@@ -444,8 +445,8 @@ def view(home: Path) -> dict:
     skills = []
     for one in data["skills"]:
         mine = have.get(one["id"])
-        skills.append({**{k: v for k, v in one.items() if k != "files"}, "installed": bool(mine), "folder": mine["folder"] if mine else "",
-                       "installed_commit": mine["commit"] if mine else "",
+        skills.append({**{k: v for k, v in one.items() if k != "files"}, "installed": bool(mine),
+                       "folder": mine["folder"] if mine else "", "installed_commit": mine["commit"] if mine else "",
                        "update": bool(mine) and (mine["commit"], mine["hash"]) != (one["source"]["commit"], one["hash"]),
                        "name_taken": not mine and one["name"] in names,
                        # Why it may not be installed from here ("" when it may, after a word on a missing licence).
@@ -576,7 +577,6 @@ async def changed(home: Path, one: dict) -> bool | None:
     hit = _seen.get(key)
     if hit and time.time() - hit[0] < SEEN_S:
         return hit[1]
-    from urllib.parse import quote
     url = f"https://api.github.com/repos/{src['repo']}/commits?per_page=1" + (
         f"&path={quote(src['path'])}" if src["path"] else "")
     result = await _get(url, 256 * 1024, 20)

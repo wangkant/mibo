@@ -197,7 +197,7 @@ def mount(app, workspace, body) -> None:
                 return _error("generic")
         except ValueError as e:
             return _error(str(e))
-        return {**await asyncio.to_thread(market.view, home), "installed_view": view()}
+        return {**await asyncio.to_thread(market.view, home), "installed_view": await asyncio.to_thread(view)}
 
     @app.get("/api/skills/market/detail")
     async def market_detail(id: str = ""):

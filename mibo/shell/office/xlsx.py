@@ -12,7 +12,6 @@ from __future__ import annotations
 import datetime
 import io
 import re
-import unicodedata
 import zipfile
 from collections import Counter
 from decimal import Decimal
@@ -25,6 +24,8 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import column_index_from_string, get_column_letter, quote_sheetname
 from openpyxl.utils.datetime import to_excel
 from openpyxl.utils.formulas import FORMULAE
+
+from . import text_width
 
 # Office's own font for Chinese, shipped with it on Windows and macOS; its Latin letters and digits are clean too.
 _FONT = "等线"
@@ -144,8 +145,7 @@ def _shown(typed: _Typed) -> str:
 
 def _width(text: str) -> int:
     """Display width: East Asian characters take two columns."""
-    return max((sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in line)
-                for line in text.split("\n")), default=0)
+    return max(text_width(line) for line in text.split("\n"))
 
 
 # ---------------------------------------------------------------- formulas
@@ -343,7 +343,7 @@ def _runs(cells: set[tuple[int, int]]) -> list[str]:
         letter = get_column_letter(column)
         rows = sorted(r for c, r in cells if c == column)
         start = rows[0]
-        for prev, row in zip(rows, rows[1:] + [0]):
+        for prev, row in zip(rows, [*rows[1:], 0]):
             if row != prev + 1:
                 ranges.append(f"{letter}{start}" if start == prev else f"{letter}{start}:{letter}{prev}")
                 start = row
@@ -364,24 +364,16 @@ def _shape_of(formula: str, sheet: str, written: dict[tuple[str, int, int], str]
     return None
 
 
-def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str],
-          written: dict[tuple[str, int, int], str]) -> list[str]:
-    """Writes one table into the sheet, styled; returns the ranges of cells whose digits are a name. `written`
-    collects every number format given, so a formula in a column without values can take the format of what
-    it refers to."""
-    header = [_clean(cell)[0] for cell in rows[0]]
-    names = [bool(_NAME_HEADER.search(h)) for h in header]
-    body = [[(_typed(text, c < len(names) and names[c]), bold) for c, (text, bold) in
-             enumerate(_clean(cell) for cell in row)] for row in rows[1:]]
-    totals = {r for r, row in enumerate(body)
-              if (first := next((t for t, _ in row if t.kind != "empty"), None)) is not None
-              and first.kind == "text" and _TOTAL.fullmatch(first.value)
-              and any(t.kind in ("number", "percent", "money", "formula") for t, _ in row)}
-    width = max(len(header), *(len(row) for row in body)) if body else len(header)
-    for row in body:
-        row += [(_Typed(None, "empty"), False)] * (width - len(row))
+def _totals(body: list[list[tuple[_Typed, bool]]]) -> set[int]:
+    """The body rows that are totals: their first value is a word such as 合计, and they hold a number."""
+    return {r for r, row in enumerate(body)
+            if (first := next((t for t, _ in row if t.kind != "empty"), None)) is not None
+            and first.kind == "text" and _TOTAL.fullmatch(first.value)
+            and any(t.kind in ("number", "percent", "money", "formula") for t, _ in row)}
 
-    # A total the model added up itself becomes a SUM of the cells above it, when it is exactly their sum.
+
+def _sum_totals(body: list[list[tuple[_Typed, bool]]], totals: set[int]) -> None:
+    """A total the model added up itself becomes a SUM of the cells above it, when it is exactly their sum."""
     for r in sorted(totals):
         start = max((t for t in totals if t < r), default=-1) + 1
         for c, (typed, bold) in enumerate(body[r]):
@@ -393,7 +385,10 @@ def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str]
                 letter = get_column_letter(c + 1)
                 body[r][c] = (_Typed(f"=SUM({letter}{start + 2}:{letter}{r + 1})", "formula"), bold)
 
-    # Each column's format, from the values written in it; formulas take the format of the column's values.
+
+def _formats(body: list[list[tuple[_Typed, bool]]], header: list[str], width: int) -> list[dict[str, str]]:
+    """Each column's format by kind, from the values written in it; formulas take the format of the column's
+    values."""
     formats: list[dict[str, str]] = []
     for c in range(width):
         typed = [row[c][0] for row in body]
@@ -410,6 +405,78 @@ def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str]
         elif c < len(header) and _PERCENT_HEADER.search(header[c]):
             column["formula"] = "0.0%"
         formats.append(column)
+    return formats
+
+
+def _put(ws, cell, typed: _Typed, row: list[tuple[_Typed, bool]], body: list[list[tuple[_Typed, bool]]],
+         column: dict[str, str], sheets: dict[str, str], problems: list[str],
+         written: dict[tuple[str, int, int], str]) -> int | None:
+    """One value into its cell, with its number format and alignment; returns the width it shows at, or None when
+    its formula is refused (the reason is added to `problems`)."""
+    c, r = cell.column, cell.row
+    numeric = typed.kind in ("number", "percent", "money", "date", "datetime")
+    if typed.kind == "formula":
+        try:
+            cell.value = _formula(typed.value, ws.title, c, r, sheets, set())
+        except _Bad as bad:
+            problems.append(f"{ws.title}!{cell.coordinate}: {bad}")
+            return None
+        label = row[0][0]
+        shape = column.get("formula") or (
+            "0.0%" if label.kind == "text" and _PERCENT_HEADER.search(label.value) else None) or _shape_of(
+            cell.value, ws.title, written)
+        if shape:
+            cell.number_format = shape
+            numeric = True
+        elif typed.value.upper().startswith(_DATE_FUNCTIONS):
+            cell.number_format = "yyyy-mm-dd"
+        shown = max((_width(_shown(t)) for t, _ in (line[c - 1] for line in body)
+                     if t.kind in ("number", "percent", "money")), default=8) + 2
+    else:
+        cell.value = typed.value
+        if typed.kind in ("text", "digits"):
+            cell.data_type = "s"
+        cell.number_format = column.get(typed.kind) or _format(typed.kind)
+        shown = _width(_shown(typed))
+    if cell.number_format != "General":
+        written[ws.title, c, r] = cell.number_format
+    if numeric:
+        cell.alignment = Alignment(horizontal="right", vertical="center")
+    else:
+        wrap = shown > _WRAP or "\n" in str(typed.value)
+        cell.alignment = Alignment(vertical="center", wrap_text=wrap or None)
+    return shown
+
+
+def _page(ws, body: list, totals: set[int], width: int, widths: list[int]) -> None:
+    """The sheet's frozen header, its filter over the rows above the last total, and its printed page."""
+    if body:
+        ws.freeze_panes = "A2"
+        last = max((r for r in range(len(body)) if r not in totals), default=None)
+        if last is not None:
+            ws.auto_filter.ref = f"A1:{get_column_letter(width)}{last + 2}"
+    ws.print_title_rows = "1:1"
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.page_setup.orientation = "landscape" if sum(min(max(w + 2, 8), _WIDEST) for w in widths) > 100 else "portrait"
+    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+
+def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str],
+          written: dict[tuple[str, int, int], str]) -> list[str]:
+    """Writes one table into the sheet, styled; returns the ranges of cells whose digits are a name. `written`
+    collects every number format given, so a formula in a column without values can take the format of what
+    it refers to."""
+    header = [_clean(cell)[0] for cell in rows[0]]
+    names = [bool(_NAME_HEADER.search(h)) for h in header]
+    body = [[(_typed(text, c < len(names) and names[c]), bold) for c, (text, bold) in
+             enumerate(_clean(cell) for cell in row)] for row in rows[1:]]
+    totals = _totals(body)
+    width = max(len(header), *(len(row) for row in body)) if body else len(header)
+    for row in body:
+        row += [(_Typed(None, "empty"), False)] * (width - len(row))
+    _sum_totals(body, totals)
+    formats = _formats(body, header, width)
 
     font, strong = Font(name=_FONT, size=11), Font(name=_FONT, size=11, bold=True)
     widths = [0] * width
@@ -424,7 +491,6 @@ def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str]
     for r, row in enumerate(body, 2):
         total = r - 2 in totals
         for c, (typed, bold) in enumerate(row, 1):
-            column = formats[c - 1]
             cell = ws.cell(r, c)
             cell.font = strong if (bold or total) else font
             cell.border = Border(_GRID, _GRID, _RULE if total else _GRID, _GRID)
@@ -432,53 +498,15 @@ def _fill(ws, rows: list[list[str]], sheets: dict[str, str], problems: list[str]
                 cell.fill = _TOTAL_FILL
             if typed.kind == "empty":
                 continue
-            numeric = typed.kind in ("number", "percent", "money", "date", "datetime")
-            if typed.kind == "formula":
-                try:
-                    cell.value = _formula(typed.value, ws.title, c, r, sheets, set())
-                except _Bad as bad:
-                    problems.append(f"{ws.title}!{cell.coordinate}: {bad}")
-                    continue
-                label = row[0][0]
-                shape = column.get("formula") or (
-                    "0.0%" if label.kind == "text" and _PERCENT_HEADER.search(label.value) else None) or _shape_of(
-                    cell.value, ws.title, written)
-                if shape:
-                    cell.number_format = shape
-                    numeric = True
-                elif typed.value.upper().startswith(_DATE_FUNCTIONS):
-                    cell.number_format = "yyyy-mm-dd"
-                shown = max((_width(_shown(t)) for t, _ in (line[c - 1] for line in body)
-                             if t.kind in ("number", "percent", "money")), default=8) + 2
-            else:
-                cell.value = typed.value
-                if typed.kind in ("text", "digits"):
-                    cell.data_type = "s"
-                cell.number_format = column.get(typed.kind) or _format(typed.kind)
-                shown = _width(_shown(typed))
-                if typed.kind == "digits":
-                    digits.add((c, r))
-            if cell.number_format != "General":
-                written[ws.title, c, r] = cell.number_format
-            if numeric:
-                cell.alignment = Alignment(horizontal="right", vertical="center")
-            else:
-                wrap = shown > _WRAP or "\n" in str(typed.value)
-                cell.alignment = Alignment(vertical="center", wrap_text=wrap or None)
+            shown = _put(ws, cell, typed, row, body, formats[c - 1], sheets, problems, written)
+            if shown is None:
+                continue
+            if typed.kind == "digits":
+                digits.add((c, r))
             widths[c - 1] = max(widths[c - 1], min(shown, _WRAP) if typed.kind == "text" else shown)
     for c, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(c)].width = min(max(w + 2, 8), _WIDEST)
-
-    if body:
-        ws.freeze_panes = "A2"
-        last = max((r for r in range(len(body)) if r not in totals), default=None)
-        if last is not None:
-            ws.auto_filter.ref = f"A1:{get_column_letter(width)}{last + 2}"
-    ws.print_title_rows = "1:1"
-    ws.page_setup.paperSize = ws.PAPERSIZE_A4
-    ws.page_setup.orientation = "landscape" if sum(min(max(w + 2, 8), _WIDEST) for w in widths) > 100 else "portrait"
-    ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    _page(ws, body, totals, width, widths)
     return _runs(digits)
 
 

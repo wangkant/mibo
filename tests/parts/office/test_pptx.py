@@ -14,6 +14,7 @@ from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Emu
 
+from mibo.shell.office import deck_layout
 from mibo.shell.office import pptx as office
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -180,7 +181,7 @@ def test_long_points_continue_on_slides_with_the_same_title_and_never_overflow()
         # A slide never starts with a sub-point, and nothing is set below 14 pt.
         assert paragraphs[0].level == 0
         assert all(r.font.size.pt >= 14 for p in paragraphs for r in p.runs)
-        _text_fits(body, office.BODY_SIZES[0])
+        _text_fits(body, deck_layout.BODY_SIZES[0])
         seen += [p.text for p in paragraphs]
     assert seen[0].startswith("第 1 条") and seen[-1].startswith("第 30 条") and len(seen) == 30 + 14
     _within_slide(deck)
@@ -278,7 +279,7 @@ def test_replacement_reaches_table_cells_and_notes() -> None:
     deck = _open(data)
     grid = next(s for s in deck.slides[4].shapes if s.has_table).table
     assert grid.cell(2, 0).text == "整理数据表"
-    assert grid.cell(2, 0).text_frame.paragraphs[0].runs[0].font.size.pt == office.TABLE_SIZES[0]
+    assert grid.cell(2, 0).text_frame.paragraphs[0].runs[0].font.size.pt == deck_layout.TABLE_SIZES[0]
     assert deck.slides[3].notes_slide.notes_text_frame.text == "这一页控制在九十秒以内。"
 
 

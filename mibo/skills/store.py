@@ -288,26 +288,26 @@ def _member_path(info: zipfile.ZipInfo) -> tuple[PurePosixPath, bool]:
     return path, plain
 
 
-def install_zip(home: Path, data: bytes, origin: str, source: str, within: str = "", ref: str = "",
-                market: dict | None = None) -> list[str]:
-    """Adds every skill in a zip (a folder holding SKILL.md, at any depth, at or under `within` when given);
-    returns the folder names added. Only files are written: nothing in it is run. A skill already there from the
-    same place is replaced; one from elsewhere stops the add. `market` is the catalog entry it came from (id,
-    commit, hash), kept so an update can be told (market.py)."""
-    try:
-        archive = zipfile.ZipFile(io.BytesIO(data))
-    except zipfile.BadZipFile:
-        raise ValueError("skill_bad_archive") from None
+_Members = dict[PurePosixPath, tuple[zipfile.ZipInfo, bool]]
+
+
+def _members(archive: zipfile.ZipFile) -> _Members:
+    """The archive's files by path, each with whether it can be written as a plain file here."""
     members = archive.infolist()
     if len(members) > 50 * MAX_MEMBERS:
         raise ValueError("skill_too_large")
-    files: dict[PurePosixPath, tuple[zipfile.ZipInfo, bool]] = {}
+    files: _Members = {}
     for info in members:
         path, plain = _member_path(info)
         if not info.is_dir():
             files[path] = (info, plain)
+    return files
+
+
+def _roots(files: _Members, within: str) -> list[PurePosixPath]:
+    """The skills to add: the topmost folders holding SKILL.md at or under `within`, or else the one `within` lies
+    in. A skill nested in another belongs to it."""
     inside = PurePosixPath(within.strip("/")) if within.strip("/") else PurePosixPath()
-    # A skill is the topmost folder holding SKILL.md; one nested in another belongs to it.
     roots = sorted({p.parent for p in files if p.name == SKILL_FILE}, key=lambda p: len(p.parts))
     wanted = [r for r in roots if _under(r, inside)]
     if not wanted:
@@ -319,18 +319,13 @@ def install_zip(home: Path, data: bytes, origin: str, source: str, within: str =
             chosen.append(root)
     if not chosen:
         raise ValueError("skill_none_found")
-    taken = [(p, info, plain) for p, (info, plain) in files.items() if any(_under(p, c) for c in chosen)]
-    if any(not plain for _, _, plain in taken):
-        raise ValueError("skill_bad_archive")
-    if len(taken) > MAX_MEMBERS or sum(i.file_size for _, i, _ in taken) > MAX_UNPACKED \
-            or any(i.file_size > MAX_MEMBER for _, i, _ in taken):
-        raise ValueError("skill_too_large")
-    target_root = skills_dir(home)
-    target_root.mkdir(parents=True, exist_ok=True)
-    kept = records(home)
-    sources = kept.setdefault("sources", {})
-    added: list[str] = []
-    # Each folder is named as its skill, else as it was in the archive.
+    return chosen
+
+
+def _plans(archive: zipfile.ZipFile, files: _Members, chosen: list[PurePosixPath], target_root: Path,
+           sources: dict, source: str) -> list[tuple[PurePosixPath, str]]:
+    """Each skill with the folder it goes in, named as its skill, else as it was in the archive; ValueError when
+    that folder is a built-in skill's name or holds a skill from elsewhere."""
     plans = []
     for root in chosen:
         try:
@@ -344,13 +339,19 @@ def install_zip(home: Path, data: bytes, origin: str, source: str, within: str =
         folder = folder[:MAX_NAME] or "skill"
         if (BUILTIN / folder).is_dir() and not (target_root / folder).exists():
             raise ValueError("skill_builtin_name")
-        there = target_root / folder
         row = sources.get(folder) if isinstance(sources.get(folder), dict) else None
-        if there.exists() and not (row and row.get("source") == source and row.get("within", "") == str(root)):
+        if (target_root / folder).exists() and not (row and row.get("source") == source
+                                                    and row.get("within", "") == str(root)):
             raise ValueError("skill_exists")
         plans.append((root, folder))
-    # Every skill is unpacked before any is put in place; a member that does not unpack as its directory says (a
-    # wrong checksum, a size it lied about, entries sharing one member's bytes) stops the add with nothing kept.
+    return plans
+
+
+def _unpack(archive: zipfile.ZipFile, taken: list, plans: list[tuple[PurePosixPath, str]],
+            target_root: Path) -> dict[str, Path]:
+    """Every skill unpacked beside its place before any is put in place; a member that does not unpack as its
+    directory says (a wrong checksum, a size it lied about, entries sharing one member's bytes) stops the add with
+    nothing kept."""
     incoming = {folder: target_root / f".incoming-{folder}-{os.getpid()}" for _, folder in plans}
     try:
         for root, folder in plans:
@@ -367,6 +368,34 @@ def install_zip(home: Path, data: bytes, origin: str, source: str, within: str =
         for place in incoming.values():
             shutil.rmtree(place, ignore_errors=True)
         raise ValueError("skill_bad_archive") from None
+    return incoming
+
+
+def install_zip(home: Path, data: bytes, origin: str, source: str, within: str = "", ref: str = "",
+                market: dict | None = None) -> list[str]:
+    """Adds every skill in a zip (a folder holding SKILL.md, at any depth, at or under `within` when given);
+    returns the folder names added. Only files are written: nothing in it is run. A skill already there from the
+    same place is replaced; one from elsewhere stops the add. `market` is the catalog entry it came from (id,
+    commit, hash), kept so an update can be told (market.py)."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise ValueError("skill_bad_archive") from None
+    files = _members(archive)
+    chosen = _roots(files, within)
+    taken = [(p, info, plain) for p, (info, plain) in files.items() if any(_under(p, c) for c in chosen)]
+    if any(not plain for _, _, plain in taken):
+        raise ValueError("skill_bad_archive")
+    if len(taken) > MAX_MEMBERS or sum(i.file_size for _, i, _ in taken) > MAX_UNPACKED \
+            or any(i.file_size > MAX_MEMBER for _, i, _ in taken):
+        raise ValueError("skill_too_large")
+    target_root = skills_dir(home)
+    target_root.mkdir(parents=True, exist_ok=True)
+    kept = records(home)
+    sources = kept.setdefault("sources", {})
+    plans = _plans(archive, files, chosen, target_root, sources, source)
+    incoming = _unpack(archive, taken, plans, target_root)
+    added: list[str] = []
     for root, folder in plans:
         there = target_root / folder
         if there.exists():

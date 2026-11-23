@@ -16,7 +16,6 @@ from __future__ import annotations
 import copy
 import io
 import re
-import unicodedata
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
@@ -27,6 +26,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor, Twips
 from docx.text.run import Run
+
+from . import text_width
 
 # Fonts: (Latin, East Asian).
 BODY = ("Times New Roman", "宋体")
@@ -54,6 +55,7 @@ _TABLE_RULE = re.compile(r"\|?\s*:?-{1,}:?\s*(?:\|\s*:?-{1,}:?\s*)*\|?")
 _PAGE_BREAK = re.compile(r"\\newpage|\\pagebreak|<!--\s*page\s*break\s*-->|<div[^>]*page-break[^>]*>\s*</div>",
                          re.IGNORECASE)
 _FENCE = re.compile(r"(`{3,}|~{3,})")
+_QUOTE = re.compile(r"^(?:>\s?)+")
 _NUMBER = re.compile(r"[-+]?[¥$€£]?\d[\d,]*(?:\.\d+)?\s*(?:%|元|万元|万|亿)?")
 
 # Inline marks, tried left to right; the first that matches at a place wins.
@@ -127,8 +129,9 @@ def _shade(props, fill: str, after: tuple[str, ...]) -> None:
     shd.set(qn("w:fill"), fill)
 
 
-def _style(document) -> None:
-    """The page, the fonts and the styles every block below is set in."""
+def _page(document) -> None:
+    """An A4 page with Word's margins for Chinese, the body fonts as the defaults, Chinese as the East Asian
+    language, and Word 2013's own mode."""
     section = document.sections[0]
     # A4 as Word writes it, in twentieths of a point.
     section.page_width, section.page_height = Twips(11906), Twips(16838)
@@ -149,6 +152,29 @@ def _style(document) -> None:
         if setting.get(qn("w:name")) == "compatibilityMode":
             setting.set(qn("w:val"), "15")
 
+
+def _page_numbers(section) -> None:
+    """Page numbers, centred in the footer."""
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for kind, text in (("begin", None), (None, "PAGE"), ("separate", None), (None, None), ("end", None)):
+        run = footer.add_run("1" if kind is None and text is None else "")
+        run.font.size, run.font.color.rgb = Pt(9), RGBColor.from_string(MUTED)
+        if kind:
+            mark = OxmlElement("w:fldChar")
+            mark.set(qn("w:fldCharType"), kind)
+            run._r.append(mark)
+        elif text:
+            instr = OxmlElement("w:instrText")
+            instr.set(qn("xml:space"), "preserve")
+            instr.text = f" {text} "
+            run._r.append(instr)
+
+
+def _style(document) -> None:
+    """The page, the fonts and the styles every block below is set in, and the page numbers."""
+    _page(document)
+    styles = document.styles
     normal = styles["Normal"]
     normal.font.size = Pt(11)
     normal.font.color.rgb = INK
@@ -199,22 +225,7 @@ def _style(document) -> None:
 
     link = styles.add_style("Hyperlink", WD_STYLE_TYPE.CHARACTER)
     link.font.color.rgb, link.font.underline = LINK, True
-
-    # Page numbers, centred in the footer.
-    footer = section.footer.paragraphs[0]
-    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for kind, text in (("begin", None), (None, "PAGE"), ("separate", None), (None, None), ("end", None)):
-        run = footer.add_run("1" if kind is None and text is None else "")
-        run.font.size, run.font.color.rgb = Pt(9), RGBColor.from_string(MUTED)
-        if kind:
-            mark = OxmlElement("w:fldChar")
-            mark.set(qn("w:fldCharType"), kind)
-            run._r.append(mark)
-        elif text:
-            instr = OxmlElement("w:instrText")
-            instr.set(qn("xml:space"), "preserve")
-            instr.text = f" {text} "
-            run._r.append(instr)
+    _page_numbers(document.sections[0])
 
 
 def _numbering(document) -> dict:
@@ -376,10 +387,6 @@ def _write(paragraph, text: str, bold: bool = False) -> None:
 
 # ---------------------------------------------------------------- blocks
 
-def _width(text: str) -> int:
-    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
-
-
 def _cells(row: str) -> list[str]:
     row = row.strip()
     row = row.removeprefix("|")
@@ -399,7 +406,7 @@ def _table(document, rows: list[list[str]], aligns: list[str], width: int) -> No
     share the width by how much they hold, and no row breaks across pages."""
     columns = max(len(row) for row in rows)
     rows = [row + [""] * (columns - len(row)) for row in rows]
-    weights = [min(max(max(_width(_plain(row[c])) for row in rows), COLUMN_LEAST), COLUMN_MOST) for c in range(columns)]
+    weights = [min(max(max(text_width(_plain(row[c])) for row in rows), COLUMN_LEAST), COLUMN_MOST) for c in range(columns)]
     widths = [width * w // sum(weights) for w in weights]
     widths[-1] += width - sum(widths)
     # A column the rule gives no alignment: the header centred, numbers (amounts, percentages) to the right.
@@ -458,6 +465,105 @@ def _indent(raw: str) -> int:
     return len(raw.replace("\t", "    ")) - len(raw.replace("\t", "    ").lstrip(" "))
 
 
+def _headings(lines: list[str]) -> list[re.Match]:
+    """The heading lines outside code fences."""
+    headings, fence = [], ""
+    for line in lines:
+        bare = line.strip()
+        if (fence and bare.startswith(fence)) or (not fence and _FENCE.match(bare)):
+            fence = "" if fence else _FENCE.match(bare)[1]
+        elif not fence and (heading := _HEADING.fullmatch(bare)):
+            headings.append(heading)
+    return headings
+
+
+def _code(document, lines: list[str], n: int, mark: str) -> int:
+    """The fenced block from line `n` on, one Code paragraph a line; returns the line after its closing fence."""
+    block = []
+    while n < len(lines) and not lines[n].strip().startswith(mark):
+        block.append(lines[n].rstrip("\n").replace("\t", "    "))
+        n += 1
+    for row, words in enumerate(block or [""]):
+        paragraph = document.add_paragraph(style="Code")
+        if words:
+            paragraph.add_run(words)
+        if row == len(block) - 1 or not block:
+            paragraph.paragraph_format.space_after = Pt(8)
+            paragraph.paragraph_format.keep_with_next = False
+    return n + 1
+
+
+def _rule(document) -> None:
+    paragraph = document.add_paragraph()
+    paragraph.paragraph_format.space_after = Pt(10)
+    _border(paragraph._p.get_or_add_pPr(), "bottom", 6, RULE, 1)
+
+
+def _heading(document, heading: re.Match, titled: bool) -> None:
+    """A heading line: the document's title when it is the one `#` at the top, else a heading a level up from it."""
+    level, words = len(heading[1]), heading[2] or ""
+    if titled and level == 1:
+        _write(document.add_paragraph(style="Title"), words)
+        return
+    _write(document.add_paragraph(style=f"Heading {max(1, level - 1) if titled else level}"), words)
+
+
+def _table_rows(lines: list[str], n: int) -> tuple[list[list[str]], list[str], int]:
+    """The table starting at line `n`: its rows of cell text, its columns' alignment, and the line after it."""
+    rows, aligns = [], []
+    while n < len(lines) and lines[n].strip() and "|" in lines[n]:
+        line = lines[n].strip()
+        n += 1
+        if _TABLE_RULE.fullmatch(line) and "-" in line:
+            aligns = ["center" if c.startswith(":") and c.endswith(":") else "right" if c.endswith(":")
+                      else "left" if c.startswith(":") else "" for c in _cells(line)]
+            continue
+        rows.append(_cells(line))
+    return rows, aligns, n
+
+
+def _list_item(document, abstract: dict, listing: dict, item: re.Match) -> None:
+    """One list item at the level its indent gives, in the list being written (`listing`: its indents, its bullet
+    and number instances, and the kind and level of the item before), which is kept up to date here."""
+    indent, number, words = _indent(item[1]), item[3], item[4]
+    indents = listing["indents"]
+    while indents and indents[-1] > indent:
+        indents.pop()
+    if not indents or indent > indents[-1]:
+        indents.append(indent)
+    level = min(len(indents) - 1, 8)
+    if not number:
+        if not listing["bullet"]:
+            listing["bullet"] = _list_instance(document, abstract["bullet"])
+        num_id, style = listing["bullet"], "List Bullet"
+        if task := _TASK.fullmatch(words):
+            words = ("☑ " if task[1] in "xX" else "☐ ") + task[2]
+    else:
+        # Numbers under a bullet start again at each bullet; under a number, Word restarts them itself.
+        kind, above = listing["last"]
+        if not listing["number"] or (kind == "bullet" and above < level):
+            listing["number"] = _list_instance(document, abstract["number"], int(number) if level == 0 else 1)
+        num_id, style = listing["number"], "List Number"
+    listing["last"] = ("number" if number else "bullet", level)
+    paragraph = document.add_paragraph(style=style)
+    num_pr = paragraph._p.get_or_add_pPr().get_or_add_numPr()
+    num_pr.get_or_add_ilvl().val = level
+    num_pr.get_or_add_numId().val = num_id
+    paragraph.paragraph_format.left_indent = Pt(STEP * (level + 1) / 20)
+    paragraph.paragraph_format.first_line_indent = Pt(-STEP / 20)
+    _write(paragraph, words)
+
+
+def _paragraph(document, bare: str, listing: dict | None) -> None:
+    paragraph = document.add_paragraph()
+    if listing:
+        # A line indented under a list item continues it, set at the item's text.
+        level = min(len(listing["indents"]) - 1, 8)
+        paragraph.paragraph_format.left_indent = Pt(STEP * (level + 1) / 20)
+        paragraph.paragraph_format.space_after = Pt(3)
+    _write(paragraph, bare)
+
+
 def make(text: str) -> bytes:
     """The Word document that `text`, written as Markdown, describes."""
     document = Document()
@@ -467,20 +573,14 @@ def make(text: str) -> bytes:
     width = (section.page_width - section.left_margin - section.right_margin) // 635
 
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    headings, fence = [], ""
-    for line in lines:
-        bare = line.strip()
-        if (fence and bare.startswith(fence)) or (not fence and _FENCE.match(bare)):
-            fence = "" if fence else _FENCE.match(bare)[1]
-        elif not fence and (heading := _HEADING.fullmatch(bare)):
-            headings.append(heading)
+    headings = _headings(lines)
     tops = [h for h in headings if len(h[1]) == 1]
     first = next((line.strip() for line in lines if line.strip()), "")
     # One `#` heading at the very top is the document's title; the `##` sections under it are then Heading 1.
     titled = len(tops) == 1 and tops[0].group(0) == first
     title_text = _plain(tops[0][2] or "") if titled else ""
 
-    # The list being written: its indents, its bullet and number instances; None between lists.
+    # The list being written; None between lists.
     listing: dict | None = None
     n = 0
     while n < len(lines):
@@ -495,95 +595,25 @@ def make(text: str) -> bytes:
         if not item and not (listing and _indent(raw) > 0 and not bare.startswith(("```", "~~~", "|", ">"))):
             listing = None
         if fence := _FENCE.match(bare):
-            mark = fence[1]
-            block = []
-            while n < len(lines) and not lines[n].strip().startswith(mark):
-                block.append(lines[n].rstrip("\n").replace("\t", "    "))
-                n += 1
-            n += 1
-            for row, words in enumerate(block or [""]):
-                paragraph = document.add_paragraph(style="Code")
-                if words:
-                    paragraph.add_run(words)
-                if row == len(block) - 1 or not block:
-                    paragraph.paragraph_format.space_after = Pt(8)
-                    paragraph.paragraph_format.keep_with_next = False
-            continue
-        if _PAGE_BREAK.fullmatch(bare):
+            n = _code(document, lines, n, fence[1])
+        elif _PAGE_BREAK.fullmatch(bare):
             document.add_page_break()
-            continue
-        if _RULE_LINE.fullmatch(bare):
-            paragraph = document.add_paragraph()
-            paragraph.paragraph_format.space_after = Pt(10)
-            _border(paragraph._p.get_or_add_pPr(), "bottom", 6, RULE, 1)
-            continue
-        if heading := _HEADING.fullmatch(bare):
-            level = len(heading[1])
-            words = heading[2] or ""
-            if titled and level == 1:
-                paragraph = document.add_paragraph(style="Title")
-                _write(paragraph, words)
-                continue
-            level = max(1, level - 1) if titled else level
-            _write(document.add_paragraph(style=f"Heading {level}"), words)
-            continue
-        if _is_table_start(lines, n - 1):
-            rows, aligns = [], []
-            n -= 1
-            while n < len(lines) and lines[n].strip() and "|" in lines[n]:
-                line = lines[n].strip()
-                n += 1
-                if _TABLE_RULE.fullmatch(line) and "-" in line:
-                    aligns = ["center" if c.startswith(":") and c.endswith(":") else "right" if c.endswith(":")
-                              else "left" if c.startswith(":") else "" for c in _cells(line)]
-                    continue
-                rows.append(_cells(line))
+        elif _RULE_LINE.fullmatch(bare):
+            _rule(document)
+        elif heading := _HEADING.fullmatch(bare):
+            _heading(document, heading, titled)
+        elif _is_table_start(lines, n - 1):
+            rows, aligns, n = _table_rows(lines, n - 1)
             _table(document, rows, aligns, width)
-            continue
-        if bare.startswith(">"):
-            words = re.sub(r"^(?:>\s?)+", "", bare)
-            if words:
+        elif bare.startswith(">"):
+            if words := _QUOTE.sub("", bare):
                 _write(document.add_paragraph(style="Quote"), words)
-            continue
-        if item:
-            indent, number, words = _indent(item[1]), item[3], item[4]
+        elif item:
             if listing is None:
                 listing = {"indents": [], "bullet": 0, "number": 0, "last": ("", 0)}
-            indents = listing["indents"]
-            while indents and indents[-1] > indent:
-                indents.pop()
-            if not indents or indent > indents[-1]:
-                indents.append(indent)
-            level = min(len(indents) - 1, 8)
-            if not number:
-                if not listing["bullet"]:
-                    listing["bullet"] = _list_instance(document, abstract["bullet"])
-                num_id, style = listing["bullet"], "List Bullet"
-                if task := _TASK.fullmatch(words):
-                    words = ("☑ " if task[1] in "xX" else "☐ ") + task[2]
-            else:
-                # Numbers under a bullet start again at each bullet; under a number, Word restarts them itself.
-                kind, above = listing["last"]
-                if not listing["number"] or (kind == "bullet" and above < level):
-                    listing["number"] = _list_instance(document, abstract["number"], int(number) if level == 0 else 1)
-                num_id, style = listing["number"], "List Number"
-            listing["last"] = ("number" if number else "bullet", level)
-            paragraph = document.add_paragraph(style=style)
-            ppr = paragraph._p.get_or_add_pPr()
-            num_pr = ppr.get_or_add_numPr()
-            num_pr.get_or_add_ilvl().val = level
-            num_pr.get_or_add_numId().val = num_id
-            paragraph.paragraph_format.left_indent = Pt(STEP * (level + 1) / 20)
-            paragraph.paragraph_format.first_line_indent = Pt(-STEP / 20)
-            _write(paragraph, words)
-            continue
-        paragraph = document.add_paragraph()
-        if listing:
-            # A line indented under a list item continues it, set at the item's text.
-            level = min(len(listing["indents"]) - 1, 8)
-            paragraph.paragraph_format.left_indent = Pt(STEP * (level + 1) / 20)
-            paragraph.paragraph_format.space_after = Pt(3)
-        _write(paragraph, bare)
+            _list_item(document, abstract, listing, item)
+        else:
+            _paragraph(document, bare, listing)
 
     _properties(document, title_text or next((_plain(h[2] or "") for h in headings), ""))
     out = io.BytesIO()
