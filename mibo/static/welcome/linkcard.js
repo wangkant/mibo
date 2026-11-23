@@ -5,26 +5,14 @@
 // site, its card below; a page that cannot be read is still a clean card with its host. Every card opens the
 // way every link in the app opens.
 window.paLinks = (() => {
+  const { el, anchor, hostOf } = window.paKit;
   const URL_RE = /https?:\/\/[^\s<>"'，。！？；）】」　]+/g;
   const MARK = /^\s*(?:[-*•]|\d{1,2}[.)])\s+/;
   const MOST = 6;
   const previews = new Map();
   const icons = new Map();
 
-  const el = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
   const clean = (url) => url.replace(/[.,;:!?)\]]+$/, "");
-  const hostOf = (url) => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "";
-    }
-  };
   // The address without its scheme, for a page that could not be read.
   const shortOf = (url) => url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
 
@@ -86,18 +74,9 @@ window.paLinks = (() => {
       box.classList.add("has-img");
       box.append(img);
     };
-    if (known) {
-      if (!icons.has(host)) icons.set(host, opts.picture(known).catch(() => ""));
-    }
+    if (known && !icons.has(host)) icons.set(host, opts.picture(known).catch(() => ""));
     icon(host, opts).then(show);
     return box;
-  }
-  function anchor(url, className) {
-    const node = el("a", className);
-    node.href = url;
-    node.target = "_blank";
-    node.rel = "noopener noreferrer";
-    return node;
   }
 
   // An address inside the words: named by its site once the page is read, its host until then.

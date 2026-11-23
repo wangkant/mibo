@@ -5,24 +5,9 @@
 // waits on (POST /api/schedule/offer). Under a run's result: what the run did not do because nobody was watching,
 // each with a button that asks for it now in the chat, where the usual cards apply.
 window.paScheduleChat = (() => {
-  const SVG = "http://www.w3.org/2000/svg";
+  const { el, svg, fill } = window.paKit;
   const CLOCK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
-
-  function el(tag, cls, text) {
-    const node = document.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function clock(cls = "i") {
-    const mark = document.createElementNS(SVG, "svg");
-    mark.setAttribute("viewBox", "0 0 24 24");
-    mark.setAttribute("aria-hidden", "true");
-    mark.setAttribute("class", cls);
-    mark.innerHTML = CLOCK;
-    return mark;
-  }
-  const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
+  const clock = (className = "i") => svg(CLOCK, className);
   async function post(path, body) {
     const response = await fetch(`/api/${path}`, {
       method: "POST",

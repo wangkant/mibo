@@ -6,7 +6,7 @@
 // asks them to fill in during a call is filled in here and sent with its button (POST /api/mcp/card), to the server
 // alone.
 (() => {
-  const SVG = "http://www.w3.org/2000/svg";
+  const { el, cardHead, fill, pressHeaders } = window.paKit;
   const ICON = {
     start: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 10 3 2-3 2"/><path d="M13 15h4"/>',
     tool: '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2l-5 5a1.5 1.5 0 0 0 2.1 2.1l5-5a4 4 0 0 0 5.2-5.2l-2.4 2.4-2.1-.4-.4-2.1z"/>',
@@ -14,30 +14,6 @@
     link: '<path d="M14 4h6v6"/><path d="M10 14 20 4"/><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"/>',
   };
   let shown = null;
-
-  function el(tag, cls, text) {
-    const node = document.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
-  function fill(text, values) {
-    return text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
-  }
-  function head(kind, title, meta) {
-    const node = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
-    const mark = document.createElementNS(SVG, "svg");
-    mark.setAttribute("viewBox", "0 0 24 24");
-    mark.setAttribute("aria-hidden", "true");
-    mark.setAttribute("class", "i");
-    mark.innerHTML = ICON[kind];
-    tile.append(mark);
-    const words = el("div", "op-card-words");
-    words.append(el("p", "op-card-title", title), el("p", "op-card-meta", meta));
-    node.append(tile, words);
-    return node;
-  }
 
   // A server's form (mcp_tools.ask_fields): one labelled input per field; returns the node and a reader of the
   // values that marks a required field left empty and gives null then.
@@ -130,7 +106,7 @@
     const fact = (name, value, cls = "") => facts.append(el("dt", "", name), el("dd", cls, value));
     if (start) {
       // The server and the program it runs in one line; the exact command, folder and values under the fold.
-      node.append(head("start", fill(t.startTitle, card), `${t.startMeta} · ${card.program}`));
+      node.append(cardHead(ICON.start, fill(t.startTitle, card), `${t.startMeta} · ${card.program}`));
       fact(t.command, card.command, "op-card-text");
       fact(t.folder, card.cwd);
       fact(t.env, card.env.length ? card.env.join(", ") : t.none);
@@ -138,7 +114,7 @@
       fold.append(el("summary", "", t.startDetails), facts);
       node.append(el("p", "op-card-meta", t.startNote), fold);
     } else if (asked) {
-      node.append(head(link ? "link" : "ask", fill(link ? t.linkTitle : t.askTitle, card), fill(t.askMeta, card)));
+      node.append(cardHead(link ? ICON.link : ICON.ask, fill(link ? t.linkTitle : t.askTitle, card), fill(t.askMeta, card)));
       if (card.message) node.append(el("p", "op-card-quote", card.message));
       if (link) {
         fact(t.address, card.url, "op-card-text");
@@ -149,7 +125,7 @@
         node.append(fields, el("p", "op-card-meta", fill(t.askNote, card)));
       }
     } else {
-      node.append(head("tool", fill(t.toolTitle, { tool: card.title || card.tool }), fill(t.toolMeta, card)
+      node.append(cardHead(ICON.tool, fill(t.toolTitle, { tool: card.title || card.tool }), fill(t.toolMeta, card)
         + (card.title && card.title !== card.tool ? ` · ${card.tool}` : "")));
       // Why the automatic review did not pass it, in one line (mcp_hub.py).
       if (card.review) node.append(el("p", "op-card-why", card.review));
@@ -177,9 +153,7 @@
           const response = await fetch("/api/mcp/card", {
             method: "POST",
             credentials: "same-origin",
-            headers: { "Content-Type": "application/json",
-              "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-              "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
+            headers: pressHeaders(),
             body: JSON.stringify({ id: card.id, answer: value, values: filled }),
           });
           const said = await response.json().catch(() => ({}));

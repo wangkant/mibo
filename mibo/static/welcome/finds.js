@@ -4,15 +4,9 @@
 // chat draws a find (chat.js findCard), so liking, replying, playing and 不感兴趣 work as they do there; the
 // list reads GET /api/feed a page at a time as it is scrolled.
 window.paFinds = (() => {
+  const { el, dayLabel } = window.paKit;
   const PAGE = 20;
   const TABS = ["all", "kept"];
-
-  function el(tag, className = "", text = "") {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  }
 
   // `main`: card(find) draws a find as the main chat does; reply() opens the main chat, where a reply goes.
   function create(ctx, main) {
@@ -113,7 +107,7 @@ window.paFinds = (() => {
       const day = new Date(card.at).toDateString();
       if (day !== lastDay) {
         lastDay = day;
-        const line = el("div", "day", dayLabel(card.at));
+        const line = el("div", "day", dayLabel(card.at, words()));
         line.setAttribute("role", "separator");
         list.append(line);
       }
@@ -136,30 +130,12 @@ window.paFinds = (() => {
       note.replaceChildren(el("h2", "finds-note-title", say(what)), el("p", "finds-note-text", say(`${what}Text`)));
     }
 
-    // 今天 · 11月20日 周五, as the chat's day lines read.
-    function dayLabel(time) {
-      const date = new Date(time);
-      const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-      const back = Math.round((start(new Date()) - start(date)) / 86400000);
-      const year = date.getFullYear() !== new Date().getFullYear();
-      const day = words().week
-        ? `${year ? `${date.getFullYear()}年` : ""}${date.getMonth() + 1}月${date.getDate()}日 ${words().week[date.getDay()]}`
-        : date.toLocaleDateString(paI18n.locale, { weekday: "short", month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
-      const near = back === 0 ? say("today") : back === 1 ? say("yesterday") : "";
-      return near ? `${near} · ${day}` : day;
-    }
-
     // A reply to a find is written in the main chat: its box takes the find, and the chat comes up.
     root.addEventListener("click", (event) => {
       if (event.target.closest(".reply-btn")) main.reply();
     });
     // A card's menu closes on a click elsewhere or on Escape, as in the chat.
-    const shut = () => {
-      for (const wrap of root.querySelectorAll(".find-more-wrap.open")) {
-        wrap.classList.remove("open");
-        wrap.firstChild.setAttribute("aria-expanded", "false");
-      }
-    };
+    const shut = () => window.paFindCard.closeMenus(root);
     document.addEventListener("click", (event) => {
       if (!event.target.closest(".find-more-wrap")) shut();
     });

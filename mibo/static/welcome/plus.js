@@ -10,7 +10,7 @@ window.paPlus = (() => {
   const QUOTE_MAX = 600;
   // Facts asked when the menu opens: drawn from the last ones if the answer is slower than this.
   const FACTS_WAIT_MS = 300;
-  const SVG = "http://www.w3.org/2000/svg";
+  const { el, svg, hostOf } = window.paKit;
   const I = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
@@ -36,27 +36,6 @@ window.paPlus = (() => {
   const CHOICES = { search_off: ["searchOff", "globe"], browser: ["browser", "pointer"], computer: ["computer", "monitor"],
     schedule: ["schedule", "clock"], page: ["browser", "pointer"], page_on: ["browser", "pointer"] };
 
-  function el(tag, className = "", text = "") {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  }
-  function svg(paths) {
-    const node = document.createElementNS(SVG, "svg");
-    node.setAttribute("viewBox", "0 0 24 24");
-    node.setAttribute("aria-hidden", "true");
-    node.setAttribute("class", "i");
-    node.innerHTML = paths;
-    return node;
-  }
-  const hostOf = (url) => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "";
-    }
-  };
   const fileOf = (base64, name, type) => {
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
     return new File([bytes], name, { type });

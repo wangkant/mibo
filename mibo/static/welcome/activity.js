@@ -6,7 +6,7 @@
 // its page, with one button for the list of all of them. Steps come as chat.js stores them ({ tool, what, out, cmd, status, ... }, welcome.py `_entry`);
 // a kind not known here shows by its own words.
 window.paActivity = (() => {
-  const SVG = "http://www.w3.org/2000/svg";
+  const { el, svg, anchor, hostOf, fill, pressHeaders } = window.paKit;
   // Lucide-style strokes, one per kind.
   const ICONS = {
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
@@ -25,21 +25,6 @@ window.paActivity = (() => {
     other: '<circle cx="12" cy="12" r="2.5"/>',
     chevron: '<path d="m9 6 6 6-6 6"/>',
   };
-  const svg = (paths, className = "i") => {
-    const node = document.createElementNS(SVG, "svg");
-    node.setAttribute("viewBox", "0 0 24 24");
-    node.setAttribute("aria-hidden", "true");
-    node.setAttribute("class", className);
-    node.innerHTML = paths;
-    return node;
-  };
-  const el = (tag, className = "", text = "") => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  };
-  const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
   const kindOf = (step) => (ICONS[step?.tool] && step.tool !== "chevron" ? step.tool : "other");
   const OK = new Set(["", "done", "ok", "confirmed"]);
   // "计算器：算 4 加 5" or "Calculator: add 4 and 5" as the program and the task.
@@ -51,13 +36,6 @@ window.paActivity = (() => {
     const s = Math.max(1, Math.round(seconds));
     return s < 60 ? fill(w.seconds, { s }) : fill(w.minutes, { m: Math.floor(s / 60), s: s % 60 });
   }
-  const hostOf = (url) => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "";
-    }
-  };
 
   // ---- While it works
   // The waiting row (chat.js typingRow): its dots give way to the step under way, its icon and words.
@@ -144,14 +122,6 @@ window.paActivity = (() => {
     });
     return box;
   }
-  function link(url, className, opts) {
-    const node = opts.link ? opts.link(url, className) : el("a", className);
-    node.href = url;
-    node.target = "_blank";
-    node.rel = "noopener noreferrer";
-    node.textContent = "";
-    return node;
-  }
   // Folded under one step: the raw key presses, the command and what it printed.
   function more(w, blocks) {
     const box = el("details", "act-more");
@@ -186,7 +156,7 @@ window.paActivity = (() => {
       const source = sources.find((s, n) => !used.has(n) && (s.site === what || hostOf(s.url) === what));
       if (source) {
         used.add(sources.indexOf(source));
-        const page = link(source.url, "act-page", opts);
+        const page = anchor(source.url, "act-page");
         page.append(siteMark(hostOf(source.url), opts), el("span", "act-page-title", source.title || source.site),
           el("span", "act-page-host", hostOf(source.url)));
         body.append(page);
@@ -250,7 +220,7 @@ window.paActivity = (() => {
   }
 
   // Under the reply: the sites it drew on, a chip each that opens the site's first page in the app's browser
-  // (opts.link, as every link in the chat does); when the pages are more than the chips, one button at the end
+  // (as every link in the chat does); when the pages are more than the chips, one button at the end
   // of the row opens the list of them all, with their titles.
   let lists = 0;
   function sources(list, opts = {}) {
@@ -264,7 +234,7 @@ window.paActivity = (() => {
     }
     const chips = [...firsts].slice(0, 4);
     for (const [host, source] of chips) {
-      const chip = link(source.url, "act-chip", opts);
+      const chip = anchor(source.url, "act-chip");
       const name = paI18n.t("activity.sourceOpen", { host, title: source.title || source.site || source.url });
       chip.setAttribute("aria-label", name);
       chip.title = name;
@@ -278,7 +248,7 @@ window.paActivity = (() => {
     rows.hidden = true;
     for (const source of list) {
       const item = el("li");
-      const page = link(source.url, "act-page", opts);
+      const page = anchor(source.url, "act-page");
       page.append(siteMark(hostOf(source.url), opts), el("span", "act-page-title", source.title || source.site || source.url),
         el("span", "act-page-host", hostOf(source.url)));
       item.append(page);
@@ -313,9 +283,7 @@ window.paActivity = (() => {
     fetch(`/api/${path}`, {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json",
-        "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-        "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
+      headers: pressHeaders(),
       body: JSON.stringify(body),
     }).then((r) => r.json());
 

@@ -93,6 +93,8 @@ function makeCard(api) {
     api("/api/feed/react", { id: found.id, action, surface: "card", rank: 0, slot: found.slot || "", ...more }).catch(() => {
       // The service is not answering: the reaction is lost, the card still goes.
     });
+  // Seconds the card has been out, to a tenth, as the feed takes them.
+  const shownFor = () => Math.min(86400, Math.round((performance.now() - shownAt) / 100) / 10);
   const seconds = () => Math.min(86400, (ran + (since === null ? 0 : performance.now() - since)) / 1000);
   // Each telling carries the whole time so far; the feed keeps the longest.
   function tellPlay(found) {
@@ -260,10 +262,9 @@ function makeCard(api) {
   function no(found, about) {
     clearTimeout(timer);
     asked = false;
-    const shown_s = Math.min(86400, Math.round((performance.now() - shownAt) / 100) / 10);
     // Seen already says nothing of their taste; any other is the card closed, with what the no was about.
     const sent = Promise.all([
-      react(found, "end", { end: opened ? "open" : about === "seen" ? "known" : "close", shown_s }),
+      react(found, "end", { end: opened ? "open" : about === "seen" ? "known" : "close", shown_s: shownFor() }),
       about === "source"
         ? react(found, "hide_source")
         : about !== "seen" && react(found, "skip", { said: about === "topic" ? { about, key: found.topic.key } : { about } }),
@@ -341,7 +342,7 @@ function makeCard(api) {
     clearTimeout(timer);
     const played = tellPlay(done);
     playing = null;
-    react(done, "end", { end: "next", shown_s: Math.min(86400, Math.round((performance.now() - shownAt) / 100) / 10) });
+    react(done, "end", { end: "next", shown_s: shownFor() });
     const mine = (item = { panel: true, target: "" });
     // The card passed over fades until the next is in.
     box.classList.add("picking");
@@ -460,7 +461,7 @@ function makeCard(api) {
     const quiet = done.said || done.panel;
     // A video played on it: how long, before the player goes.
     const played = quiet ? null : tellPlay(done);
-    const out = Math.round((performance.now() - shownAt) / 100) / 10;
+    const shown_s = shownFor();
     // The pet droops at a find put away or turned down, not at a frame of its own going (pet.js).
     box.dataset.went = done.panel && !done.no ? "panel" : "";
     box.classList.remove("picking");
@@ -479,7 +480,7 @@ function makeCard(api) {
     const sent = quiet
       ? null
       : Promise.all([
-          react(done, "end", { end, shown_s: Math.min(86400, out) }),
+          react(done, "end", { end, shown_s }),
           action === "open" ? react(done, action) : null,
           // A no that says so counts as more than a plain skip (taste.py SAID_NO).
           nope ? react(done, "skip", { said: { about: "thing" } }) : null,

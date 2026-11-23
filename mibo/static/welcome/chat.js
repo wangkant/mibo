@@ -3,7 +3,10 @@
 // sentence about the thing, the thing's card under it. A plain chat is only talk. The shell
 // makes one view per chat. The column reads quietly: the character's words without bubbles,
 // its face, name and time once at the start of each run; the person's words in soft bubbles.
+// This file is the view, the composer, sending and the questions a reply waits on; the thread is drawn
+// by chatthread.js, a find by findcard.js, what rides on a message by attach.js.
 window.paChat = (() => {
+  const { I, el, button, svg, iconButton, motion } = window.paKit;
   const MAIN = "main";
   // Failures that the settings page can fix get a way there.
   const SETTINGS_FIXES = new Set(["key_required", "chat_failed", "model_no_balance", "model_window_small"]);
@@ -20,276 +23,16 @@ window.paChat = (() => {
   const END_PX = 80;
   // A plain chat is named after the first message sent in it, cut to this many characters.
   const TITLE_CLIP = 40;
-  // The character's messages further apart than this start a new run, with its name and time again.
-  const RUN_GAP_MS = 10 * 60 * 1000;
-  // What a message can carry (welcome.py checks it again): at most `most` things. A picture of at
-  // most `picked` bytes, sent as picked when it is within `side` pixels and `picture` bytes, else
-  // drawn smaller as WebP until it is; a text file of at most `file` bytes, by its extension.
-  const ATTACH = { most: 4, picked: 20 * 1024 * 1024, picture: 1000000, side: 1600, file: 512 * 1024 };
-  const PICTURE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-  const TEXT_KINDS = new Set(
-    ("txt text md markdown rst csv tsv json jsonl yaml yml toml ini cfg conf log xml html htm " +
-      "css scss js mjs cjs ts tsx jsx vue py ipynb java kt kts scala go rs c h cc cpp hpp cs m mm " +
-      "swift rb php pl lua r sql sh bash zsh ps1 bat cmd tex bib srt vtt diff patch").split(" "),
-  );
-  const SVG = "http://www.w3.org/2000/svg";
-  // Lucide-style strokes.
-  const I = {
-    window: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/>',
-    terminal: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 10 3 2-3 2"/><path d="M13 15h4"/>',
-    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-    up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
-    stop: '<rect x="5" y="5" width="14" height="14" rx="2.5"/>',
-    reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
-    heart:
-      '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7z"/>',
-    open: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
-    more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
-    tv: '<rect x="2" y="7" width="20" height="15" rx="2"/><path d="m17 2-5 5-5-5"/>',
-    video: '<rect x="2" y="4" width="20" height="16" rx="4"/><path d="m10 9 5 3-5 3z"/>',
-    file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/>',
-    branch: '<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
-    post: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-    globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
-    shrink: '<path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/>',
-    x: '<path d="M18 6 6 18M6 6l12 12"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    skip: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
-    less: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/>',
-    raise: '<circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/>',
-    seen: '<path d="M20 6 9 17l-5-5"/>',
-    alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
-    talk: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>',
-    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-    compass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36z"/>',
-    help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
-    // A dashed bubble: the 无痕对话.
-    ghost: '<path d="M10.1 2.18a10 10 0 0 1 3.8 0M13.9 21.82a10 10 0 0 1-3.8 0M17.6 3.72a10 10 0 0 1 2.7 2.7M2.18 13.9a10 10 0 0 1 0-3.8M20.28 17.6a10 10 0 0 1-2.7 2.7M21.82 10.1a10 10 0 0 1 0 3.8M3.72 6.4a10 10 0 0 1 2.7-2.7"/><path d="m6.8 20.79-3.9.9a.5.5 0 0 1-.6-.6l.9-3.9"/>',
-  };
-  const YOUTUBE = ["www.youtube-nocookie.com", "www.youtube.com", "youtube.com", "youtube-nocookie.com"];
-
-  // Seconds a player has run: from YouTube's own state changes once it sends them
-  // (asked to with "listening"), else the time it has been on the page.
-  function playClock(frame, origin) {
-    let total = 0;
-    let since = performance.now();
-    let heard = false;
-    const hear = (event) => {
-      if (event.source !== frame.contentWindow) return;
-      let said;
-      try {
-        said = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-      const state = said?.event === "onStateChange" ? said.info : said?.info?.playerState;
-      if (typeof state !== "number") return;
-      const now = performance.now();
-      // From its first word on, only the time it says it plays counts.
-      if (!heard) {
-        heard = true;
-        since = null;
-      }
-      if (state === 1) since ??= now;
-      else if (since !== null) {
-        total += now - since;
-        since = null;
-      }
-    };
-    if (origin) {
-      addEventListener("message", hear);
-      // Asked until it answers, as YouTube's own API does: its player is ready a little after its page.
-      frame.addEventListener("load", () => {
-        let tries = 0;
-        const ask = setInterval(() => {
-          if (heard || ++tries > 40 || !frame.isConnected) return clearInterval(ask);
-          frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), origin);
-        }, 250);
-      });
-    }
-    return {
-      seconds: () => Math.min(86400, (total + (since === null ? 0 : performance.now() - since)) / 1000),
-      stop: () => removeEventListener("message", hear),
-    };
-  }
-  // The videos playing in place in any chat, each with its way to tell the feed how long it has run.
-  // Told when it is folded away, scrolled out of view or the page is put away; the feed keeps the longest.
-  const players = new Map();
-  const tellAll = () => players.forEach((tell) => tell());
-  const offView = new IntersectionObserver((entries) => {
-    for (const entry of entries) if (!entry.isIntersecting) players.get(entry.target)?.();
-  });
-  document.addEventListener("visibilitychange", () => document.hidden && tellAll());
-  addEventListener("pagehide", tellAll);
   const IDEA_ICONS = { main: [I.compass, I.calendar, I.talk], plain: [I.talk, I.calendar, I.help] };
-  const PLAY = '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/>';
-  // The character's words are Markdown, read by markdown-it (markdown-it.umd.min.js, vendored): CommonMark with
-  // GitHub's tables and struck text. No HTML in a reply is drawn; only web addresses become links, bare ones
-  // too (README.md and mail addresses stay words); a picture is a link to it and is never loaded. Lines indented
-  // four spaces are not code, and dashes under a paragraph are a rule, not a heading. Underscores never mark
-  // emphasis (__init__); an asterisk or tilde run marks it only with no letter or digit outside it and no space
-  // inside (2 * 3, x**2 + y**2 stay as written), so bold that ends in Chinese punctuation closes (**注意：**明天).
-  const MD = (() => {
-    const md = window.markdownit({ html: false, linkify: true });
-    md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
-    md.disable(["code", "lheading"]);
-    md.validateLink = (url) => /^https?:\/\//i.test(url);
-    const word = /[A-Za-z0-9]/;
-    const space = /\s/;
-    md.inline.State = class extends md.inline.State {
-      scanDelims(start) {
-        const marker = this.src[start];
-        let end = start;
-        while (end < this.posMax && this.src[end] === marker) end += 1;
-        const before = this.src[start - 1] || " ";
-        const after = end < this.posMax ? this.src[end] : " ";
-        const marks = marker !== "_";
-        return { can_open: marks && !space.test(after) && !word.test(before),
-          can_close: marks && !space.test(before) && !word.test(after), length: end - start };
-      }
-    };
-    md.renderer.rules.image = (tokens, n, options, env, self) => {
-      const src = md.utils.escapeHtml(tokens[n].attrGet("src"));
-      return `<a href="${src}">${md.utils.escapeHtml(self.renderInlineAsText(tokens[n].children, options, env)) || src}</a>`;
-    };
-    // Headings start at h3 under the chat's own; a column's side is a data attribute (no inline styles here);
-    // a bare address is marked to be named by its site.
-    md.core.ruler.push("chat", (state) => {
-      for (const token of state.tokens) {
-        if (token.type === "heading_open" || token.type === "heading_close") token.tag = `h${Math.min(6, +token.tag[1] + 2)}`;
-        else if ((token.type === "th_open" || token.type === "td_open") && token.attrGet("style"))
-          token.attrs = [["data-align", token.attrGet("style").split(":")[1]]];
-        else if (token.type === "inline")
-          for (const child of token.children) if (child.type === "link_open" && child.markup in { linkify: 1, autolink: 1 }) child.attrSet("data-bare", "");
-      }
-    });
-    return md;
-  })();
-  // Block elements: the line breaks markdown-it writes beside them are its own, not the reply's.
-  const BLOCK = /^(P|UL|OL|LI|BLOCKQUOTE|TABLE|THEAD|TBODY|TR|TH|TD|PRE|HR|H[1-6]|DIV)$/;
-
-  function el(tag, className = "", text = "") {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text) node.textContent = text;
-    return node;
-  }
-  function button(className, text, run) {
-    const node = el("button", className, text);
-    node.type = "button";
-    node.addEventListener("click", run);
-    return node;
-  }
-  function svg(paths, className = "i") {
-    const node = document.createElementNS(SVG, "svg");
-    node.setAttribute("viewBox", "0 0 24 24");
-    node.setAttribute("aria-hidden", "true");
-    node.setAttribute("class", className);
-    node.innerHTML = paths;
-    return node;
-  }
-  // A button holding only an icon, named for screen readers and on hover.
-  function iconButton(className, paths, label, run) {
-    const node = button(className, "", run);
-    node.append(svg(paths));
-    node.setAttribute("aria-label", label);
-    node.title = label;
-    return node;
-  }
-  // The head of a card that asks the person: an icon, what is asked, and one faint line under it.
-  function cardHead(paths, title, meta = "") {
-    const head = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
-    tile.append(svg(paths));
-    const words = el("div", "op-card-words");
-    words.append(el("p", "op-card-title", title));
-    if (meta) words.append(el("p", "op-card-meta", meta));
-    head.append(tile, words);
-    return head;
-  }
-  const motion = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
-  // An ISO time, or epoch seconds (remarks keep those) or milliseconds.
-  const when = (at) => {
-    const time = typeof at === "number" ? (at < 1e12 ? at * 1000 : at) : at ? new Date(at).getTime() : NaN;
-    return Number.isFinite(time) && time > 0 ? time : 0;
-  };
-  const dayKey = (time) => {
-    const d = new Date(time);
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-  };
-  const hostOf = (url) => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, "");
-    } catch {
-      return "";
-    }
-  };
-  const extOf = (name) => (/\.([^.]+)$/.exec(name)?.[1] || "").toLowerCase();
-  function sizeOf(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    return bytes < 1048576 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
-  }
-  const base64Of = (blob) =>
-    new Promise((done, fail) => {
-      const reader = new FileReader();
-      reader.onload = () => done(String(reader.result).split(",")[1] || "");
-      reader.onerror = () => fail(reader.error);
-      reader.readAsDataURL(blob);
-    });
-  // A picture as it is sent: as picked when small enough, else drawn smaller as WebP.
-  async function sendable(file) {
-    const bitmap = await createImageBitmap(file);
-    try {
-      let scale = Math.min(1, ATTACH.side / Math.max(bitmap.width, bitmap.height));
-      if (scale === 1 && file.size <= ATTACH.picture) return file;
-      for (;;) {
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise((done) => canvas.toBlob(done, "image/webp", 0.85));
-        if (blob.size <= ATTACH.picture) return blob;
-        scale *= 0.75;
-      }
-    } finally {
-      bitmap.close();
-    }
-  }
-  // Whether a file's bytes read as text, as welcome.py reads them: UTF-8, UTF-16 with its mark, or GB18030.
-  function readsAsText(buffer) {
-    const bytes = new Uint8Array(buffer);
-    if ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff)) return true;
-    for (const label of ["utf-8", "gb18030"]) {
-      try {
-        return !new TextDecoder(label, { fatal: true }).decode(bytes).includes("\0");
-      } catch {
-        // Not this one: the next.
-      }
-    }
-    return false;
-  }
-
-  // A video's length as a player shows it.
-  function clock(seconds) {
-    const s = Math.round(seconds);
-    const two = (n) => String(n).padStart(2, "0");
-    const h = Math.floor(s / 3600);
-    return h ? `${h}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}` : `${Math.floor(s / 60)}:${two(s % 60)}`;
-  }
-  // One quiet icon for where a thing is from; only the cover carries colour.
-  function siteIcon(card) {
-    const host = hostOf(card.url);
-    if (/(^|\.)(github\.com|gitlab\.com|gitee\.com|codeberg\.org)$/.test(host)) return I.branch;
-    if (card.kind === "video") return /bilibili|b23\.tv/.test(host) ? I.tv : I.video;
-    if (card.kind === "article") return I.file;
-    if (card.kind === "post") return I.post;
-    return I.globe;
-  }
+  // Where a step waits on the person's yes: a command (shell/panel.py), turning a switched-off ability on
+  // (turnon.py), a task in another program (desk/panel.py), one of their MCP servers (mcp_hub.py, toolcard.js),
+  // a setting (appmap.py), or the browser (web/gate.py).
+  const ASK_ROUTES = { operate: "browser/confirm", shell: "shell/card", turn_on: "turnon/card",
+    desk: "programs/card", mcp: "mcp/card", settings: "settings/card" };
 
   function create(id, ctx, hooks) {
     const main = id === MAIN;
     const words = () => paI18n.words("chat");
-    const locale = () => paI18n.locale;
     // As the shell last read it, so a new chat can be typed in at once; read again on show.
     let state = ctx.state;
     let seen = 0,
@@ -316,17 +59,9 @@ window.paChat = (() => {
       atEnd = true,
       title = "",
       replying = null,
-      // What rides on the next message: { key, kind, file, size, url, data } each, data once it is ready.
-      attached = [],
-      attachKey = 0,
       dragDepth = 0,
       // A 无痕对话: it reads no memory and leaves none (welcome.py PageChat.private).
-      privateChat = false,
-      // When the checkpoint or the cleared mark the thread shows was written (welcome.py PageChat.summary).
-      marked = 0;
-    // Where the thread was last drawn to: the day, and the character's open run of messages.
-    let lastDay = "",
-      run = null;
+      privateChat = false;
     // Pictures behind the page's token, fetched once per view.
     const blobs = new Map();
     const parts = {};
@@ -345,11 +80,10 @@ window.paChat = (() => {
       if (!blobs.has(path)) blobs.set(path, ctx.picture(path));
       return blobs.get(path);
     };
+    const ask = (text) => !sending && send(text);
     // What the link cards and the steps above a reply take from the chat (linkcard.js, activity.js).
-    const links = { api: ctx.api, picture: blob, link: (url, className) => linkNode(url, className),
-      findCard: (card) => findCard(card), grew: () => keepEnd(), goOn: (text) => !sending && send(text), go: ctx.go,
-      confirm: ctx.confirm };
-    const linkCards = (text, skip = "") => window.paLinks.cards(window.paLinks.urls(text, [skip]), links);
+    const links = { api: ctx.api, picture: blob, findCard: (card) => finds.card(card), grew: () => keepEnd(), goOn: ask,
+      go: ctx.go, confirm: ctx.confirm };
 
     // ---- The page: the thread, or the empty and not-set-up states, and the composer
     const root = el("div", `chat ${main ? "chat-main" : "chat-plain"}`);
@@ -362,7 +96,7 @@ window.paChat = (() => {
     parts.scroll.addEventListener("scroll", () => {
       const box = parts.scroll;
       atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < END_PX;
-      closeMenus();
+      finds.closeMenus();
     });
 
     // No messages yet: the character's bust fading out, a greeting, the composer, three ideas.
@@ -404,13 +138,15 @@ window.paChat = (() => {
     parts.input = el("textarea", "chat-input");
     parts.input.rows = 2;
     const tools = el("div", "chat-tools");
+    const attached = window.paAttach.create({ tray: parts.tray, form: parts.form, refused: parts.refused, input: parts.input,
+      say, configured: () => Boolean(state?.configured), changed: () => syncSend() });
     parts.picker = el("input");
     parts.picker.type = "file";
     parts.picker.multiple = true;
     parts.picker.hidden = true;
-    parts.picker.accept = [...PICTURE_TYPES, ...[...TEXT_KINDS].map((kind) => `.${kind}`)].join(",");
+    parts.picker.accept = window.paAttach.ACCEPT;
     parts.picker.addEventListener("change", () => {
-      attach([...parts.picker.files]);
+      attached.add([...parts.picker.files]);
       parts.picker.value = "";
     });
     // "+": a menu of what can go with a message and what to ask for (plus.js).
@@ -420,7 +156,7 @@ window.paChat = (() => {
       name: () => displayName(),
       configured: () => Boolean(state?.configured),
       pick: () => parts.picker.click(),
-      attach, refuse, flash, attachItem,
+      attach: attached.add, refuse: attached.refuse, flash, attachItem: attached.addItem,
       refresh: () => poll(),
       private: () => privateChat,
       setPrivate,
@@ -444,7 +180,7 @@ window.paChat = (() => {
       tools: () => Boolean(parts.messages.querySelector(".act, .me-choice")),
       // Its context gauge, 立即归纳 and 清空上下文 act on this chat; what they changed shows in the thread.
       chat: id,
-      changed: async () => mark((await history(seen)).summary),
+      changed: async () => thread.mark((await history(seen)).summary),
     });
     parts.send = el("button", "chat-send");
     parts.send.type = "submit";
@@ -466,6 +202,13 @@ window.paChat = (() => {
     // Files dragged over the chat: a frame saying they can be let go here.
     parts.dropZone = el("div", "chat-drop");
     root.append(parts.scroll, parts.empty, parts.off, parts.dock, parts.dropZone);
+
+    // A find as this chat draws one (findcard.js); its reply rides on this chat's composer.
+    const finds = window.paFindCard.create({ api: ctx.api, picture: blob, say, reply: (card) => setReply(card),
+      grew: () => keepEnd(), root });
+    const thread = window.paThread.create({ messages: parts.messages, id, say, words, displayName, face: ctx.face,
+      picture: blob, attachedText: ctx.attachedText, go: ctx.go, links, findCard: finds.card,
+      choices: (list) => plus.sent(list), ask, grew: () => keepEnd() });
 
     const carriesFiles = (event) => Boolean(state?.configured) && [...(event.dataTransfer?.types || [])].includes("Files");
     root.addEventListener("dragenter", (event) => {
@@ -489,14 +232,14 @@ window.paChat = (() => {
       event.preventDefault();
       dragDepth = 0;
       root.classList.remove("dropping");
-      attach([...event.dataTransfer.files]);
+      attached.add([...event.dataTransfer.files]);
     });
     // A picture pasted from the clipboard; text that comes with it is pasted as text instead.
     parts.input.addEventListener("paste", (event) => {
       const files = [...event.clipboardData.files];
       if (!files.length || event.clipboardData.types.includes("text/plain")) return;
       event.preventDefault();
-      attach(files);
+      attached.add(files);
     });
 
     parts.input.addEventListener("input", grow);
@@ -534,12 +277,12 @@ window.paChat = (() => {
       },
       // A card's own menu closes on any click elsewhere.
       click: (event) => {
-        if (!event.target.closest(".find-more-wrap")) closeMenus();
+        if (!event.target.closest(".find-more-wrap")) finds.closeMenus();
       },
       keydown: (event) => {
         if (event.key === "Escape" && root.querySelector(".find-more-wrap.open")) {
           event.stopPropagation();
-          closeMenus();
+          finds.closeMenus();
         }
       },
     };
@@ -552,7 +295,7 @@ window.paChat = (() => {
     }
 
     function renderText() {
-      root.lang = locale();
+      root.lang = paI18n.locale;
       parts.greet.textContent = greeting();
       // A plain chat needs no words of its own: the greeting and the ideas say it.
       parts.emptyText.hidden = !main;
@@ -577,7 +320,7 @@ window.paChat = (() => {
       plus.render();
       bar.render();
       parts.dropZone.textContent = say("dropHere");
-      paintTray();
+      attached.paint();
       for (const name of parts.messages.querySelectorAll(".ai-name")) name.textContent = displayName();
       paintQuote();
       parts.mark.replaceChildren(svg(I.ghost), el("strong", "", say("privateMark")), el("span", "", say("privateNote")));
@@ -628,8 +371,8 @@ window.paChat = (() => {
         parts.send.setAttribute("aria-label", say(stops ? "stop" : "send"));
         parts.send.title = say(stops ? "stop" : "send");
       }
-      parts.send.disabled = !sending && (!state?.configured || !(parts.input.value.trim() || attached.length) ||
-        attached.some((item) => !item.data));
+      parts.send.disabled = !sending && (!state?.configured || !(parts.input.value.trim() || attached.count) ||
+        !attached.ready());
     }
     function grow() {
       parts.input.style.height = "auto";
@@ -646,312 +389,12 @@ window.paChat = (() => {
     // The same when the thread's own box changes size: the window, the chat set beside a page, the box growing.
     new ResizeObserver(keepEnd).observe(parts.scroll);
 
-    // ---- The thread's frame: days, and the character's runs
-    function dayLabel(time) {
-      const date = new Date(time);
-      const start = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-      const back = Math.round((start(new Date()) - start(date)) / 86400000);
-      const year = date.getFullYear() !== new Date().getFullYear();
-      const day = words().week
-        ? `${year ? `${date.getFullYear()}年` : ""}${date.getMonth() + 1}月${date.getDate()}日 ${words().week[date.getDay()]}`
-        : date.toLocaleDateString(locale(), { weekday: "short", month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
-      const near = back === 0 ? words().today : back === 1 ? words().yesterday : "";
-      return near ? `${near} · ${day}` : day;
-    }
-    const timeOf = (time) =>
-      new Date(time).toLocaleTimeString(locale(), paI18n.lang === "en" ? { hour: "numeric", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    // A new day gets its line before its first message.
-    function separate(time) {
-      if (!time || dayKey(time) === lastDay) return;
-      lastDay = dayKey(time);
-      const line = el("div", "day", dayLabel(time));
-      line.setAttribute("role", "separator");
-      parts.messages.append(line);
-    }
-    // The open run of the character's messages, or a new one with its face, name and time.
-    function botRun(time) {
-      const open =
-        run && run.node === parts.messages.lastElementChild &&
-        (!time || !run.last || (dayKey(time) === dayKey(run.last) && time - run.last < RUN_GAP_MS));
-      if (open) {
-        if (time) run.last = time;
-        return run.body;
-      }
-      const node = el("section", "ai");
-      const body = el("div", "ai-body");
-      const meta = el("div", "ai-meta");
-      meta.append(el("span", "ai-name", displayName()));
-      if (time) {
-        const stamp = el("time", "ai-time", timeOf(time));
-        stamp.dateTime = new Date(time).toISOString();
-        meta.append(stamp);
-      }
-      body.append(meta);
-      node.append(ctx.face("ai-face"), body);
-      parts.messages.append(node);
-      run = { node, body, last: time };
-      return body;
-    }
-    // A line taken out of a run: a run left with nothing in it goes too.
-    function unline(node) {
-      const section = node.closest(".ai");
-      node.remove();
-      if (section && !section.querySelector(".line")) {
-        section.remove();
-        if (run?.node === section) run = null;
-      }
-    }
-
     // ---- Messages
-    const isRemark = (item) => item.remark === true || item.kind === "remark";
-    async function showPicture(holder, name, alt = say("picture")) {
-      try {
-        const url = name.startsWith("blob:") ? name : await blob(`/api/chat/picture/${encodeURIComponent(name)}`);
-        const image = el("img");
-        image.alt = alt;
-        image.addEventListener("load", keepEnd, { once: true });
-        image.src = url;
-        holder.classList.remove("loading", "pa-shimmer");
-        holder.replaceChildren(image);
-      } catch {
-        holder.classList.remove("loading", "pa-shimmer");
-        holder.classList.add("gone");
-        holder.textContent = say("pictureGone");
-      }
-    }
-    function pictureNode(item) {
-      const holder = el("div", "pic loading pa-shimmer");
-      if (item.picture) showPicture(holder, item.picture);
-      else {
-        holder.classList.remove("loading", "pa-shimmer");
-        holder.classList.add("gone");
-        holder.textContent = say("pictureGone");
-      }
-      return holder;
-    }
-    // What the person attached, above their words: pictures as they are, files as chips that open.
-    function attachedNode(list) {
-      const box = el("div", "me-att");
-      for (const item of list) {
-        if (item.kind === "picture") {
-          const holder = el("div", "pic loading pa-shimmer");
-          showPicture(holder, item.url || item.name, say("myPicture"));
-          box.append(holder);
-          continue;
-        }
-        // A page from the app's browser opens the way every link opens.
-        if (item.kind === "page") {
-          const link = window.paPlus.pageChip(item, "a");
-          link.href = item.url;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          box.append(link);
-          continue;
-        }
-        const node = el("div", "att-sent");
-        // Stored ones open: those of a message still on its way have no name yet.
-        const head = item.name ? button("att att-file", "", () => showFile(node, head, item.name)) : el("div", "att att-file");
-        head.append(fileWords(item));
-        if (item.name) {
-          head.setAttribute("aria-expanded", "false");
-          head.setAttribute("aria-label", `${say("showFile")}: ${item.file}`);
-        }
-        node.append(head);
-        box.append(node);
-      }
-      return box;
-    }
-    function fileWords(item) {
-      const icon = el("span", "att-icon");
-      icon.append(svg(I.file));
-      const words = el("span", "att-words");
-      const size = el("span", "att-size", sizeOf(item.size));
-      if (item.clipped) {
-        size.textContent += ` · ${say("clipped")}`;
-        size.title = say("clippedTip");
-      }
-      words.append(el("span", "att-name", item.file), size);
-      const frag = document.createDocumentFragment();
-      frag.append(icon, words);
-      return frag;
-    }
-    async function showFile(node, head, name) {
-      const open = head.getAttribute("aria-expanded") !== "true";
-      head.setAttribute("aria-expanded", String(open));
-      node.querySelector(".att-text")?.remove();
-      if (!open) return;
-      const text = el("pre", "att-text pa-shimmer");
-      node.append(text);
-      try {
-        text.textContent = await ctx.attachedText(`/api/chat/file/${encodeURIComponent(name)}`);
-      } catch {
-        text.classList.add("gone");
-        text.textContent = say("fileGone");
-      }
-      text.classList.remove("pa-shimmer");
-    }
-    // A thing brought with no sentence of its own is said by its title: not twice.
-    function saysTitle(text, card) {
-      const words = String(text || "").replace(/[…\s.]+$/, "");
-      return !words || (card.title || "").startsWith(words) || text === card.url;
-    }
-    // A link in the character's words, opened the way every link in the app opens.
-    function linkNode(url, className = "say-link") {
-      const link = el("a", className, url);
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      return link;
-    }
-    // `text` into `node`, its web addresses as links.
-    function linked(node, text) {
-      let at = 0;
-      for (const match of text.matchAll(/https?:\/\/[^\s<>"'，。！？；）】」]+/g)) {
-        const url = match[0].replace(/[.,;:!?)\]]+$/, "");
-        node.append(text.slice(at, match.index), window.paLinks.inline(url, links));
-        at = match.index + url.length;
-      }
-      node.append(text.slice(at));
-      return node;
-    }
-    // A fenced code block, drawn as code with a button that copies it.
-    function codeNode(lang, code) {
-      const box = el("div", "code");
-      const head = el("div", "code-head");
-      const copy = button("code-copy", say("copy"), async () => {
-        try {
-          await navigator.clipboard.writeText(code);
-          copy.textContent = say("copied");
-          setTimeout(() => (copy.textContent = say("copy")), 1500);
-        } catch {
-          // The code is still there to select by hand.
-        }
-      });
-      head.append(el("span", "code-lang", lang), copy);
-      const pre = el("pre");
-      pre.append(el("code", "", code));
-      box.append(head, pre);
-      return box;
-    }
-    // The character's words, drawn from their Markdown (MD above): markdown-it's blocks without the line breaks it
-    // writes between them (the words keep their own), code with its copy button, a table in a box that scrolls,
-    // each link opened as every link in the app opens and a bare address named by its site.
-    function sayNode(text) {
-      const node = el("div", "say rich");
-      node.innerHTML = MD.render(String(text || ""));
-      const walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-      const texts = [];
-      while (walk.nextNode()) if (!walk.currentNode.parentNode.closest("pre")) texts.push(walk.currentNode);
-      for (const words of texts) {
-        if (BLOCK.test(words.nextSibling?.tagName || "")) words.data = words.data.replace(/\n$/, "");
-        if (BLOCK.test(words.previousSibling?.tagName || "")) words.data = words.data.replace(/^\n/, "");
-        if (!words.data) words.remove();
-      }
-      for (const pre of node.querySelectorAll("pre")) {
-        const code = pre.firstChild;
-        pre.replaceWith(codeNode(code.className.replace(/^language-/, ""), code.textContent.replace(/\n$/, "")));
-      }
-      for (const table of node.querySelectorAll("table")) {
-        const box = el("div", "say-table");
-        table.replaceWith(box);
-        box.append(table);
-      }
-      for (const link of node.querySelectorAll("a")) {
-        if (link.hasAttribute("data-bare")) link.replaceWith(window.paLinks.inline(link.textContent, links));
-        else {
-          link.className = "say-link";
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          link.title = link.getAttribute("href");
-        }
-      }
-      return node;
-    }
-    // The words with the lines their link cards say taken out; fenced code keeps every line.
-    function wordsOf(text) {
-      return String(text || "")
-        .split(/^([ \t]*```[^\n]*\n[\s\S]*?(?:\n[ \t]*```[ \t]*$|(?![\s\S])))/m)
-        .map((part, n) => (n % 2 ? part : window.paLinks.bare(part)))
-        .filter(Boolean)
-        .join("\n");
-    }
     // `loading`: drawn as part of a whole history, which reports to the shell once at its end.
     function showMessage(item, arrived = false, loading = false) {
-      const time = when(item.at);
-      separate(time);
-      let node;
-      if (item.role === "user") {
-        node = el("section", "me");
-        if (item.attachments?.length) node.append(attachedNode(item.attachments));
-        const bubble = el("div", "bubble");
-        if (item.quote) {
-          bubble.classList.add("has-quote");
-          bubble.append(quoteNode(item.quote));
-        }
-        if (item.picture !== undefined) bubble.append(pictureNode(item));
-        else if (item.text) bubble.append(linked(el("span", "bubble-text"), item.text));
-        // Attachments alone need no empty bubble under them.
-        if (bubble.firstChild) node.append(bubble);
-        const sent = item.picture === undefined && linkCards(item.text);
-        if (sent) node.append(sent);
-        if (item.choices?.length) node.append(plus.sent(item.choices));
-        // Longer than the model reads at once: it read the head and the tail (dm._cut_message).
-        if (item.cut) node.append(el("small", "msg-mark msg-cut", say("cut")));
-        node.dataset.at = item.at || "";
-        parts.messages.append(node);
-        if (item.failed) failed(node, item.failed, item.text, item.seq, item.quote, item.attachments || [], item.choices || []);
-      } else if (item.role === "memory") {
-        // What the background memory kept from this chat: one quiet line under the last reply (activity.js).
-        node = window.paActivity.saved(item, links);
-        const last = parts.messages.lastElementChild;
-        (last?.classList.contains("ai") ? last.querySelector(".ai-body") : parts.messages).append(node);
-      } else if (isRemark(item)) {
-        // A passing remark: no face, quieter, on the text's edge.
-        node = el("p", "aside");
-        node.append(el("span", "", item.text));
-        if (time) {
-          const stamp = el("time", "", timeOf(time));
-          stamp.dateTime = new Date(time).toISOString();
-          node.append(stamp);
-        }
-        parts.messages.append(node);
-      } else {
-        const body = botRun(time);
-        node = el("div", "line");
-        // What it did for the reply, above its words (activity.js): above the first of them when it said several.
-        const did = window.paActivity.summary(item, links);
-        const first = did && body.querySelector(":scope > .line:not(.typing)");
-        if (first) first.before(did);
-        else if (did) node.append(did);
-        // A line that is only an address is said by its card.
-        const words = wordsOf(item.text);
-        if (item.picture !== undefined) node.append(pictureNode(item));
-        else if (!(item.card && saysTitle(item.text, item.card)) && words) node.append(sayNode(words));
-        // Each card answered beside the page while it worked in it: one line, kept with the reply.
-        for (const step of item.trace || []) {
-          if (step.tool === "operate" && step.confirmed) for (const line of step.confirmed.split("\n")) node.append(el("p", "op-note", line));
-        }
-        const cards = item.picture === undefined && linkCards(item.text, item.card?.url);
-        if (cards) node.append(cards);
-        const from = window.paActivity.sources(item.sources, links);
-        if (from) node.append(from);
-        // The memories the reply drew on, each with edit and forget (activity.js).
-        const recalled = window.paActivity.recalled(item, links);
-        if (recalled) node.append(recalled);
-        // The files the reply changed, with 撤销这次的改动 (activity.js).
-        const changed = window.paActivity.changes(item, links);
-        if (changed) node.append(changed);
-        // Under the answer to a memory command, the way to Settings › Memory (welcome.py marks its last line).
-        if (item.manage) node.append(button("pa-btn pa-btn-link chat-manage", say("manageMemory"), () => ctx.go("setup/memory")));
-        if (item.card) {
-          node.classList.add("has-find");
-          node.append(findCard(item.card));
-          if (item.card.id) node.dataset.item = item.card.id;
-        }
-        // A scheduled task's mark, what the reply did to tasks, and what a run left for them (schedulechat.js).
-        window.paScheduleChat.decorate(node, item, (text) => !sending && send(text));
-        body.append(node);
-      }
+      const node = thread.draw(item);
+      if (item.role === "user" && item.failed)
+        failed(node, item.failed, item.text, item.seq, item.quote, item.attachments || [], item.choices || []);
       node.dataset.seq = item.seq || "";
       if (arrived) node.classList.add("arrived");
       seen = Math.max(seen, item.seq || 0);
@@ -963,24 +406,6 @@ window.paChat = (() => {
       if (arrived) keepEnd();
       else toBottom();
       if (visible()) hooks.seen(id, seen);
-      return node;
-    }
-    // A find quoted at the head of the person's bubble: a rule, its picture, its title.
-    function quoteNode(quote) {
-      const node = el("div", "quote");
-      if (quote.picture) {
-        const thumb = el("span", "quote-thumb");
-        const img = el("img");
-        img.alt = "";
-        blob(quote.picture)
-          .then((url) => {
-            img.src = url;
-          })
-          .catch(() => thumb.remove());
-        thumb.append(img);
-        node.append(thumb);
-      }
-      node.append(el("span", "quote-title", quote.title || quote.site || ""));
       return node;
     }
     // Under a message that went unanswered: why, and a way to send it again.
@@ -1009,37 +434,19 @@ window.paChat = (() => {
       mine.after(note);
       toBottom();
     }
-    function typingRow() {
-      const body = botRun(Date.now());
-      const node = el("div", "line typing");
-      const dots = el("span", "dots");
-      dots.setAttribute("role", "status");
-      dots.setAttribute("aria-label", say("typing"));
-      dots.append(el("i"), el("i"), el("i"));
-      // While a reply is on its way: what the character is looking up for it.
-      node.append(dots, el("span", "doing"));
-      body.append(node);
-      keepEnd();
-      return node;
-    }
     // What came, shown at once and in order.
     function reveal(items) {
       for (const item of items) if (!(item.seq && item.seq <= seen)) showMessage(item, item.role !== "user");
     }
     // The marks of a reply being waited for go.
     function stopReveal() {
-      for (const node of parts.messages.querySelectorAll(".line.typing")) unline(node);
+      for (const node of parts.messages.querySelectorAll(".line.typing")) thread.unline(node);
     }
     function showHistory(value) {
       stopReveal();
       // A video playing in the thread drawn before stops with it, and how long it ran is told.
-      for (const node of parts.messages.querySelectorAll(".find.is-playing")) {
-        node.querySelector(".player").remove();
-        players.get(node)?.();
-      }
-      parts.messages.replaceChildren();
-      lastDay = "";
-      run = null;
+      for (const node of parts.messages.querySelectorAll(".find.is-playing")) window.paFindCard.stop(node);
+      thread.reset();
       seen = 0;
       tag = value.chat || "";
       if (privateChat !== Boolean(value.private)) {
@@ -1047,369 +454,18 @@ window.paChat = (() => {
         renderText();
       }
       for (const item of value.messages) showMessage(item, false, true);
-      marked = 0;
-      mark(value.summary);
+      thread.mark(value.summary);
       const said = value.messages.findLast((item) => item.role !== "user" && item.text);
       if (main && said) hooks.said?.(id, said.text);
       seen = Math.max(seen, value.last || 0);
       if (visible()) hooks.seen(id, seen);
       toBottom();
     }
-    // Where the chat's older turns became its checkpoint, one quiet line before the first message the model still
-    // reads whole, with the checkpoint's text under it on request; where its context was cleared, the line it left.
-    // Drawn again only when a new one was written.
-    function mark(summary) {
-      if ((summary?.at || 0) === marked) return;
-      marked = summary?.at || 0;
-      parts.messages.querySelector(":scope > .chat-compacted")?.remove();
-      if (!summary) return;
-      const node = el("div", "chat-compacted");
-      const line = el("p", "chat-compacted-line");
-      line.append(el("span", "", say(summary.cleared ? "contextCleared" : "compacted")));
-      node.append(line);
-      if (!summary.cleared) {
-        const text = el("div", "chat-summary", summary.text);
-        text.hidden = true;
-        text.id = `chat-summary-${id}`;
-        const open = button("pa-btn pa-btn-link", say("showSummary"), () => {
-          text.hidden = !text.hidden;
-          open.textContent = say(text.hidden ? "showSummary" : "collapse");
-          open.setAttribute("aria-expanded", String(!text.hidden));
-          if (!text.hidden) keepEnd();
-        });
-        open.setAttribute("aria-expanded", "false");
-        open.setAttribute("aria-controls", text.id);
-        line.append(open);
-        node.append(text);
-      }
-      // The first turn the model still reads whole was heard at "from" (dm.py), and the page keeps its messages'
-      // times to the second: after a checkpoint, the last of their messages sent by then; after a clear, the first
-      // sent after it.
-      const mine = [...parts.messages.querySelectorAll(":scope > .me[data-at]")];
-      const from = summary.from * 1000;
-      const first = summary.cleared ? mine.find((one) => Date.parse(one.dataset.at) > from)
-        : mine.findLast((one) => Date.parse(one.dataset.at) <= from);
-      if (first) first.before(node);
-      else {
-        parts.messages.append(node);
-        keepEnd();
-      }
-    }
     // A plain chat deleted from another window: the shell lets it go.
     function lost(error) {
       if (error?.message !== "invalid_chat") return false;
       hooks.gone(id);
       return true;
-    }
-
-    // ---- A thing it brought: a 16:10 cover beside a body laid to its height, a fixed foot
-    function findCard(card) {
-      const node = el("article", "find");
-      if (card.skipped) return folded(node, card);
-      const site = String(card.site || "").replace(/^www\./, "") || hostOf(card.url);
-      const video = card.kind === "video" && card.embed;
-      const cover = video ? el("div", "cover") : original(card, "cover");
-      if (!video) {
-        cover.tabIndex = -1;
-        cover.setAttribute("aria-hidden", "true");
-      }
-      if (card.picture) {
-        const img = el("img");
-        img.alt = "";
-        img.decoding = "async";
-        cover.classList.add("pa-shimmer");
-        img.addEventListener("load", () => cover.classList.remove("pa-shimmer"), { once: true });
-        blob(card.picture)
-          .then((url) => {
-            img.src = url;
-          })
-          .catch(() => {
-            // A picture that does not arrive leaves the quiet cover, not a broken frame.
-            img.remove();
-            cover.classList.remove("pa-shimmer");
-            cover.classList.add("blank");
-            cover.append(svg(siteIcon(card), "i cover-mark"));
-          });
-        cover.append(img);
-      } else {
-        cover.classList.add("blank");
-        cover.append(svg(siteIcon(card), "i cover-mark"));
-      }
-      if (video) {
-        const play = button("play", "", () => playIn(node, card));
-        play.setAttribute("aria-label", `${say("play")}: ${card.title || site}`);
-        play.append(svg(PLAY, "play-mark"));
-        cover.append(play);
-        if (card.length) cover.append(el("span", "dur", clock(card.length)));
-      }
-
-      const body = el("div", "find-body");
-      const top = el("div", "find-top");
-      const icon = el("span", "site");
-      icon.append(svg(siteIcon(card)));
-      top.append(icon, el("span", "src", site));
-      if (card.author && card.author !== site) top.append(el("span", "dot", "·"), el("span", "by", card.author));
-      if (card.why) top.append(whyChip(card));
-      const heading = el("h3");
-      const link = original(card, "find-title");
-      link.textContent = card.title || site;
-      heading.append(link);
-      body.append(top, heading);
-      // Why it was shown, in words (panels/feed.py page): the 推荐记录 list's rows carry it.
-      if (card.reason) body.append(el("p", "find-reason", card.reason));
-      if (card.excerpt) body.append(el("p", "find-text", card.excerpt));
-
-      // The cover and the site's icon already say what kind it is: the foot says only how old.
-      const foot = el("div", "find-foot");
-      if (card.at) {
-        const stamp = el("time", "", ago(card.at));
-        stamp.dateTime = card.at;
-        stamp.title = new Date(card.at).toLocaleString(locale());
-        foot.append(stamp);
-      }
-      foot.append(actions(card, node));
-      body.append(foot);
-      node.append(cover, body);
-      return node;
-    }
-    // The player is put in place only when asked: an embedded player is heavy
-    // and would start talking to its site as soon as it loads.
-    function playIn(node, card) {
-      const player = el("div", "player");
-      const frame = el("iframe");
-      const src = new URL(card.embed);
-      src.searchParams.set("autoplay", "1");
-      // YouTube's player says when it plays and pauses, once asked to.
-      const youtube = YOUTUBE.includes(src.hostname);
-      // The origin tells the player where to send its replies, as YouTube's own API does.
-      if (youtube) {
-        src.searchParams.set("enablejsapi", "1");
-        src.searchParams.set("origin", location.origin);
-      }
-      const ran = playClock(frame, youtube ? src.origin : "");
-      frame.src = src.href;
-      frame.title = card.title || "";
-      frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
-      // The page itself sends no referrer; without one YouTube refuses to play (its error 153).
-      frame.referrerPolicy = "strict-origin-when-cross-origin";
-      // Each telling carries the whole time so far, so only a second more than last time is told;
-      // once the player is gone (收起, folded, the chat redrawn) it is told for the last time.
-      let told = 0;
-      players.set(node, () => {
-        const seconds = ran.seconds();
-        // Kept alive: the last telling may come as the window closes.
-        if (seconds - told >= 1) react(card, "play", { play_s: Math.round(seconds * 10) / 10 }, { keepalive: true });
-        told = Math.max(told, seconds);
-        if (frame.isConnected) return;
-        ran.stop();
-        players.delete(node);
-        offView.unobserve(node);
-      });
-      offView.observe(node);
-      // 收起 sits on the card's own line under the video, never over the site's player.
-      const close = button("player-close", "", () => {
-        player.remove();
-        close.remove();
-        players.get(node)?.();
-        node.classList.remove("is-playing");
-        node.querySelector(".play")?.focus();
-      });
-      close.append(svg(I.shrink), el("span", "", say("collapse")));
-      player.append(frame);
-      node.prepend(player);
-      node.querySelector(".find-top").append(close);
-      node.classList.add("is-playing");
-      keepEnd();
-      // Watching it in place is the video's way of opening it.
-      react(card, "open");
-    }
-    function original(card, className) {
-      const link = el("a", className);
-      link.href = card.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.addEventListener("click", () => react(card, "open"));
-      return link;
-    }
-    function actions(card, node) {
-      const row = el("span", "acts");
-      // Only a thing from the library can be answered or reacted to; anything can be opened.
-      if (card.id) {
-        const reply = button("reply-btn", "", () => setReply(card));
-        reply.append(svg(I.reply), el("span", "", say("reply")));
-        const like = iconButton("icon-btn like", I.heart, say("like"), async () => {
-          const liked = !card.liked;
-          setLiked(like, card, liked);
-          if (liked) {
-            like.classList.remove("pop");
-            void like.offsetWidth;
-            like.classList.add("pop");
-          }
-          try {
-            await ctx.api("feed/react", reaction(card, liked ? "like" : "unlike"));
-          } catch {
-            setLiked(like, card, !liked);
-          }
-        });
-        setLiked(like, card, Boolean(card.liked));
-        row.append(reply, like);
-      }
-      const open = original(card, "icon-btn");
-      open.append(svg(I.open));
-      open.setAttribute("aria-label", say("open"));
-      open.title = say("open");
-      row.append(open);
-      if (card.id) row.append(moreMenu(card, node));
-      return row;
-    }
-    // Why this one (recommend.Why), beside the site: a press offers more or less of what it names, the
-    // lean Settings shows too; a press on the one already set takes it back.
-    function whyChip(card) {
-      const why = card.why;
-      if (!why.key) return el("span", "find-why", why.text);
-      const wrap = el("span", "find-more-wrap find-why-wrap");
-      const menu = el("div", "find-menu");
-      menu.setAttribute("role", "menu");
-      const chip = button("find-why", why.text, () => {
-        const open = !wrap.classList.contains("open");
-        closeMenus();
-        wrap.classList.toggle("open", open);
-        chip.setAttribute("aria-expanded", String(open));
-        if (open) menu.querySelector("button").focus();
-      });
-      chip.setAttribute("aria-haspopup", "menu");
-      chip.setAttribute("aria-expanded", "false");
-      const choice = (to, paths, text) => {
-        const node = button("", "", () => {
-          closeMenus();
-          why.lean = why.lean === to ? null : to;
-          for (const other of menu.children) other.setAttribute("aria-checked", String(other === node && why.lean === to));
-          ctx.api("feed/lean", { key: why.key, to: why.lean }).catch(() => {});
-        });
-        node.setAttribute("role", "menuitemradio");
-        node.setAttribute("aria-checked", String(why.lean === to));
-        node.append(svg(paths), el("span", "", text));
-        return node;
-      };
-      menu.append(choice(1, I.raise, say("leanMore")), choice(-1, I.less, say("leanLess")));
-      wrap.append(chip, menu);
-      return wrap;
-    }
-    // Not interested, behind ⋯, with what it was about: this one, its kind of topic, its source, or
-    // seen already (which says nothing of their taste).
-    function moreMenu(card, node) {
-      const wrap = el("span", "find-more-wrap");
-      const menu = el("div", "find-menu");
-      menu.setAttribute("role", "menu");
-      const item = (paths, text, kind) => {
-        const choice = button("", "", () => {
-          closeMenus();
-          fold(card, node, kind);
-        });
-        choice.setAttribute("role", "menuitem");
-        choice.append(svg(paths), el("span", "", text));
-        return choice;
-      };
-      menu.append(item(I.skip, say("skip"), "skip"));
-      if (card.topic) menu.append(item(I.less, say("lessTopic", card.topic.name), "topic"));
-      if (card.source) menu.append(item(I.less, say("less"), "hide_source"));
-      menu.append(item(I.seen, say("known"), "known"));
-      const more = iconButton("icon-btn", I.more, say("more"), () => {
-        const open = !wrap.classList.contains("open");
-        closeMenus();
-        wrap.classList.toggle("open", open);
-        more.setAttribute("aria-expanded", String(open));
-        if (open) menu.querySelector("button").focus();
-      });
-      more.setAttribute("aria-haspopup", "menu");
-      more.setAttribute("aria-expanded", "false");
-      wrap.append(more, menu);
-      return wrap;
-    }
-    function closeMenus() {
-      for (const wrap of root.querySelectorAll(".find-more-wrap.open")) {
-        wrap.classList.remove("open");
-        wrap.firstChild.setAttribute("aria-expanded", "false");
-      }
-    }
-    function setLiked(like, card, liked) {
-      card.liked = liked;
-      like.setAttribute("aria-pressed", String(liked));
-      like.classList.toggle("loved", liked);
-      like.setAttribute("aria-label", say(liked ? "liked" : "like"));
-      like.title = say(liked ? "liked" : "like");
-    }
-    // The one line a card turned down folds to: what the no was, and the way to take it back.
-    function folded(node, card) {
-      const key = { topic: "topicDone", hide_source: "lessDone", known: "knownDone" }[card.skipped] || "skipped";
-      const note = el("div", "find-folded-line");
-      const undo = button("find-undo", say("undo"), async () => {
-        undo.disabled = true;
-        try {
-          await ctx.api("feed/undo", { id: card.id });
-        } catch {
-          // Not taken back: the line stays, to be tried again.
-          undo.disabled = false;
-          return;
-        }
-        card.skipped = "";
-        node.replaceWith(findCard(card));
-      });
-      note.append(svg(I.skip), el("span", "", say(key, card.topic?.name)), undo);
-      node.className = "find folded";
-      node.style.height = "";
-      node.replaceChildren(note);
-      return node;
-    }
-    // Not for me, in the way `kind` says (skip: this one; topic; hide_source; known: seen already): the
-    // card folds down to one quiet line, so the chat below it does not jump.
-    async function fold(card, node, kind) {
-      // A video playing on it stops here, and how long it ran is told.
-      node.querySelector(".player")?.remove();
-      players.get(node)?.();
-      node.style.height = `${node.offsetHeight}px`;
-      void node.offsetHeight;
-      node.classList.add("folding");
-      node.style.height = "44px";
-      card.skipped = kind;
-      setTimeout(() => card.skipped && folded(node, card), motion() === "auto" ? 0 : 260);
-      const sent =
-        kind === "known"
-          ? reaction(card, "end", { end: "known" })
-          : kind === "hide_source"
-            ? reaction(card, kind)
-            : reaction(card, "skip", { said: kind === "topic" ? { about: "topic", key: card.topic.key } : { about: "thing" } });
-      try {
-        await ctx.api("feed/react", sent);
-      } catch {
-        // Not recorded: the card comes back as it was.
-        card.skipped = "";
-        setTimeout(() => node.replaceWith(findCard(card)), 300);
-      }
-    }
-    // What the feed learns from: where the card is (its place in the batch it came in) and the ranking's slot.
-    function reaction(card, action, more = {}) {
-      return { id: card.id, action, surface: card.surface || "chat", rank: card.rank ?? 0, slot: card.slot || "", ...more };
-    }
-    function react(card, kind, more, how) {
-      // Opening still works when the note does not arrive; nothing to undo.
-      if (card.id) ctx.api("feed/react", reaction(card, kind, more), how).catch(() => {});
-    }
-    function ago(at) {
-      const then = new Date(at);
-      const seconds = (then.getTime() - Date.now()) / 1000;
-      const format = new Intl.RelativeTimeFormat(locale(), { numeric: "auto" });
-      const steps = [
-        [60, 1, "second"],
-        [3600, 60, "minute"],
-        [86400, 3600, "hour"],
-        [604800, 86400, "day"],
-      ];
-      if (Math.abs(seconds) < 45) return format.format(0, "second");
-      for (const [limit, size, unit] of steps) {
-        if (Math.abs(seconds) < limit) return format.format(Math.round(seconds / size), unit);
-      }
-      return then.toLocaleDateString(locale(), { month: "short", day: "numeric" });
     }
 
     // ---- Answering one thing it brought: the thing rides on the composer until sent
@@ -1425,103 +481,12 @@ window.paChat = (() => {
       parts.quote.hidden = !replying;
       parts.form.classList.toggle("has-quote", Boolean(replying));
       if (!replying) return parts.quote.replaceChildren();
-      const line = quoteNode(replying);
+      const line = thread.quoteNode(replying);
       line.setAttribute("aria-label", say("replyTo").replace("{title}", replying.title));
       parts.quote.replaceChildren(line, iconButton("chat-quote-x", I.x, say("cancelReply"), () => {
         setReply(null);
         parts.input.focus();
       }));
-    }
-
-    // ---- Attaching: picked with +, pasted, or dropped on the chat
-    function attach(files) {
-      if (!state?.configured || !files.length) return;
-      refuse("");
-      for (const file of files) {
-        if (attached.length >= ATTACH.most) {
-          refuse(say("refusedMany"));
-          break;
-        }
-        const kind = PICTURE_TYPES.has(file.type) ? "picture" : "file";
-        const item = { key: ++attachKey, kind, file: file.name || "image.png", size: file.size, url: "", data: "" };
-        const why =
-          kind === "picture"
-            ? file.size > ATTACH.picked && "refusedPictureSize"
-            : !TEXT_KINDS.has(extOf(item.file))
-              ? "refusedType"
-              : file.size > ATTACH.file && "refusedFileSize";
-        if (why) {
-          refuse(say(why).replace("{file}", item.file));
-          continue;
-        }
-        attached.push(item);
-        (async () => {
-          if (kind === "file") {
-            if (!readsAsText(await file.arrayBuffer())) throw new Error("unreadable");
-            item.data = await base64Of(file);
-            return;
-          }
-          const picture = await sendable(file);
-          item.size = picture.size;
-          item.data = await base64Of(picture);
-          item.url = URL.createObjectURL(picture);
-        })()
-          .catch(() => {
-            unattach(item);
-            refuse(say(kind === "picture" ? "refusedPicture" : "refusedUnreadable").replace("{file}", item.file));
-          })
-          .finally(paintTray);
-      }
-      paintTray();
-      parts.input.focus();
-    }
-    function unattach(item) {
-      attached = attached.filter((other) => other !== item);
-      if (item.url && item.kind !== "page") URL.revokeObjectURL(item.url);
-      paintTray();
-    }
-    // Something "+" adds that is no file: a page from the app's browser ({ kind: "page", url, title }).
-    function attachItem(item) {
-      refuse("");
-      if (attached.length >= ATTACH.most) return refuse(say("refusedMany"));
-      attached.push({ ...item, key: ++attachKey, file: item.title || item.url, data: item.kind });
-      paintTray();
-      parts.input.focus();
-    }
-    function paintTray() {
-      parts.tray.hidden = !attached.length;
-      parts.form.classList.toggle("has-tray", attached.length > 0);
-      const chips = attached.map((item) => {
-        const chip = el("div", `att att-${item.kind}${item.data ? "" : " pa-shimmer"}`);
-        chip.title = item.file;
-        if (item.kind === "picture") {
-          if (item.url) {
-            const image = el("img");
-            image.alt = item.file;
-            image.src = item.url;
-            chip.append(image);
-          }
-        } else if (item.kind === "page") {
-          chip.className = "att att-file att-page";
-          chip.append(...window.paPlus.pageChip(item).childNodes);
-        } else chip.append(fileWords(item));
-        chip.append(iconButton("att-x", I.x, say("remove").replace("{file}", item.file), () => {
-          unattach(item);
-          parts.input.focus();
-        }));
-        return chip;
-      });
-      const row = el("div", "chat-tray-row");
-      row.append(...chips);
-      parts.tray.replaceChildren(row);
-      syncSend();
-    }
-    function refuse(text) {
-      parts.refused.hidden = !text;
-      parts.refused.replaceChildren();
-      if (text)
-        parts.refused.append(svg(I.alert), el("span", "chat-refused-text", text),
-          iconButton("chat-quote-x", I.x, say("dismiss"), () => refuse("")));
     }
 
     // A 无痕对话, or back to a plain chat: a new chat of that kind opens in its place (app.js).
@@ -1547,16 +512,13 @@ window.paChat = (() => {
         grow();
         return;
       }
-      if (!(text.trim() || attached.length) || !state?.configured || attached.some((item) => !item.data)) return;
+      if (!(text.trim() || attached.count) || !state?.configured || !attached.ready()) return;
       if (!bar.allow(submit)) return;
       const quote = replying;
-      const files = attached;
-      attached = [];
-      refuse("");
+      const files = attached.take();
       parts.input.value = "";
       setReply(null);
       grow();
-      paintTray();
       // Beside a page in the app's browser, the page it is about goes with it (browse.js).
       send(text, null, quote, files, [...plus.take(), ...(window.paBeside?.take() || [])]);
     }
@@ -1567,7 +529,7 @@ window.paChat = (() => {
       stopReveal();
       const mine = showMessage({ role: "user", text, quote, attachments: files, choices, at: new Date().toISOString() });
       renderSetup();
-      const typing = typingRow();
+      const typing = thread.typingRow();
       // The looks for what it sends on its own say meanwhile what it is looking up.
       waiting = typing;
       cut = new AbortController();
@@ -1585,14 +547,14 @@ window.paChat = (() => {
         for (const item of files) if (item.url) URL.revokeObjectURL(item.url);
         // The chat as recorded: anything sent meanwhile, this message and the reply.
         mine.remove();
-        unline(typing);
+        thread.unline(typing);
         if (value.forgotLines || value.chat !== tag) showHistory(value.forgotLines ? value : await history());
         else {
           reveal(value.messages);
-          mark(value.summary);
+          thread.mark(value.summary);
         }
       } catch (error) {
-        unline(typing);
+        thread.unline(typing);
         if (lost(error)) return;
         const why = cut.signal.aborted ? String(cut.signal.reason) : "";
         // The service marks the message stopped once its reply has ended; a page process that hangs is not waited for.
@@ -1681,95 +643,32 @@ window.paChat = (() => {
       waiting.before(el("p", "op-note", answered.said));
       keepEnd();
     }
-    // A step before a command runs on this computer (shell/panel.py), said in the chat in the app's own words: what
-    // it will do, the real list of files for a delete, the exact command under a fold; or a folder to grant. The
-    // question that turns a switched-off ability on (turnon.py) is drawn here too. The person's yes typed in the chat
-    // box answers it (answerAsk), never the model's words.
+    // A question card (askcards.js) under the waiting row, whose words now say it waits for the person.
+    function hang(node) {
+      waiting.after(node);
+      const label = waiting.querySelector(".doing");
+      if (label) label.textContent = say("opWaiting");
+      keepEnd();
+      return node;
+    }
+    // A step before a command runs on this computer, or turning an ability or a setting on; answered by the
+    // person's yes typed in the chat box (answerAsk), never the model's words.
     function showShellCard(card) {
       if (shellCard && (!card || shellCard.dataset.id !== card.id)) {
         if (!shellCard.classList.contains("answered")) shellCard.remove();
         shellCard = null;
       }
       if (!card || shellCard || !waiting) return;
-      const said = card[ctx.lang] || card.en;
-      const folder = card.type === "folder";
-      // The app's own questions: turning an ability on (turnon.py), a setting that widens what it may do (appmap.py).
-      const own = card.type === "turn_on" || card.type === "setting";
-      const node = el("div", "op-card shell-card");
-      node.dataset.id = card.id;
-      node.append(folder ? cardHead(I.folder, said.title, card.folder)
-        : own ? cardHead(card.feature === "programs" ? I.window : I.terminal, said.title)
-        : cardHead(I.terminal, said.title));
-      // Why the automatic review did not pass it, in one line (shell/panel.py).
-      if (said.review) node.append(el("p", "op-card-why", said.review));
-      const lines = el("ul", "shell-card-lines");
-      for (const line of said.lines || []) lines.append(el("li", "", line));
-      if (lines.childElementCount) node.append(lines);
-      // An edit's whole difference, indentation kept (activity.js).
-      if (card.diff) node.append(window.paActivity.diff(card.diff));
-      if (!folder && !own) {
-        const facts = el("dl", "op-card-facts");
-        facts.append(el("dt", "", say("shellWhere")), el("dd", "", card.cwd));
-        node.append(facts);
-        const fold = el("details", "shell-card-command");
-        fold.append(el("summary", "", say("shellCommand")), el("pre", "", card.command));
-        node.append(fold);
-      }
-      node.append(el("p", "op-card-ask", say("confirmAsk")));
-      waiting.after(node);
-      shellCard = node;
-      const label = waiting.querySelector(".doing");
-      if (label) label.textContent = say("opWaiting");
-      keepEnd();
+      shellCard = hang(window.paAskCards.shell(card, ctx.lang, say));
     }
-    // A step of a task in another program (desk/panel.py) with an effect outside, said in the chat with the
-    // program, the window, the control, the exact text or the files, and the window's picture. The person's yes
-    // typed in the chat box answers it (answerAsk), never the model's words.
+    // A step of a task in another program with an effect outside; answered the same way.
     function showDeskCard(card) {
       if (deskCard && (!card || deskCard.dataset.id !== card.id)) {
         if (!deskCard.classList.contains("answered")) deskCard.remove();
         deskCard = null;
       }
       if (!card || deskCard || !waiting) return;
-      const node = el("div", "op-card desk-card");
-      node.dataset.id = card.id;
-      const facts = el("dl", "op-card-facts");
-      const fact = (key, value, className = "") => {
-        if (value) facts.append(el("dt", "", say(key)), el("dd", className, value));
-      };
-      if (String(card.type).startsWith("see_") && (card.text || card.said)) {
-        // Working the window by its picture (see/): the app's own sentence, and the picture with the spot ringed.
-        node.append(cardHead(I.window, card.said || card.text, card.window));
-        // Why the automatic review did not pass it, in one line (desk/panel.py, see/act.py).
-        if (card.review) node.append(el("p", "op-card-why", card.review));
-        if (card.said && card.text) node.append(el("p", "op-card-quote", card.text));
-        if (card.picture) {
-          const shot = el("img", "op-card-shot");
-          shot.src = `data:image/jpeg;base64,${card.picture}`;
-          shot.alt = "";
-          node.append(shot);
-        }
-      } else {
-        const kind = words().deskKinds[card.kind] || card.kind;
-        node.append(cardHead(I.window, say("deskAsk").replace("{program}", card.program).replace("{kind}", kind), card.window));
-        if (card.review) node.append(el("p", "op-card-why", card.review));
-        fact("deskTarget", card.target);
-        fact(card.kind === "file" && card.files?.length ? "deskNewName" : "deskText", card.text, "op-card-text");
-        fact("deskFiles", (card.files || []).join("\n"), "op-card-text");
-        node.append(facts);
-        if (card.picture) {
-          const shot = el("img", "op-card-shot");
-          shot.src = `data:image/jpeg;base64,${card.picture}`;
-          shot.alt = "";
-          node.append(shot);
-        }
-      }
-      node.append(el("p", "op-card-ask", say("confirmAsk")));
-      waiting.after(node);
-      deskCard = node;
-      const label = waiting.querySelector(".doing");
-      if (label) label.textContent = say("opWaiting");
-      keepEnd();
+      deskCard = hang(window.paAskCards.desk(card, say, words().deskKinds));
     }
     // The stop button, Esc, or the wait running past TURN_MS: the service cancels the reply, the page stops waiting.
     function stopReply(why) {
@@ -1788,59 +687,66 @@ window.paChat = (() => {
       }, 2500);
     }
 
-    // ---- Looking for what the character sent on its own
+    // ---- Looking for what the character sent on its own, and while a reply is on its way, what it is doing
+    // While it works: the step under way, and the question it waits on, if any. Working in the browser takes its
+    // time, and a step may wait on the person's yes.
+    async function pollStep() {
+      const step = (await history(seen)).doing;
+      const line = window.paActivity.live(waiting, step);
+      const place = ASK_ROUTES[step?.tool];
+      if (place && sending) {
+        clearTimeout(turnLimit);
+        turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
+        const asked = await ctx.api(place);
+        if (step.tool === "operate") showCard(asked.card, asked.answered);
+        else if (step.tool === "desk") showDeskCard(asked.card);
+        else if (step.tool === "mcp") window.paToolCard.show(waiting, asked.card, keepEnd);
+        else showShellCard(asked.card);
+        // A server's form is filled in on the page; every other step is answered in the chat box.
+        const id = asked.card && asked.card.typed !== false ? asked.card.id : null;
+        if (id !== awaitingYes && !(awaitingYes === null && id && noted.has(`asked:${id}`))) {
+          awaitingYes = id;
+          if (id) noted.add(`asked:${id}`);
+          syncSend();
+        }
+      }
+      // The sidebar's line under the character's name says it too (app.js).
+      if (sending) hooks.doing(line);
+    }
+    // Otherwise: what the character sent on its own.
+    async function pollMessages() {
+      polling = true;
+      try {
+        const value = await history(seen);
+        // A reply that started meanwhile brings these messages itself.
+        if (!sending) {
+          const was = parts.empty.hidden;
+          if (value.chat !== tag) showHistory(await history());
+          else {
+            reveal(value.messages.filter((item) => item.seq > seen));
+            thread.mark(value.summary);
+          }
+          if (was !== parts.empty.hidden || !parts.empty.hidden) renderSetup();
+        }
+      } finally {
+        polling = false;
+      }
+    }
     async function poll() {
       clearTimeout(pollTimer);
       if (!asking() || !state?.configured) return;
       if (sending && waiting) {
         try {
-          const step = (await history(seen)).doing;
-          const line = window.paActivity.live(waiting, step);
-          // Working in the browser takes its time, and a step may wait on the person's yes, as may a command
-          // (shell/panel.py), turning a switched-off ability on (turnon.py), a task in another program
-          // (desk/panel.py) or one of their MCP servers (mcp_hub.py, toolcard.js).
-          const place = { operate: "browser/confirm", shell: "shell/card", turn_on: "turnon/card",
-            desk: "programs/card", mcp: "mcp/card", settings: "settings/card" }[step?.tool];
-          if (place && sending) {
-            clearTimeout(turnLimit);
-            turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-            const asked = await ctx.api(place);
-            if (step.tool === "operate") showCard(asked.card, asked.answered);
-            else if (step.tool === "desk") showDeskCard(asked.card);
-            else if (step.tool === "mcp") window.paToolCard.show(waiting, asked.card, keepEnd);
-            else showShellCard(asked.card);
-            // A server's form is filled in on the page; every other step is answered in the chat box.
-            const id = asked.card && asked.card.typed !== false ? asked.card.id : null;
-            if (id !== awaitingYes && !(awaitingYes === null && id && noted.has(`asked:${id}`))) {
-              awaitingYes = id;
-              if (id) noted.add(`asked:${id}`);
-              syncSend();
-            }
-          }
-          // The sidebar's line under the character's name says it too (app.js).
-          if (sending) hooks.doing(line);
+          await pollStep();
         } catch {
           // The waiting row keeps its dots.
         }
       } else if (!sending && !polling) {
-        polling = true;
         try {
-          const value = await history(seen);
-          // A reply that started meanwhile brings these messages itself.
-          if (!sending) {
-            const was = parts.empty.hidden;
-            if (value.chat !== tag) showHistory(await history());
-            else {
-              reveal(value.messages.filter((item) => item.seq > seen));
-              mark(value.summary);
-            }
-            if (was !== parts.empty.hidden || !parts.empty.hidden) renderSetup();
-          }
+          await pollMessages();
         } catch (error) {
           // The next look tries again; a lasting problem shows when a message is sent.
           if (lost(error)) return;
-        } finally {
-          polling = false;
         }
       }
       clearTimeout(pollTimer);
@@ -1946,7 +852,7 @@ window.paChat = (() => {
         if (state?.configured) parts.input.focus();
       },
       // A find drawn as this chat draws one, for the 推荐记录 list (finds.js): its reply goes to this chat.
-      findCard: (card) => findCard(card),
+      findCard: (card) => finds.card(card),
       drop() {
         clearTimeout(pollTimer);
         for (const [type, run] of Object.entries(listeners)) document.removeEventListener(type, run);
@@ -1954,7 +860,7 @@ window.paChat = (() => {
         bar.drop();
         root.remove();
         for (const url of blobs.values()) url.then((value) => URL.revokeObjectURL(value)).catch(() => {});
-        for (const item of attached) if (item.url) URL.revokeObjectURL(item.url);
+        attached.drop();
       },
     };
   }
