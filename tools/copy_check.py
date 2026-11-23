@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "mibo"
 # Where interface text lives; prompts and persona files are the character's voice.
 PLACES = ("static/welcome", "panels", "web", "desk", "shell", "see", "skills", "review.py", "browsed.py", "browser.py",
-          "window.py", "pacing.py", "endpoints.py", "abilities.py", "spend.py", "snip.py")
+          "window", "pacing.py", "endpoints.py", "abilities.py", "spend.py", "snip.py")
 # Not interface text: marks, shipped skills, and the modules whose Chinese is words for the model or
 # patterns that match what a person types.
 SKIP = ("providermarks.js", "/builtin/",

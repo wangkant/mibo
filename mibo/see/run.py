@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 
 from . import ask
 from .capture import Refused
@@ -29,79 +30,111 @@ STUCK_AFTER = 3
 BAD_AFTER = 3
 HISTORY_SHOWN = 6
 
+AskModel = Callable[[str, list[dict]], Awaitable[str]]
 
-async def run(ask_model: Callable[[str, list[dict]], Awaitable[str]], sight, task: str, *,
+
+@dataclass
+class _Tally:
+    """One run so far: the one-line results of its steps, what it spent, and the counts its stop rules go by."""
+    steps: list[str] = field(default_factory=list)
+    calls: int = 0
+    actions: int = 0
+    stuck: int = 0
+    bad: int = 0
+    changed: bool = False
+    checked: bool = False
+
+    def finish(self, status: str, result: str = "") -> dict:
+        return {"status": status, "result": result, "steps": self.steps, "calls": self.calls, "actions": self.actions}
+
+
+async def run(ask_model: AskModel, sight, task: str, *,
               on_step: Callable[[str], None] = lambda note: None, calls_max: int = CALLS_MAX) -> dict:
     """Do `task` by sight. Returns {"status", "result", "steps", "calls", "actions"}: status done, unchanged,
     failed, asked, declined, refused, handover, cap, or why the person held it."""
     prof = sight.profile
-    steps: list[str] = []
-    calls = actions = stuck = bad = 0
-    changed = checked = False
-
-    def finish(status: str, result: str = "") -> dict:
-        return {"status": status, "result": result, "steps": steps, "calls": calls, "actions": actions}
-
+    tally = _Tally()
     while True:
         why = sight.held()
         if why:
-            return finish(why, "held by the person")
+            return tally.finish(why, "held by the person")
         try:
             frame = await sight.look()
         except Refused as e:
-            return finish("handover", str(e))
-        if calls >= calls_max or actions >= ACTIONS_MAX:
-            return finish("cap", f"stopped after {calls} model calls")
-        content = ask.prompt(task, steps[-HISTORY_SHOWN:], frame, prof, sight.surface.name)
-        calls += 1
+            return tally.finish("handover", str(e))
+        if tally.calls >= calls_max or tally.actions >= ACTIONS_MAX:
+            return tally.finish("cap", f"stopped after {tally.calls} model calls")
+        content = ask.prompt(task, tally.steps[-HISTORY_SHOWN:], frame, prof, sight.surface.name)
+        tally.calls += 1
         answer = await ask_model(ask.RULES, [{"role": "user", "content": content}])
         note, planned, error = ask.read(answer, frame, prof)
         if error:
-            bad += 1
-            steps.append(f"[failed] your answer was refused ({error}); nothing was done")
-            if bad >= BAD_AFTER:
-                return finish("handover", "three answers in a row were not usable")
+            tally.bad += 1
+            tally.steps.append(f"[failed] your answer was refused ({error}); nothing was done")
+            if tally.bad >= BAD_AFTER:
+                return tally.finish("handover", "three answers in a row were not usable")
             continue
-        bad = 0
+        tally.bad = 0
         if note:
             on_step(note)
-        acted = False
-        for a in planned:
-            if a["do"] == "done":
-                if acted:
-                    steps.append("[look] done is taken only in a reply after the picture that shows it, not in the "
-                                 "reply that acted: check this picture, then say done again")
-                    break
-                if a["success"] and not changed:
-                    if checked:
-                        return finish("unchanged", a["result"])
-                    checked = True
-                    steps.append("[check] nothing you did has changed the window yet, so the task is not done by "
-                                 "anything here. Act, or, if the task only asks what the window shows, say done "
-                                 "again with what it shows")
-                    break
-                return finish("done" if a["success"] else "failed", a["result"])
-            if a["do"] == "ask_person":
-                return finish("asked", a["question"])
-            if prof.zoom == "ctx" and a.get("at") and "mark" not in a and a["do"] in ("click", "double_click", "type"):
-                second, back = ask.zoom(frame, a["at"], a["target"])
-                calls += 1
-                point = ask.read_zoom(await ask_model("You point at things in pictures.",
-                                                      [{"role": "user", "content": second}]), back)
-                if point is not None:
-                    a["at"] = point
-            actions += 1
-            acted = True
-            result = await sight.act(a)
-            line = result["line"]
-            steps.append(line)
-            logger.info("[Agent] see %s", line[:300])
-            if result["status"] not in ("ok", "failed"):
-                return finish(result["status"], line)
-            changed = changed or bool(result.get("changed"))
-            stuck = stuck + 1 if result["status"] == "ok" and not result.get("changed") and a["do"] != "wait" else 0
-            if stuck >= STUCK_AFTER:
-                return finish("handover", "nothing changed three times running")
-            # After a drag, a scroll or typing the picture has moved: the other planned points may be wrong now.
-            if result["status"] != "ok" or a["do"] in ("drag", "scroll", "type"):
-                break
+        ended = await _carry_out(ask_model, sight, frame, planned, tally)
+        if ended is not None:
+            return ended
+
+
+async def _carry_out(ask_model: AskModel, sight, frame, planned: list[dict], tally: _Tally) -> dict | None:
+    """The actions of one reply in order: the run's result when one ends it, or None to look again."""
+    acted = False
+    for a in planned:
+        if a["do"] == "done":
+            return _done(a, acted, tally)
+        if a["do"] == "ask_person":
+            return tally.finish("asked", a["question"])
+        if (sight.profile.zoom == "ctx" and a.get("at") and "mark" not in a
+                and a["do"] in ("click", "double_click", "type")):
+            tally.calls += 1
+            await _second_look(ask_model, frame, a)
+        tally.actions += 1
+        acted = True
+        result = await sight.act(a)
+        line = result["line"]
+        tally.steps.append(line)
+        logger.info("[Agent] see %s", line[:300])
+        if result["status"] not in ("ok", "failed"):
+            return tally.finish(result["status"], line)
+        tally.changed = tally.changed or bool(result.get("changed"))
+        unchanged = result["status"] == "ok" and not result.get("changed") and a["do"] != "wait"
+        tally.stuck = tally.stuck + 1 if unchanged else 0
+        if tally.stuck >= STUCK_AFTER:
+            return tally.finish("handover", "nothing changed three times running")
+        # After a drag, a scroll or typing the picture has moved: the other planned points may be wrong now.
+        if result["status"] != "ok" or a["do"] in ("drag", "scroll", "type"):
+            return None
+    return None
+
+
+def _done(a: dict, acted: bool, tally: _Tally) -> dict | None:
+    """A done: the run's result, or None with a step saying why it is not taken yet."""
+    if acted:
+        tally.steps.append("[look] done is taken only in a reply after the picture that shows it, not in the "
+                           "reply that acted: check this picture, then say done again")
+        return None
+    if a["success"] and not tally.changed:
+        if tally.checked:
+            return tally.finish("unchanged", a["result"])
+        tally.checked = True
+        tally.steps.append("[check] nothing you did has changed the window yet, so the task is not done by "
+                           "anything here. Act, or, if the task only asks what the window shows, say done "
+                           "again with what it shows")
+        return None
+    return tally.finish("done" if a["success"] else "failed", a["result"])
+
+
+async def _second_look(ask_model: AskModel, frame, a: dict) -> None:
+    """A weak pointer's second look at a crop round its point, beside the whole picture: the point moves to
+    where that look says, unless it gave none."""
+    second, back = ask.zoom(frame, a["at"], a["target"])
+    point = ask.read_zoom(await ask_model("You point at things in pictures.",
+                                          [{"role": "user", "content": second}]), back)
+    if point is not None:
+        a["at"] = point

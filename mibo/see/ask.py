@@ -15,7 +15,7 @@ import re
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .frame import Frame
+from .frame import Frame, png_part
 from .profile import Profile
 
 ACTIONS_A_REPLY = 4
@@ -125,10 +125,7 @@ def prompt(task: str, steps: list[str], frame: Frame, prof: Profile, program: st
     words = (f"Task (the person's own words): {task}\n" + (f"Window: {program}\n" if program else "")
              + ("Steps so far:\n" + "\n".join(f"- {s}" for s in steps) + "\n" if steps else "")
              + f"{how_to_point(frame, prof)}\n{DATA_LINE}\nThe window now:")
-    image = shown(frame, prof)
-    from .frame import b64_png
-    return [{"type": "text", "text": words},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64_png(image)}},
+    return [{"type": "text", "text": words}, png_part(shown(frame, prof)),
             {"type": "text", "text": "Reply with one JSON object."}]
 
 
@@ -177,61 +174,74 @@ def read(answer: str, frame: Frame, prof: Profile) -> tuple[str, list[dict], str
         raw = [value]
     if not isinstance(raw, list) or not raw:
         return "", [], 'the object has no "actions" list'
-    note = " ".join(str(value.get("note") or "").split())[:80]
-    out: list[dict] = []
+    note = _line(value.get("note"), 80)
     try:
-        for a in raw[:ACTIONS_A_REPLY]:
-            if not isinstance(a, dict):
-                raise ValueError("each action must be an object")
-            do = a.get("do")
-            act = {"do": do, "target": " ".join(str(a.get("target") or "").split())[:80]}
-            if do in POINTED or (do == "type" and ("x" in a or "mark" in a)):
-                if "mark" in a and do != "drag":
-                    m = a["mark"]
-                    if isinstance(m, bool) or not isinstance(m, int) or m not in frame.marks:
-                        raise ValueError(f"mark {json.dumps(m)[:12]} is not on the latest picture")
-                    act["mark"] = m
-                    x, y = frame.marks[m][:2]
-                    act["at"] = frame.to_image(x, y)
-                else:
-                    act["at"] = _point(a, frame, prof)
-            if do == "drag":
-                act["to"] = _point(a, frame, prof, "to_x", "to_y")
-            if do == "scroll":
-                if a.get("direction") not in ("up", "down"):
-                    raise ValueError('scroll needs "direction": "up" or "down"')
-                amount = a.get("amount", 3)
-                if isinstance(amount, bool) or not isinstance(amount, int) or not 1 <= amount <= 10:
-                    raise ValueError("scroll amount must be a whole number from 1 to 10")
-                act.update(direction=a["direction"], amount=amount)
-            elif do == "type":
-                text = a.get("text")
-                if not isinstance(text, str) or not text or len(text) > TEXT_MAX:
-                    raise ValueError(f"type needs a text of 1 to {TEXT_MAX} characters")
-                if any(ch < " " for ch in text):
-                    raise ValueError("a text may not hold line breaks or control characters; use key Enter or Tab")
-                act["text"] = text
-            elif do == "key":
-                key = a.get("key")
-                if not isinstance(key, str) or not KEYS.match(key):
-                    raise ValueError(f"key {json.dumps(key)[:20]} is not one of the keys this can press")
-                act["key"] = key
-            elif do == "wait":
-                seconds = a.get("seconds", 1)
-                if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 < seconds <= 5:
-                    raise ValueError("wait seconds must be from 1 to 5")
-                act["seconds"] = float(seconds)
-            elif do == "done":
-                act.update(success=a.get("success") is not False,
-                           result=" ".join(str(a.get("result") or "").split())[:600])
-            elif do == "ask_person":
-                act["question"] = " ".join(str(a.get("question") or "").split())[:300]
-            elif do not in POINTED:
-                raise ValueError(f"no action {json.dumps(do)[:20]}")
-            out.append(act)
+        out = [_action(a, frame, prof) for a in raw[:ACTIONS_A_REPLY]]
     except ValueError as e:
         return note, [], str(e)
     return note, out, ""
+
+
+def _line(value, most: int) -> str:
+    """A value of the answer as one line of at most `most` characters."""
+    return " ".join(str(value or "").split())[:most]
+
+
+def _action(a, frame: Frame, prof: Profile) -> dict:
+    """One action of the answer, checked whole; ValueError says why it is refused."""
+    if not isinstance(a, dict):
+        raise ValueError("each action must be an object")
+    do = a.get("do")
+    act = {"do": do, "target": _line(a.get("target"), 80)}
+    if do in POINTED or (do == "type" and ("x" in a or "mark" in a)):
+        if "mark" in a and do != "drag":
+            m = a["mark"]
+            if isinstance(m, bool) or not isinstance(m, int) or m not in frame.marks:
+                raise ValueError(f"mark {json.dumps(m)[:12]} is not on the latest picture")
+            act["mark"] = m
+            x, y = frame.marks[m][:2]
+            act["at"] = frame.to_image(x, y)
+        else:
+            act["at"] = _point(a, frame, prof)
+    if do == "drag":
+        act["to"] = _point(a, frame, prof, "to_x", "to_y")
+    act.update(_fields(a, do))
+    return act
+
+
+def _fields(a: dict, do) -> dict:
+    """The fields of an action besides its points, checked; ValueError for an action there is none of."""
+    if do == "scroll":
+        if a.get("direction") not in ("up", "down"):
+            raise ValueError('scroll needs "direction": "up" or "down"')
+        amount = a.get("amount", 3)
+        if isinstance(amount, bool) or not isinstance(amount, int) or not 1 <= amount <= 10:
+            raise ValueError("scroll amount must be a whole number from 1 to 10")
+        return {"direction": a["direction"], "amount": amount}
+    if do == "type":
+        text = a.get("text")
+        if not isinstance(text, str) or not text or len(text) > TEXT_MAX:
+            raise ValueError(f"type needs a text of 1 to {TEXT_MAX} characters")
+        if any(ch < " " for ch in text):
+            raise ValueError("a text may not hold line breaks or control characters; use key Enter or Tab")
+        return {"text": text}
+    if do == "key":
+        key = a.get("key")
+        if not isinstance(key, str) or not KEYS.match(key):
+            raise ValueError(f"key {json.dumps(key)[:20]} is not one of the keys this can press")
+        return {"key": key}
+    if do == "wait":
+        seconds = a.get("seconds", 1)
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or not 0 < seconds <= 5:
+            raise ValueError("wait seconds must be from 1 to 5")
+        return {"seconds": float(seconds)}
+    if do == "done":
+        return {"success": a.get("success") is not False, "result": _line(a.get("result"), 600)}
+    if do == "ask_person":
+        return {"question": _line(a.get("question"), 300)}
+    if do not in POINTED:
+        raise ValueError(f"no action {json.dumps(do)[:20]}")
+    return {}
 
 
 # --- the second look, for a weak pointer: the crop with the whole picture beside it
@@ -245,7 +255,6 @@ ZOOM_PROMPT = ("The first picture is the whole window; the red rectangle on it i
 
 def zoom(frame: Frame, at: tuple[float, float], target: str) -> tuple[list[dict], tuple]:
     """The content of the second look round a first point, and (x0, y0, factor) to read its answer back."""
-    from .frame import b64_png
     wide, high = frame.size
     side = min(ZOOM_SIDE, wide, high)
     x0 = int(min(max(at[0] - side / 2, 0), wide - side))
@@ -254,8 +263,7 @@ def zoom(frame: Frame, at: tuple[float, float], target: str) -> tuple[list[dict]
     ImageDraw.Draw(whole).rectangle((x0, y0, x0 + side, y0 + side), outline=(255, 0, 0), width=3)
     crop = frame.image.crop((x0, y0, x0 + side, y0 + side)).resize((side * 2, side * 2), Image.LANCZOS)
     content = [{"type": "text", "text": ZOOM_PROMPT.format(w=side * 2, h=side * 2, target=target or "what you meant")},
-               {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64_png(whole)}},
-               {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64_png(crop)}}]
+               png_part(whole), png_part(crop)]
     return content, (x0, y0, 2.0, side * 2)
 
 

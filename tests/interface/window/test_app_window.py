@@ -11,6 +11,7 @@ import pytest
 from harness.window import stand_in_webview
 
 from mibo import window
+from mibo.window import native, winforms
 
 
 @pytest.fixture
@@ -186,9 +187,9 @@ def _frameless(monkeypatch, *, regions: bool):
         return object(), lambda: done.__setitem__("undone", done["undone"] + 1)
 
     monkeypatch.setattr(sys, "platform", "win32")
-    monkeypatch.setattr(window, "_own_process", lambda: None)
-    monkeypatch.setattr(window, "_strip_title_bar", strip)
-    monkeypatch.setattr(window, "_text_menus", lambda shown: regions)
+    monkeypatch.setattr(native, "own_process", lambda: None)
+    monkeypatch.setattr(native, "strip_title_bar", strip)
+    monkeypatch.setattr(winforms, "text_menus", lambda shown: regions)
     return done
 
 
@@ -244,7 +245,7 @@ def test_a_page_that_never_draws_the_bar_gives_the_window_its_own_back(webview, 
 
 def test_elsewhere_the_window_keeps_its_title_bar(webview, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(window, "_strip_title_bar", lambda shown: pytest.fail("only Windows drops the title bar"))
+    monkeypatch.setattr(native, "strip_title_bar", lambda shown: pytest.fail("only Windows drops the title bar"))
     app = window.AppWindow("http://127.0.0.1:1/", storage=tmp_path)
     assert app.run() is True and app.frameless is False
     assert app.control("minimize") is False, "nothing to do once it closed"

@@ -7,7 +7,8 @@ import threading
 import time
 import types
 
-from mibo import welcome, window
+from mibo import welcome
+from mibo.window import winforms
 
 
 class Event:
@@ -102,7 +103,7 @@ def stand_in_webview(monkeypatch) -> types.ModuleType:
     module.settings = {}
     monkeypatch.setitem(sys.modules, "webview", module)
     # WebView2's own events, which the stand-in has none of.
-    monkeypatch.setattr(window, "_own_pages", lambda shown, origin, open_link: None)
+    monkeypatch.setattr(winforms, "own_pages", lambda shown, origin, open_link: None)
     return module
 
 

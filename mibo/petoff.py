@@ -29,7 +29,7 @@ def apply(owner, on: bool) -> None:
     from System.Windows.Forms import Screen
 
     from . import petchat
-    from .window import PET_MARGIN
+    from .window.pet import PET_MARGIN
 
     owner._pet_off = not on
     if not on:

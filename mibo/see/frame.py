@@ -50,13 +50,8 @@ class Frame:
         wide, high = self.image.size
         return 0 <= x < wide and 0 <= y < high
 
-    def jpeg(self, quality: int = 80) -> str:
-        buf = io.BytesIO()
-        self.image.save(buf, "JPEG", quality=quality)
-        return base64.b64encode(buf.getvalue()).decode("ascii")
-
     def data_url(self) -> str:
-        return "data:image/jpeg;base64," + self.jpeg()
+        return "data:image/jpeg;base64," + b64(self.image, "JPEG", quality=80)
 
 
 def fit(image: Image.Image, long_edge: int = LONG_EDGE) -> tuple[Image.Image, float]:
@@ -104,16 +99,22 @@ def change(before: Frame, after: Frame, *points: tuple[float, float]) -> dict:
     return {"any": True, "near": near, "box": (round(x0), round(y0), round(x1 - x0), round(y1 - y0))}
 
 
-def b64_png(image: Image.Image) -> str:
+def b64(image: Image.Image, kind: str = "PNG", **save) -> str:
+    """The image encoded as `kind` (Pillow's format name, with its `save` options), in base64."""
     buf = io.BytesIO()
-    image.save(buf, "PNG")
+    image.save(buf, kind, **save)
     return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def png_part(image: Image.Image) -> dict:
+    """The image as a PNG part of a message's content."""
+    return {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64(image)}}
 
 
 def pack(frame: Frame) -> dict:
     """A frame as JSON, to cross from the app's process (where the pane and the windows are) to the service's
     (where the model is called)."""
-    return {"png": b64_png(frame.image), "kind": frame.kind, "origin": list(frame.origin), "k": frame.k,
+    return {"png": b64(frame.image), "kind": frame.kind, "origin": list(frame.origin), "k": frame.k,
             "real": list(frame.real), "hwnd": frame.hwnd, "rect": list(frame.rect), "dpi": frame.dpi,
             "url": frame.url, "marks": {str(n): [x, y, what, list(b)] for n, (x, y, what, b) in frame.marks.items()}}
 

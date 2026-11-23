@@ -93,8 +93,8 @@ class Compact:
             return
         win.expose(api.away, api.full)
         win.events.loaded.wait(LOAD_S)
-        w._text_menus(win)
-        w._own_pages(win, f"{address.scheme}://{address.netloc}", owner.open_link)
+        w.winforms.text_menus(win)
+        w.winforms.own_pages(win, f"{address.scheme}://{address.netloc}", owner.open_link)
         win.events.loaded.clear()
         win.load_url(urlunsplit((address.scheme, address.netloc, "/compact", "", address.fragment)))
         win.events.loaded.wait(LOAD_S)
@@ -127,8 +127,8 @@ class Compact:
         box, scale = wintypes.RECT(), owner._pet_scale
         owner._user32.GetWindowRect(owner._pet_hwnd, ctypes.byref(box))
         x0, _, x1, y1 = (round(v * scale) for v in owner._outline)
-        fx = box.right - box.left - round(w.PET_SIZE[0] * scale) if owner._card == "left" else 0
-        fy = box.bottom - box.top - round(w.PET_FIGURE[1] * scale)
+        fx = box.right - box.left - round(w.pet.PET_SIZE[0] * scale) if owner._card == "left" else 0
+        fy = box.bottom - box.top - round(w.pet.PET_FIGURE[1] * scale)
         left, right, feet = box.left + fx + x0, box.left + fx + x1, box.top + fy + y1
         wide, high, gap = round(SIZE[0] * scale), round(SIZE[1] * scale), round(GAP * scale)
         area = Screen.FromHandle(owner._pet.native.Handle).WorkingArea

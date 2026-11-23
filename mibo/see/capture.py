@@ -63,7 +63,7 @@ def aware():
 # --- the pane
 
 SECRETS_JS = """(sel) => {
-  const label = new RegExp(%s, 'i');
+  const label = new RegExp(""" + repr(SECRET_LABEL.pattern) + """, 'i');
   const out = [];
   for (const e of document.querySelectorAll('input,textarea')) {
     const words = [e.name, e.id, e.placeholder, e.getAttribute('aria-label'), e.title].filter(Boolean).join(' ');
@@ -72,7 +72,7 @@ SECRETS_JS = """(sel) => {
     if (r.width > 0 && r.height > 0) out.push([r.x, r.y, r.width, r.height]);
   }
   return out;
-}""" % repr(SECRET_LABEL.pattern)
+}"""
 
 
 async def pane(tab, long_edge: int = LONG_EDGE) -> Frame:

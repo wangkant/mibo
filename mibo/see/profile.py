@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw
 
-from .frame import LONG_EDGE
+from .frame import LONG_EDGE, png_part
 
 
 @dataclass(frozen=True)
@@ -131,9 +131,8 @@ async def selftest(ask_model, model: str) -> str:
     """One look at a drawn picture through the person's own service, asked in the form `model`'s profile starts
     from: the reading that came back ("px", "norm" or "none"), or "" when no answer came (not measured).
     `ask_model(system, messages)` gives the answer's text, or None when the call failed."""
-    from .frame import b64_png
     w, h = SELFTEST_SIZE
     answer = await ask_model("You point at things in pictures.", [{"role": "user", "content": [
         {"type": "text", "text": SELFTEST_PROMPT.format(w=w, h=h, form=FORMS[profile(model).scale])},
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + b64_png(selftest_picture())}}]}])
+        png_part(selftest_picture())]}])
     return "" if answer is None else read_selftest(answer)

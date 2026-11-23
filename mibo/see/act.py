@@ -36,6 +36,7 @@ proof of the outcome.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import os
 import re
@@ -45,7 +46,7 @@ from collections.abc import Callable
 from typing import Any
 
 from . import capture, words
-from .frame import Frame, change, ring
+from .frame import Frame, b64, change, ring
 
 SETTLE_S = 0.5
 ANSWER_S = 15.0
@@ -109,10 +110,8 @@ class PaneSurface:
     async def capture(self, long_edge: int) -> Frame:
         # The ring shown before an action is gone before the picture after it, or it would read as a change.
         from ..web.pageops import UNRING_JS
-        try:
+        with contextlib.suppress(Exception):
             await self.tab.evaluate(f"() => {{ {UNRING_JS} }}")
-        except Exception:
-            pass
         return await capture.pane(self.tab, long_edge)
 
     async def marks(self) -> list:
@@ -244,7 +243,7 @@ class WindowSurface:
             cond = A.Automation.ControlViewCondition
             for e in uia.element(self.hwnd).FindAll(A.TreeScope.Descendants, cond):
                 c = e.Current
-                role = uia.ROLES.get(c.ControlType.ProgrammaticName.split(".")[-1], "custom")
+                role = _role(c)
                 r = c.BoundingRectangle
                 if role in uia.CONTROLS and c.Name and not c.IsOffscreen and r.Width >= 4 and r.Height >= 4:
                     self.tree.append(((r.X, r.Y, r.Width, r.Height), role, " ".join(c.Name.split())[:80], e))
@@ -272,7 +271,7 @@ class WindowSurface:
 
             def sort(e) -> tuple:
                 c = e.Current
-                role = uia.ROLES.get(c.ControlType.ProgrammaticName.split(".")[-1], "custom")
+                role = _role(c)
                 r = c.BoundingRectangle
                 name = " ".join(str(c.Name or "").split())[:80]
                 return role, name, role in uia.CONTROLS and bool(name) and r.Width * r.Height / area < DRAWN_SHARE
@@ -312,7 +311,7 @@ class WindowSurface:
             if f is None or f.Current.ProcessId not in self.pids:
                 return {"known": False, "secret": False, "elsewhere": True}
             c = f.Current
-            role = uia.ROLES.get(c.ControlType.ProgrammaticName.split(".")[-1], "custom")
+            role = _role(c)
             node = uia.Node(el=f, role=role, name=c.Name, auto=c.AutomationId, cls=c.ClassName, pid=c.ProcessId,
                             enabled=True, focused=True, secret=c.IsPassword, rect=(0, 0, 0, 0),
                             hwnd=c.NativeWindowHandle, patterns=[], readonly=False, top=self.hwnd, parent=None,
@@ -340,10 +339,8 @@ class WindowSurface:
         with capture.aware():
             front = win32.top_of(win32.foreground())
             if front != self.hwnd and win32.pid_of(front) not in self.pids:
-                try:
+                with contextlib.suppress(Exception):
                     uia.element(self.hwnd).SetFocus()
-                except Exception:
-                    pass
                 time.sleep(0.2)
                 front = win32.top_of(win32.foreground())
             if front != self.hwnd and win32.pid_of(front) not in self.pids:
@@ -391,6 +388,12 @@ class WindowSurface:
         from ..desk import uia, win32
         vks = uia.parse_key(keys)
         await asyncio.to_thread(self._run, lambda: win32.chord(vks))
+
+
+def _role(current) -> str:
+    """The role of a UI Automation element's Current, as the structure layer names it (desk/uia.ROLES)."""
+    from ..desk import uia
+    return uia.ROLES.get(current.ControlType.ProgrammaticName.split(".")[-1], "custom")
 
 
 async def _answer(fn: Callable, *args: Any) -> Any:
@@ -480,10 +483,9 @@ class Sight:
         frame = await self.surface.capture(self.profile.long_edge)
         # Read every look: a window's point lookups use what it names now.
         found = await self.surface.marks()
-        if self.profile.marks:
-            if len(found) <= MARKS_MAX:
-                frame.marks = {n + 1: (b[0] + b[2] / 2, b[1] + b[3] / 2, what, b) for n, (b, what) in enumerate(found)
-                               if frame.inside(*frame.to_image(b[0] + b[2] / 2, b[1] + b[3] / 2))}
+        if self.profile.marks and len(found) <= MARKS_MAX:
+            frame.marks = {n + 1: (b[0] + b[2] / 2, b[1] + b[3] / 2, what, b) for n, (b, what) in enumerate(found)
+                           if frame.inside(*frame.to_image(b[0] + b[2] / 2, b[1] + b[3] / 2))}
         self.frame = frame
         return frame
 
@@ -496,44 +498,20 @@ class Sight:
         return answer
 
     def _picture(self, at: tuple[float, float] | None) -> str:
-        import base64
-        import io
-        image = ring(self.frame.image, *at) if at else self.frame.image
-        image = image.copy()
+        """The picture for the person's card, with a ring where it points."""
+        image = ring(self.frame.image, *at) if at else self.frame.image.copy()
         image.thumbnail((720, 720))
-        buf = io.BytesIO()
-        image.save(buf, "JPEG", quality=65)
-        return base64.b64encode(buf.getvalue()).decode("ascii")
+        return b64(image, "JPEG", quality=65)
 
     async def _allowed(self, a: dict, hit: dict | None, at: tuple | None) -> tuple[str, str]:
         """("", why) to go on, or (status, line) when the person said no or was not asked."""
         do = a["do"]
-        name = self.surface.name
         if do == "scroll":
             return "", "scrolling"
         if do in ("click", "double_click", "drag") or (do == "type" and at is not None):
-            if hit and hit.get("known"):
-                kind, why = await self.surface.gate("drag" if do == "drag" else "click", hit)
-                if kind:
-                    verdict = await self._reviewed(kind, {"target": [hit["what"]], "page_says": hit["what"]})
-                    if verdict is not None and verdict.decision != "ask":
-                        return self._verdict(verdict, kind)
-                    answer = await self._card({"type": "see_action", "kind": kind, "why": why,
-                                               "target": hit["what"], "picture": self._picture(at),
-                                               **self._why(verdict)})
-                    if not (answer and answer.get("yes")):
-                        return "declined", (f"[declined] the person {'said no to' if answer else 'did not answer'} "
-                                            f"{kind} ({hit['what']}); nothing was done")
-                    return "", f"{kind}, confirmed by the person"
-            elif self.lease != self.surface.place():
-                answer = await self._card({"type": "see_lease", "text": words.say(words.LEASE, self.lang, who=self.who,
-                                                                                   window=name),
-                                           "target": hit["what"] if hit else "", "picture": self._picture(at),
-                                           "choices": ["allow", "no"]})
-                if not (answer and answer.get("yes")):
-                    return "declined", ("[declined] the person did not allow working by sight in this window; "
-                                        "nothing was done")
-                self.lease = self.surface.place()
+            decided = await self._point_allowed(do, hit, at)
+            if decided is not None:
+                return decided
         if do == "type":
             from ..review import carries_secret
             if carries_secret(a["text"]):
@@ -543,33 +521,66 @@ class Sight:
             self.typed = a["text"][:2000]
             return "", "typing into the window"
         if do == "key":
-            focus = await self.surface.focused()
-            kind, why = "", ""
-            if focus.get("known") and self.surface.kind == "window":
-                kind, why = await self.surface.key_gate(a["key"], focus)
-            elif focus.get("known") and a["key"] in ("Enter", "Space"):
-                kind, why = await self.surface.gate("enter" if a["key"] == "Enter" else "click", focus)
-            if kind or SENDING_KEYS.match(a["key"]):
-                verdict = await self._reviewed(kind or "submit", {"target": [], "text": self.typed,
-                                                                  "page_says": a["key"]})
-                if verdict is not None and verdict.decision != "ask":
-                    return self._verdict(verdict, kind or "submit")
-                answer = await self._card({"type": "see_key", "key": a["key"], "kind": kind or "submit",
-                                           "why": why or "a key that may send, pressed by sight",
-                                           "picture": self._picture(None), "text": self.typed, **self._why(verdict),
-                                           "said": words.say(words.KEY, self.lang, who=self.who, window=name,
-                                                             key=a["key"])})
-                if not (answer and answer.get("yes")):
-                    return "declined", f"[declined] the person did not let {a['key']} be pressed; nothing was done"
-                return "", "a key confirmed by the person"
-            if not focus.get("known") and self.lease != self.surface.place():
-                answer = await self._card({"type": "see_lease", "text": words.say(words.LEASE, self.lang,
-                                                                                   who=self.who, window=name),
-                                           "target": "", "picture": self._picture(None), "choices": ["allow", "no"]})
-                if not (answer and answer.get("yes")):
-                    return "declined", "[declined] the person did not allow working by sight here; nothing was done"
-                self.lease = self.surface.place()
+            decided = await self._key_allowed(a["key"])
+            if decided is not None:
+                return decided
         return "", "moving about"
+
+    async def _point_allowed(self, do: str, hit: dict | None, at: tuple | None) -> tuple[str, str] | None:
+        """A pointer action: a spot the structure names goes by its own rules, an unsorted one needs the lease.
+        None when nothing here decides it."""
+        if hit and hit.get("known"):
+            kind, why = await self.surface.gate("drag" if do == "drag" else "click", hit)
+            if not kind:
+                return None
+            verdict = await self._reviewed(kind, {"target": [hit["what"]], "page_says": hit["what"]})
+            if verdict is not None and verdict.decision != "ask":
+                return self._verdict(verdict, kind)
+            answer = await self._card({"type": "see_action", "kind": kind, "why": why, "target": hit["what"],
+                                       "picture": self._picture(at), **self._why(verdict)})
+            if not _yes(answer):
+                return "declined", (f"[declined] the person {'said no to' if answer else 'did not answer'} "
+                                    f"{kind} ({hit['what']}); nothing was done")
+            return "", f"{kind}, confirmed by the person"
+        if self.lease != self.surface.place() and not await self._lease(hit["what"] if hit else "", at):
+            return "declined", "[declined] the person did not allow working by sight in this window; nothing was done"
+        return None
+
+    async def _key_allowed(self, key: str) -> tuple[str, str] | None:
+        """A key: one that may send goes to the reviewer and, unpassed, to a card; one into nothing the
+        structure names needs the lease. None when nothing here decides it."""
+        focus = await self.surface.focused()
+        kind, why = "", ""
+        if focus.get("known") and self.surface.kind == "window":
+            kind, why = await self.surface.key_gate(key, focus)
+        elif focus.get("known") and key in ("Enter", "Space"):
+            kind, why = await self.surface.gate("enter" if key == "Enter" else "click", focus)
+        if kind or SENDING_KEYS.match(key):
+            verdict = await self._reviewed(kind or "submit", {"target": [], "text": self.typed, "page_says": key})
+            if verdict is not None and verdict.decision != "ask":
+                return self._verdict(verdict, kind or "submit")
+            answer = await self._card({"type": "see_key", "key": key, "kind": kind or "submit",
+                                       "why": why or "a key that may send, pressed by sight",
+                                       "picture": self._picture(None), "text": self.typed, **self._why(verdict),
+                                       "said": words.say(words.KEY, self.lang, who=self.who,
+                                                         window=self.surface.name, key=key)})
+            if not _yes(answer):
+                return "declined", f"[declined] the person did not let {key} be pressed; nothing was done"
+            return "", "a key confirmed by the person"
+        if not focus.get("known") and self.lease != self.surface.place() and not await self._lease("", None):
+            return "declined", "[declined] the person did not allow working by sight here; nothing was done"
+        return None
+
+    async def _lease(self, target: str, at: tuple | None) -> bool:
+        """The card that lets the character work by sight in this window (or on this site) for this task;
+        True when the person allowed it, and the lease is held from then on."""
+        answer = await self._card({"type": "see_lease", "text": words.say(words.LEASE, self.lang, who=self.who,
+                                                                           window=self.surface.name),
+                                   "target": target, "picture": self._picture(at), "choices": ["allow", "no"]})
+        if not _yes(answer):
+            return False
+        self.lease = self.surface.place()
+        return True
 
     async def _reviewed(self, kind: str, action: dict):
         """The reviewer's verdict on an act of `kind` in this window, or None when the kind is the person's."""
@@ -622,15 +633,18 @@ class Sight:
         if not_ready:
             # Held (paused while the person kept using the computer), or no way to the window.
             return {"status": self.held() or "refused", "line": f"[{self.held() or 'refused'}] {not_ready}"}
+        refused = await self._send(a, real, before)
+        if refused:
+            return {"status": "refused", "line": refused}
+        return await self._after(a, before, real, hit)
+
+    async def _send(self, a: dict, real: tuple[float, float] | None, before: Frame) -> str:
+        """The action itself, through the surface: a refusal line when the keyboard focus forbids it, else ""."""
         do = a["do"]
-        where = f" at {round(at[0])},{round(at[1])} of the picture" if at else ""
-        on = f" on {hit['what']}" if hit else ""
         if do in ("click", "double_click"):
             await self.surface.click(*real, count=2 if do == "double_click" else 1)
         elif do == "drag":
-            to = before.to_real(*a["to"])
-            await self.surface.drag(*real, *to)
-            where += f" to {round(a['to'][0])},{round(a['to'][1])}"
+            await self.surface.drag(*real, *before.to_real(*a["to"]))
         elif do == "scroll":
             await self.surface.scroll(*real, a["amount"] if a["direction"] == "up" else -a["amount"])
         elif do == "type":
@@ -639,17 +653,25 @@ class Sight:
                 await asyncio.sleep(0.15)
             focus = await self.surface.focused()
             if focus.get("secret"):
-                return {"status": "refused", "line": "[refused] the focus is in a password field: that is for the "
-                                                     "person to type; nothing was typed"}
+                return "[refused] the focus is in a password field: that is for the person to type; nothing was typed"
             if focus.get("elsewhere"):
-                return {"status": "refused", "line": "[refused] the keyboard focus is not in this window; nothing "
-                                                     "was typed"}
+                return "[refused] the keyboard focus is not in this window; nothing was typed"
             await self.surface.type(a["text"])
         elif do == "key":
             focus = await self.surface.focused()
             if focus.get("elsewhere"):
-                return {"status": "refused", "line": "[refused] the keyboard focus is not in this window"}
+                return "[refused] the keyboard focus is not in this window"
             await self.surface.key(a["key"])
+        return ""
+
+    async def _after(self, a: dict, before: Frame, real: tuple[float, float] | None, hit: dict | None) -> dict:
+        """The second picture once an action was sent, and the line on what was sent and whether the picture
+        changed where it pointed."""
+        do, at = a["do"], a.get("at")
+        where = f" at {round(at[0])},{round(at[1])} of the picture" if at else ""
+        if do == "drag":
+            where += f" to {round(a['to'][0])},{round(a['to'][1])}"
+        on = f" on {hit['what']}" if hit else ""
         await asyncio.sleep(SETTLE_S)
         try:
             after = await self.surface.capture(self.profile.long_edge)
@@ -672,3 +694,8 @@ class Sight:
         text = f" {a['text'][:60]!r}" if do == "type" else (f" {a['key']}" if do == "key" else "")
         return {"status": "ok", "line": f"[ok] {do}{text}{where}{on} was sent -> {said}{small}",
                 "changed": seen["any"]}
+
+
+def _yes(answer: dict | None) -> bool:
+    """The person answered a card yes; no answer counts as no."""
+    return bool(answer and answer.get("yes"))

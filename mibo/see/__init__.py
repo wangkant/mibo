@@ -17,5 +17,4 @@ of the one granted window or the pane and works it by pointing.
   followed by a second picture; the gate looks up what is at the point.
 - when: whether to look by picture at all, and the person's switch.
 - run: the loop of one task by sight, which either loop hands a window to.
-- native: vendor computer-use tools mapped onto the same actions.
 """
