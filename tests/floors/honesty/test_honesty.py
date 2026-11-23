@@ -6,6 +6,7 @@ import itertools
 import re
 
 from harness.model import say
+
 from mibo.prompts import (
     _HONEST_ANSWER,
     OWNER_TOOL_GUIDE,

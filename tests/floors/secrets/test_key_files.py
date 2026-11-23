@@ -6,9 +6,9 @@ import json
 import sys
 
 import pytest
-
 from harness.folders import Profile
 from harness.model import call, say
+
 from mibo.shell import grants
 from mibo.shell.run import HIDDEN, hide_secret_names
 

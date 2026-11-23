@@ -4,7 +4,6 @@ all the pages, and only when they are more than the chips."""
 from __future__ import annotations
 
 import pytest
-
 from harness.model import say
 from harness.page import measured
 

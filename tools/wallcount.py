@@ -16,9 +16,9 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from mibo.review import endpoint  # noqa: E402
-from mibo.sources import base, china  # noqa: E402
-from mibo.web import pagejudge, signin  # noqa: E402
+from mibo.review import endpoint
+from mibo.sources import base, china
+from mibo.web import pagejudge, signin
 
 FINDS, PER_SOURCE, PAGE_S = 40, 3, 30
 

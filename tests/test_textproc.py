@@ -6,9 +6,9 @@ Run from the repo root:
 """
 from __future__ import annotations
 
-from mibo.textproc import TextProcessing as TP
-
 from helpers import check
+
+from mibo.textproc import TextProcessing as TP
 
 
 def test_nothing_in_this_module_can_read_agent_state() -> None:

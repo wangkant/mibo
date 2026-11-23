@@ -3,8 +3,8 @@ following the language picked at once, and each choice kept where the app reads 
 from __future__ import annotations
 
 import pytest
-
 from harness.page import measured
+
 from mibo import settingsfile
 
 pytestmark = pytest.mark.browser

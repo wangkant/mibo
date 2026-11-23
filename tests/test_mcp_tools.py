@@ -13,13 +13,12 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import mcp_standin
 import pytest
 
 from mibo import cardwait, mcp_hub, mcp_tools
 from mibo.mcp_client import Connection, McpError
 from mibo.textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN
-
-import mcp_standin
 
 STANDIN = str(Path(__file__).with_name("mcp_standin.py"))
 STDIO = {"command": sys.executable, "args": [STANDIN]}
@@ -252,7 +251,7 @@ class _Turn:
 
     def __init__(self, home: Path) -> None:
         # No model set: tool search stays on the tools' own words.
-        self.workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=lambda: {},
+        self.workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=dict,
                                          _main=SimpleNamespace(conversation="main", history=[]), _chats={})
         self.home = home
 

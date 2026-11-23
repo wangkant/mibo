@@ -108,7 +108,7 @@ def wonder(runtime: Path, words: str, now: float, asked: bool = False) -> str:
     they do not want. The words queued, "" for none."""
     from . import profile
     words = _clip(words, WONDER_LEN)
-    if not words or not asked and profile.unwanted(runtime, words):
+    if not words or (not asked and profile.unwanted(runtime, words)):
         return ""
     key = words.casefold()
     with _wonder_lock:

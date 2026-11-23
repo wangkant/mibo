@@ -26,7 +26,6 @@ import re
 from collections import Counter, deque
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from urllib.parse import parse_qsl, urlsplit
 
 from fastapi import Request
@@ -142,7 +141,7 @@ def load_topics(runtime: Path) -> list[str]:
     return [topic for topic, in db.at(runtime).read("SELECT topic FROM feed_topics ORDER BY n")]
 
 
-def _marks(events: list, until: Optional[float] = None) -> tuple[dict, float]:
+def _marks(events: list, until: float | None = None) -> tuple[dict, float]:
     """What the person had done with each thing by `until`, and when the
     desktop last showed something."""
     marks: dict[str, dict] = {}
@@ -205,7 +204,7 @@ def _by_source(marks: dict, sources: dict[str, str]) -> dict[str, dict]:
     return rows
 
 
-def source_points(row: Optional[dict]) -> float:
+def source_points(row: dict | None) -> float:
     """What was learned of the source that brought a thing, as points; 0 for a walk's find."""
     return SOURCE * weights.learned(row) - SOURCE_HIDDEN * (row["hides"] if row else 0)
 
@@ -270,7 +269,7 @@ def _word(word: str) -> str:
     return re.escape(word)
 
 
-def topic_matcher(topics: list[str]) -> Optional[re.Pattern]:
+def topic_matcher(topics: list[str]) -> re.Pattern | None:
     """One pattern for every word the person's topics stand for, or None without topics."""
     named = {}
     for key, (names, words) in SUGGESTED.items():
@@ -285,7 +284,7 @@ def topic_matcher(topics: list[str]) -> Optional[re.Pattern]:
     return re.compile("|".join(subjects._word(w.casefold()) for w in sorted(words, key=len, reverse=True)))
 
 
-def on_topic(shaped: dict, matcher: Optional[re.Pattern]) -> bool:
+def on_topic(shaped: dict, matcher: re.Pattern | None) -> bool:
     return bool(matcher and matcher.search(" ".join((shaped["title"], shaped["text"], shaped["site"])).casefold()))
 
 
@@ -309,10 +308,10 @@ class Veins:
                 frozenset(about) | frozenset(name for name, matcher in self.matchers if matcher.search(text)))
 
     @staticmethod
-    def same(a: Optional[tuple], b: Optional[tuple], topics: bool = True) -> bool:
-        return bool(a and b and (a[0] == b[0] or topics and a[1] & b[1]))
+    def same(a: tuple | None, b: tuple | None, topics: bool = True) -> bool:
+        return bool(a and b and (a[0] == b[0] or (topics and a[1] & b[1])))
 
-    def last(self, library: Library, events: list) -> Optional[tuple]:
+    def last(self, library: Library, events: list) -> tuple | None:
         """The vein of the last thing the pet's card or the main chat brought."""
         for _at, ident, action, *rest in reversed(events):
             extra = rest[2] if len(rest) > 2 else {}
@@ -322,7 +321,7 @@ class Veins:
                 return self.of(shaped, item) if shaped else None
         return None
 
-    def varied(self, rows: list, last: Optional[tuple] = None, mix: bool = False) -> list:
+    def varied(self, rows: list, last: tuple | None = None, mix: bool = False) -> list:
         """(shaped, item) rows in their order, except that each goes after one from another source and on
         other topics where one is left; failing that, from another source. With `mix`, text and video take
         turns where both are left."""
@@ -330,7 +329,7 @@ class Veins:
         left, placed, video = list(rows), [], None
         while left:
             apart = [r for r in left if not self.same(veins[r[1].id], last)]
-            row = (mix and next((r for r in apart if is_video(r[1], r[0]) != video), None)
+            row = ((mix and next((r for r in apart if is_video(r[1], r[0]) != video), None))
                    or next(iter(apart), None)
                    or next((r for r in left if not self.same(veins[r[1].id], last, False)), left[0]))
             left.remove(row)
@@ -345,7 +344,7 @@ def is_video(item: Item, shaped: dict) -> bool:
 
 # ------------------------------------------------------------------- items --
 
-def shape(item: Item, marks: dict) -> Optional[dict]:
+def shape(item: Item, marks: dict) -> dict | None:
     """One thing as the feed draws it, from the same card the days and the chat use."""
     card = life.clean_card(item.card())
     if card is None:
@@ -366,7 +365,7 @@ def errand(url: str) -> bool:
     account or payment page, or a shop's or a booking site's page."""
     parts = urlsplit(url)
     query = [key for key, _ in parse_qsl(parts.query) if not key.lower().startswith(TRACKING)]
-    return (parts.path.strip("/").lower() in ("", "index.html", "index.htm", "index.php") and not query
+    return ((parts.path.strip("/").lower() in ("", "index.html", "index.htm", "index.php") and not query)
             or browsed.secret(url) or browsed.site_of(parts.hostname or "").split(".")[0] in ERRAND_SITES)
 
 
@@ -378,7 +377,7 @@ def presentable(shaped: dict) -> bool:
                 and shaped["picture"])
 
 
-def ranked(library: Library, events: list, at: float, topics: list[str] = (), *, seed: Optional[int] = None,
+def ranked(library: Library, events: list, at: float, topics: list[str] = (), *, seed: int | None = None,
            picks: bool = True, since: float = 0) -> list[tuple[dict, Item]]:
     """Everything not dismissed, not skipped, found by `at` (and at `since` or later), reachable now and a thing
     to read (not an `errand`), unseen first, then by score:
@@ -516,9 +515,9 @@ def first_round(library: Library, events: list, now: float, topics: list[str]) -
 on_card: dict[str, dict] = {}
 
 
-def remember(runtime: Path, item: Item, action: str, now: Optional[float] = None, *, surface: str = "",
-             rank: Optional[int] = None, play_s: float = 0.0, slot: str = "", end: str = "",
-             shown_s: float = 0.0, said: Optional[dict] = None, line: str = "") -> bool:
+def remember(runtime: Path, item: Item, action: str, now: float | None = None, *, surface: str = "",
+             rank: int | None = None, play_s: float = 0.0, slot: str = "", end: str = "",
+             shown_s: float = 0.0, said: dict | None = None, line: str = "") -> bool:
     """Keep one reaction with the model's snapshot of the thing at that moment, where it was shown
     (`surface`: card, list, chat or first), at which `rank` and in which `slot` (model, explore or character,
     as the ranking served it when the page does not say), and what it says of the item's source; one that
@@ -554,7 +553,7 @@ def remember(runtime: Path, item: Item, action: str, now: Optional[float] = None
                 "hide_source": mark and mark["hide"], "play": play_s <= (mark["play"] if mark else 0),
                 "read": play_s <= (mark["play"] if mark else 0), "end": mark and mark["end"]}[action]
         # A find that opened to a wall says nothing more of the person's taste.
-        if done or mark and mark["walled"]:
+        if done or (mark and mark["walled"]):
             return False
         if action == "seen":
             from .. import recommend
@@ -587,7 +586,7 @@ def take_back(runtime: Path, item: Item) -> None:
     store = db.at(runtime)
     with store.write() as conn:
         gone = [e for e in _numbered(conn, "WHERE id = ?", (item.id,)) if (
-            e[2] in ("skip", "hide_source") or e[2] == "end" and e[5]["end"] in ("close", "quick", "known"))]
+            e[2] in ("skip", "hide_source") or (e[2] == "end" and e[5]["end"] in ("close", "quick", "known")))]
         _drop(conn, gone)
     store.scrubbed()
     nos = [e for e in gone if e[2] != "end"]
@@ -616,7 +615,7 @@ def walled(runtime: Path, item: Item) -> bool:
         mark = _marks(mine)[0].get(item.id)
         if mark is None or mark["walled"]:
             return False
-        gone = [e for e in mine if e[2] in ("open", "read") or e[2] == "end" and e[5].get("end") == "open"]
+        gone = [e for e in mine if e[2] in ("open", "read") or (e[2] == "end" and e[5].get("end") == "open")]
         _drop(conn, gone)
         _add(conn, [round(life.clock(), 3), item.id, "walled", mark["site"], mark["kind"], {}])
     if item.source and any(e[2] == "open" for e in gone):
@@ -709,7 +708,7 @@ class Feed:
         # Each thing's showing: its first "seen", else its first event (a page opened in the app's browser).
         showing: dict[str, list] = {}
         for event in events:
-            if event[1] not in showing or event[2] == "seen" and showing[event[1]][2] != "seen":
+            if event[1] not in showing or (event[2] == "seen" and showing[event[1]][2] != "seen"):
                 showing[event[1]] = event
         tops = {ident: row.get("top") or [] for ident, row in model.first_shown(
             runtime, [item.id for _, _, item in got["rows"]]).items()}
@@ -824,11 +823,11 @@ class Feed:
                 # What the lean was before, for an undo to put back.
                 was = await asyncio.to_thread(lambda: profile.load(self.ws._runtime(), False)["leans"].get(key))
                 said.update(key=key, was=was)
-        if (surface not in model.SURFACES and surface != "" or slot not in ("", "model", "explore", "character")
-                or rank is not None and (not isinstance(rank, int) or isinstance(rank, bool) or rank < 0)
+        if ((surface not in model.SURFACES and surface != "") or slot not in ("", "model", "explore", "character")
+                or (rank is not None and (not isinstance(rank, int) or isinstance(rank, bool) or rank < 0))
                 or not isinstance(seconds, (int, float)) or isinstance(seconds, bool)
-                or not 0 <= seconds <= PLAY_MAX_S or action in ("play", "read") and not seconds
-                or action == "end" and end not in ENDS):
+                or not 0 <= seconds <= PLAY_MAX_S or (action in ("play", "read") and not seconds)
+                or (action == "end" and end not in ENDS)):
             raise ValueError("feed_action")
         if end == "close" and seconds < QUICK_S:
             end = "quick"

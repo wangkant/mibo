@@ -5,9 +5,9 @@ new, something on a home that knows nothing yet, and the same order for the same
 from __future__ import annotations
 
 import pytest
-
 from harness.clock import Clock
 from harness.finds import Shelf
+
 from mibo import profile
 from mibo.panels import feed
 from mibo.web import signin

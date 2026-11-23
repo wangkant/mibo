@@ -42,9 +42,9 @@ import re
 import threading
 import time
 import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Awaitable, Callable
 
 # The kinds code lets the reviewer see, per area; every other kind is the person's. "outward" is a press, an Enter
 # or a form that sends something out of the page or window, whatever its words say; "upload" a file the person
@@ -271,18 +271,16 @@ SECRET_TEXT = re.compile(
 FIELD = re.compile(r"\\*\"([^\"\\]{1,60})\\*\"\s*:\s*(?:\\*\"([^\"\\]{3,})|(\d[\d ]{11,22}\d)\b)")
 # A field name's last word that holds a secret, whatever its case and separators: token, clientSecret, x-api-key,
 # pwd; not a count, a limit or a policy (token_count, max_tokens, password_policy).
-SECRET_NAMES = frozenset("secret token pass pwd passwd password passcode passphrase otp totp cvv cvc pin authorization "
-                         "apikey".split())
+SECRET_NAMES = frozenset(["secret", "token", "pass", "pwd", "passwd", "password", "passcode", "passphrase", "otp", "totp", "cvv", "cvc", "pin", "authorization", "apikey"])
 # Tokens that only page through a listing.
-NOT_SECRET = frozenset("page next sync continuation continue cursor pagination skip starting start end resumption "
-                       "marker input output from to base quote".split())
+NOT_SECRET = frozenset(["page", "next", "sync", "continuation", "continue", "cursor", "pagination", "skip", "starting", "start", "end", "resumption", "marker", "input", "output", "from", "to", "base", "quote"])
 # A value that could be a credential: long, with no spaces. A coin's symbol or a word is not.
 CREDENTIAL = re.compile(r"\S{12,}")
 # A card number is written as one: in groups of four (4-6-5 for Amex), under a card, pan or number field, or after a
 # card word; a bare digit run (an id, a timestamp) is not one.
 CARD_GROUPED = re.compile(r"(?<![\d.])(?:\d{4}(?:[ -]\d{4}){3}(?:[ -]?\d{1,3})?|\d{4}[ -]\d{6}[ -]\d{5})(?![\d.])")
 CARD_SAID = re.compile(r"(?:\bcard\b|卡号|卡號|カード|카드)\D{0,12}?(\d[\d -]{11,22}\d)(?!\d)", re.I)
-CARD_FIELDS = frozenset("card pan number cc".split())
+CARD_FIELDS = frozenset(["card", "pan", "number", "cc"])
 # Things that point somewhere: a message must not carry one the person did not give.
 POINTERS = re.compile(r"https?://\S+|www\.\S+|\b[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w@])@[\w\u4e00-\u9fff.-]{2,}|"
                       r"\b[a-z0-9-]+\.(?:com|cn|net|org|io|me|cc|xyz|top|ru|link|ly|gl|co)\b(?:/\S*)?|\d{5,}|\d{3}-\d{2}-\d{4}",

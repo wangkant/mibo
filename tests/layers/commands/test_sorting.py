@@ -9,7 +9,8 @@ import sys
 
 import pytest
 
-from mibo.shell import files, read as reading
+from mibo.shell import files
+from mibo.shell import read as reading
 from mibo.shell.grants import Grants
 
 # (PowerShell command, what the judge must do) with one folder granted, run from it.

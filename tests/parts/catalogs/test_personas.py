@@ -121,7 +121,7 @@ def test_the_persona_card_gives_the_reply_style_or_the_default(tmp_path) -> None
 
 
 def test_the_fan_made_characters_come_last_with_their_own_names(portraits) -> None:
-    assert sw.PERSONA_KEYS == ("mibo", *FAN_MADE, sw.TEMPLATE)
+    assert ("mibo", *FAN_MADE, sw.TEMPLATE) == sw.PERSONA_KEYS
     assert [c.name_in("en") for c in sw.CHARACTERS if c.stem] == ["Mibo", "White Dragon", "Big Fish", "Milady"]
     assert [sw.character_for("mibo").name_in(lang) for lang in ("zh", "ja", "ko", "ru")] == ["Mibo"] * 4
     assert [sw.character_for("chatgpt").name_in(lang) for lang in ("zh", "zh-TW", "ja", "ko", "de")] \

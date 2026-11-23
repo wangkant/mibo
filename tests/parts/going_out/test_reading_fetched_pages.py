@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from harness.model import call, say
+
 from mibo.panels.links import Links
 
 PAGES = Path(__file__).resolve().parents[2] / "data" / "pages"

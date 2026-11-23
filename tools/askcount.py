@@ -89,7 +89,7 @@ def workspace_for(home: Path) -> SimpleNamespace:
     import time
     rooms = {c: SimpleNamespace(conversation=c, history=[{"role": "user", "text": SAID, "at": time.time()}])
              for c in ("c1", "c2")}
-    return SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=lambda: {},
+    return SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=dict,
                            _main=SimpleNamespace(conversation="main", history=[]), _chats=rooms)
 
 
@@ -202,7 +202,8 @@ async def shell_run(out: Path, policy: str) -> dict:
         finally:
             task.cancel()
         result["conversations"].append({"cards": len(log), "steps": steps, "pressed": log})
-    from mibo.shell import read as reading, run as running
+    from mibo.shell import read as reading
+    from mibo.shell import run as running
     running.SPARE.close()
     reading.PARSER.close()
     return result

@@ -205,7 +205,7 @@ class Person:
         a += 0.4 * any(w in where for w in self.t.trust) - 0.6 * any(w in where for w in self.t.avoid)
         a += 0.15 * (lab["quality"] - 3)
         # "other": a language none of these people read.
-        if lab["lang"] == "other" or lab["lang"] == "en" and not self.t.english:
+        if lab["lang"] == "other" or (lab["lang"] == "en" and not self.t.english):
             a -= 1.2
         if context:
             main = top(lab)
@@ -236,7 +236,7 @@ class Person:
             seconds = full * min(1.0, sigmoid(3 * a) * (0.4 + r()))
             like = r() < sigmoid(4 * a - 2.2)
             return {"open": True, "like": like, "seconds": round(seconds, 1), "end": "open", "shown_s": 4 + 6 * r()}
-        if r() < sigmoid(-3 * a - 0.3) or busy and r() < 0.5:
+        if r() < sigmoid(-3 * a - 0.3) or (busy and r() < 0.5):
             quick = a < -0.2 or busy
             return {"open": False, "like": False, "seconds": 0, "end": "close",
                     "shown_s": 1 + 1.5 * r() if quick else 4 + 10 * r()}

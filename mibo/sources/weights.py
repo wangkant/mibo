@@ -19,8 +19,8 @@ import math
 import random
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from .. import db
 
@@ -75,7 +75,7 @@ def load(runtime: Path) -> dict[str, dict]:
     return _state(db.at(runtime).read("SELECT * FROM source_state"))
 
 
-def row(runtime: Path, key: str) -> Optional[dict]:
+def row(runtime: Path, key: str) -> dict | None:
     """One source's row, or None for a source never read nor reacted to."""
     return _state(db.at(runtime).read("SELECT * FROM source_state WHERE key = ?", (key,))).get(key)
 
@@ -108,7 +108,7 @@ def hidden(runtime: Path, key: str) -> None:
     change(runtime, edit)
 
 
-def read(runtime: Path, answered: dict[str, str | bool], now: Optional[float] = None) -> None:
+def read(runtime: Path, answered: dict[str, str | bool], now: float | None = None) -> None:
     """A round read these sources: OK, BLOCKED (the transport could not reach it) or FAILED_READ
     (anything else); True and False stand for OK and FAILED_READ."""
     now = int(time.time() if now is None else now)
@@ -129,14 +129,14 @@ def read(runtime: Path, answered: dict[str, str | bool], now: Optional[float] = 
     change(runtime, edit)
 
 
-def open_to(row: Optional[dict], now: float, retry_s: float = RETRY_S) -> bool:
+def open_to(row: dict | None, now: float, retry_s: float = RETRY_S) -> bool:
     """Whether a source may be read: not blocked, or its retry is due (`retry_s` after its last try)."""
     if not row or row["blocked"] < BLOCKED_AFTER:
         return True
     return now - row["tried"] >= retry_s
 
 
-def learned(row: Optional[dict]) -> float:
+def learned(row: dict | None) -> float:
     """The exponent learned from reactions, LOW to HIGH; 0 for a source nobody reacted to."""
     if not row:
         return 0.0
@@ -149,11 +149,11 @@ def _text(source) -> str:
     return " ".join((source.group, *source.name, *source.about)).casefold()
 
 
-def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher: Optional[re.Pattern], *,
-          unreadable: set[str] = frozenset(), defaults: Optional[set[str]] = None, supply: Optional[Callable] = None,
-          origin: Optional[Callable[[str], float]] = None, retry_s: float = RETRY_S,
-          now: Optional[float] = None, topical: Optional[dict[str, float]] = None,
-          own: Optional[set[str]] = None) -> list[dict]:
+def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher: re.Pattern | None, *,
+          unreadable: set[str] = frozenset(), defaults: set[str] | None = None, supply: Callable | None = None,
+          origin: Callable[[str], float] | None = None, retry_s: float = RETRY_S,
+          now: float | None = None, topical: dict[str, float] | None = None,
+          own: set[str] | None = None) -> list[dict]:
     """Each source's gate, prior, learned exponent and weight, highest weight first.
 
     w = G * prior * exp(supply(s) + theta) * HIDE^hides * FAILED^min(fails, FAILS_MAX), with

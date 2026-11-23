@@ -19,11 +19,17 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field, fields
-from typing import Optional
 
 from . import langs
-from .config_env import (DEFAULT_LLM_BASE_URL, DEFAULT_LLM_MODEL, env_bool,
-                         env_float, env_int, env_str, vision_endpoint_from_env)
+from .config_env import (
+    DEFAULT_LLM_BASE_URL,
+    DEFAULT_LLM_MODEL,
+    env_bool,
+    env_float,
+    env_int,
+    env_str,
+    vision_endpoint_from_env,
+)
 
 logger = logging.getLogger("agent")
 
@@ -133,7 +139,7 @@ class AgentSettings:
     memory_log_days: int = 30
     #: Persona document; ``None`` means the agent loads ``PERSONA_FILE``, so
     #: file reads stay out of this record.
-    persona: Optional[str] = None
+    persona: str | None = None
 
     # ---- vision ------------------------------------------------------------
     vision_model: str = ""
@@ -192,7 +198,7 @@ class AgentSettings:
         self.llm_dm_model = self.llm_dm_model or self.model
 
     @classmethod
-    def from_env(cls, env=None, **overrides) -> "AgentSettings":
+    def from_env(cls, env=None, **overrides) -> AgentSettings:
         """The app's configuration, the home's settings included.
 
         An out-of-range value falls back to the default and warns."""

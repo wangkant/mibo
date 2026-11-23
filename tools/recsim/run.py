@@ -25,10 +25,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import report  # noqa: E402
 from llm import Model  # noqa: E402
 from people import PEOPLE  # noqa: E402
 from people2 import FRESH  # noqa: E402
-import report  # noqa: E402
 
 
 def main() -> None:

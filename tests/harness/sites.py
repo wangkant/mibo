@@ -21,9 +21,9 @@ import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import roam_standin
 from httpcore._backends.auto import AutoBackend
 
-import roam_standin
 from mibo import ingestion
 
 # How long a stand-in that holds its asker (a tarpit, a held lookup) waits before it gives up on its own, so an

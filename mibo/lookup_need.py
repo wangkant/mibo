@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import re
 
-
 _WRITTEN = re.compile(r"(?:<tool_call>\s*)?(\{[^{}]*\"name\"\s*:\s*\"(\w+)\"[^{}]*(\{[^{}]*\})?[^{}]*\})", re.S)
 _WRITTEN_FN = re.compile(r"\b(\w+)\(\s*(?:(\w+)\s*=\s*)?[\"']([^\"']{1,300})[\"']\s*\)")
 

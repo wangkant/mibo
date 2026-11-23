@@ -22,7 +22,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..resolve import CLOSE, FOUND, plain, score
-from . import grants as g, win32
+from . import grants as g
+from . import win32
 
 # The model may give a program's other name after a slash (微信/WeChat).
 SEVERAL = re.compile(r"[/|、，,]")

@@ -277,8 +277,8 @@ def main() -> None:
     _standing.update(standing(args.data))
     everyone = [u for u in people if u in arms.get("app", {})]
     report = {"main": table(arms, everyone, ["app", *BASE, *CEIL])}
-    print_table(f"All sampled people (app and baselines): mean watch ratio, watched-through share, "
-                f"distinct categories", report["main"])
+    print_table("All sampled people (app and baselines): mean watch ratio, watched-through share, "
+                "distinct categories", report["main"])
     report["main_gaps"] = gaps(report["main"])
     print("\nShare of the random-to-oracle distance in watched-through covered (app / popular / bandit):")
     for k in KS:

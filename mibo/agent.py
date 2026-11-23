@@ -10,18 +10,10 @@ import os
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
 
-
-from . import channels
+from . import channels, langs
 from . import embeddings as embeddings_mod
-from . import langs
 from . import recent as recent_mod
-from .paths import (
-    ROOT,
-    resolve_runtime_state_file,
-    resolve_seed_lang_file,
-)
 from .consolidate import Consolidation
 from .decision import ReplyDecision
 from .dm import DirectMessages
@@ -31,6 +23,11 @@ from .llm import ModelCalls
 from .loop import ToolLoop
 from .memory import Memory
 from .messages import MessageParsing
+from .paths import (
+    ROOT,
+    resolve_runtime_state_file,
+    resolve_seed_lang_file,
+)
 from .prompt import PromptBuilder
 from .prompts import parse_persona_style, render_persona_template
 from .retrieval import Retrieval
@@ -43,7 +40,7 @@ from .views import DataViews
 logger = logging.getLogger("agent")
 
 
-def _load_persona_card() -> Optional[dict]:
+def _load_persona_card() -> dict | None:
     """The optional persona card (PERSONA_CARD_FILE) with the `reply_style`
     policy."""
     card_path = ROOT / os.getenv("PERSONA_CARD_FILE", "persona.card.json")
@@ -52,7 +49,7 @@ def _load_persona_card() -> Optional[dict]:
     return json.loads(card_path.read_text(encoding="utf-8"))
 
 
-def _card_aliases(card: Optional[dict]) -> tuple[str, ...]:
+def _card_aliases(card: dict | None) -> tuple[str, ...]:
     """The card's optional `aliases`: nicknames that call the persona too."""
     raw = card.get("aliases") if isinstance(card, dict) else None
     if not isinstance(raw, list):
@@ -107,7 +104,7 @@ def _loop_time() -> float:
 class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
             Retrieval, ModelCalls, ToolLoop, WebSearch, FollowUp, Consolidation, Memory,
             DataViews, ContentIngestion):
-    def __init__(self, settings: Optional[AgentSettings] = None, **overrides):
+    def __init__(self, settings: AgentSettings | None = None, **overrides):
         """Wire one agent from one settings record: ``Agent(settings)``, or
         the settings fields as keywords (``Agent(api_key=..., ...)``)."""
         if settings is None:
@@ -191,7 +188,7 @@ class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
         # keeps the conversation; turns carry `t` and `seq`.
         self._recent = recent_mod.RecentStore(self.memory_file.with_name("recent.json"))
         self._recent_dirty: set[str] = set()
-        self._recent_flushed_at: Optional[float] = None
+        self._recent_flushed_at: float | None = None
         self.window_seq: dict[str, int] = {}
         # A chat's state is read and written under its lock.
         self.locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -254,7 +251,7 @@ class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
         logged = self.chat_log.last_seq(conv) if self.chat_log.on else 0
         self.window_seq[conv] = max(self.window_seq.get(conv, 0), logged)
 
-    def _recent_entry(self, conv: str) -> Optional[dict]:
+    def _recent_entry(self, conv: str) -> dict | None:
         """A chat's entry for recent.json from what is held now; None when
         nothing of it is left."""
         snap = self._recent.snapshot(conv) or {}

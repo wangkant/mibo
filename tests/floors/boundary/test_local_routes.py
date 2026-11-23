@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import re
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from mibo import players, welcome
 

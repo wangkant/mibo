@@ -30,10 +30,9 @@ def _take_worker(runtime: str, start: int, count: int) -> None:
 
 def test_a_write_is_whole_or_not_at_all(tmp_path: Path) -> None:
     store = db.at(tmp_path)
-    with pytest.raises(RuntimeError):
-        with store.write() as conn:
-            conn.execute("INSERT INTO page_chats VALUES ('a', 'c', '', '', 0)")
-            raise RuntimeError("cut short")
+    with pytest.raises(RuntimeError), store.write() as conn:
+        conn.execute("INSERT INTO page_chats VALUES ('a', 'c', '', '', 0)")
+        raise RuntimeError("cut short")
     assert store.read("SELECT count(*) FROM page_chats") == [(0,)]
 
 

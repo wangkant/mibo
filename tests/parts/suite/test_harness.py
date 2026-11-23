@@ -11,15 +11,14 @@ import os
 
 import httpx
 import pytest
-
 from harness import attacks
 from harness.app import KEY
 from harness.clock import Clock
 from harness.folders import KEYS, Profile
-from harness.model import (MODEL, SYSTEM_OF, Unscripted, call, content_filter, error_in_200, fail, hang, say,
-                           text, think)
+from harness.model import MODEL, SYSTEM_OF, Unscripted, call, content_filter, error_in_200, fail, hang, say, text, think
 from harness.sites import Site
 from harness.turn import run_turn
+
 from mibo import ingestion, life, review, roam, updates
 from mibo.acting import Modes
 from mibo.shell import grants

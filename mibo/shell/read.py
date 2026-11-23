@@ -867,7 +867,7 @@ class Sorter:
             self.file_method(member, node, first)
             return
         if on in ("environment", "system.environment") and member.startswith("getenvironmentvariable") and (
-                int(node.get("nargs") or 0) >= 2 or member.endswith("s") and int(node.get("nargs") or 0) >= 1):
+                int(node.get("nargs") or 0) >= 2 or (member.endswith("s") and int(node.get("nargs") or 0) >= 1)):
             self.add("secrets", "secrets", "reads the person's saved environment variables, where programs keep keys")
             return
         if not member:

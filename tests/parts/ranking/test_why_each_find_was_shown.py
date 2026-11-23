@@ -9,10 +9,10 @@ import os
 from pathlib import Path
 
 import pytest
-
 from harness.app import App, quiet_start
 from harness.clock import Clock
 from harness.finds import Shelf
+
 from mibo import db, i18n, recommend, subjects
 from mibo.panels import feed
 

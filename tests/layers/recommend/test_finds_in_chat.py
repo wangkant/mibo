@@ -8,9 +8,9 @@ import time
 from types import SimpleNamespace
 
 import pytest
-
 from harness.finds import Shelf
 from harness.model import call, say
+
 from mibo import findtool, roam
 from mibo.library import CHAT, Item
 

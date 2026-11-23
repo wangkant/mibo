@@ -39,7 +39,7 @@ def _motion() -> bool:
 class _Api:
     """What the compact page may ask of its window."""
 
-    def __init__(self, chat: "Compact"):
+    def __init__(self, chat: Compact):
         self._chat = chat
 
     def away(self) -> None:

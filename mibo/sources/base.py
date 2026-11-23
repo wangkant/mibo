@@ -12,9 +12,9 @@ import asyncio
 import html
 import io
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Optional
 from urllib.parse import urljoin, urlsplit
 
 import feedparser
@@ -72,8 +72,8 @@ def local_to(region: str, sources: list[Source], keys: set[str] | None = None) -
     return [replace(s, region=region) if keys is None or s.key in keys else s for s in sources]
 
 
-def client(transport: Optional[httpx.AsyncBaseTransport] = None,
-           mounts: Optional[dict[str, httpx.AsyncBaseTransport]] = None) -> httpx.AsyncClient:
+def client(transport: httpx.AsyncBaseTransport | None = None,
+           mounts: dict[str, httpx.AsyncBaseTransport] | None = None) -> httpx.AsyncClient:
     """The sources' client; a round passes the transport that records reachability (`situation.client_options`)."""
     return httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT_S, connect=CONNECT_S), headers=HEADERS,
                              follow_redirects=True, transport=transport, mounts=mounts)
@@ -127,7 +127,7 @@ def smaller(picture: str) -> str:
 
 
 def find(url: str, title: str, *, site: str = "", kind: str = "", text: str = "", author: str = "",
-         published: str = "", picture: str = "", length: Optional[int] = None) -> Find:
+         published: str = "", picture: str = "", length: int | None = None) -> Find:
     """A find from its public facts. A YouTube or Bilibili address becomes a
     video with its player; `kind` is otherwise article, post or page."""
     player = player_for(url)
@@ -165,7 +165,7 @@ def _picture(entry: dict) -> str:
 
 
 def parse_feed(body: bytes, base_url: str, *, site: str = "", content_type: str = "",
-               text: Optional[Callable[[dict], str]] = None) -> list[Find]:
+               text: Callable[[dict], str] | None = None) -> list[Find]:
     """The entries of an RSS 2.0, RSS 1.0 or Atom document, in the feed's order. `text`
     picks an entry's description where a source knows better than the feed's own."""
     doc = feed_document(body, base_url, content_type)
@@ -199,14 +199,14 @@ def parse_feed(body: bytes, base_url: str, *, site: str = "", content_type: str 
 
 
 async def feed_finds(answer: httpx.Response, *, site: str = "",
-                     text: Optional[Callable[[dict], str]] = None) -> list[Find]:
+                     text: Callable[[dict], str] | None = None) -> list[Find]:
     """The finds in a fetched feed, parsed off the event loop: a large feed takes feedparser a second."""
     return await asyncio.to_thread(parse_feed, answer.content, str(answer.url), site=site,
                                    content_type=answer.headers.get("content-type", ""), text=text)
 
 
 async def read_feed(http: httpx.AsyncClient, url: str, *, site: str = "",
-                    text: Optional[Callable[[dict], str]] = None, **params) -> list[Find]:
+                    text: Callable[[dict], str] | None = None, **params) -> list[Find]:
     """The finds of the feed at `url`, read through the sources' client."""
     answer = await http.get(url, params=params or None)
     answer.raise_for_status()

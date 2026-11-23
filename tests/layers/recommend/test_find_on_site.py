@@ -6,8 +6,8 @@ browser and the web search are stand-ins here: no model and no platform is reach
 from __future__ import annotations
 
 import pytest
-
 from harness.model import call, say
+
 from mibo import browsed, catalog, findtool, prompts, search
 
 VIDEOS = [("https://www.douyin.com/video/7311111111111111111", "猫咪第一次见到黄瓜"),

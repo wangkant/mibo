@@ -21,9 +21,8 @@ import html
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from .. import mcp_market
+from .. import mcp_market, runtimes, secretstore
 from .. import mcp_tools as mt
-from .. import runtimes, secretstore
 from ..mcp_hub import Hub
 
 # Where a consent page sends the browser back.
@@ -158,7 +157,7 @@ def mount(app, workspace, body) -> None:
         elif isinstance(payload.get("remove"), str):
             keys = await asyncio.to_thread(mt.remove_server, home, payload["remove"])
             if keys:
-                await asyncio.to_thread(keep, {key: "" for key in keys})
+                await asyncio.to_thread(keep, dict.fromkeys(keys, ""))
             await asyncio.to_thread(hub.grants.forget, payload["remove"])
             await hub.forget_sign_in(payload["remove"])
         elif isinstance(payload.get("disabled"), bool) and isinstance(payload.get("server"), str):

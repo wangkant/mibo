@@ -9,8 +9,8 @@ import json
 import os
 
 import pytest
-
 from harness.model import call, say, text
+
 from mibo.shell import checkpoint
 from mibo.shell import files as file_tools
 from mibo.shell.grants import Grants

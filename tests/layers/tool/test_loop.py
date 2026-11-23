@@ -11,11 +11,11 @@ import time
 from pathlib import Path
 
 import pytest
-from PIL import Image
-
 from harness.model import call, fail, hang, say, tokens
 from harness.page import measured
 from harness.turn import run_turn
+from PIL import Image
+
 from mibo import acting, character, loop
 from mibo.review import Verdict
 from mibo.shell import tool as shell_tool

@@ -17,9 +17,9 @@ import logging
 import re
 from pathlib import Path
 
-from . import store
 from .. import turnctx
 from ..textproc import _clean_prompt_source
+from . import store
 
 logger = logging.getLogger("agent")
 

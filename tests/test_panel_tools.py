@@ -9,8 +9,8 @@ import sys
 import time
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from mibo import mcp_tools, settingsfile, welcome
 

@@ -21,10 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "recsim"))
 
-from mibo import recommend, subjects, taste  # noqa: E402
-from mibo.library import Library  # noqa: E402
-from mibo.panels import feed  # noqa: E402
-from subjects_check import TO  # noqa: E402
+from subjects_check import TO
+
+from mibo import recommend, subjects, taste
+from mibo.library import Library
+from mibo.panels import feed
 
 
 def main() -> None:

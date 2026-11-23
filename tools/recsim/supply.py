@@ -17,7 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from people import PEOPLE  # noqa: E402
+from people import PEOPLE
 
 STRONG, ON = 0.5, 0.4
 

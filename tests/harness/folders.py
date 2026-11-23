@@ -33,7 +33,7 @@ class Profile:
             "Pictures/猫.jpg": b"\xff\xd8\xff" + b"\x00" * 300,
             "Music/歌.mp3": b"ID3" + b"\x00" * 100,
             "Videos/clip.mp4": b"\x00\x00\x00\x18ftypmp42",
-            **{key: "API_KEY=sk-not-a-real-key\n" for key in KEYS},
+            **dict.fromkeys(KEYS, "API_KEY=sk-not-a-real-key\n"),
         }
         for name, body in files.items():
             path = root / name

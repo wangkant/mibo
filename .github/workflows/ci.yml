@@ -57,12 +57,13 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           python -m playwright install --with-deps chromium
           python -c "from playwright.sync_api import sync_playwright as p; pw = p().start(); print('PERSONA_BROWSER_PATH=' + pw.chromium.executable_path); pw.stop()" >> "$GITHUB_ENV"
-      # Dead and undefined names only, not a style gate; re-exports carry `# noqa: F401`.
-      - name: Lint for dead and undefined names
-        run: ruff check . --select F401,F811,F821,F841
+      # The rule set is in pyproject.toml ([tool.ruff.lint]); re-exports carry `# noqa: F401`.
+      - name: Lint
+        run: ruff check .
+      # One process per core; a file's tests stay in one process.
       - name: Run the test suite
         run: |
-          python -m pytest -q --durations=25
+          python -m pytest -q -n auto --dist loadfile --durations=25
           python -m compileall -q .
 
   windows:
@@ -90,7 +91,7 @@ jobs:
         # bash: PowerShell reports only the last command of a step, which hid failing tests here.
         shell: bash
         run: |
-          python -m pytest -q --durations=25
+          python -m pytest -q -n auto --dist loadfile --durations=25
           python -m compileall -q .
 
   package:

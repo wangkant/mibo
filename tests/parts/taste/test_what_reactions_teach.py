@@ -4,9 +4,9 @@ sign-in nothing; what was taught is kept on disk and goes when the person starts
 from __future__ import annotations
 
 import pytest
-
 from harness.clock import Clock
 from harness.finds import Shelf
+
 from mibo import profile, taste
 from mibo.panels import feed
 from mibo.sources import weights

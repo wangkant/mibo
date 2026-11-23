@@ -10,8 +10,8 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-
 from harness.app import TOKEN
+
 from mibo import settingsfile, welcome
 
 # A setting, form field or variable that holds a key by its name.

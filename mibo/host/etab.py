@@ -15,7 +15,8 @@ import asyncio
 import contextlib
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..web.tabs import AUTO_ATTACH, OPEN_S, Answer, TabError, _BlockingTab
 

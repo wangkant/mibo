@@ -7,11 +7,12 @@ import time
 from datetime import date
 
 from harness.model import say
+
 from mibo import person
 from mibo.prompt import _TURN_CONTEXT_OPEN
-from mibo.timewords import Due
 from mibo.prompts import OWNER_TOOL_GUIDE, STYLE_KNOBS, PersonaStyle, dm_output_protocol, dm_style_guide
 from mibo.textproc import _OWN_CHAT_INPUT_RULES, _USER_DATA_CLOSE, _USER_DATA_OPEN, _WEB_DESC_CLOSE, _WEB_DESC_OPEN
+from mibo.timewords import Due
 
 # The closers the register bans, in both languages a reply is written in.
 BANNED = ("Is there anything else", "I'm here to help", "Let me know if", "有什么我可以帮你的", "还有什么需要我帮忙的",

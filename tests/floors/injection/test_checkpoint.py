@@ -9,6 +9,7 @@ import time
 from harness import attacks
 from harness.model import fail, say
 from harness.page import measured
+
 from mibo.prompt import _CHECKPOINT_OPEN
 
 ZH = "今天下午我们去公园散步，路上看到很多银杏叶已经黄了，风一吹就落下来，像下了一场金色的雨，真好看。"

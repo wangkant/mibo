@@ -10,9 +10,9 @@ import sys
 import textwrap
 
 import pytest
-
 from harness import attacks
 from harness.model import call, say, text
+
 from mibo import acting, mcp_tools
 from mibo.shell import files as file_tools
 from mibo.shell.grants import LOG_FILE, Grants

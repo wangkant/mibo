@@ -3,12 +3,11 @@ wrote survives, and the state the page shows. The server's boundary is a floor i
 from __future__ import annotations
 
 import pytest
-
 from harness.app import TOKEN
 from harness.model import fail, say
+
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
-from mibo import settingsfile
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 

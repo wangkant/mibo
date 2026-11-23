@@ -502,16 +502,11 @@ def asks_each_time(tool: dict) -> bool:
 # reads, in its parameters and its description, and always in the call's arguments. A read verb leading a name takes a
 # thing as its object (get_payment reads a payment), but never hides a later verb (get_or_create_payment,
 # fetch_and_pay, list_and_delete, check_out). Carding a harmless write is the cheap mistake, so the words lean wide.
-_READS = frozenset("get list read search find query fetch show view describe lookup look count check browse inspect "
-                   "preview retrieve peek poll status info explain summarize summarise analyze analyse calculate "
-                   "compute estimate compare validate verify ping echo whoami is has can snapshot screenshot scrape "
-                   "crawl extract convert diff scroll hover wait".split())
+_READS = frozenset(["get", "list", "read", "search", "find", "query", "fetch", "show", "view", "describe", "lookup", "look", "count", "check", "browse", "inspect", "preview", "retrieve", "peek", "poll", "status", "info", "explain", "summarize", "summarise", "analyze", "analyse", "calculate", "compute", "estimate", "compare", "validate", "verify", "ping", "echo", "whoami", "is", "has", "can", "snapshot", "screenshot", "scrape", "crawl", "extract", "convert", "diff", "scroll", "hover", "wait"])
 # Words that are only ever verbs that change, run or send something: a name holding one does not read. Words that
 # are also things (issue, post, run, order, update in getUpdates) are not here: after a read verb they name what is
 # read, and after "and" or "or" they count as verbs anyway.
-_VERBS = frozenset("edit modify reset replace add remove send create submit execute exec initiate approve cancel write "
-                   "save upload publish insert upsert append move rename install uninstall kill restart invoke "
-                   "navigate drag apply deploy revert confirm capture set delete".split())
+_VERBS = frozenset(["edit", "modify", "reset", "replace", "add", "remove", "send", "create", "submit", "execute", "exec", "initiate", "approve", "cancel", "write", "save", "upload", "publish", "insert", "upsert", "append", "move", "rename", "install", "uninstall", "kill", "restart", "invoke", "navigate", "drag", "apply", "deploy", "revert", "confirm", "capture", "set", "delete"])
 # Words of the vocabulary that name a thing a read verb may take: list_payouts, list_trash.
 _THINGS = frozenset({"payment", "payout", "deposit", "trash"})
 # Verbs that are things too (list_runs, list_calls): they count only as the name's first verb (run_query).
@@ -525,17 +520,16 @@ _ACCESS_FIELDS = re.compile(r"^(?:role|roles|permission|permissions|access_?leve
 _MONEY_FIELDS = re.compile(r"^(?!min|max).*(?:amount|price|total|cost(?!ing)|fee(?![dl]))", re.I)
 _TO_FIELDS = re.compile(r"recipient|payee|beneficiary|iban|card_?number|account_?number|routing|^to$", re.I)
 # Fields that hold a statement or a command; a tool that says it runs them has every argument read so.
-_CODE_KEYS = frozenset("sql statement command cmd script code shell".split())
+_CODE_KEYS = frozenset(["sql", "statement", "command", "cmd", "script", "code", "shell"])
 # Fields that hold a statement in a database's tool and plain words in a search: there only a whole statement
 # counts, at the start or after a semicolon, never the words inside a question.
-_ASKED_KEYS = frozenset("query expression".split())
+_ASKED_KEYS = frozenset(["query", "expression"])
 _NAMED = r"[\w.\"`\[\]]+"
 _SQL_STATEMENT = re.compile(
     r"(?:^|;)\s*(?:delete\s+from\s+" + _NAMED + r"|drop\s+(?:table|database|schema|index|collection|view)\s+"
     r"(?:if\s+exists\s+)?" + _NAMED + r"|truncate\s+(?:table\s+)?" + _NAMED + r")\s*(?:;|$|where\b|cascade\b|"
     r"restrict\b)", re.I)
-_RUNS_NAME = frozenset("sql shell bash powershell terminal command cmd script python javascript code exec execute eval "
-                       "run".split())
+_RUNS_NAME = frozenset(["sql", "shell", "bash", "powershell", "terminal", "command", "cmd", "script", "python", "javascript", "code", "exec", "execute", "eval", "run"])
 _RUNS_SAID = re.compile(r"\b(?:sql|cypher|shell commands?|statements?)\b", re.I)
 _SQL_DELETES = re.compile(r"\bdelete\s+from\b|\bdrop\s+(?:table|database|schema|index|collection|view)\b|"
                           r"\btruncate\s+(?:table\s+)?\w", re.I)
@@ -545,7 +539,7 @@ _CODE_DELETES = re.compile(
     r"(?:^|[\s;&|(])(?:rm|del|erase|rmdir|rd|Remove-Item|ri|shred|unlink)\s+\S|\bformat\s+[a-z]:|\bgit\s+clean\b|"
     r"\bfind\b[^;|&\n]*\s-delete\b|\brmtree\s*\(|\bos\.(?:remove|unlink|rmdir|removedirs)\s*\(|\.unlink\s*\(|"
     r"\bfs\.(?:rm|rmdir|unlink)(?:Sync)?\s*\(|\brimraf\b|\b(?:File|Directory)\.Delete\s*\(", re.I)
-_ACTION_KEYS = frozenset("action operation op method intent verb httpmethod".split())
+_ACTION_KEYS = frozenset(["action", "operation", "op", "method", "intent", "verb", "httpmethod"])
 # A request that writes to where payments are made.
 _PAY_PATH = re.compile(r"/(?:charges|payments?|payouts?|transfers|refunds|checkout|payment_intents|invoices/[^/]+/pay|"
                        r"subscriptions)\b", re.I)

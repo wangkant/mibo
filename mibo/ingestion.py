@@ -18,7 +18,6 @@ import time
 import warnings
 import zlib
 from dataclasses import dataclass
-from typing import Optional
 from urllib.parse import urlencode, urlsplit
 
 import httpcore
@@ -27,7 +26,7 @@ import openai
 from httpcore._backends.auto import AutoBackend
 
 from .config_env import env_int
-from .textproc import (_detect_image_mime)
+from .textproc import _detect_image_mime
 
 logger = logging.getLogger("agent")
 
@@ -260,7 +259,7 @@ async def safe_fetch_url(
     timeout: float,
     max_wire_bytes: int,
     max_decoded_bytes: int,
-    headers: Optional[dict] = None,
+    headers: dict | None = None,
     allowed_content_types: tuple[str, ...] = (),
     require_content_type: bool = False,
     max_redirects: int = 5,
@@ -296,66 +295,65 @@ async def safe_fetch_url(
                 follow_redirects=False,
                 trust_env=False,
             )
-            async with client_cm as client:
-                async with client.stream(
-                    "GET",
-                    current,
-                    headers=request_headers,
-                    follow_redirects=False,
-                ) as response:
-                    if response.status_code in (301, 302, 303, 307, 308):
-                        location = response.headers.get("location", "")
-                        if not location:
-                            return None
-                        current = str(httpx.URL(current).join(location))
-                        continue
-                    if response.status_code != 200:
+            async with client_cm as client, client.stream(
+                "GET",
+                current,
+                headers=request_headers,
+                follow_redirects=False,
+            ) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("location", "")
+                    if not location:
                         return None
+                    current = str(httpx.URL(current).join(location))
+                    continue
+                if response.status_code != 200:
+                    return None
 
-                    content_type = (
-                        response.headers.get("content-type", "")
-                        .split(";", 1)[0]
-                        .strip()
-                        .lower()
-                    )
-                    if require_content_type and not content_type:
+                content_type = (
+                    response.headers.get("content-type", "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
+                if require_content_type and not content_type:
+                    return None
+                if allowed_content_types and not any(
+                    content_type == allowed.rstrip("/")
+                    or content_type.startswith(allowed)
+                    for allowed in allowed_content_types
+                ):
+                    return None
+
+                length = response.headers.get("content-length", "")
+                try:
+                    if length and int(length) > max_wire_bytes:
                         return None
-                    if allowed_content_types and not any(
-                        content_type == allowed.rstrip("/")
-                        or content_type.startswith(allowed)
-                        for allowed in allowed_content_types
-                    ):
+                except (TypeError, ValueError):
+                    pass
+
+                chunks: list[bytes] = []
+                wire_size = 0
+                async for chunk in response.aiter_raw():
+                    wire_size += len(chunk)
+                    if wire_size > max_wire_bytes:
                         return None
+                    chunks.append(chunk)
 
-                    length = response.headers.get("content-length", "")
-                    try:
-                        if length and int(length) > max_wire_bytes:
-                            return None
-                    except (TypeError, ValueError):
-                        pass
-
-                    chunks: list[bytes] = []
-                    wire_size = 0
-                    async for chunk in response.aiter_raw():
-                        wire_size += len(chunk)
-                        if wire_size > max_wire_bytes:
-                            return None
-                        chunks.append(chunk)
-
-                    encoding = (
-                        response.headers.get("content-encoding", "")
-                        .strip()
-                        .lower()
-                    )
-                    body = _decode_body(chunks, encoding, max_decoded_bytes)
-                    if body is None:
-                        return None
-                    return SafeFetchResult(
-                        url=str(getattr(response, "url", current) or current),
-                        status_code=response.status_code,
-                        headers={str(k): str(v) for k, v in response.headers.items()},
-                        content=body,
-                    )
+                encoding = (
+                    response.headers.get("content-encoding", "")
+                    .strip()
+                    .lower()
+                )
+                body = _decode_body(chunks, encoding, max_decoded_bytes)
+                if body is None:
+                    return None
+                return SafeFetchResult(
+                    url=str(getattr(response, "url", current) or current),
+                    status_code=response.status_code,
+                    headers={str(k): str(v) for k, v in response.headers.items()},
+                    content=body,
+                )
         except Exception as e:
             logger.debug("[Agent] safe fetch failed (%s): %s", _url_for_log(current), e)
             return None
@@ -629,8 +627,8 @@ class ContentIngestion:
         return low in _RESERVED_LOCAL_NAMES or low.endswith(".localhost")
 
     async def _safe_get(self, url: str, *, timeout: float,
-                        headers: Optional[dict] = None,
-                        max_redirects: int = 5) -> Optional[httpx.Response]:
+                        headers: dict | None = None,
+                        max_redirects: int = 5) -> httpx.Response | None:
         """GET with every redirect hop re-resolved, re-validated and pinned; None
         if a hop is internal or the redirect cap is exceeded."""
         result = await safe_fetch_url(

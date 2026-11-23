@@ -1222,7 +1222,7 @@ def no_windows() -> None:
     from mibo.desk import names, tool, win32
     from mibo.shell import run as running
     names.apps = lambda fresh=False: []
-    names.open_windows = lambda: []
+    names.open_windows = list
     win32.open_app = win32.open_file = lambda target: False
 
     def nothing_opens(*args, **kwargs):
@@ -1317,6 +1317,7 @@ def run(args) -> int:
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent))
     import scratchhome
+
     from mibo.shell import grants
     real = [grants.known_folder(guid) for guid in KNOWN]
     model = scratchhome.keys(args.keys)

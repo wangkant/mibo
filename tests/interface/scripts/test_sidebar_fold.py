@@ -4,7 +4,6 @@ and then it folds only where the screen has no room for it."""
 from __future__ import annotations
 
 import pytest
-
 from harness.page import measured
 
 pytestmark = pytest.mark.browser

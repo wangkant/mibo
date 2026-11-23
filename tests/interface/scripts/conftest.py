@@ -4,7 +4,6 @@ turns that skip into a failure (MIBO_REQUIRE_BROWSER)."""
 from __future__ import annotations
 
 import pytest
-
 from harness.page import Browser, NoBrowser
 
 

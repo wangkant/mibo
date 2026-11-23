@@ -11,11 +11,11 @@ import json
 import os
 import re
 
-from fastapi.testclient import TestClient
 import pytest
-
+from fastapi.testclient import TestClient
 from harness.folders import Profile
 from harness.model import call, say, text
+
 from mibo import cardwait, welcome
 from mibo.cardwait import Card, asking, reaches, said_yes
 from mibo.shell import checkpoint

@@ -3,11 +3,10 @@ files the portrait route will read is a floor in tests/floors/boundary/."""
 from __future__ import annotations
 
 import pytest
-
 from harness.app import TOKEN
+
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
-from mibo import settingsfile
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 FAN_MADE = ("chatgpt", "deepseek", "claude")

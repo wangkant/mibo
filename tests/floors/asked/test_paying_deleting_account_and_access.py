@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
-
 from harness import attacks
+
 from mibo import acting, review
 from mibo.desk import gate as desk
 from mibo.web import gate

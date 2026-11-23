@@ -4,8 +4,8 @@ shows a key, an empty label or English in its place."""
 from __future__ import annotations
 
 import pytest
-
 from harness.page import measured
+
 from mibo import langs
 
 pytestmark = pytest.mark.browser

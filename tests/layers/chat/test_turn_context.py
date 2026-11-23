@@ -13,11 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from harness.app import App
 from harness.model import call, fail, say, tokens
 from harness.page import measured
 from harness.turn import run_turn
+
 from mibo import context, pastchats, person, today, turnctx
 from mibo.dm import chat_key
 from mibo.library import Item, Library

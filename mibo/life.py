@@ -12,7 +12,6 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlsplit
 
 from . import memstore, person, players
@@ -47,11 +46,11 @@ class Sources:
         return Library(self.runtime)
 
     @classmethod
-    def of_agent(cls, agent, runtime: Path) -> "Sources":
+    def of_agent(cls, agent, runtime: Path) -> Sources:
         return cls(Path(runtime), agent.person_store.facts())
 
     @classmethod
-    def from_files(cls, runtime: Path) -> "Sources":
+    def from_files(cls, runtime: Path) -> Sources:
         """The files alone."""
         runtime = Path(runtime)
         try:
@@ -74,7 +73,7 @@ def owner_notes(src: Sources) -> list[dict]:
 
 # ---------------------------------------------------------------------- now --
 
-def asleep_until(now: float, offset_hours: float) -> Optional[int]:
+def asleep_until(now: float, offset_hours: float) -> int | None:
     """The waking time when `now` is inside the sleep hours on the persona's clock, else None."""
     from .textproc import SLEEP_HOUR_END, SLEEP_HOUR_START
     local = datetime.fromtimestamp(now, timezone(timedelta(hours=offset_hours)))
@@ -89,7 +88,7 @@ def asleep_until(now: float, offset_hours: float) -> Optional[int]:
 
 
 def now_state(library: Library, now: float, *, answering: bool = False,
-              sleep_until: Optional[int] = None) -> dict:
+              sleep_until: int | None = None) -> dict:
     outing = library.outing()
     if outing.state == "out":
         return {"state": "out", "where": outing.site, "since": int(outing.since), "until": None, "count": 0}
@@ -104,7 +103,7 @@ def now_state(library: Library, now: float, *, answering: bool = False,
 
 
 def home(src: Sources, *, answering: bool = False, sleep_until=None,
-         now: Optional[float] = None) -> dict:
+         now: float | None = None) -> dict:
     """What the character is doing now: out, answering, asleep, just back, or at home."""
     now = clock() if now is None else now
     return {"now": now_state(src.library, now, answering=answering, sleep_until=sleep_until)}
@@ -117,7 +116,7 @@ def _clip(text, limit: int = _TEXT_MAX) -> str:
     return value if len(value) <= limit else value[:limit - 1] + "…"
 
 
-def mark(library: Library, ident: str, action: str, kept: bool = True) -> Optional[Item]:
+def mark(library: Library, ident: str, action: str, kept: bool = True) -> Item | None:
     """The owner's choice about one thing it saw: keep (or un-keep), or not for me."""
     item = library.get(ident)
     if item is None:
@@ -148,7 +147,7 @@ def _web(url: str) -> str:
         return ""
 
 
-def clean_card(card) -> Optional[dict]:
+def clean_card(card) -> dict | None:
     """A card a chat message may carry, with only what the page may draw:
     a player only from a listed host, a picture only from the library."""
     if not isinstance(card, dict):

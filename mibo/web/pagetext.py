@@ -28,7 +28,7 @@ import json
 import math
 import re
 from collections import Counter
-from typing import Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
 
 from .. import context
 
@@ -114,7 +114,7 @@ def _sections(lines: list[str]) -> list[tuple[str, int, int]]:
     return out
 
 
-def _header(lines: list[str], i: int) -> Optional[int]:
+def _header(lines: list[str], i: int) -> int | None:
     """The header row of the table line `i` stands in, or None."""
     j = i
     while j >= 0 and lines[j].startswith("|"):
@@ -276,7 +276,7 @@ def _field(answer: str, key: str) -> str:
 
 
 async def answer(ask_model: Callable[[str, list[dict]], Awaitable[str]], question: str, text: str, budget: int, *,
-                 more: Optional[Callable[[str], Awaitable[tuple[str, bool]]]] = None, goes_on: bool = False,
+                 more: Callable[[str], Awaitable[tuple[str, bool]]] | None = None, goes_on: bool = False,
                  look_for: str = "", part: int = -1) -> dict:
     """The answer to `question` from a page whose document holds `text`, the model's page room being `budget`
     tokens. `more(how)` loads more of a live page ("step": one screen on; "all": the rest) and gives the document's

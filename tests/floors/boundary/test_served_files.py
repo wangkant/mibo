@@ -8,12 +8,11 @@ import hashlib
 import os
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
-from mibo import settingsfile
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
 from mibo.library import Item, Library
 
 TOKEN = "test-local-capability"

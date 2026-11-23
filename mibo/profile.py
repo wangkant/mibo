@@ -30,8 +30,6 @@ import re
 import time
 from datetime import date
 from pathlib import Path
-from typing import Optional
-
 
 from . import drafting, langs, situation
 from . import setup_wizard as sw
@@ -176,7 +174,7 @@ def _walk_len(word: str) -> int:
     return WALK_LEN if _CJK.search(word) else WALK_LEN_LATIN
 
 
-def _kind(word) -> Optional[str]:
+def _kind(word) -> str | None:
     """"video" or "text" from the person's word for a form; None when it names neither."""
     word = str(word or "")
     return "video" if _VIDEO.search(word) else "text" if _TEXT.search(word) else None
@@ -227,7 +225,7 @@ def dislike(runtime: Path, what: str, about: str, now: float, *, words: str = ""
     does any walk word holding it."""
     what = _clip(what, WORD_LEN)
     if not what:
-        return
+        return None
     if about == "kind" and _kind(what):
         return form(runtime, None, "text" if _kind(what) == "video" else "video", now, words=words or what)
     if about == "length":
@@ -251,7 +249,7 @@ def dislike(runtime: Path, what: str, about: str, now: float, *, words: str = ""
     _said(runtime, state, now)
 
 
-def form(runtime: Path, short: Optional[bool], kind: Optional[str], now: float, *, words: str = "") -> None:
+def form(runtime: Path, short: bool | None, kind: str | None, now: float, *, words: str = "") -> None:
     """A wish about length (`short`: True for short things, False for long ones) and form (`kind`: "video"
     or "text", or the person's word for one); None leaves that part as it was. The ranking's length and
     kind terms follow it at once (FORM_AGAINST on the other)."""
@@ -335,7 +333,7 @@ def walk_topics(runtime: Path) -> list[str]:
     return [w for w in dict.fromkeys(words) if not unwanted(runtime, w)]
 
 
-def _matcher(tokens: list[str]) -> Optional[re.Pattern]:
+def _matcher(tokens: list[str]) -> re.Pattern | None:
     from .panels import feed
     words = {w for w in (" ".join(str(t or "").split()).casefold() for t in tokens) if len(w) >= 2}
     if not words:
@@ -628,7 +626,7 @@ def apply(runtime: Path, answer: str, state: dict) -> dict:
     return state
 
 
-async def rewrite(runtime: Path, home: Optional[Path] = None, now: Optional[float] = None) -> bool:
+async def rewrite(runtime: Path, home: Path | None = None, now: float | None = None) -> bool:
     """One rewrite call now; False when no model is set or the answer could not be used."""
     runtime = Path(runtime)
     home = runtime.parent if home is None else Path(home)
@@ -675,7 +673,7 @@ def due(runtime: Path, now: float) -> bool:
             or (new >= WEEK_REACTIONS and now - float(state.get("at") or state.get("since") or now) >= WEEK_S))
 
 
-async def refresh(runtime: Path, home: Optional[Path] = None, now: Optional[float] = None) -> bool:
+async def refresh(runtime: Path, home: Path | None = None, now: float | None = None) -> bool:
     now = time.time() if now is None else now
     return await asyncio.to_thread(due, runtime, now) and await rewrite(runtime, home, now)
 
@@ -686,7 +684,7 @@ def _lines(text: str) -> list[str]:
     return _text(text, 10_000).splitlines()
 
 
-async def answer(runtime: Path, home: Path, text: str, now: Optional[float] = None) -> bool:
+async def answer(runtime: Path, home: Path, text: str, now: float | None = None) -> bool:
     """The first run's free-text answer: kept, and one rewrite at once."""
     text = " ".join(str(text or "").split())
     if not text or len(text) > FREE_MAX:
@@ -697,7 +695,7 @@ async def answer(runtime: Path, home: Path, text: str, now: Optional[float] = No
     return await rewrite(runtime, home, now)
 
 
-def edit(runtime: Path, payload: dict, now: Optional[float] = None) -> bool:
+def edit(runtime: Path, payload: dict, now: float | None = None) -> bool:
     """The owner's own changes. A line they add to a text is pinned; a removed pinned line is unpinned.
     Returns whether a text changed, so the caller can ask for a rewrite that turns a "not this" into a rule."""
     now = time.time() if now is None else now
@@ -770,7 +768,7 @@ def edit(runtime: Path, payload: dict, now: Optional[float] = None) -> bool:
         leans = payload["leans"]
         if not isinstance(leans, dict) or not all(
                 isinstance(k, str) and k.partition(":")[0] in ("topic", "like", "subj", "origin", "kind")
-                and len(k) <= 120 and (v is None or v in LEANS and not isinstance(v, bool)) for k, v in leans.items()):
+                and len(k) <= 120 and (v is None or (v in LEANS and not isinstance(v, bool))) for k, v in leans.items()):
             raise ValueError("profile_invalid")
         state["leans"] = {k: v for k, v in {**current["leans"], **leans}.items() if v is not None}
     if "pace" in payload:

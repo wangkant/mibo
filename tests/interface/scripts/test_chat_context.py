@@ -9,9 +9,9 @@ import json
 import time
 
 import pytest
-
 from harness.model import fail, say
 from harness.page import measured
+
 from mibo.prompt import _CHECKPOINT_OPEN
 
 pytestmark = pytest.mark.browser

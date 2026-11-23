@@ -22,8 +22,8 @@ import openai
 
 # This checkout's mibo, not the one the environment has installed.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from mibo import drafting  # noqa: E402
-from mibo.endpoints import chat_completions_url  # noqa: E402
+from mibo import drafting
+from mibo.endpoints import chat_completions_url
 
 MODEL = "deepseek/deepseek-v4.1-flash"
 

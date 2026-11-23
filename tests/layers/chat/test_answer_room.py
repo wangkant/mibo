@@ -8,9 +8,9 @@ import os
 from pathlib import Path
 
 import pytest
-
 from harness.app import App, quiet_start
 from harness.model import say, tokens
+
 from mibo import abilities, context
 from mibo.endpoints import chat_completions_url
 

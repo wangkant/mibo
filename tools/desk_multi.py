@@ -452,8 +452,9 @@ def paste(b: Bench) -> dict:
 
 def sight(b: Bench) -> dict:
     """The card's picture against the one sent, and a click by picture while the person uses the computer."""
-    from PIL import Image
     import base64
+
+    from PIL import Image
     out = {}
     win32 = b.win32
     win32.idle_s = b.person.idle_s

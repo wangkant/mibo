@@ -10,7 +10,8 @@ import sys
 import threading
 from pathlib import Path
 
-from . import home as homes, shortcut
+from . import home as homes
+from . import shortcut
 
 MACOS = sys.platform == "darwin"
 # The LaunchAgent that opens the app.

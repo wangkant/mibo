@@ -54,8 +54,7 @@ from urllib.parse import urlsplit
 from ..browsed import secret as secret_address
 
 CONTROLS = set(
-    "button link textbox searchbox combobox listbox option checkbox radio switch slider spinbutton tab menuitem "
-    "menuitemcheckbox menuitemradio treeitem".split(" "))
+    ["button", "link", "textbox", "searchbox", "combobox", "listbox", "option", "checkbox", "radio", "switch", "slider", "spinbutton", "tab", "menuitem", "menuitemcheckbox", "menuitemradio", "treeitem"])
 # Text inside these is one line; text across them is not joined.
 BLOCKS = {"paragraph", "listitem", "row", "LabelText"}
 CELLS = {"cell", "gridcell", "columnheader", "rowheader"}
@@ -1757,7 +1756,7 @@ class Page:
 
             def walk_one(n: dict | None, inside: str) -> None:
                 if not n:
-                    return
+                    return None
                 role = val(n.get("role"))
                 role = "" if role is None else str(role)
                 name = norm(val(n.get("name")))
@@ -1770,7 +1769,7 @@ class Page:
                     # Drawn: its lines go in by where it stands (drawn_lines), with the name the tree gives it; its own
                     # tree is not read.
                     doc["layout"]["drawn"][local]["name"] = name
-                    return
+                    return None
                 if role in CELLS and text:
                     # The cells of a table's row stay apart, so its columns can be compared.
                     text.append("|")
@@ -1796,7 +1795,7 @@ class Page:
                         emit(inner)
                         flush()
                         lines.append("--- end of frame")
-                    return
+                    return None
                 if (local in clickable and ident not in self.last and role not in CONTROLS
                         and not (prop(n, "focusable") and role != "RootWebArea")):
                     # Shown as clickable though the tree names no control: a row, a menu entry, a day.
@@ -1813,25 +1812,25 @@ class Page:
                         lines.append(("*" if previous and ident not in previous else "") + f"[{ident}] clickable"
                                      + (f' "{shown}"' if shown else f" {{{hint}}}" if hint else ""))
                         if not holds:
-                            return
+                            return None
                         for c in kids:
                             walk(by_id.get(c), fold(f"{inside} {shown}"))
                         return flush()
                 if n.get("ignored"):
                     for c in kids:
                         walk(by_id.get(c), inside)
-                    return
+                    return None
                 if role == "StaticText":
                     t = fold(name)
                     if t and t not in inside and (visible is None or t in visible):
                         text.append(name)
-                    return
+                    return None
                 if role == "heading" and name:
                     flush()
                     lines.append(f"## {name}")
                     for c in kids:
                         walk(by_id.get(c), fold(name))
-                    return
+                    return None
                 # A slider's knob or an icon with no name that takes the focus is shown by its hint.
                 focusable = (prop(n, "focusable") and role != "RootWebArea"
                              and (name or val(n.get("value")) or prop(n, "editable")
@@ -1840,7 +1839,7 @@ class Page:
                     if role not in BLOCKS:
                         for c in kids:
                             walk(by_id.get(c), inside)
-                        return
+                        return None
                     flush()
                     for c in kids:
                         walk(by_id.get(c), inside)
@@ -1902,7 +1901,7 @@ class Page:
                              + (" " + " ".join(states) if states else "")
                              + ("  options: " + " | ".join(options[:OPTIONS_MAX]) + more if options else ""))
                 if popup or role in NATIVE_INPUTS or is_secret:
-                    return
+                    return None
                 inside = fold(f"{inside} {clip(name, 150)} {value}")
                 for c in kids:
                     walk(by_id.get(c), inside)

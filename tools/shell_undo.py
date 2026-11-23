@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.card_wait import Page  # noqa: E402
+from tools.card_wait import Page
 
 A_PY = "def total(rows):\n    s = 0\n    for row in rows:\n        if row > 0:\n            s += row\n    return s\n" + \
        "".join(f"# note {n}\n" for n in range(1, 30))

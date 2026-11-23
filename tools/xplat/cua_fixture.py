@@ -66,8 +66,7 @@ def run_tk(state: State) -> None:
 def run_qt(state: State) -> None:
     from PySide6.QtCore import Qt, QTimer, qVersion
     from PySide6.QtGui import QKeySequence, QShortcut
-    from PySide6.QtWidgets import (QApplication, QLabel, QLineEdit, QListWidget, QPushButton, QVBoxLayout,
-                                   QWidget)
+    from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QListWidget, QPushButton, QVBoxLayout, QWidget
 
     app = QApplication(sys.argv)
     window = QWidget()

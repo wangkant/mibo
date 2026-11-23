@@ -2,12 +2,10 @@
 server's boundary is a floor in tests/floors/boundary/."""
 from __future__ import annotations
 
-
 import pytest
 
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
-from mibo import settingsfile
 
 
 @pytest.fixture

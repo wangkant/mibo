@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import itertools
 from contextvars import ContextVar
-from typing import Optional
 
 from .textproc import (
     _WEB_DESC_CLOSE,
@@ -14,7 +13,7 @@ from .textproc import (
 
 # Set by a turn whose model is shown pictures itself: an attached picture is
 # kept here, not captioned, and goes to the reply call (dm.py).
-turn_pictures: ContextVar[Optional[list]] = ContextVar("turn_pictures", default=None)
+turn_pictures: ContextVar[list | None] = ContextVar("turn_pictures", default=None)
 
 
 class MessageParsing:

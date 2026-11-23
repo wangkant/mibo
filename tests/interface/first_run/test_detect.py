@@ -10,11 +10,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-
 from harness.app import TOKEN
-from mibo import settingsfile
+
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
 from mibo.panels import detect
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

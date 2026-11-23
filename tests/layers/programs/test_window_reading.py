@@ -12,7 +12,7 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
-from mibo.desk import uia, win32  # noqa: E402
+from mibo.desk import uia, win32
 
 WINDOW = 7
 

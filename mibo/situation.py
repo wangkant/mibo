@@ -31,9 +31,10 @@ import sys
 import time
 import urllib.request
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -94,7 +95,7 @@ _CYRILLIC = re.compile(r"[Ѐ-ӿ]")
 _LATIN = re.compile(r"[A-Za-z]")
 
 # What the requests of one source's fetch did, for the round to tell blocked from failed.
-_tally: contextvars.ContextVar[Optional[dict]] = contextvars.ContextVar("situation_tally", default=None)
+_tally: contextvars.ContextVar[dict | None] = contextvars.ContextVar("situation_tally", default=None)
 
 
 # ------------------------------------------------------------------- the table --
@@ -106,7 +107,7 @@ def _hosts(found) -> dict[str, dict]:
     return {site: dict(zip(HOST_FIELDS, values)) for site, *values in found}
 
 
-def _host(store: db.Db, site: str) -> Optional[dict]:
+def _host(store: db.Db, site: str) -> dict | None:
     return _hosts(store.read("SELECT * FROM hosts WHERE site = ?", (site,))).get(site)
 
 
@@ -133,7 +134,7 @@ def _edit(runtime: Path, edit: Callable[[dict], None]) -> dict:
         return state
 
 
-def _edit_host(runtime: Path, site: str, edit: Callable[[dict], Optional[bool]]) -> None:
+def _edit_host(runtime: Path, site: str, edit: Callable[[dict], bool | None]) -> None:
     """One host's row edited in one transaction; `edit` returning False writes nothing. It is read first outside
     one, so a request that changes nothing takes no write lock."""
     store = db.at(runtime)
@@ -149,7 +150,7 @@ def _blank_host() -> dict:
     return {"fails": 0, "fail_at": 0.0, "ok_at": 0.0, "wall_at": 0.0, "mode": ""}
 
 
-def _top(row: Optional[dict]) -> tuple[str, Any]:
+def _top(row: dict | None) -> tuple[str, Any]:
     """The origin that decides a row, and its value."""
     by = (row or {}).get("by") or {}
     for origin in reversed(ORIGINS):
@@ -246,7 +247,7 @@ def site_of(address: str) -> str:
     return _SAME.get(site, site)
 
 
-def _up(row: Optional[dict]) -> bool:
+def _up(row: dict | None) -> bool:
     if not row:
         return True
     if row["mode"]:
@@ -259,13 +260,13 @@ def retry_s(runtime: Path) -> float:
     return 0.0 if value(runtime, "vpn") else RETRY_S
 
 
-def record(runtime: Path, host: str, ok: bool, now: Optional[float] = None) -> None:
+def record(runtime: Path, host: str, ok: bool, now: float | None = None) -> None:
     """One request's outcome for its host: True for any HTTP answer, False for a counted transport failure."""
     site, now = site_of(host), time.time() if now is None else now
     if not site:
         return
 
-    def edit(row: dict) -> Optional[bool]:
+    def edit(row: dict) -> bool | None:
         if ok:
             if not row["fails"] and now - row["ok_at"] < OK_WRITE_S:
                 return False
@@ -279,11 +280,11 @@ def record(runtime: Path, host: str, ok: bool, now: Optional[float] = None) -> N
     _edit_host(runtime, site, edit)
 
 
-def record_wall(runtime: Path, host: str, wall: bool, now: Optional[float] = None) -> None:
+def record_wall(runtime: Path, host: str, wall: bool, now: float | None = None) -> None:
     """A walk's list showed a login or verification wall to visitors (or did not)."""
     site, now = site_of(host), time.time() if now is None else now
 
-    def edit(row: dict) -> Optional[bool]:
+    def edit(row: dict) -> bool | None:
         if bool(row["wall_at"]) == wall:
             return False
         row["wall_at"] = now if wall else 0.0
@@ -297,7 +298,7 @@ def navigation_failed(error: BaseException) -> bool:
     return bool(_NAV_FAILED.search(str(error)))
 
 
-def gate(runtime: Path, key: Optional[str] = None, host: Optional[str] = None) -> bool:
+def gate(runtime: Path, key: str | None = None, host: str | None = None) -> bool:
     """True when a source key may be read (it is not blocked, or is due a retry) and a host's things may be
     shown (it is not down). A host the record has never seen is allowed."""
     if host is not None and not _up(_host(db.at(runtime), site_of(host))):
@@ -308,7 +309,7 @@ def gate(runtime: Path, key: Optional[str] = None, host: Optional[str] = None) -
     return True
 
 
-def walkable(runtime: Path, host: str, now: Optional[float] = None) -> bool:
+def walkable(runtime: Path, host: str, now: float | None = None) -> bool:
     """Whether a walk may go to `host` now: it is up or due a retry, and showed no wall in the last RETRY_S."""
     now = time.time() if now is None else now
     row = _host(db.at(runtime), site_of(host))
@@ -349,7 +350,7 @@ class _Recording(httpx.AsyncHTTPTransport):
         return response
 
 
-def recording_transport(runtime: Path, proxy: Optional[str] = None) -> httpx.AsyncHTTPTransport:
+def recording_transport(runtime: Path, proxy: str | None = None) -> httpx.AsyncHTTPTransport:
     return _Recording(runtime, proxy=proxy)
 
 
@@ -400,7 +401,7 @@ async def probe(runtime: Path, lang: str = "") -> None:
     await asyncio.to_thread(infer, runtime, lang)
 
 
-async def retry_down(runtime: Path, now: Optional[float] = None) -> None:
+async def retry_down(runtime: Path, now: float | None = None) -> None:
     """Each round: the down hosts due a retry (RETRY_S after their last failure, every round with the VPN
     switch on) tried again, so one no source or walk asks for, such as a first-start probe host, comes
     back too. A host the person set to always or never is left alone."""
@@ -476,7 +477,7 @@ def _zone() -> str:
         return ""
 
 
-def _metered() -> Optional[bool]:
+def _metered() -> bool | None:
     """Whether Windows says the connection costs by use; None elsewhere or when it does not say."""
     if sys.platform != "win32":
         return None
@@ -536,7 +537,7 @@ def _accounts(runtime: Path) -> list[str]:
     return found
 
 
-def _signature(hosts: dict) -> Optional[str]:
+def _signature(hosts: dict) -> str | None:
     """"CN" when YouTube and Google are down while Bilibili answers, the mainland's pattern; else None."""
     def known_down(site: str) -> bool:
         row = hosts.get(site)
@@ -548,7 +549,7 @@ def _signature(hosts: dict) -> Optional[str]:
     return None
 
 
-def infer(runtime: Path, lang: str = "", now: Optional[float] = None) -> dict:
+def infer(runtime: Path, lang: str = "", now: float | None = None) -> dict:
     """Every factor inferred again, locally; run at start and at the beginning of each round."""
     now = time.time() if now is None else now
     system = os_region()
@@ -679,7 +680,7 @@ def notes(runtime: Path, now: float) -> str:
     return "\n".join(lines)
 
 
-def view(runtime: Path, now: Optional[float] = None) -> dict:
+def view(runtime: Path, now: float | None = None) -> dict:
     """What the page shows and edits: each factor with its origin and any question, and the hosts."""
     now = time.time() if now is None else now
     factors = {}

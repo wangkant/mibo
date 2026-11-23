@@ -13,7 +13,7 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
-from mibo.desk import hands, uia, win32  # noqa: E402
+from mibo.desk import hands, uia, win32
 
 PLACEHOLDER = "Message or run a task, / commands, @ files or sessions"
 WANT = "帮我打开桌面上的网易云音乐"  # copy: voice
@@ -253,7 +253,7 @@ def press_view(electron, monkeypatch, changes):
     def broken(pattern):
         return SimpleNamespace(Invoke=lambda: (_ for _ in ()).throw(RuntimeError("Operation is not valid")))
     node.el.GetCurrentPattern = broken
-    view.snapshot = lambda: {}
+    view.snapshot = dict
     view.changes = lambda before, after: changes
     view._point = lambda n: (150, 20)
     clicked = []

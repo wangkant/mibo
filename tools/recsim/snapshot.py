@@ -24,9 +24,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from mibo.library import Library  # noqa: E402
-from people import SUBJECTS  # noqa: E402
 from llm import Model  # noqa: E402
+from people import SUBJECTS  # noqa: E402
+
+from mibo.library import Library  # noqa: E402
 
 BATCH = 25
 

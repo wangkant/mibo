@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Optional
 
 from .storage import atomic_write_text, load_rebuildable_json
 from .storage import num as _num
@@ -48,7 +47,7 @@ class RecentStore:
         self.convs = load_rebuildable_json(self.path, _parse) or {}
         return self.convs
 
-    def snapshot(self, conv: str) -> Optional[dict]:
+    def snapshot(self, conv: str) -> dict | None:
         return self.convs.get(conv)
 
     def put(self, conv: str, state: dict) -> None:
@@ -57,7 +56,7 @@ class RecentStore:
     def drop(self, conv: str) -> bool:
         return self.convs.pop(conv, None) is not None
 
-    def trim(self, now: Optional[float] = None) -> list[str]:
+    def trim(self, now: float | None = None) -> list[str]:
         """Drop chats quiet for longer than keep_hours, then all but the
         newest max_convs; returns the dropped keys."""
         now = time.time() if now is None else now

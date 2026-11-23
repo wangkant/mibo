@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from operator import mul
-from typing import Iterable, Optional, Sequence
 
 from .embeddings import text_key
 
@@ -176,7 +176,7 @@ def row_fields(rec: dict) -> tuple[str, str, float, str]:
     )
 
 
-def cosine(a, b) -> Optional[float]:
+def cosine(a, b) -> float | None:
     """Cosine similarity of two unit vectors; None when either is missing,
     so such a row is ranked on the other signals alone."""
     if a is None or b is None:
@@ -202,8 +202,8 @@ def age_phrase(age_s: float) -> str:
 
 
 def score(weights: Weights, *, lexical: float = 0.0,
-          similarity: Optional[float] = None, age_s: Optional[float] = None,
-          importance: Optional[float] = None, uses: int = 0,
+          similarity: float | None = None, age_s: float | None = None,
+          importance: float | None = None, uses: int = 0,
           time_match: bool = False) -> float:
     s = weights.lexical * lexical
     if similarity is not None:

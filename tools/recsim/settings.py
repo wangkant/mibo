@@ -25,9 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import sim  # noqa: E402
-from people import OFFERED, SUBJECTS  # noqa: E402
-from mibo import profile, taste  # noqa: E402
+import sim
+from people import OFFERED, SUBJECTS
+
+from mibo import profile, taste
 
 SCENARIOS = ("base", "less", "more", "quiet", "topic_more", "topic_less", "wish", "like", "remove")
 QUIET = {"from": "19:00", "to": "23:00"}

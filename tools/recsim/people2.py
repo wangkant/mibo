@@ -18,8 +18,23 @@ import hashlib
 import math
 from dataclasses import dataclass, field
 
-from people import (DAY, DESIGN, HOME, OFFICE, OFFICE_WEEKEND, RESEARCH, RETIRED, STREAMER, STUDENT,
-                    STUDENT_WEEKEND, SUBJECTS, TIRE, Person, Truth, top)
+from people import (
+    DAY,
+    DESIGN,
+    HOME,
+    OFFICE,
+    OFFICE_WEEKEND,
+    RESEARCH,
+    RETIRED,
+    STREAMER,
+    STUDENT,
+    STUDENT_WEEKEND,
+    SUBJECTS,
+    TIRE,
+    Person,
+    Truth,
+    top,
+)
 
 
 @dataclass
@@ -143,7 +158,7 @@ class Fresh(Person):
         a += t.source_taste * _stable(t.name, item.get("source") or item.get("site", ""))
         a += t.whim * _stable(t.name, item["id"])
         a += 0.15 * (lab["quality"] - 3)
-        if lab["lang"] == "other" or lab["lang"] == "en" and not t.english:
+        if lab["lang"] == "other" or (lab["lang"] == "en" and not t.english):
             a -= 1.2
         if context:
             main = top(lab)

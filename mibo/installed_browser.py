@@ -13,8 +13,9 @@ import shutil
 import signal
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any
 
 logger = logging.getLogger("mibo.installed_browser")
 
@@ -38,7 +39,7 @@ _LINUX_NAMES = ("google-chrome", "google-chrome-stable", "microsoft-edge", "micr
                 "chromium", "chromium-browser")
 
 
-def find_browser() -> Optional[Path]:
+def find_browser() -> Path | None:
     """The installed browser to use, or None."""
     chosen = os.environ.get(BROWSER_ENV, "").strip()
     if chosen:
@@ -79,7 +80,7 @@ def headless_wanted() -> bool:
     return sys.platform.startswith("linux") and not any(os.environ.get(name) for name in ("DISPLAY", "WAYLAND_DISPLAY"))
 
 
-def end_profile(profile: Path, process: Optional[subprocess.Popen] = None) -> None:
+def end_profile(profile: Path, process: subprocess.Popen | None = None) -> None:
     """End every browser process that has `profile` open. A browser leaves
     helper processes behind when only its first one is ended."""
     if process is not None and process.poll() is None:
@@ -123,7 +124,7 @@ def end_profile(profile: Path, process: Optional[subprocess.Popen] = None) -> No
 class Browser:
     """One browser process on one profile, and the connection to it."""
 
-    def __init__(self, profile: Path, *, executable: Optional[Path] = None, headless: Optional[bool] = None):
+    def __init__(self, profile: Path, *, executable: Path | None = None, headless: bool | None = None):
         self.profile = profile
         self.executable = executable
         self.headless = headless_wanted() if headless is None else headless
@@ -134,7 +135,8 @@ class Browser:
     async def start(self) -> Any:
         """Start the browser and return its one context."""
         try:
-            from playwright.async_api import Error as DriverError, async_playwright
+            from playwright.async_api import Error as DriverError
+            from playwright.async_api import async_playwright
         except ImportError:
             raise RuntimeError(NO_DRIVER) from None
         program = self.executable or find_browser()

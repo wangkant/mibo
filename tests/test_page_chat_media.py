@@ -3,11 +3,10 @@ replaces; the rest of the page chat is in tests/interface/page_chat/ and its pic
 tests/floors/boundary/."""
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
-from mibo import welcome
-from mibo import settingsfile
+from mibo import settingsfile, welcome
 
 TOKEN = "test-local-capability"
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

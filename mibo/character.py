@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import life, paths, person, quiet, settingsfile
 from .dm import chat_key
@@ -35,8 +35,8 @@ class NotReady(RuntimeError):
 
 class Character:
     def __init__(self, home: Path, runtime: Callable[[], Path],
-                 said: Optional[Callable[[str, list], None]] = None,
-                 chats: Optional[Callable[[], list]] = None):
+                 said: Callable[[str, list], None] | None = None,
+                 chats: Callable[[], list] | None = None):
         self.home = Path(home).resolve()
         #: runtime(): where the home keeps its state (the page reads it from the home's settings).
         self._runtime = runtime
@@ -127,7 +127,7 @@ class Character:
     # ---- the chat -----------------------------------------------------------
 
     async def reply(self, conversation: str, parts: list[dict], *, choices=(),
-                    run: Optional[dict] = None) -> list[dict]:
+                    run: dict | None = None) -> list[dict]:
         """One message of the person's in a chat, answered (dm.DirectMessages.answer)."""
         agent = await self._ready()
         return await agent.answer(conversation, parts, choices=choices, run=run)
@@ -177,7 +177,7 @@ class Character:
         return person.page_view(person.Person(self._runtime() / person.FILE))
 
     async def person_write(self, action: str, conversation: str, item: str, text: str,
-                           payload: Optional[dict] = None) -> dict:
+                           payload: dict | None = None) -> dict:
         """forget, edit or restore one thing it knows, forget all, add one, set the switches, or keep the ticked
         items of a pasted list; the view after it, and for a forget from the chats too what the page marks in its
         own copies (`scrub`). import_preview answers {lines} and changes nothing. ValueError("activity_changed")
@@ -224,8 +224,9 @@ class Character:
 
     def person_export(self, fmt: str) -> str:
         """Everything kept that is still true, as JSON or Markdown."""
-        from .textproc import _env_tz_offset
         from datetime import timedelta, timezone
+
+        from .textproc import _env_tz_offset
         store = self.agent.person_store if self.agent is not None else person.Person(self._runtime() / person.FILE)
         lang = self.agent.chat_lang if self.agent is not None else "en"
         return person.export(store, fmt, lang, time.time(), timezone(timedelta(hours=_env_tz_offset())))
@@ -240,7 +241,7 @@ class Character:
                else life.Sources.from_files(self._runtime()))
         return life.home(src, answering=self.busy(), sleep_until=life.asleep_until(at, _env_tz_offset()), now=at)
 
-    def mark(self, ident: str, action: str, kept: bool = True) -> Optional[bool]:
+    def mark(self, ident: str, action: str, kept: bool = True) -> bool | None:
         """Keep, dismiss or mark told one thing it saw; whether it is kept now, None when it is gone."""
         item = life.mark(Library(self._runtime()), ident, action, kept)
         return None if item is None else item.state == KEPT

@@ -212,7 +212,7 @@ def run(args) -> int:
                          "events": [[e[1], e[2], json.loads(e[3]).get("said")] for e in added],
                          "before_card": last_card, **{k: v for k, v in step.items() if k != "say"}})
             print(f"{n} {step['say'][:24]} | card {card and card.get('title')} | calls {[x for x, _ in made]}")
-            last_card = card and {"id": card["id"], "title": card.get("title")} or last_card
+            last_card = (card and {"id": card["id"], "title": card.get("title")}) or last_card
         feed_reasons = {c["id"]: c.get("reason", "") for c in call(base, token, "feed").get("items") or []}
         call(base, token, "exit", {}, timeout=30)
     finally:

@@ -277,9 +277,7 @@ def _time_of(text: str) -> tuple[int, int] | None:
             _num(hit.group(6)) if hit.group(6) else 0
         if part in _NIGHT and (h == 12 or 1 <= h <= 4):
             h = 24 + h % 12
-        elif part in _LATER and h < 12:
-            h += 12
-        elif part == "中午" and h < 11:
+        elif (part in _LATER and h < 12) or (part == "中午" and h < 11):
             h += 12
         elif part == "凌晨" and h == 12:
             h = 0

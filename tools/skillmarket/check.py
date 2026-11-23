@@ -17,11 +17,11 @@ import difflib
 import json
 import re
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
-import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -82,7 +82,7 @@ def problems_offline(catalog: dict, cache: Path) -> list[str]:
         read = fact["licence"]
         if lic["spdx"] != read["spdx"] and not (lic["spdx"] == "CUSTOM" and read["spdx"] not in OPEN | SHARE_ALIKE):
             out.append(f"{sid}: licence {lic['spdx']} is not the {read['spdx']} read")
-        if lic["installable"] and not (read["spdx"] in OPEN | SHARE_ALIKE and read.get("file")
+        if lic["installable"] and not ((read["spdx"] in OPEN | SHARE_ALIKE and read.get("file"))
                                        or read["spdx"] == "NONE"):
             out.append(f"{sid}: installable licence that was not read")
         # Third-party text: nothing written may share a long run with the skill's own description.

@@ -4,9 +4,9 @@ the find is new or where it is from. Its key is what a tap on the chip leans mor
 from __future__ import annotations
 
 import pytest
-
 from harness.clock import Clock
 from harness.finds import Shelf
+
 from mibo import recommend
 from mibo.panels import feed
 

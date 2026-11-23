@@ -2,7 +2,7 @@
 (prompt.py) appends what they give after its own context, in the order they registered."""
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 Provider = Callable[[str, str], list]
 

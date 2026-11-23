@@ -470,7 +470,7 @@ def make(text: str) -> bytes:
     headings, fence = [], ""
     for line in lines:
         bare = line.strip()
-        if fence and bare.startswith(fence) or not fence and _FENCE.match(bare):
+        if (fence and bare.startswith(fence)) or (not fence and _FENCE.match(bare)):
             fence = "" if fence else _FENCE.match(bare)[1]
         elif not fence and (heading := _HEADING.fullmatch(bare)):
             headings.append(heading)

@@ -51,8 +51,8 @@ import subprocess
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from urllib.parse import urlsplit
 
 from . import browsed
@@ -187,10 +187,9 @@ def _keys_down() -> set[int]:
 
 def _dark() -> bool:
     import winreg
-    with contextlib.suppress(OSError):
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
-            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+    with contextlib.suppress(OSError), winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
+        return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
     return False
 
 
@@ -351,7 +350,7 @@ class _Tab:
     asks of the person (the strip under the bar shows the first, while the tab is in front) and the permissions
     allowed this time, for its page as it is now ({origin: kinds})."""
 
-    def __init__(self, ident: int, private: bool, opener: "_Tab | None" = None):
+    def __init__(self, ident: int, private: bool, opener: _Tab | None = None):
         self.id, self.private, self.opener = ident, private, opener
         self.view = self.core = None
         self.pending = ""
@@ -584,7 +583,7 @@ class Pane:
     def _open(self, address: str, here: bool = False) -> None:
         """`address` in the tab in front when `here` or when it is still empty (and not private), else in a new
         tab: a link from the app or a tab brought back is never private."""
-        if self._tab is None or not (here or self._tab.view is None and not self._tab.private):
+        if self._tab is None or not (here or (self._tab.view is None and not self._tab.private)):
             self._switch(self._new_tab(False))
         tab = self._tab
         self._begin(address)
@@ -806,7 +805,7 @@ class Pane:
         view.CreationProperties = properties
         view.DefaultBackgroundColor = ColorTranslator.FromHtml(CANVAS[_dark()])
         view.Bounds = box or self._box
-        view.Visible = box is not None or tab is self._tab and not self._hidden and not self._quieted
+        view.Visible = box is not None or (tab is self._tab and not self._hidden and not self._quieted)
         view.CoreWebView2InitializationCompleted += self._ready
         view.ZoomFactorChanged += self._zoomed
         view.KeyDown += self._key
@@ -1043,7 +1042,7 @@ class Pane:
         (always) or for this page (once). Nothing is allowed while the character operates."""
         from Microsoft.Web.WebView2.Core import CoreWebView2PermissionState as State
         tab = next((t for t in self._tabs if any(n["id"] == ident for n in t.notices)), None)
-        if tab is None or self.op is not None and how != "no":
+        if tab is None or (self.op is not None and how != "no"):
             return
         notice = next(n for n in tab.notices if n["id"] == ident)
         tab.notices.remove(notice)
@@ -1431,7 +1430,7 @@ class Pane:
         own steps: kept for the site (over the fit, when that is on; Ctrl 0 comes through _key)."""
         view = self._view
         # A tab behind is zoomed again as it comes to the front.
-        if view is None or sender is not None and not view.Equals(sender):
+        if view is None or (sender is not None and not view.Equals(sender)):
             return
         now = float(view.ZoomFactor)
         if abs(now - self._zoom_set) <= 0.0005:
@@ -1636,7 +1635,7 @@ class Pane:
         self.ui(self._unwatch_input)
         waiting = status == "waiting" and op["card"] is not None
         for step in op["steps"]:
-            if step["state"] == "doing" or step["state"] == "waiting" and not waiting:
+            if step["state"] == "doing" or (step["state"] == "waiting" and not waiting):
                 step.update(state="done" if status == "done" else "stopped", why="" if status == "done" else unfinished)
         op.update(end=status, note=note[:300], why=handed(status, note), card=op["card"] if waiting else None)
         self._tell_op()
@@ -1735,7 +1734,7 @@ class Pane:
             self._pause()
         for tab in self._tabs:
             if tab.view is not None:
-                tab.view.Visible = not on and (tab.aside or tab is self._tab and not self._hidden)
+                tab.view.Visible = not on and (tab.aside or (tab is self._tab and not self._hidden))
             if tab.core is not None:
                 tab.core.MemoryUsageTargetLevel = (CoreWebView2MemoryUsageTargetLevel.Low if on
                                                    else CoreWebView2MemoryUsageTargetLevel.Normal)
@@ -1803,7 +1802,7 @@ class Pane:
         anything but a find (a find's glance is handed over: the recommender learns from it)."""
         self._pause()
         reading, self._reading = self._reading, None
-        if (reading is None or reading["s"] < READ_MIN_S and not reading["id"] or reading["secret"] or self.private
+        if (reading is None or (reading["s"] < READ_MIN_S and not reading["id"]) or reading["secret"] or self.private
                 or not web_address(reading["url"]) or browsed.secret(reading["url"])):
             return None
         return {"url": reading["url"], "title": reading["title"], "s": round(reading["s"], 1),

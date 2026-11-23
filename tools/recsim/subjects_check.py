@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mibo import subjects  # noqa: E402
-from mibo.sources import catalog  # noqa: E402
+from mibo import subjects
+from mibo.sources import catalog
 
 TO = {"ai": "ai", "programming": "programming", "security": "programming", "gadgets": "gadgets", "internet": "gadgets",
       "tech": "gadgets", "games": "games", "anime": "anime", "film": "film", "music": "music", "books": "books",

@@ -17,12 +17,13 @@ import os
 import re
 import secrets
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from ..cardwait import WAIT_S
 from ..web.pageops import clip, quote
-from . import gate, grants as g, names, uia, win32
+from . import gate, names, uia, win32
+from . import grants as g
 from .operate import UNANSWERED
 from .strip import Strip
 
@@ -51,8 +52,8 @@ OFF_TEXT = {"zh": "电脑操作未开启：请先在设置中开启“允许{who
 
 
 class Hands:
-    def __init__(self, desktop: Path, *, ask: Callable[[dict], Optional[dict]], who: str = "Mibo",
-                 lang: str = "zh", review: Optional[Callable[[dict], object]] = None):
+    def __init__(self, desktop: Path, *, ask: Callable[[dict], dict | None], who: str = "Mibo",
+                 lang: str = "zh", review: Callable[[dict], object] | None = None):
         from ..acting import Modes
         self.grants = g.Grants(desktop)
         self.modes = Modes(desktop)
@@ -830,6 +831,7 @@ class Hands:
         goes; "" when none may be taken now (another program covers the window)."""
         import base64
         import io
+
         from ..see import capture, profile
         try:
             frame = asyncio.run(self._surface().capture(profile.profile(self.sees).long_edge))

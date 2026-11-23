@@ -348,7 +348,7 @@ def holds(word: str, on: set, text: str) -> bool:
     groups = parts(word)
     if whole(word):
         return bool(set(groups[0]) & on)
-    return bool(_phrase(word).search(_plain(text)) or groups and all(set(group) & on for group in groups))
+    return bool(_phrase(word).search(_plain(text)) or (groups and all(set(group) & on for group in groups)))
 
 
 def name(key: str, lang: str) -> str:

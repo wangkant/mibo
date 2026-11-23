@@ -5,7 +5,6 @@ punctuation; __init__, C:\\Users and 2 * 3 stay as written; a reply stopped insi
 from __future__ import annotations
 
 import pytest
-
 from harness.page import measured
 
 pytestmark = pytest.mark.browser

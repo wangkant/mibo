@@ -7,9 +7,9 @@ import json
 import logging
 import secrets
 import shutil
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterable
 
 from .storage import atomic_write_text
 from .textproc import _focus_tokens

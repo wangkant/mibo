@@ -145,7 +145,8 @@ def rejudge(run: Path) -> None:
 
 async def run(out: Path, only: set, dump: bool, extras: bool) -> None:
     from mibo import roam
-    from mibo.web import read as reading, sites
+    from mibo.web import read as reading
+    from mibo.web import sites
     stamp = int(time.time())
     runtime = out / f"runtime-{stamp}"
     visitor = roam.Visitor(out / "profile")

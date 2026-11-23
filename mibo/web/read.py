@@ -20,7 +20,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlsplit
 
 from .tabs import Tab, TabError
@@ -140,7 +139,7 @@ async def quiet(tab: Tab, most_s: float = ITEM_S) -> None:
         await asyncio.sleep(QUIET_POLL_S)
 
 
-async def run_reader(tab: Tab, opts: Optional[dict] = None) -> dict:
+async def run_reader(tab: Tab, opts: dict | None = None) -> dict:
     """reader.js's answer for the page as it is now."""
     for attempt in range(TRIES):
         try:
@@ -148,7 +147,7 @@ async def run_reader(tab: Tab, opts: Optional[dict] = None) -> dict:
             return data if isinstance(data, dict) else {}
         except Exception as exc:
             # A document replaced mid-call (a redirect to a language's address) is read again once settled.
-            if "destroyed" not in str(exc) and "navigat" not in str(exc) or attempt == TRIES - 1:
+            if ("destroyed" not in str(exc) and "navigat" not in str(exc)) or attempt == TRIES - 1:
                 raise
             await asyncio.sleep(3.0)
             await settle(tab)
@@ -176,7 +175,7 @@ def _wall(data: dict) -> tuple[str, str]:
     return kind, evidence
 
 
-async def read(tab: Tab, url: str, *, screens: int = 0, here: bool = False, runtime: Optional[Path] = None,
+async def read(tab: Tab, url: str, *, screens: int = 0, here: bool = False, runtime: Path | None = None,
                background: bool = False, mode: str = "signed_out", item: bool = False, within_s: float = 0.0) -> Page:
     """`url` read in `tab` (`here`: the page the tab is on, not loaded again). `screens` more screens are
     scrolled and merged for a list; an `item` page settles sooner. With `within_s`, the waits and the screens

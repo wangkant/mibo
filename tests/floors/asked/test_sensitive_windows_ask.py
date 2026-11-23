@@ -13,10 +13,11 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
-from harness import attacks  # noqa: E402
-from mibo import acting  # noqa: E402
-from mibo.desk import panel, win32  # noqa: E402
-from mibo.see import when  # noqa: E402
+from harness import attacks
+
+from mibo import acting
+from mibo.desk import panel, win32
+from mibo.see import when
 
 ROWS = [row for row in attacks.load("asked") if row.values[0]["area"] == "programs"]
 SAID = "打开这个窗口，看看里面有什么"  # copy: voice

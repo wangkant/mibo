@@ -29,7 +29,6 @@ from collections import Counter
 from pathlib import Path
 
 from nltk.stem import PorterStemmer
-
 from sessions import old
 
 NAMES = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}

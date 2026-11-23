@@ -5,14 +5,13 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlsplit
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from mibo import openrouter_signin as osr
 from mibo import setup_wizard as sw
 from mibo import welcome
-from mibo.panels import signin
-from mibo.panels import tools
+from mibo.panels import signin, tools
 
 HEADERS = {welcome.TOKEN_HEADER: "token"}
 # Only a label for the page's address: nothing listens on it.

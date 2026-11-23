@@ -7,7 +7,6 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from .storage import atomic_write_text, load_rebuildable_json
 
@@ -39,7 +38,7 @@ class MemoryState:
         self.path = Path(path)
         self.data: dict = load_rebuildable_json(self.path, _parse) or {}
         self._dirty = False
-        self._saved_at: Optional[float] = None
+        self._saved_at: float | None = None
 
     def touch(self) -> None:
         self._dirty = True
@@ -95,7 +94,7 @@ class CallBudget:
 
     def allowed(self, conv: str, now: float, per_day_total: int,
                 per_conv: int = PER_CONV_PER_DAY, min_gap_s: float = MIN_GAP_S,
-                reason: str = "") -> Optional[str]:
+                reason: str = "") -> str | None:
         """None when a call may go now, else why not: off, paused, backoff,
         gap, chat_cap or day_cap. Reason "evict" skips the per-chat gap."""
         if per_day_total <= 0:
@@ -148,7 +147,7 @@ class CallBudget:
         self.state.data["fails_in_row"] = 0
         self.state.touch()
 
-    def status(self, now: float, cap: int, conv: Optional[str] = None) -> dict:
+    def status(self, now: float, cap: int, conv: str | None = None) -> dict:
         """What the page shows: calls in the last 24 hours against the cap,
         a pause, and for one chat its next try."""
         row = self.state._map("per_conv").get(conv) if conv else None

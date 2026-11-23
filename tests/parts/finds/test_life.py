@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from harness.clock import Clock
+
 from mibo import life
 from mibo.library import KEPT, Item, Library
 

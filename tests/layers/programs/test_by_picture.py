@@ -16,9 +16,9 @@ from PIL import Image
 if sys.platform != "win32":
     pytest.skip("the app operates other programs on Windows only", allow_module_level=True)
 
-from mibo import acting, review  # noqa: E402
-from mibo.desk import panel, win32  # noqa: E402
-from mibo.see import act, frame, profile  # noqa: E402
+from mibo import acting, review
+from mibo.desk import panel, win32
+from mibo.see import act, frame, profile
 
 ASKED = "帮我打开桌面上的grok bot并给主agent发一个hello"  # copy: voice
 

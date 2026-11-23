@@ -9,9 +9,9 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional
 
 from . import db
 from .storage import atomic_write_text
@@ -45,7 +45,7 @@ class Item:
     title: str = ""
     author: str = ""
     published: str = ""
-    length: Optional[int] = None        # seconds, for a video
+    length: int | None = None        # seconds, for a video
     description: str = ""
     text: str = ""
     embed: str = ""
@@ -132,7 +132,7 @@ class Library:
             self._wrote()
         return item
 
-    def get(self, ident: str) -> Optional[Item]:
+    def get(self, ident: str) -> Item | None:
         found = self.db.read("SELECT item FROM library WHERE id = ?", (str(ident),))
         return _item(found[0][0]) if found else None
 
@@ -159,7 +159,7 @@ class Library:
     def _wrote(self) -> None:
         _writes[self.db.path] = _writes.get(self.db.path, 0) + 1
 
-    def change(self, ident: str, **values) -> Optional[Item]:
+    def change(self, ident: str, **values) -> Item | None:
         # Read and written in one transaction, so two changes to one thing at once both stay.
         with self.db.write() as conn:
             item = self.get(ident)
@@ -231,7 +231,7 @@ class Library:
         (self.pictures / name).write_bytes(data)
         return name
 
-    def picture_path(self, ident: str) -> Optional[Path]:
+    def picture_path(self, ident: str) -> Path | None:
         item = self.get(ident)
         if item is None or not item.picture:
             return None
@@ -252,7 +252,7 @@ class Library:
         self.root.mkdir(parents=True, exist_ok=True)
         atomic_write_text(self.outing_path, json.dumps(asdict(outing), ensure_ascii=False))
 
-    def left(self, site: str = "", now: Optional[float] = None) -> Outing:
+    def left(self, site: str = "", now: float | None = None) -> Outing:
         now = int(time.time() if now is None else now)
         outing = self.outing()
         day = time.strftime("%Y-%m-%d", time.localtime(now))
@@ -270,7 +270,7 @@ class Library:
                 outing.sites.append(site)
             self._save_outing(outing)
 
-    def returned(self, count: int, sites: Iterable[str] = (), now: Optional[float] = None) -> Outing:
+    def returned(self, count: int, sites: Iterable[str] = (), now: float | None = None) -> Outing:
         outing = self.outing()
         outing.state, outing.site = "home", ""
         outing.last_end, outing.last_count = int(time.time() if now is None else now), int(count)

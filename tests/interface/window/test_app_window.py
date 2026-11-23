@@ -8,8 +8,8 @@ import threading
 from pathlib import Path
 
 import pytest
-
 from harness.window import stand_in_webview
+
 from mibo import window
 
 

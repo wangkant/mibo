@@ -172,6 +172,7 @@ def run(args) -> int:
     sys.path[:0] = [str(tree), str(HERE)]
     import everyday
     import scratchhome
+
     from mibo import review
     model = scratchhome.keys(args.keys)
     made = scratchhome.make(home, key=model["LLM_API_KEY"], LLM_MODEL=args.model, AGENT_LANG="zh",

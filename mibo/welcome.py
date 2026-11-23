@@ -8,14 +8,11 @@ import asyncio
 import base64
 import binascii
 import contextlib
-from contextlib import asynccontextmanager
-from datetime import datetime
 import functools
 import hashlib
 import importlib
 import json
 import os
-from pathlib import Path
 import re
 import secrets
 import socket
@@ -25,29 +22,27 @@ import sys
 import threading
 import time
 import traceback
-from typing import Callable
-from urllib.parse import urlsplit
 import webbrowser
+from collections.abc import Callable
+from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from . import __version__, channels, db, home as homes, i18n, langs
+from . import __version__, channels, db, i18n, langs, life, pacing, quiet, recommend, settingsfile, updates
+from . import home as homes
 from . import setup_wizard as sw
-from . import life
-from . import quiet
-from . import settingsfile
-from . import pacing
-from . import recommend
-from . import updates
 from . import window as appwindow
-from .panels import modelbar
-from .see import when
 from .character import PERSON_ACTIONS, Character, NotReady
 from .endpoints import model_problem
 from .library import Library, item_id
 from .memstore import MemoryFileDamaged
+from .panels import modelbar
+from .see import when
 from .storage import FileLock, LockUnavailable, atomic_write_text
 
 ASSETS = Path(__file__).with_name("static") / "welcome"
@@ -108,10 +103,7 @@ ATTACH_MAX = 4
 ATTACH_PICTURE = 1_000_000
 ATTACH_FILE = 512 * 1024
 ATTACH_TEXT = 10_000
-ATTACH_TEXT_KINDS = frozenset((
-    "txt text md markdown rst csv tsv json jsonl yaml yml toml ini cfg conf log xml html htm "
-    "css scss js mjs cjs ts tsx jsx vue py ipynb java kt kts scala go rs c h cc cpp hpp cs m mm "
-    "swift rb php pl lua r sql sh bash zsh ps1 bat cmd tex bib srt vtt diff patch").split())
+ATTACH_TEXT_KINDS = frozenset(["txt", "text", "md", "markdown", "rst", "csv", "tsv", "json", "jsonl", "yaml", "yml", "toml", "ini", "cfg", "conf", "log", "xml", "html", "htm", "css", "scss", "js", "mjs", "cjs", "ts", "tsx", "jsx", "vue", "py", "ipynb", "java", "kt", "kts", "scala", "go", "rs", "c", "h", "cc", "cpp", "hpp", "cs", "m", "mm", "swift", "rb", "php", "pl", "lua", "r", "sql", "sh", "bash", "zsh", "ps1", "bat", "cmd", "tex", "bib", "srt", "vtt", "diff", "patch"])
 CHAT_BODY = MAX_BODY + ATTACH_MAX * ATTACH_PICTURE * 4 // 3 + 4096
 # A file the person attached, its text stored by its content hash.
 FILE_NAME = re.compile(r"[0-9a-f]{40}\.txt")
@@ -1115,7 +1107,7 @@ class Workspace:
         for chat in self._all_chats():
 
             def hit(text: str, chat=chat) -> bool:
-                return said(text) or chat is room and " ".join(text.split()) in lines
+                return said(text) or (chat is room and " ".join(text.split()) in lines)
             rows = []
             for m in chat.history:
                 text = str(m.get("text") or "")
@@ -1910,6 +1902,7 @@ def main(argv: list[str] | None = None, prog: str = "mibo start") -> int:
 
 def _start(args: argparse.Namespace, home: Path, refuse: Callable[[str], int], log=None) -> int:
     import uvicorn
+
     from .textproc import DESKTOP_ENV
     # The desktop app keeps this computer's clock (textproc.default_tz_offset).
     os.environ[DESKTOP_ENV] = "1"

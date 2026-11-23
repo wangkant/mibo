@@ -12,10 +12,10 @@ import time
 from pathlib import Path
 
 import pytest
-
 from harness.app import KEY, App, quiet_start
 from harness.model import MODEL, call, hang, say, think
 from harness.turn import run_turn
+
 from mibo import transport
 from mibo.endpoints import chat_completions_url
 

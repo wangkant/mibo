@@ -14,10 +14,10 @@ from .prompts import (
 )
 from .storage import num as _stamp
 from .textproc import (
+    _OWN_CHAT_INPUT_RULES,
     _WEB_DESC_CLOSE,
     _WEB_DESC_OPEN,
     TextProcessing,
-    _OWN_CHAT_INPUT_RULES,
     _clean_prompt_source,
     _fence_user_data,
     _strip_web_desc,
@@ -192,7 +192,7 @@ class PromptBuilder:
         return f"{static_block}\n\n{dm_output_protocol()}"
 
     def _build_dm_prompt(self, history: list[dict], *, room: float, pkey: str = "",
-                         follow_up: str = "", pictures: int = 0) -> "DMPrompt":
+                         follow_up: str = "", pictures: int = 0) -> DMPrompt:
         """The system prompt and the framed turns of the chat, the turn context within `room` estimated tokens
         (context.text_tokens; the turn context's share C of the budget over the model's ratio). It is filled in a
         fixed order, each part taking what the ones before it leave: the frame, the notes and the time; the memory

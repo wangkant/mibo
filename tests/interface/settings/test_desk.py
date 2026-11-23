@@ -10,10 +10,9 @@ import time
 import zipfile
 
 import pytest
-
 from harness.app import TOKEN
-from mibo import browsed, chatlog, db, i18n, secretstore, settingsfile, shortcut, taste
-from mibo import welcome
+
+from mibo import browsed, chatlog, db, i18n, secretstore, settingsfile, shortcut, taste, welcome
 from mibo.library import Item, Library
 from mibo.panels import desk, feed
 

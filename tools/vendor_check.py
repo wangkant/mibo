@@ -22,9 +22,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mibo import setup_wizard as sw  # noqa: E402
-from mibo.endpoints import chat_completions_url, model_problem  # noqa: E402
-from mibo.panels.detect import ENV_KEYS  # noqa: E402
+from mibo import setup_wizard as sw
+from mibo.endpoints import chat_completions_url, model_problem
+from mibo.panels.detect import ENV_KEYS
 
 # Presets without a variable of their own in ENV_KEYS.
 EXTRA_KEYS = {"qianfan": "QIANFAN_API_KEY", "hunyuan": "TOKENHUB_API_KEY"}

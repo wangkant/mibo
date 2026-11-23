@@ -8,12 +8,11 @@ import logging
 import os
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Mapping, Optional
 
 from .config_env import parse_tz_offset
-
 
 logger = logging.getLogger("agent")
 
@@ -188,9 +187,7 @@ def scrub_third_party_text(value: object) -> str:
         text = text.replace(separator, "\n")
     kept: list[str] = []
     for i, ch in enumerate(text):
-        if ch in "\t\n" or (ch == "\u200d" and _joins_emoji(text, i)):
-            kept.append(ch)
-        elif (unicodedata.category(ch) not in _STRIPPED_CATEGORIES
+        if ch in "\t\n" or (ch == "\u200d" and _joins_emoji(text, i)) or (unicodedata.category(ch) not in _STRIPPED_CATEGORIES
                 and ch not in _RESERVED_DEFAULT_IGNORABLES):
             kept.append(ch)
     return "".join(kept)
@@ -370,7 +367,7 @@ class ReplyStyle:
     max_chars: int = MAX_REPLY_CHARS
 
     @classmethod
-    def from_card(cls, card: Optional[Mapping]) -> "ReplyStyle":
+    def from_card(cls, card: Mapping | None) -> ReplyStyle:
         """Build from a card's optional `reply_style` object."""
         raw = card.get("reply_style") if isinstance(card, Mapping) else None
         if not isinstance(raw, Mapping):

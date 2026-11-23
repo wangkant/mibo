@@ -12,8 +12,8 @@ import pytest
 if sys.platform != "win32":
     pytest.skip("the app works in other programs on Windows only", allow_module_level=True)
 
-from mibo.desk import operate  # noqa: E402
-from mibo.desk import tool as desk_tool  # noqa: E402
+from mibo.desk import operate
+from mibo.desk import tool as desk_tool
 
 
 class Lookups(SimpleNamespace):

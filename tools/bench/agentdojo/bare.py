@@ -21,9 +21,6 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE))
 
 import openai  # noqa: E402
-from dotenv import dotenv_values  # noqa: E402
-from everyday import PRICE, Meter  # noqa: E402
-
 from agentdojo.agent_pipeline.agent_pipeline import AgentPipeline, PipelineConfig  # noqa: E402
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement  # noqa: E402
 from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM  # noqa: E402
@@ -32,6 +29,8 @@ from agentdojo.benchmark import run_task_with_injection_tasks, run_task_without_
 from agentdojo.logging import OutputLogger  # noqa: E402
 from agentdojo.models import MODEL_NAMES  # noqa: E402
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
+from dotenv import dotenv_values  # noqa: E402
+from everyday import PRICE, Meter  # noqa: E402
 from run import VERSION, BudgetSpent, read_done, sample_pairs  # noqa: E402
 
 

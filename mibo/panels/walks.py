@@ -97,8 +97,8 @@ def mount(app, workspace, body) -> None:
             sites.steer(workspace._runtime(), key, how)
             return view()
         on, walks = payload.get("on"), payload.get("walks")
-        if on is not None and not isinstance(on, bool) or walks is not None and (
-                isinstance(walks, bool) or not isinstance(walks, int) or not 0 <= walks <= WALKS_MAX):
+        if (on is not None and not isinstance(on, bool)) or (walks is not None and (
+                isinstance(walks, bool) or not isinstance(walks, int) or not 0 <= walks <= WALKS_MAX)):
             raise ValueError("walks_invalid")
         changes = {**({"ROAM_ENABLED": "true" if on else "false"} if on is not None else {}),
                    **({"ROAM_WALKS_A_DAY": str(walks)} if walks is not None else {})}
@@ -119,8 +119,8 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         if payload.get("search") is not None:
             api, key = payload["search"], payload.get("key")
-            if not isinstance(api, str) or api and (api not in search.SEARCH_APIS or not isinstance(key, str)
-                                                    or not key.strip() or len(key) > KEY_MAX):
+            if not isinstance(api, str) or (api and (api not in search.SEARCH_APIS or not isinstance(key, str)
+                                                    or not key.strip() or len(key) > KEY_MAX)):
                 raise ValueError("walks_invalid")
             payload["key"] = key.strip() if api else ""
             # A key the service turns down is not kept: the person sees it at once, not at the next search.

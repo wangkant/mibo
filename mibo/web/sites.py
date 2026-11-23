@@ -29,10 +29,10 @@ import random
 import re
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Callable, Optional
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
@@ -235,7 +235,7 @@ def where(url: str) -> str:
 
 # ---------------------------------------------------------------- walls and robots
 
-def held(runtime: Path, url: str, mode: str, now: Optional[float] = None) -> str:
+def held(runtime: Path, url: str, mode: str, now: float | None = None) -> str:
     """"dead" for an address found dead, else the wall still in its back-off at this address for `mode`
     ("signed_out" or "pane"); "" for none."""
     now = time.time() if now is None else now
@@ -249,7 +249,7 @@ def held(runtime: Path, url: str, mode: str, now: Optional[float] = None) -> str
     return wall["kind"] if now - wall["last_at"] < steps[min(wall["count"], len(steps)) - 1] else ""
 
 
-def saw(runtime: Path, page: reading.Page, mode: str, now: Optional[float] = None, asked: str = "") -> None:
+def saw(runtime: Path, page: reading.Page, mode: str, now: float | None = None, asked: str = "") -> None:
     """What reading a page showed, into its host's card: a dead page noted for that address alone, a wall
     noted with its back-off at the address's shape, a page read without one clears the wall noted there. A
     remembered wall or robots' no is not news. The wall is noted at the `asked` address (where a check or
@@ -302,7 +302,7 @@ def robots_says(text: str, url: str) -> bool:
     return Protego.parse(text).can_fetch(url, AGENT)
 
 
-async def robots_allow(runtime: Path, tab: Tab, url: str, now: Optional[float] = None) -> bool:
+async def robots_allow(runtime: Path, tab: Tab, url: str, now: float | None = None) -> bool:
     """Whether robots.txt lets Mibo read `url`; read again once a week, in the tab. A site that cannot answer
     (5xx) keeps every robot out for now; one with no robots.txt keeps none out."""
     now = time.time() if now is None else now
@@ -330,7 +330,7 @@ async def robots_allow(runtime: Path, tab: Tab, url: str, now: Optional[float] =
     return allowed
 
 
-def when(text: str) -> Optional[float]:
+def when(text: str) -> float | None:
     """The time a row's time says, as epoch seconds (a date, or how long ago); None when it says neither."""
     text = str(text or "").strip()
     ago = _AGO.search(text)
@@ -351,7 +351,7 @@ def when(text: str) -> Optional[float]:
     return None
 
 
-def fresh(row: dict, now: Optional[float] = None) -> bool:
+def fresh(row: dict, now: float | None = None) -> bool:
     """Whether a list row is newer than HORIZON_S, or not dated at all."""
     at = when(row.get("time") or "")
     return at is None or (time.time() if now is None else now) - at <= HORIZON_S
@@ -366,7 +366,7 @@ def address(entry: dict, words: str = "") -> str:
     return entry.get("url", "")
 
 
-def rested(runtime: Path, address_: str, now: Optional[float] = None) -> bool:
+def rested(runtime: Path, address_: str, now: float | None = None) -> bool:
     """A host whose checks failed STALE_AFTER times in a row rests for STALE_S."""
     now = time.time() if now is None else now
     health = card(runtime, address_)["health"]
@@ -459,7 +459,7 @@ def _feeds(page: reading.Page, key: str) -> list[str]:
     return [u for u in found.get("feeds") or [] if key_of(u) == key and "comment" not in u.lower()][:2]
 
 
-async def _feed_first(runtime: Path, tab: Tab, key: str, entry: dict, page: reading.Page) -> Optional[reading.Page]:
+async def _feed_first(runtime: Path, tab: Tab, key: str, entry: dict, page: reading.Page) -> reading.Page | None:
     """The feed a hot list's page declares, read in its place and put in its place on the card; None when the
     page declares none that reads."""
     for url in _feeds(page, key):
@@ -477,7 +477,7 @@ async def _feed_first(runtime: Path, tab: Tab, key: str, entry: dict, page: read
     return None
 
 
-def _entry(runtime: Path, key: str, intent: str) -> Optional[dict]:
+def _entry(runtime: Path, key: str, intent: str) -> dict | None:
     found = card(runtime, key)
     if intent == "search":
         return found["search"] or None
@@ -488,7 +488,7 @@ def _entry(runtime: Path, key: str, intent: str) -> Optional[dict]:
 # ---------------------------------------------------------------- the ladder
 
 async def learn(runtime: Path, tab: Tab, key: str, intent: str, words: str = "", *,
-                failed: str = "") -> Optional[dict]:
+                failed: str = "") -> dict | None:
     """Where `intent` lives on the host, learned from what its home page declares (a search checked with
     `words`); the entry written to the card, or None. Never on a host whose home shows a wall."""
     home = card(runtime, key)["home"]
@@ -526,7 +526,7 @@ def _template(raw: str, base: str) -> str:
     return text if "{q}" in text and not re.search(r"\{(?!q\})", text) else ""
 
 
-async def _try_search(runtime: Path, tab: Tab, key: str, template: str, words: str, how: str) -> Optional[dict]:
+async def _try_search(runtime: Path, tab: Tab, key: str, template: str, words: str, how: str) -> dict | None:
     """A search template kept when the search for `words` stays on the host, shows no wall and lists something."""
     if not template or key_of(template) != key:
         return None
@@ -535,7 +535,7 @@ async def _try_search(runtime: Path, tab: Tab, key: str, template: str, words: s
     return entry if not page.wall and key_of(page.url) == key and any(r.get("link") for r in page.rows) else None
 
 
-async def _search_rungs(runtime: Path, tab: Tab, key: str, found: dict, words: str) -> Optional[dict]:
+async def _search_rungs(runtime: Path, tab: Tab, key: str, found: dict, words: str) -> dict | None:
     base = tab.url
     for link in (found.get("opensearch") or [])[:2]:
         try:
@@ -562,7 +562,7 @@ async def _search_rungs(runtime: Path, tab: Tab, key: str, found: dict, words: s
 
 
 async def _hot_rungs(runtime: Path, tab: Tab, key: str, home: reading.Page, found: dict,
-                     failed: str) -> Optional[dict]:
+                     failed: str) -> dict | None:
     for url in _feeds(home, key):
         if url == failed:
             continue
@@ -591,7 +591,7 @@ async def _hot_rungs(runtime: Path, tab: Tab, key: str, home: reading.Page, foun
     return None
 
 
-async def _try_hot(runtime: Path, tab: Tab, key: str, entry: dict) -> Optional[dict]:
+async def _try_hot(runtime: Path, tab: Tab, key: str, entry: dict) -> dict | None:
     page = await read_entry(runtime, tab, entry, screens=0)
     rows = [r for r in page.rows if r.get("link")]
     if page.wall or page.kind != "list" or len(rows) < HOT_ROWS:
@@ -606,7 +606,7 @@ async def _try_hot(runtime: Path, tab: Tab, key: str, entry: dict) -> Optional[d
 
 # ---------------------------------------------------------------- where walks may go
 
-def walk_hosts(runtime: Path, intent: str, now: Optional[float] = None, keys: Optional[list] = None) -> list[dict]:
+def walk_hosts(runtime: Path, intent: str, now: float | None = None, keys: list | None = None) -> list[dict]:
     """The cards a walk may read `intent` from now: seeded or learned hosts (or only `keys`) that walk, have
     that entry, are reachable, not resting, not behind a wall in their back-off and not kept off it by
     robots.txt."""

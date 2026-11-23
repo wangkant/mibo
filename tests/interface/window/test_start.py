@@ -11,9 +11,9 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from harness.app import TOKEN
 from harness.window import Server, fake_window
+
 from mibo import cli, welcome, window
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

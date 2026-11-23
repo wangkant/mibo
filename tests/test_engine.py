@@ -7,7 +7,6 @@ from pathlib import Path
 
 from helpers import check, make_agent
 
-
 # ---- what the model and the operator read -------------------------------------
 
 def test_a_rejected_key_is_one_operator_line(tmp: Path, caplog) -> None:

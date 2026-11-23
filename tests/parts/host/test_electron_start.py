@@ -52,7 +52,7 @@ def download(monkeypatch: pytest.MonkeyPatch):
     def serve(published: bytes, sent: bytes | None = None) -> list[str]:
         url = "https://github.com/electron/electron/releases/download/v0/electron.zip"
         build = [(url, hashlib.sha256(published).hexdigest(), len(published))]
-        monkeypatch.setitem(runtimes.ELECTRON, "builds", {key: build for key in SYSTEMS})
+        monkeypatch.setitem(runtimes.ELECTRON, "builds", dict.fromkeys(SYSTEMS, build))
 
         async def fetch(url: str, **_named):
             fetched.append(url)

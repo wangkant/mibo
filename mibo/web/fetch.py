@@ -22,7 +22,7 @@ import logging
 import re
 import warnings
 from html.parser import HTMLParser
-from typing import Any, Optional
+from typing import Any
 
 from ..ingestion import safe_fetch_url
 from . import read as reading
@@ -102,7 +102,7 @@ def _trafilatura():
     return trafilatura
 
 
-def _sniffed(content: bytes) -> Optional[str]:
+def _sniffed(content: bytes) -> str | None:
     """The charset a page's bytes show when nothing names one: UTF-8 when they are, else charset-normalizer's
     guess (trafilatura's detect_encoding), GB2312 and GBK read as GB18030."""
     from w3lib.encoding import resolve_encoding
@@ -159,11 +159,11 @@ def _page(content: bytes, content_type: str, url: str, wide: bool) -> tuple[str,
     return html, head(html, url)[0]["title"], main_text(html, wide)
 
 
-async def plain(agent: Any, url: str, wide: bool = False) -> Optional[tuple[int, str, str, str, str]]:
+async def plain(agent: Any, url: str, wide: bool = False) -> tuple[int, str, str, str, str] | None:
     """(status, html, title, main text, final address) of a plain fetch; None when it failed or may not be made
     (every redirect hop is checked to be public). `wide` takes more of the page, for a list."""
-    from .sites import TOKEN
     from ..sources.base import HEADERS
+    from .sites import TOKEN
     result = await safe_fetch_url(
         url, timeout=FETCH_S, max_wire_bytes=FETCH_MAX, max_decoded_bytes=2 * FETCH_MAX,
         headers={**HEADERS, "User-Agent": f"{HEADERS['User-Agent']} {TOKEN}",
@@ -198,7 +198,7 @@ def _rows(rows: list) -> str:
     return "\n".join(lines)
 
 
-async def rendered(roam: Any, url: str, wants_list: bool) -> Optional[tuple[str, str, str]]:
+async def rendered(roam: Any, url: str, wants_list: bool) -> tuple[str, str, str] | None:
     """(title, text, final address) of `url` read in the visitor browser by RENDER_S; None for a wall, a
     private address or nothing read. A list asked for that shows few rows is scrolled a screen."""
     from ..roam import facts_from
@@ -228,7 +228,7 @@ async def rendered(roam: Any, url: str, wants_list: bool) -> Optional[tuple[str,
     return facts.get("title") or str(page.data.get("title") or ""), body, page.url
 
 
-async def for_chat(agent: Any, url: str, wants_list: bool = False) -> Optional[tuple[str, str, str]]:
+async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str, str, str] | None:
     """(title, readable text, final address) of a public page, or None when it cannot or may not be read: the
     plain fetch, else, when that is thin and a visitor browser is there (started while the fetch runs), the
     rendered read, and the fetch's text when that read is not to be had."""

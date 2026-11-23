@@ -11,11 +11,11 @@ import struct
 from pathlib import Path
 
 import pytest
-from PIL import Image
-
 from harness.app import App, quiet_start
 from harness.model import drop, fail, say, text
 from harness.turn import run_turn
+from PIL import Image
+
 from mibo import transport
 
 VISION_KEY = "sk-vision-key"

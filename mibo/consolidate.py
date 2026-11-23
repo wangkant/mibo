@@ -21,18 +21,13 @@ import string
 import time
 import unicodedata
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional
 
-from . import chatlangs
-from . import memstate
-from . import quiet
-from . import ranking
-from . import timewords
+from . import chatlangs, memstate, quiet, ranking, timewords
 from .llm import purpose
 from .memory import _SENTENCE_END
-from .textproc import (_clean_prompt_source, _fence_user_data, _strip_web_desc,
-                       salvage_json_object, strip_json_fences)
+from .textproc import _clean_prompt_source, _fence_user_data, _strip_web_desc, salvage_json_object, strip_json_fences
 
 logger = logging.getLogger("agent")
 
@@ -242,7 +237,7 @@ def _merged(plan: dict, again: dict, off: dict, lang: str) -> dict:
     plan = dict(plan)
     for key in ("facts", "plans", "topics"):
         asked = off.get(key) or []
-        new = [x for x in again.get(key) or [] if isinstance(x, dict) and x.get("text") or isinstance(x, str)]
+        new = [x for x in again.get(key) or [] if (isinstance(x, dict) and x.get("text")) or isinstance(x, str)]
         pairs = {id(old): rep for old, rep in zip(asked, new)}
         out = []
         for x in plan.get(key) or []:
@@ -294,7 +289,7 @@ class Consolidation:
                 and int(getattr(self.settings, "memory_calls_per_day", 0) or 0) > 0
                 and int(self.memory_tidy_every or 0) > 0)
 
-    def _maybe_consolidate(self, conv: str, reason: str) -> Optional[str]:
+    def _maybe_consolidate(self, conv: str, reason: str) -> str | None:
         """After a turn: the fold starts when due, and the memory loop looks
         each minute until it has run."""
         self.__dict__["_person_heard"] = True
@@ -335,7 +330,7 @@ class Consolidation:
             return "daily"
         return ""
 
-    def _maybe_fold_person(self, now: Optional[float] = None) -> Optional[str]:
+    def _maybe_fold_person(self, now: float | None = None) -> str | None:
         """The person's fold when due and the budget allows: once the talk is
         quiet, after PERSON_FOLD_LINES new lines of theirs, or once a day with
         anything new. The code-only tidy runs first."""
@@ -485,7 +480,7 @@ class Consolidation:
         langs = tuple(dict.fromkeys(c for c in (lang, self.chat_lang) if c))
         todo: list = []
 
-        def refuse(why: str, op: Optional[dict] = None) -> None:
+        def refuse(why: str, op: dict | None = None) -> None:
             if op is not None and isinstance(op.get("instead"), dict):
                 todo.append(op["instead"])
                 return
@@ -588,8 +583,8 @@ class Consolidation:
                 # whose first words the line says with a "not" ("不住闵行了"), whatever it was filed under.
                 head = put.get("slot", "").split(".")[0]
                 for f in store.facts():
-                    same = f.get("kind") == put.get("kind") or head and f.get("slot", "").split(".")[0] == head
-                    if f is not put and (same and person.denies(f["text"], said) or person.denied(f, said)):
+                    same = f.get("kind") == put.get("kind") or (head and f.get("slot", "").split(".")[0] == head)
+                    if f is not put and ((same and person.denies(f["text"], said)) or person.denied(f, said)):
                         store.end_fact(f, now, "replaced")
                 self._tell_profile([put], now)
                 done["add"] += 1
@@ -661,7 +656,7 @@ class Consolidation:
         for the day's fold (only with MEMORY_CALLS_PER_DAY and MEMORY_TIDY_EVERY
         above zero); once a day: prune the logs."""
         tick = 0
-        pruned_at: Optional[float] = None
+        pruned_at: float | None = None
         while True:
             try:
                 now = time.time()

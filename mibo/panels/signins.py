@@ -227,11 +227,9 @@ class Waiting:
 
 
 def mount(app, workspace, body) -> None:
-    from .. import browsed, signwatch
+    from .. import acting, browsed, signwatch
     from ..web import gate, signin, sites
     from .runtime import WINDOW_HEADER
-
-    from .. import acting
     desktop = workspace.home / "runtime" / "desktop"
     runtime = desktop.parent
     # The judgment on the person's own model, as the app's settings name it when it is asked.
@@ -247,7 +245,7 @@ def mount(app, workspace, body) -> None:
         if not ident or pane.op is not None:
             return
         page = signin.page(pane.cdp)
-        if not page or page["chars"] >= PLAIN_CHARS and not page["password"] and not signin.in_flow(url):
+        if not page or (page["chars"] >= PLAIN_CHARS and not page["password"] and not signin.in_flow(url)):
             return
         lang = _lang(app)
         verdict = asyncio.run(pagejudge.judge(page, {**found, "flow": signin.in_flow(url)}, waiting.ask, lang))
@@ -467,7 +465,7 @@ def mount(app, workspace, body) -> None:
                 typed = str(payload.get("url") or "").strip()
                 typed = typed if "://" in typed else f"https://{typed}"
                 parts = urlsplit(typed)
-                if not browsed.web(typed) or not parts.hostname or "." not in parts.hostname and parts.hostname != "localhost":
+                if not browsed.web(typed) or not parts.hostname or ("." not in parts.hostname and parts.hostname != "localhost"):
                     raise ValueError("signin_invalid")
                 found = signin.find(parts.hostname)
                 entry = signin.load(desktop).get(signin.key(typed)) or {}

@@ -7,7 +7,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import queue
 import re
 import shutil
@@ -15,12 +14,13 @@ import subprocess
 import tempfile
 import threading
 import time
-from urllib.parse import parse_qs, urlsplit
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import scratchhome
-from package_smoke import FakeModel, REPLY, _env
+from package_smoke import REPLY, FakeModel, _env
 
 
 def main(argv=None) -> int:

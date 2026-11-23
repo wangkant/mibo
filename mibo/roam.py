@@ -21,26 +21,39 @@ import random
 import re
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, NamedTuple, Optional
+from typing import Any, NamedTuple
 from urllib.parse import urljoin, urlsplit
 
-from . import players, profile, quiet, situation
 from . import installed_browser as web
-from .players import bilibili_id, player_for, youtube_id  # noqa: F401  (others import them from here)
-from .web import read as reading, sites
-from .web.read import Found
-from .web.tabs import PlaywrightTab
-from .ingestion import MAX_IMAGE_PIXELS, _RESERVED_LOCAL_NAMES, _is_internal_ip, _resolve_public_target
+from . import players, profile, quiet, situation
+from .ingestion import _RESERVED_LOCAL_NAMES, MAX_IMAGE_PIXELS, _is_internal_ip, _resolve_public_target
 from .library import PICTURE_MAX_BYTES, TEXT_MAX, Item, Library, item_id
 from .llm import purpose
 from .panels.feed import site_taste
+from .players import bilibili_id, player_for, youtube_id  # noqa: F401  (others import them from here)
 from .storage import atomic_write_text
-from .textproc import (SLEEP_HOUR_END, SLEEP_HOUR_START, _UNTRUSTED_INPUT_RULES, _WEB_DESC_CLOSE,
-                       _WEB_DESC_OPEN, _clean_prompt_source, _env_tz_offset, _fence_user_data,
-                       default_tz_offset, parse_tz_offset, salvage_json_object, strip_json_fences)
+from .textproc import (
+    _UNTRUSTED_INPUT_RULES,
+    _WEB_DESC_CLOSE,
+    _WEB_DESC_OPEN,
+    SLEEP_HOUR_END,
+    SLEEP_HOUR_START,
+    _clean_prompt_source,
+    _env_tz_offset,
+    _fence_user_data,
+    default_tz_offset,
+    parse_tz_offset,
+    salvage_json_object,
+    strip_json_fences,
+)
+from .web import read as reading
+from .web import sites
+from .web.read import Found
+from .web.tabs import PlaywrightTab
 
 logger = logging.getLogger("mibo.roam")
 
@@ -172,7 +185,7 @@ def _image(value: Any) -> str:
     return _text(value, 2000)
 
 
-def _seconds(value: Any) -> Optional[int]:
+def _seconds(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -328,7 +341,7 @@ class Visitor:
     """One headless browser on a profile that is never signed in, started when
     a page is wanted and stopped when none has been for a while."""
 
-    def __init__(self, profile: Path, *, executable: Optional[Path] = None,
+    def __init__(self, profile: Path, *, executable: Path | None = None,
                  host_check: Callable[[str], bool] = host_ok,
                  public: Callable[[str], Awaitable[bool]] = public_address, clock: Callable[[], float] = time.monotonic):
         self.browser = web.Browser(profile, executable=executable, headless=True)
@@ -438,9 +451,9 @@ class _Plan:
 class Roam:
     """The walk loop and the reader the rest of the service uses."""
 
-    def __init__(self, agent: Any, *, home: Path, runtime: Path, executable: Optional[Path] = None,
+    def __init__(self, agent: Any, *, home: Path, runtime: Path, executable: Path | None = None,
                  clock: Callable[[], float] = time.time, public: Callable[[str], Awaitable[bool]] = public_address,
-                 host_check: Callable[[str], bool] = host_ok, hosts: Optional[dict] = None):
+                 host_check: Callable[[str], bool] = host_ok, hosts: dict | None = None):
         self.agent = agent
         self.settings = agent.settings
         self.library = Library(runtime)
@@ -536,7 +549,7 @@ class Roam:
         return (now - self.started >= FIRST_WALK_S and now - last >= self.settings.roam_gap_h * 3600
                 and now >= self._not_before(now))
 
-    def next_walk(self, now: float) -> Optional[float]:
+    def next_walk(self, now: float) -> float | None:
         """When the next walk of its own may leave, for Settings › 外出; None while one cannot."""
         if self._held(now):
             return None
@@ -578,7 +591,7 @@ class Roam:
         finally:
             await self.visitor.stop()
 
-    async def tick(self, now: Optional[float] = None) -> int:
+    async def tick(self, now: float | None = None) -> int:
         """One look at the clock: a walk when one is due. Returns what it kept, or -1 when it stayed in."""
         now = self.clock() if now is None else now
         await self.visitor.stop_if_idle()
@@ -613,7 +626,7 @@ class Roam:
     # -- reading one page
 
     async def _read(self, url: str, *, background: bool = False, cover: str = "",
-                    walls: Optional[list] = None) -> Optional[_Read]:
+                    walls: list | None = None) -> _Read | None:
         """`url` read through web/read.py. A walk's read is a `background` visit (the host's card and
         robots.txt are asked first); `cover` is the list row's picture, for a page that declares none.
         The wall a page showed is added to `walls`."""
@@ -785,7 +798,7 @@ class Roam:
 
     # -- the walk itself
 
-    async def walk(self, now: Optional[float] = None) -> int:
+    async def walk(self, now: float | None = None) -> int:
         """Go out, read a few pages, keep what is worth keeping. Returns how many were kept."""
         now = self.clock() if now is None else now
         self._walking = True
@@ -1024,7 +1037,7 @@ def fence_pages(text: str) -> str:
     return f"{_WEB_DESC_OPEN}[external_web_pages]\n{cleaned}\n[/external_web_pages]{_WEB_DESC_CLOSE}"
 
 
-def _whole(value: Any) -> Optional[int]:
+def _whole(value: Any) -> int | None:
     """A whole number as models write one: 2, 2.0 or "2"; None for anything else (a bool included)."""
     if isinstance(value, bool):
         return None
@@ -1035,7 +1048,7 @@ def _whole(value: Any) -> Optional[int]:
     return value if isinstance(value, int) else None
 
 
-def parse_choice(answer: Any, count: int, limit: int = KEEP_MAX) -> Optional[list[Choice]]:
+def parse_choice(answer: Any, count: int, limit: int = KEEP_MAX) -> list[Choice] | None:
     """The valid rows of the model's answer, at most `limit`, each page once; a row that is not
     in the asked form is left out. None when the answer is not the asked JSON at all."""
     value = salvage_json_object(strip_json_fences(str(answer or "")))
@@ -1119,8 +1132,8 @@ def judge_prompt(runtime: Path, home: Path, values: dict, picked: list[Item], no
     return system, knowing(runtime, now) + "\n\nThe things:\n" + fence_pages("\n\n".join(rows))
 
 
-async def judge(runtime: Path, home: Optional[Path] = None, now: Optional[float] = None,
-                rng: Optional[random.Random] = None) -> int:
+async def judge(runtime: Path, home: Path | None = None, now: float | None = None,
+                rng: random.Random | None = None) -> int:
     """After a round: the profile's own rewrite when due, then one batched judgement of what the
     sources brought when enough waits, written to the library. How many things were judged.
     `home` is the folder whose settings name the model, runtime's parent unless given."""

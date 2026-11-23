@@ -54,8 +54,7 @@ from urllib.parse import parse_qs, urlsplit
 from . import mcp_tools as mt
 from . import runtimes, secretstore
 from .cardwait import Card, risk_of
-from .mcp_client import (Connection, KeptTokens, McpError, describe, find_program, oauth_client, program_env,
-                         revoke)
+from .mcp_client import Connection, KeptTokens, McpError, describe, find_program, oauth_client, program_env, revoke
 
 logger = logging.getLogger("agent.tools")
 

@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import time
 from datetime import date, datetime
-from typing import Optional
 
 from .decision import SEND
 from .dm import chat_key
@@ -23,7 +22,7 @@ FOLLOW_UP_EVENING = 18
 
 
 class FollowUp:
-    def _follow_up_plan(self, today: date, evening: bool = True) -> Optional[dict]:
+    def _follow_up_plan(self, today: date, evening: bool = True) -> dict | None:
         """The plan to ask after: theirs, not asked about, its day (or the end
         of its span) 0 to FOLLOW_UP_DAYS days ago, today's only in the
         `evening`; the latest first."""
@@ -37,7 +36,7 @@ class FollowUp:
                 due.append((end, plan))
         return max(due, key=lambda d: d[0])[1] if due else None
 
-    async def follow_up(self, now: float, chats: list[str]) -> Optional[tuple[str, str]]:
+    async def follow_up(self, now: float, chats: list[str]) -> tuple[str, str] | None:
         """Ask how a plan of the person's went: at most once a day, in the
         chat of `chats` they used last, never in sleep hours or while they are
         talking. (the chat, the line) once it is in that chat's history, for

@@ -6,10 +6,10 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from harness.folders import Profile
 from harness.model import call, say
 from harness.page import measured
+
 from mibo.acting import Modes
 
 pytestmark = pytest.mark.browser

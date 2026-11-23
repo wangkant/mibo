@@ -9,9 +9,9 @@ import logging
 import threading
 
 import pytest
+from harness.model import say
 from roam_standin import Recorder
 
-from harness.model import say
 from mibo.ingestion import MAX_HTML_DECODED_BYTES, MAX_HTML_WIRE_BYTES, safe_fetch_url
 
 PAGE = "<html><head><title>Shore Notes</title></head><body><p>Tide pools at dawn.</p></body></html>"

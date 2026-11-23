@@ -73,6 +73,7 @@ class Run:
         `through` it is asked through review.decide, so code's floor (review.precheck) comes first, and with
         --reviewer-env the real reviewer answers instead of the stand-in."""
         from opbounds import drive
+
         from mibo.web import gate, operate
 
         async def ask(card: dict) -> dict:
@@ -257,6 +258,7 @@ async def main(argv: list[str]) -> int:
     usage: dict = {}
     if args.reviewer_env:
         from review_score import read_env
+
         from mibo.review import endpoint
         env = read_env(Path(args.reviewer_env))
         REVIEWER["ask"] = endpoint(env["LLM_BASE_URL"], env["LLM_API_KEY"], env["LLM_MODEL"], usage=usage)

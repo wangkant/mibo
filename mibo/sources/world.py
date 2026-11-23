@@ -7,8 +7,8 @@ visitor's browser reads, or a section page read the same way.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Callable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx

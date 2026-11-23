@@ -59,8 +59,8 @@ import re
 import secrets
 import time
 from collections import Counter
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable, Optional
 from urllib.parse import parse_qsl, unquote_plus, urlsplit
 
 from . import gate, pagetext, signin
@@ -410,12 +410,12 @@ class Hands:
     turn under way (an address may carry what they said, never what a page showed); `page` is the tab's Page the
     looks read, so a look's refs are the steps' refs."""
 
-    def __init__(self, tab, *, ask: Callable[[dict], Awaitable[Optional[dict]]], allowed: gate.Allowed,
+    def __init__(self, tab, *, ask: Callable[[dict], Awaitable[dict | None]], allowed: gate.Allowed,
                  attended: Callable[[], bool], held: Callable[[], str] = lambda: "",
                  tell: Callable[[str], None] = lambda line: None, lang: str = "zh",
-                 downloads: Callable[[], list[dict]] = lambda: [], mode: Callable[[], str] = lambda: "auto",
-                 review: Optional[Callable[[dict], Awaitable]] = None, kept: Optional[dict] = None,
-                 said: Callable[[], str] = lambda: "", page: Optional[Page] = None):
+                 downloads: Callable[[], list[dict]] = list, mode: Callable[[], str] = lambda: "auto",
+                 review: Callable[[dict], Awaitable] | None = None, kept: dict | None = None,
+                 said: Callable[[], str] = lambda: "", page: Page | None = None):
         self.page = page or Page(tab)
         self.said = said
         self.kept = {} if kept is None else kept
@@ -434,24 +434,24 @@ class Hands:
         # What was typed this run into fields that are not search boxes: {"text", "field", "site", "node",
         # "before", "out"}; "out" once the person let it out. Requests carrying one of these are held, all run long.
         self.typed: list[dict] = []
-        self._paused: Optional[asyncio.Queue] = None
+        self._paused: asyncio.Queue | None = None
         # Held requests, each with the typed entries it carried when it was held.
         self._holding: list[tuple[dict, list[dict]]] = []
         # A confirmed press under way: {"site", "said", "matched", "aside"}.
-        self._pressing: Optional[dict] = None
+        self._pressing: dict | None = None
         # A choice being made (a box ticked, a radio, a list's option): {"text", "field", "site", "out", "choice"}.
         # A post it sets off is a setting saved the moment it changed, held as an account change.
-        self._choice: Optional[dict] = None
+        self._choice: dict | None = None
         # The file chooser the page opened (Page.fileChooserOpened), for the step that opened it.
-        self._file: Optional[dict] = None
+        self._file: dict | None = None
         # The page's own dialogs: lines of what it said, a question a step opened and that waits for its card,
         # the question the person said yes to (answered OK when it comes again), whether a step is under way.
         self._told: list[str] = []
-        self._asked: Optional[dict] = None
-        self._again: Optional[tuple[str, str]] = None
+        self._asked: dict | None = None
+        self._again: tuple[str, str] | None = None
         self._acting = False
         self._closed = False
-        self._drain: Optional[asyncio.Task] = None
+        self._drain: asyncio.Task | None = None
         # Outside actions pressed in this run, with what the page showed after: a like pressed twice is undone, and
         # anything pressed again on a page that has not changed since is done twice.
         self.pressed: dict[tuple, int] = {}
@@ -466,13 +466,13 @@ class Hands:
         self._frame = ""
         self._address = ""
         # A bare submission under way (gate's "watch"): what the card says if a request leaves on it.
-        self._watching: Optional[dict] = None
+        self._watching: dict | None = None
         # The page's own navigations held, each with its card under way; how the last one not let go ended
         # ({"status": "declined" or "waiting", "kind", "result"}).
         self._navs: list[tuple[asyncio.Task, dict]] = []
         self._turned: dict = {}
         # While the person signs in, the page is theirs: Fetch's settings as they were, to turn it on again after.
-        self._released: Optional[dict] = None
+        self._released: dict | None = None
         # The reviewer's verdicts in this run, by action: the same control and request is not asked about twice.
         self._verdicts: dict[str, object] = {}
         # Where each box that scrolls by itself stood after a read's last step on.
@@ -808,8 +808,8 @@ class Hands:
             self._told.append(f"[dialog] the page asked {said} " + ("as the press went out, which is not what the "
                               "person confirmed" if press else "by itself") + "; answered Cancel")
 
-    async def _card(self, kind: str, button: str, to: str, text: str, why: str, review: Optional[dict] = None,
-                    **more) -> Optional[dict]:
+    async def _card(self, kind: str, button: str, to: str, text: str, why: str, review: dict | None = None,
+                    **more) -> dict | None:
         """A card for something the page asks for itself, with the page as the person sees it: their answer. With
         `review` (the action as the reviewer reads it) the mode is asked first: {"yes": True, "passed": line} when
         the reviewer passed it, {"turned": line} when it turned it down, else the card. An act answered before in
@@ -1314,14 +1314,14 @@ class Hands:
     async def _url(self) -> str:
         return str(await self.page._evaluate("() => location.href") or "")
 
-    async def _fresh(self, ident: int) -> Optional[int]:
+    async def _fresh(self, ident: int) -> int | None:
         """The id itself while it is on the page; a control drawn again since the look, found again (in one
         step in the page, else by a fresh look); or None."""
         if ident in self.page.last and await self.page.alive(ident):
             return ident
         return await self.page.again(ident) or await self.page.relocate(ident)
 
-    async def _seen(self, ident: Optional[int]) -> dict:
+    async def _seen(self, ident: int | None) -> dict:
         """What a control says of itself and the words the page shows, read before an action and after it."""
         try:
             if ident is not None:
@@ -1333,7 +1333,7 @@ class Hands:
         except Exception:
             return {"state": {}, "lines": []}
 
-    async def _changed(self, ident: Optional[int], before: dict, line: str, most: int = CAME_UP) -> str:
+    async def _changed(self, ident: int | None, before: dict, line: str, most: int = CAME_UP) -> str:
         """What an action that went through changed, to end its line: the control's own state (now on, no longer
         checked), then the words that came up on the page, `most` of them. "" for an action that failed or left
         the page: the next look shows a new page whole."""
@@ -1383,7 +1383,7 @@ class Hands:
                 + "; look again")
 
     async def _click(self, ident: int, element: str, times: int = 1, how: str = "",
-                     at: Optional[tuple[float, float]] = None) -> dict:
+                     at: tuple[float, float] | None = None) -> dict:
         """A click; `how` "double" or "right"; `at` a point from its top left to press it at; judged by the strictest
         of what it is a press on (_pressed). A double click on a control with an effect outside would press it twice
         and is refused; a right click presses nothing but opens the page's menu, so what it sends is watched as a
@@ -1553,7 +1553,7 @@ class Hands:
             return kind, why
         return gate.classify("click", "" if role == "text" and facts.get("text") else name, role, facts, url)
 
-    async def _pressed(self, ident: Optional[int], x: Optional[float], y: Optional[float], url: str,
+    async def _pressed(self, ident: int | None, x: float | None, y: float | None, url: str,
                        release: bool = False) -> dict:
         """What a press is judged by: the strictest of everything it could be a press on. That is the ref, and with
         a point (x, y from the ref's top left, or of the view with no ref; a drag's release always has one) every
@@ -2002,7 +2002,7 @@ async def picture_of(page: Page) -> dict:
             "size": [round(wide), round(high)]}
 
 
-async def look_at(page: Page, most: int, *, ref: Optional[int] = None, interactive: bool = False, find: str = "",
+async def look_at(page: Page, most: int, *, ref: int | None = None, interactive: bool = False, find: str = "",
                   start: int = 0, picture: bool = False) -> dict:
     """A look at a page (surface.py's look): its print or a part of it, what was left out
     and why, what the app noticed on it (hints from WALL_JS and signin.CHECK_JS, never a verdict), and with

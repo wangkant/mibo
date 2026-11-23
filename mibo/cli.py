@@ -11,8 +11,7 @@ import os
 import sys
 import textwrap
 
-from mibo import i18n, langs
-from mibo import __version__
+from mibo import __version__, i18n, langs
 
 # name -> (module, function, its one-line help in the catalog). The function takes (argv, prog).
 COMMANDS = {

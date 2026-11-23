@@ -15,9 +15,9 @@ import os
 import re
 import sys
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 from urllib.parse import urlsplit
 
 # A score from here on is a match; two this near, neither named exactly, go back to the model.

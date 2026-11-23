@@ -4,8 +4,8 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from harness.app import TOKEN
+
 from mibo import abilities, drafting, settingsfile, welcome
 from mibo import setup_wizard as sw
 from mibo.endpoints import chat_completions_url

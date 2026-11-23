@@ -407,6 +407,7 @@ def _activate(hwnd: int) -> None:
     focus that way while another process holds it): this thread joins the input of the one in front for the
     moment of the switch, as Windows allows the process in front to hand it over."""
     import ctypes
+
     from ..desk import win32
     u, k = win32.user32, win32.kernel32
     u.AttachThreadInput.argtypes = [ctypes.c_uint, ctypes.c_uint, ctypes.c_int]

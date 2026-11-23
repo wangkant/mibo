@@ -15,14 +15,18 @@ import secrets
 import time
 
 import uvicorn
-from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
-
-from mcp.server.auth.provider import (AccessToken, AuthorizationCode, AuthorizationParams, RefreshToken,
-                                      construct_redirect_uri)
-from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions, AuthSettings
+from mcp.server.auth.provider import (
+    AccessToken,
+    AuthorizationCode,
+    AuthorizationParams,
+    RefreshToken,
+    construct_redirect_uri,
+)
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.mcpserver import MCPServer
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 STATS = {"registered": 0, "consented": 0, "denied": 0, "issued": 0, "refreshed": 0, "revoked": 0, "calls": 0}
 

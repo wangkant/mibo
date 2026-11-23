@@ -70,8 +70,6 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 
-from everyday import PRICE, Meter  # noqa: E402
-
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement  # noqa: E402
 from agentdojo.agent_pipeline.tool_execution import is_string_list, tool_result_to_str  # noqa: E402
 from agentdojo.attacks.attack_registry import load_attack  # noqa: E402
@@ -81,6 +79,7 @@ from agentdojo.logging import Logger, OutputLogger  # noqa: E402
 from agentdojo.models import MODEL_NAMES  # noqa: E402
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
 from agentdojo.types import text_content_block_from_string  # noqa: E402
+from everyday import PRICE, Meter  # noqa: E402
 
 VERSION = "v1.2.2"
 SERVERS = {"banking": "banking", "slack": "slack"}

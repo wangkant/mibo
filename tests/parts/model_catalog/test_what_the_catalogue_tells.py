@@ -12,12 +12,12 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
 import modelcatalog as build
+import pytest
 from harness.app import KEY, App, quiet_start
 from harness.model import MODEL, call, say
 from harness.turn import run_turn
+
 from mibo import abilities, context, loop, modelcatalog, spend, usage
 from mibo.endpoints import chat_completions_url
 from mibo.panels import modelbar

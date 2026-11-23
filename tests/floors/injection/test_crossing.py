@@ -12,8 +12,8 @@ import time
 from types import SimpleNamespace
 
 import pytest
-
 from harness.model import call, say
+
 from mibo import crossing, review
 from mibo.loop import ChatLookups
 from mibo.shell import read as reading

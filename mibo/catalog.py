@@ -8,8 +8,8 @@ one window and tool set."""
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
 
 from . import appmap, context, findtool, mcp_offer, pastchats, schedule_tool, search, surface
 from .desk import tool as desk_tool
@@ -150,7 +150,7 @@ def offered(budget: context.Budget) -> Offer:
     for module in MODULES[:-1]:
         mine = [t for t in tools if module.owns(t["function"]["name"])]
         size = context.text_tokens(json.dumps(mine, ensure_ascii=False)) if mine else 0.0
-        if run or not (module.deferred or full) and used + size <= room:
+        if run or (not (module.deferred or full) and used + size <= room):
             up, used = up + mine, used + size
         else:
             full = full or not module.deferred

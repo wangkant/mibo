@@ -12,11 +12,11 @@ import time
 from pathlib import Path
 
 import pytest
-
 from harness.app import App
 from harness.model import call, fail, held, say, tokens
 from harness.page import measured
 from harness.turn import run_turn
+
 from mibo import chatlog, db, loop, pastchats
 from mibo.dm import chat_key
 from mibo.prompt import _CHECKPOINT_OPEN

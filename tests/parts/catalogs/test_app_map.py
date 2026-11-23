@@ -8,8 +8,8 @@ import re
 
 import pytest
 from fastapi.testclient import TestClient
-
 from harness.app import TOKEN
+
 from mibo import appmap, cardwait, crossing, i18n, secretstore, welcome
 from mibo import setup_wizard as sw
 from mibo.see import when

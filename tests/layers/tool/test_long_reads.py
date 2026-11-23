@@ -6,9 +6,9 @@ from __future__ import annotations
 import re
 
 import pytest
-
 from harness.model import call, say, tokens
 from harness.page import measured
+
 from mibo.shell import files
 
 ROUNDS = 30

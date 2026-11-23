@@ -14,11 +14,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from mibo import ranking
-from mibo.agent import Agent
-
 from helpers import check, isolated_agent
 
+from mibo import ranking
+from mibo.agent import Agent
 
 # ---------------------------------------------------------------------------
 # Ranking with an embedding

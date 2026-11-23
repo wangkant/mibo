@@ -9,8 +9,8 @@ import json
 import sys
 
 import pytest
-
 from harness.model import call, say, text
+
 from mibo.shell.grants import LOG_FILE, Grants
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="read.py reads commands with Windows PowerShell's "

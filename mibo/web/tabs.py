@@ -32,8 +32,9 @@ import contextlib
 import json
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 # How long an address may take to start answering, and its document to be parsed after.
 OPEN_S = 30.0
@@ -52,7 +53,7 @@ class Answer:
     status: int = 0
     kind: str = ""                     # the content type, lower case
     length: int = 0                    # the declared content length, 0 when none
-    body: Optional[Callable[[], Awaitable[bytes]]] = None
+    body: Callable[[], Awaitable[bytes]] | None = None
 
 
 class Tab:
@@ -60,7 +61,7 @@ class Tab:
 
     def __init__(self) -> None:
         # Fetch's settings while it is on in the page; the frame session each paused request came from.
-        self._fetch: Optional[dict] = None
+        self._fetch: dict | None = None
         self._paused: dict[str, str] = {}
 
     @property
@@ -73,7 +74,7 @@ class Tab:
     async def evaluate(self, script: str, arg: Any = None) -> Any:
         raise NotImplementedError
 
-    async def cdp(self, method: str, params: Optional[dict] = None, session: str = "") -> dict:
+    async def cdp(self, method: str, params: dict | None = None, session: str = "") -> dict:
         params = params or {}
         if not session and method.startswith("Fetch.") and "requestId" in params:
             session = self._paused.pop(params["requestId"], "")

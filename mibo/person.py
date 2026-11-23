@@ -17,9 +17,9 @@ import json
 import re
 import shutil
 import unicodedata
+from collections.abc import Callable, Iterable
 from datetime import date, datetime, timedelta, tzinfo
 from pathlib import Path
-from typing import Callable, Iterable, Optional
 
 from . import chatlangs, context, memstore, ranking, timewords
 from .storage import num as _num
@@ -155,7 +155,7 @@ _UNSAID_RE = _compiled("unsaid")
 _FORGET_THAT_RE = _compiled("forget_that")
 
 
-def unsaid(text: str) -> Optional[re.Match]:
+def unsaid(text: str) -> re.Match | None:
     """The words of a "don't keep this" anywhere in `text`, in any chat language."""
     for _code, pat in _UNSAID_RE:
         m = pat.search(str(text or ""))
@@ -169,7 +169,7 @@ def forget_that(text: str) -> bool:
     return any(pat.search(str(text or "").strip()) for _code, pat in _FORGET_THAT_RE)
 
 
-def dated(text: str, at: float, tz, langs: Iterable[str] = (), said: Optional[str] = None,
+def dated(text: str, at: float, tz, langs: Iterable[str] = (), said: str | None = None,
           now: float = 0.0) -> tuple[str, str]:
     """`text` with each day word that names one past day written as that day, counted from `at`
     ("今天下午拔了智齿" is "11-27下午拔了智齿"), and the ISO day of the first; (text, "") when none does.
@@ -320,7 +320,7 @@ class Person:
 
     def __init__(self, path: Path):
         self.path = Path(path)
-        self._data: Optional[dict] = None
+        self._data: dict | None = None
 
     @property
     def data(self) -> dict:
@@ -375,7 +375,7 @@ class Person:
     def plans(self, *status: str) -> list[dict]:
         return [p for p in self.data["plans"] if not status or p.get("status", "open") in status]
 
-    def get(self, item_id: str) -> Optional[dict]:
+    def get(self, item_id: str) -> dict | None:
         return next((r for r in self.data["facts"] + self.data["plans"]
                      if r.get("id") == item_id), None)
 
@@ -442,8 +442,8 @@ class Person:
         # Kept without the first person that opens it; the name is read from the words as said.
         said, slot, text = _clip(text), slot_key(slot), _clip(neutral(text))
         # The same words, or fewer of them in the same slot ("研二" beside "华东师大研二"): nothing new.
-        same = next((f for f in self.facts() if f["text"] == text or slot and text in f["text"]
-                     and _same_slot(slot_key(f.get("slot")), slot)), None)
+        same = next((f for f in self.facts() if f["text"] == text or (slot and text in f["text"]
+                     and _same_slot(slot_key(f.get("slot")), slot))), None)
         if same is not None:
             same["at"] = now
             if slot and not same.get("slot"):
@@ -461,8 +461,8 @@ class Person:
             # on one day ("mother" and "mother.visit"). A reply's fact of another kind in the slot is the
             # fold's to file again.
             old = [f for f in self.facts() if (f.get("kind") in (kind, "other") or f.get("src") == "turn") and (
-                slot_key(f.get("slot")) == slot or _same_slot(slot_key(f.get("slot")), slot)
-                and not (day or f.get("day")) and _share(f["text"], text) >= 0.3)]
+                slot_key(f.get("slot")) == slot or (_same_slot(slot_key(f.get("slot")), slot)
+                and not (day or f.get("day")) and _share(f["text"], text) >= 0.3))]
         else:
             old = [f for f in self.facts() if not f.get("slot") and f.get("kind") in (kind, "other")
                    and _tokens(f["text"]) and _share(f["text"], text) >= SAME_FACT]
@@ -491,8 +491,8 @@ class Person:
         same = next((p for p in self.plans("open", "asked")
                      if _tokens(p["text"]) and (_share(p["text"], text) >= 0.5
                                                 or _share(text, p["text"]) >= 0.5
-                                                or p.get("due") == due.due and _share(
-                                                    bare, p["text"].replace(str(p.get("said") or "\0"), "")) > 0)),
+                                                or (p.get("due") == due.due and _share(
+                                                    bare, p["text"].replace(str(p.get("said") or "\0"), "")) > 0))),
                     None)
         fields = {"due": due.due, "due_kind": due.kind, "until": due.until, "said": due.words,
                   "said_at": now}
@@ -577,7 +577,7 @@ class Person:
                     talk={"summary": "", "at": 0.0, "topics": []})
         return n
 
-    def restore(self, tid: str, now: float) -> Optional[dict]:
+    def restore(self, tid: str, now: float) -> dict | None:
         """Put a past fact, or a fact or plan from before a rewrite, back; what holds its slot now
         becomes past in its place."""
         past = next((f for f in self.data["facts"] if f.get("id") == tid and f.get("status") == "past"), None)
@@ -600,7 +600,7 @@ class Person:
         put["born"] = _num(item.get("born")) or put["born"]
         return put
 
-    def edit(self, item_id: str, text: str, now: float) -> Optional[dict]:
+    def edit(self, item_id: str, text: str, now: float) -> dict | None:
         """The person's own rewrite of one fact or plan; its slot stays."""
         row = self.get(item_id)
         text = _clip(text)
@@ -612,7 +612,7 @@ class Person:
 
     # ---- the daily tidy, code only -----------------------------------------------
 
-    def tidy(self, now: float, tz: Optional[tzinfo] = None) -> bool:
+    def tidy(self, now: float, tz: tzinfo | None = None) -> bool:
         """Plans long past are done, birthdays come round again, a fact of a day
         long gone and what they were going through and no longer say are past,
         old topics and trash go. Whether anything changed."""
@@ -654,7 +654,7 @@ def chatlog_refs() -> int:
 
 # ---- the turn's operations -----------------------------------------------------
 
-def apply_turn(store: Person, reply: str, at: float, tz: Optional[tzinfo]) -> list[dict]:
+def apply_turn(store: Person, reply: str, at: float, tz: tzinfo | None) -> list[dict]:
     """The open plans a sent reply asked about: those due by today that the reply shares two words with.
     What the person says of themselves is the fold's. Never saves."""
     asked = []
@@ -694,7 +694,7 @@ def topic_of(text: str) -> str:
     return topic.strip() or str(text or "")
 
 
-def form_of(text: str) -> tuple[Optional[bool], Optional[str]]:
+def form_of(text: str) -> tuple[bool | None, str | None]:
     """(short, kind) a form fact asks for: short or long things, videos or text."""
     low = str(text or "").lower()
     short = (True if re.search(r"短|几分钟|幾分鐘|别太长|別太長|short|brief|quick", low)
@@ -864,7 +864,7 @@ def _command_kind(text: str) -> tuple[str, str]:
         return "form", "form.length"
     if _MANNER.search(text):
         return "manner", ""
-    disliked = bool(_DISLIKE.search(text)) or refuses(text) and not _LIKE.search(text)
+    disliked = bool(_DISLIKE.search(text)) or (refuses(text) and not _LIKE.search(text))
     if _FOOD.search(text):
         return ("dislike" if disliked or timewords.has_negation(text) else "like"), "food." + topic_of(text)
     if disliked:
@@ -892,7 +892,7 @@ def command_facts(text: str) -> list[tuple[str, str, str]]:
         typed = [_clause_kind(p) for p in parts]
         whole = _command_kind(sentence)
         read = sum(kind != "other" for kind, _slot in typed)
-        if read == 0 or read == 1 and whole[0] != "other":
+        if read == 0 or (read == 1 and whole[0] != "other"):
             out.append((*whole, sentence))
             continue
         mine, lead = [], ""
@@ -1154,7 +1154,7 @@ def shown(row: dict) -> str:
 
 def _has_source(row: dict) -> bool:
     """Whether the words an item came from can be shown: the 记住 that said it, or the chat lines it cites."""
-    return bool(row.get("words") or row.get("refs") and row.get("conv"))
+    return bool(row.get("words") or (row.get("refs") and row.get("conv")))
 
 
 def page_view(store: Person) -> dict:

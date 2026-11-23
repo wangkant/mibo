@@ -7,9 +7,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterable, Optional
 
 from . import db, ranking
 from .textproc import _focus_tokens
@@ -52,7 +52,7 @@ def merge_refs(*groups: Iterable[int]) -> list[int]:
     return sorted(seqs)[-REFS_MAX:]
 
 
-def clean_row(row) -> Optional[dict]:
+def clean_row(row) -> dict | None:
     """A log row from a recent-window row (room line or DM turn), or None."""
     if not isinstance(row, dict):
         return None
@@ -130,7 +130,7 @@ class ChatLog:
     def search(self, conv: str, words: str = "", *,
                since: float = 0.0, until: float = 0.0, limit: int = SEARCH_MAX,
                lang: str = "zh", skip: Iterable[int] = (),
-               rows: Optional[list[dict]] = None) -> list[dict]:
+               rows: list[dict] | None = None) -> list[dict]:
         """Lines by words (BM25 over focus tokens) and by time range: best
         first when `words` is given, else newest first. Words that make no
         token find nothing."""
@@ -151,7 +151,7 @@ class ChatLog:
         hits = sorted((h for h in hits if h[0] > 0), key=lambda h: (-h[0], -h[1]))
         return [row for _s, _q, row in hits[:limit]]
 
-    def status(self, conv: Optional[str] = None) -> dict:
+    def status(self, conv: str | None = None) -> dict:
         """What the page shows: on or off, the days kept, and for one chat
         how many lines and from when to when."""
         out: dict = {"on": self.on, "days": int(self.days)}
@@ -238,7 +238,7 @@ class ChatLog:
         self.db.scrubbed()
         return chats
 
-    def prune(self, now: Optional[float] = None) -> int:
+    def prune(self, now: float | None = None) -> int:
         """Drop lines older than the kept days and past the per-chat cap;
         returns how many went."""
         now = time.time() if now is None else now

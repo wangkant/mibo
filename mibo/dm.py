@@ -9,27 +9,21 @@ import logging
 import time
 from datetime import datetime
 
-from . import abilities
-from . import catalog
-from . import channels
-from . import context
-from . import db
-from . import person
-from . import today
+from . import abilities, catalog, channels, context, db, person, today
+from .decision import PASS, SEND
 from .llm import FROM_BUDGET, ProviderError, answer_text, purpose
 from .loop import ANSWER_NOW, ChatLookups, stopped_reply
 from .messages import turn_pictures
-from .decision import PASS, SEND
 from .pastchats import NAME as PAST_CHATS
 from .prompt import history_messages
 from .schedule_tool import run_of
-from .turns import OutOfTime, Turn, current_turn
 from .textproc import (
     TextProcessing,
     _detect_image_mime,
     _strip_web_desc,
     scrub_third_party_text,
 )
+from .turns import OutOfTime, Turn, current_turn
 
 logger = logging.getLogger("agent")
 

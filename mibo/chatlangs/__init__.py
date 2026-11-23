@@ -9,9 +9,9 @@ package; `detect` guesses which one a message is written in.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import importlib
 import re
+from dataclasses import dataclass, field
 
 #: Every chat language, in the order a memory command is tried: the two the
 #: prompts are written in first.

@@ -12,8 +12,8 @@ import re
 import time
 
 import pytest
-
 from harness.model import say, text
+
 from mibo import consolidate
 
 CJK = re.compile(r"[぀-ヿ㐀-鿿가-힯]")

@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import opbench  # noqa: E402
+import opbench
 
 # The chat brought beside the page (the bar's button) and the page put back in its context if it was taken out;
 # then whether what is sent now goes to the page.

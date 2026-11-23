@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from package_smoke import FakeModel  # noqa: E402
+from package_smoke import FakeModel
 
 ASK = "给 Alice 发消息：明天见"
 # The stand-in model's fixed plan for that request, read off the page lines of the operating prompt.

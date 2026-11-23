@@ -21,8 +21,8 @@ import logging
 import random
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 from urllib.parse import quote, urljoin
 
 import httpx
@@ -124,7 +124,7 @@ def change_choice(runtime: Path, change: Callable[[dict], None]) -> dict:
         return choice
 
 
-def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: Optional[random.Random] = None) -> list[dict]:
+def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: random.Random | None = None) -> list[dict]:
     """Every public source with its weight for this person, highest first (see `weights.weigh`):
     the languages they read (the character's own first, the others less), the defaults of the character's
     language, the situation's supply term, and the taste model's sampled coefficient for each source while
@@ -152,7 +152,7 @@ YIELD_DAYS = 14
 ENOUGH = 10
 
 
-def pulls(runtime: Path, sources: list[Source], now: float) -> Optional[dict[str, float]]:
+def pulls(runtime: Path, sources: list[Source], now: float) -> dict[str, float] | None:
     """Per source key, its pull toward the person's interests (roam.interests): over the interests, the
     largest of how short the library is of it (1 with nothing fresh, unseen and readable on it, 1/2 with ENOUGH) times
     the share of what the source brought in YIELD_DAYS that is on it. The share starts from the source's own
@@ -398,12 +398,12 @@ class Rounds:
     whose settings name the character's model, the runtime's parent unless given."""
 
     def __init__(self, runtime: Callable[[], Path], lang: Callable[[], str],
-                 home: Optional[Callable[[], Path]] = None):
+                 home: Callable[[], Path] | None = None):
         self.runtime, self.lang = runtime, lang
         self.home = home or (lambda: self.runtime().parent)
         self.running = False
         self._wake = asyncio.Event()
-        self.last_count: Optional[int] = None
+        self.last_count: int | None = None
         self.last_picked: list[str] = []
         # Called after a round that kept something new (the page shares it and tells the pet).
         self.found: Callable[[], None] = lambda: None

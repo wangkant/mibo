@@ -31,9 +31,9 @@ import random
 import re
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
 from urllib.parse import urlsplit
 
 from . import db, life, situation, subjects
@@ -182,8 +182,8 @@ class Reader:
     """What a snapshot needs from the runtime, read once: the picked topics, the topics the owner said no
     to and those they said they like, and the sources' languages and what each says it brings."""
 
-    def __init__(self, runtime: Path, topics: Optional[list[str]] = None, events: Optional[list] = None,
-                 now: Optional[float] = None):
+    def __init__(self, runtime: Path, topics: list[str] | None = None, events: list | None = None,
+                 now: float | None = None):
         from . import profile
         from .sources import catalog
         feed = _feed()
@@ -281,7 +281,7 @@ class Priors:
     then the situation's. The replay passes the sources hidden by then and leaves the profile out, since
     it cannot tell when each was said."""
 
-    def __init__(self, runtime: Path, hidden: Optional[set[str]] = None, rules: bool = True):
+    def __init__(self, runtime: Path, hidden: set[str] | None = None, rules: bool = True):
         from . import profile
         self.table = dict(PRIORS)
         if hidden is None:
@@ -296,11 +296,11 @@ class Priors:
             form = profile.load(runtime, False)["form"]
             against = {True: ["len:long"], False: ["len:short"]}.get(form.get("short"), []) + {
                 "video": ["kind:text", "kind:page"], "text": ["kind:video"]}.get(form.get("kind"), [])
-            self.table.update({name: profile.FORM_AGAINST for name in against})
+            self.table.update(dict.fromkeys(against, profile.FORM_AGAINST))
             if form.get("short") is not None:
                 # The same wish on the lengths as numbers: against longer, or against shorter.
                 lean = profile.FORM_AGAINST[0] / 2 * (1 if form["short"] else -1)
-                self.table.update({name: (lean, profile.FORM_AGAINST[1]) for name in ("secs", "chars")})
+                self.table.update(dict.fromkeys(("secs", "chars"), (lean, profile.FORM_AGAINST[1])))
         self.table.update({"origin:src:" + key: HIDDEN for key in hidden})
         self.table.update(situation.priors(runtime))
 
@@ -339,7 +339,7 @@ def history(events: list, until: float = math.inf) -> dict[str, dict]:
         h["acted"] = at
         if action == "open":
             h["open"] = True
-            h["back"] = h["back"] or h["opened"] is not None and at - h["opened"] >= BACK_S
+            h["back"] = h["back"] or (h["opened"] is not None and at - h["opened"] >= BACK_S)
             h["opened"] = at if h["opened"] is None else h["opened"]
         elif action == "talk":
             h["talk"] = True
@@ -361,7 +361,7 @@ def _played(h: dict) -> bool:
     """Whether a thing was played or read for real: PLAY_SHARE of its own length, or PLAY_MIN_S seconds."""
     snap = h["f"] or {}
     full = snap.get("secs") or snap.get("chars", 0) / READ_CHARS_S
-    return h["play"] >= PLAY_MIN_S or bool(full) and h["play"] >= PLAY_SHARE * full
+    return h["play"] >= PLAY_MIN_S or (bool(full) and h["play"] >= PLAY_SHARE * full)
 
 
 def _stay(h: dict) -> tuple[int, float]:
@@ -375,7 +375,7 @@ def _stay(h: dict) -> tuple[int, float]:
     return 1, STAY + (PLAY[1] - STAY) * way
 
 
-def reacted(h: dict) -> Optional[int]:
+def reacted(h: dict) -> int | None:
     """1 for a thing liked, stayed with, come back to or answered, or opened where the stay is not seen;
     0 for one skipped, hidden or only glanced at; None when nothing was done."""
     if h["hide"] or h["like"] or h["skip"]:
@@ -387,7 +387,7 @@ def reacted(h: dict) -> Optional[int]:
     return 1 if h["open"] else None
 
 
-def label(h: dict, until: float) -> Optional[tuple[int, float, float]]:
+def label(h: dict, until: float) -> tuple[int, float, float] | None:
     """(y, confidence, when) from a thing's final mark by `until`, or None while it says nothing yet."""
     if h["walled"]:
         return None
@@ -419,7 +419,7 @@ def label(h: dict, until: float) -> Optional[tuple[int, float, float]]:
     return y, c, h["acted"]
 
 
-def rows(events: list, until: float, read: set[str], rebuild: Callable[[str, float], Optional[dict]],
+def rows(events: list, until: float, read: set[str], rebuild: Callable[[str, float], dict | None],
          families: tuple = ()) -> tuple[list, int]:
     """One training row (x, y, c, id) per thing with a label by `until`, and how many could not be rebuilt:
     an old event without a snapshot whose thing the library no longer has."""
@@ -442,7 +442,7 @@ def rows(events: list, until: float, read: set[str], rebuild: Callable[[str, flo
 
 # ----------------------------------------------------------------------- fit --
 
-def solve(data: list, prior: Callable[[str], tuple[float, float]], start: Optional[dict] = None
+def solve(data: list, prior: Callable[[str], tuple[float, float]], start: dict | None = None
           ) -> tuple[dict[str, float], dict[str, float]]:
     """Cyclic coordinate Newton on ½Σq0(w-m0)² + Σc[log(1+e^z) - yz]: posterior means and precisions."""
     cols: dict[str, list] = {}
@@ -493,7 +493,7 @@ class _Rebuild:
         self.items = {item.id: item for item in Library(runtime).items()}
         self.reader = reader
 
-    def __call__(self, ident: str, at: float) -> Optional[dict]:
+    def __call__(self, ident: str, at: float) -> dict | None:
         item = self.items.get(ident)
         shaped = _feed().shape(item, {}) if item else None
         return self.reader.snapshot(item, shaped, at) if shaped else None
@@ -532,7 +532,7 @@ def load_at(runtime: Path, at: float) -> dict:
     return max(made, key=lambda m: m["at"]) if made else last
 
 
-def train(runtime: Path, now: Optional[float] = None) -> dict:
+def train(runtime: Path, now: float | None = None) -> dict:
     """Fit on every reaction so far and write the model; what was written."""
     runtime = Path(runtime)
     now = life.clock() if now is None else now
@@ -657,7 +657,7 @@ class Ranker:
     """Scores, reasons and the character's slot for one ranking at `at`."""
 
     def __init__(self, runtime: Path, topics: list[str], at: float, seed: int,
-                 hidden: Optional[set[str]] = None, events: Optional[list] = None):
+                 hidden: set[str] | None = None, events: list | None = None):
         self.reader = Reader(runtime, list(topics), events)
         self.read = readable(runtime)
         self.prior = Priors(runtime, hidden)
@@ -727,7 +727,7 @@ class Ranker:
                 served.pop(next(iter(served)))
 
 
-def shown(runtime: Path, item: Item, surface: str, rank: Optional[int], now: float, host: str,
+def shown(runtime: Path, item: Item, surface: str, rank: int | None, now: float, host: str,
           slot: str = "") -> None:
     """One row in the `shown` table for a thing the person was shown, whether its host was down then (`gated`);
     the last SHOWN_MAX are kept."""
@@ -802,7 +802,7 @@ def taught(runtime: Path, lang: str = "en") -> dict:
 
 # ------------------------------------------------------------------- numbers --
 
-def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
+def numbers(runtime: Path, now: float | None = None, days: int = 7) -> dict:
     """The week in numbers, for settings: what each surface's showings led to, play time, and the
     character's picks against the model's."""
     runtime = Path(runtime)
@@ -841,7 +841,7 @@ def numbers(runtime: Path, now: Optional[float] = None, days: int = 7) -> dict:
 
 # -------------------------------------------------------------------- replay --
 
-def auc(pairs: list[tuple[float, int]]) -> Optional[float]:
+def auc(pairs: list[tuple[float, int]]) -> float | None:
     """The chance a random positive outscores a random negative, ties counted half."""
     pos = sum(y for _, y in pairs)
     neg = len(pairs) - pos
@@ -871,7 +871,7 @@ def _metrics(days: list[list[dict]], name: str) -> dict:
             "top5": sum(top) / len(top) if top else None}
 
 
-def _ci(values: list[float]) -> list[Optional[float]]:
+def _ci(values: list[float]) -> list[float | None]:
     values = sorted(v for v in values if v is not None)
     if not values:
         return [None, None]
@@ -1002,7 +1002,7 @@ def _print(report: dict) -> None:
     print("families: " + ", ".join(f"{k} {v}" for k, v in report["families"].items()))
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     from .paths import runtime_dir
     parser = argparse.ArgumentParser(prog="python -m mibo.taste")
     parser.add_argument("command", choices=["replay"])

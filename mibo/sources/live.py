@@ -13,10 +13,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from . import china, tech
 from .base import client
@@ -39,7 +40,7 @@ class Live:
     name: tuple[str, str]                    # (English, Chinese)
     page: str                                # the list's own page
     sites: tuple[str, ...]                   # words naming the site, lower case
-    fetch: Optional[Callable[[Any], Awaitable[list]]] = None   # the source's fetch; None: the page is read
+    fetch: Callable[[Any], Awaitable[list]] | None = None   # the source's fetch; None: the page is read
     also: str = ""                           # what the message must hold too, beside the site's other list
     signed: bool = False                     # read only with the person's session, where they signed in
 
@@ -75,7 +76,7 @@ LISTS = (
 )
 
 
-def asked(said: str) -> Optional[Live]:
+def asked(said: str) -> Live | None:
     """The list the message asks for, or None. A message with an address asks for that page: a list only
     when the address is the list's own page."""
     low = (said or "").lower()
@@ -88,7 +89,7 @@ def asked(said: str) -> Optional[Live]:
                  and (not live.also or re.search(live.also, low))), None)
 
 
-async def rows(agent: Any, live: Live, lang: str, home: Path) -> Optional[str]:
+async def rows(agent: Any, live: Live, lang: str, home: Path) -> str | None:
     """The list as numbered lines for the model, read now; None when it could not or may not be read in time."""
     title = live.name[1] if lang.startswith("zh") else live.name[0]
     try:

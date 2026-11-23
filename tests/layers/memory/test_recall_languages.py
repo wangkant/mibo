@@ -7,6 +7,7 @@ import re
 
 from harness.model import call, say
 from harness.turn import run_turn
+
 from mibo import chatlangs, pastchats
 
 # A line in each chat language, and words of it a search would use.

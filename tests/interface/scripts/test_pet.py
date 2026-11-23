@@ -7,10 +7,10 @@ import base64
 from datetime import datetime, timezone
 
 import pytest
-
 from harness.clock import Clock
 from harness.model import text
 from harness.page import measured
+
 from mibo import situation
 from mibo.library import Item, Library
 

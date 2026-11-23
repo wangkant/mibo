@@ -9,8 +9,8 @@ import os
 
 import pytest
 from docx import Document
-
 from harness.model import call, say
+
 from mibo.shell import checkpoint, office
 from mibo.shell import files as file_tools
 from mibo.shell.grants import Grants

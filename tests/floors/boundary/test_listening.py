@@ -8,7 +8,6 @@ import socket
 import sys
 
 import primp
-
 from harness.model import call, say
 
 # Binds past loopback while a test watches; the audit hook stays for the run once added, as audit hooks do.

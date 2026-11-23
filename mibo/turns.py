@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import random
-from typing import Optional
 
 from . import chatlangs
 
@@ -30,17 +29,17 @@ class Turn:
     order, as the page's chat takes it: {"type": "text", "text": ...}, the
     last one carrying what the reply looked up, brought or forgot."""
 
-    def __init__(self, choices=(), run: Optional[dict] = None) -> None:
+    def __init__(self, choices=(), run: dict | None = None) -> None:
         self.said: list[dict] = []
         self.choices = frozenset(c for c in choices if c in TURN_CHOICES)
         # A scheduled task's run ({"id", "kind", "acts", "words"}, schedule_tool.py); None for a turn of the person's.
         self.run = run
         # The reply's reasoning where the model returned it (abilities.note_reasoning).
-        self.thinking: Optional[dict] = None
+        self.thinking: dict | None = None
 
 
 # Set for the length of one `Agent.answer` call; None outside a turn.
-current_turn: contextvars.ContextVar[Optional[Turn]] = contextvars.ContextVar("current_turn", default=None)
+current_turn: contextvars.ContextVar[Turn | None] = contextvars.ContextVar("current_turn", default=None)
 
 
 def turn_choices() -> frozenset[str]:

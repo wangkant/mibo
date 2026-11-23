@@ -31,7 +31,6 @@ import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from urllib.parse import quote
 
 from . import __version__, secretstore
@@ -90,7 +89,7 @@ def uv_dirs() -> list[Path]:
     return dirs
 
 
-def program_env(own: Optional[dict] = None) -> dict:
+def program_env(own: dict | None = None) -> dict:
     """What a server program starts with: what a program needs to run and find
     its tools here, never this app's own settings or anything named like a
     secret, plus the server's own `env`."""
@@ -107,7 +106,7 @@ def program_env(own: Optional[dict] = None) -> dict:
     return out
 
 
-def find_program(command: str, env: Optional[dict] = None, cwd: Optional[str] = None) -> str:
+def find_program(command: str, env: dict | None = None, cwd: str | None = None) -> str:
     """The full path of `command`, or "" when it cannot be found. uv and uvx
     are also looked for where the installers put them; a relative path is
     taken from `cwd`."""
@@ -267,7 +266,7 @@ class Connection:
         self.server_name = ""
         self.last_status = 0
         self._stop = asyncio.Event()
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._errlog = None
 
     @property

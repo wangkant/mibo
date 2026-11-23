@@ -56,6 +56,7 @@ class Run:
         import scratchhome
         import uvicorn
         from everyday import no_windows
+
         from mibo import abilities, paths, situation, welcome
         from mibo.endpoints import chat_completions_url
         from mibo.panels import modelbar
@@ -171,6 +172,7 @@ def main(argv: list[str]) -> int:
     sys.path[:0] = [str(Path(args.tree).resolve()), str(HERE.parent / "tests"), str(HERE)]
     from everyday import Meter
     from harness.pane import Pane as Standin
+
     from mibo import installed_browser
 
     class Pane(Standin):

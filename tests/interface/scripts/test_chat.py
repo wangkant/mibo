@@ -7,7 +7,6 @@ import json
 import time
 
 import pytest
-
 from harness.model import hang, say
 from harness.page import measured
 

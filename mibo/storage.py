@@ -11,9 +11,10 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger("agent.storage")
 
@@ -101,7 +102,7 @@ class FileLock:
         self.timeout = timeout
         self._fd = -1
 
-    def acquire(self) -> "FileLock":
+    def acquire(self) -> FileLock:
         if self._fd >= 0:
             return self
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,7 +170,7 @@ class FileLock:
         finally:
             os.close(fd)
 
-    def __enter__(self) -> "FileLock":
+    def __enter__(self) -> FileLock:
         return self.acquire()
 
     def __exit__(self, *_exc) -> None:

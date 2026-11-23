@@ -49,16 +49,9 @@ _TOTAL = re.compile(r"(合计|总计|小计|共计|总额|总和|total|subtotal|
 _DATE_FUNCTIONS = ("=TODAY(", "=DATE(", "=EDATE(", "=EOMONTH(", "=WORKDAY(", "=DATEVALUE(")
 
 # Functions newer than Excel 2007, which the file must name with the _xlfn. prefix Excel itself writes.
-_XLFN = frozenset((
-    "CONCAT TEXTJOIN IFS SWITCH MAXIFS MINIFS XLOOKUP XMATCH IFNA DAYS ISOWEEKNUM XOR NUMBERVALUE FORMULATEXT "
-    "ISFORMULA SHEET SHEETS UNICHAR UNICODE ARABIC BASE DECIMAL AGGREGATE CEILING.MATH FLOOR.MATH CEILING.PRECISE "
-    "FLOOR.PRECISE STDEV.S STDEV.P VAR.S VAR.P PERCENTILE.INC PERCENTILE.EXC QUARTILE.INC QUARTILE.EXC RANK.EQ "
-    "RANK.AVG MODE.SNGL NORM.DIST NORM.INV NORM.S.DIST NORM.S.INV T.DIST T.INV T.TEST CHISQ.TEST F.TEST BINOM.DIST "
-    "POISSON.DIST EXPON.DIST GAMMA.DIST LOGNORM.DIST WEIBULL.DIST CONFIDENCE.NORM CONFIDENCE.T COVARIANCE.S "
-    "COVARIANCE.P TEXTBEFORE TEXTAFTER").split())
+_XLFN = frozenset(["CONCAT", "TEXTJOIN", "IFS", "SWITCH", "MAXIFS", "MINIFS", "XLOOKUP", "XMATCH", "IFNA", "DAYS", "ISOWEEKNUM", "XOR", "NUMBERVALUE", "FORMULATEXT", "ISFORMULA", "SHEET", "SHEETS", "UNICHAR", "UNICODE", "ARABIC", "BASE", "DECIMAL", "AGGREGATE", "CEILING.MATH", "FLOOR.MATH", "CEILING.PRECISE", "FLOOR.PRECISE", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P", "PERCENTILE.INC", "PERCENTILE.EXC", "QUARTILE.INC", "QUARTILE.EXC", "RANK.EQ", "RANK.AVG", "MODE.SNGL", "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "T.DIST", "T.INV", "T.TEST", "CHISQ.TEST", "F.TEST", "BINOM.DIST", "POISSON.DIST", "EXPON.DIST", "GAMMA.DIST", "LOGNORM.DIST", "WEIBULL.DIST", "CONFIDENCE.NORM", "CONFIDENCE.T", "COVARIANCE.S", "COVARIANCE.P", "TEXTBEFORE", "TEXTAFTER"])
 # Functions whose result fills several cells; a file written here has none of the metadata that spilling needs.
-_SPILL = frozenset("FILTER SORT SORTBY UNIQUE SEQUENCE RANDARRAY TEXTSPLIT LET LAMBDA VSTACK HSTACK TOCOL TOROW "
-                   "CHOOSECOLS CHOOSEROWS TAKE DROP EXPAND WRAPROWS WRAPCOLS".split())
+_SPILL = frozenset(["FILTER", "SORT", "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY", "TEXTSPLIT", "LET", "LAMBDA", "VSTACK", "HSTACK", "TOCOL", "TOROW", "CHOOSECOLS", "CHOOSEROWS", "TAKE", "DROP", "EXPAND", "WRAPROWS", "WRAPCOLS"])
 _LAST_COLUMN, _LAST_ROW = 16384, 1048576
 
 
@@ -70,7 +63,7 @@ class _Bad(Exception):
 
 class _Typed:
     """A cell's value and what kind of value it is, with how it was written (decimals, separators, unit)."""
-    __slots__ = ("value", "kind", "decimals", "grouped", "unit")
+    __slots__ = ("decimals", "grouped", "kind", "unit", "value")
 
     def __init__(self, value, kind: str, decimals: int = 0, grouped: bool = False, unit: str = "") -> None:
         self.value, self.kind, self.decimals, self.grouped, self.unit = value, kind, decimals, grouped, unit

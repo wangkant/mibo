@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mibo import person, profile  # noqa: E402
+from mibo import person, profile
 
 TZ = timezone(timedelta(hours=-8))
 # Estimated tokens (context.text_tokens): about what the memory block is left at a 64k window (prompt.py).

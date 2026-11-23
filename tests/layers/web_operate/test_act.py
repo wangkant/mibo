@@ -264,7 +264,7 @@ def test_work_asked_for_in_the_browser_comes_with_the_page_in_front(app, pages):
 def test_a_left_question_is_answered_by_the_next_message_typed_beside_the_page(app, typed, yes):
     # Read by cardwait.said_yes from their words alone, with no model call; the message is then a turn like any other.
     from mibo.panels.browser import Operating
-    pane = SimpleNamespace(op=None, op_kept=lambda yes: None, tabs=lambda: [])
+    pane = SimpleNamespace(op=None, op_kept=lambda yes: None, tabs=list)
     run = Operating(SimpleNamespace(pane=pane, attended=lambda: True), app.home / "runtime" / "desktop", app)
     run.left = {"id": "c1", "kind": "comment", "act": ("card", "comment"), "said": "回复阿杰"}  # copy: voice
     app.app.state.window, app.app.state.operating = SimpleNamespace(pane=pane), run

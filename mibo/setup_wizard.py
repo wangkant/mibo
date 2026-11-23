@@ -17,9 +17,9 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from mibo.endpoints import chat_completions_url as completions_url
 from mibo import home as homes
 from mibo import langs
+from mibo.endpoints import chat_completions_url as completions_url
 from mibo.prompts import render_persona_template
 from mibo.storage import atomic_write_text, dated_copy
 from mibo.storage import replace as _replace

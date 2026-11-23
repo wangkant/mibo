@@ -9,8 +9,9 @@ a false hit can only refuse a change."""
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import datetime, timedelta, tzinfo
-from typing import Iterable, NamedTuple, Optional
+from typing import NamedTuple
 
 from .ranking import day_label
 
@@ -246,7 +247,7 @@ def has_negation(text: str) -> bool:
     return bool(NEGATION.search(str(text or "")))
 
 
-def _number(raw: str) -> Optional[int]:
+def _number(raw: str) -> int | None:
     raw = raw.strip().lower()
     if raw.isdigit():
         return int(raw)
@@ -263,14 +264,14 @@ def _number(raw: str) -> Optional[int]:
     return None
 
 
-def _weekday(lang: str, word: str) -> Optional[int]:
+def _weekday(lang: str, word: str) -> int | None:
     for i, alts in enumerate(_WEEKDAYS.get(lang, ())):
         if re.fullmatch(alts, word, re.IGNORECASE):
             return i
     return None
 
 
-def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> Optional[tuple[datetime, datetime]]:
+def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> tuple[datetime, datetime] | None:
     day0 = now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
     day = timedelta(days=1)
     monday = day0 - timedelta(days=day0.weekday())
@@ -323,8 +324,8 @@ def _range(kind: str, m: re.Match, lang: str, now_dt: datetime) -> Optional[tupl
     return None
 
 
-def resolve(text: str, now: float, tz: Optional[tzinfo] = None,
-            langs: Optional[Iterable[str]] = None) -> Optional[Range]:
+def resolve(text: str, now: float, tz: tzinfo | None = None,
+            langs: Iterable[str] | None = None) -> Range | None:
     """(start, end) epoch seconds of the first time words in `text`, read in
     `langs` first and then in every language; None when there are none.
     Days are local to `tz` (the system's when None)."""
@@ -346,7 +347,7 @@ def resolve(text: str, now: float, tz: Optional[tzinfo] = None,
     return None
 
 
-def phrase(span: Range, lang: str = "en", tz: Optional[tzinfo] = None) -> str:
+def phrase(span: Range, lang: str = "en", tz: tzinfo | None = None) -> str:
     """The range in the prompt's internal English: "Mon 3 Nov" or
     "Mon 3 Nov to Sun 9 Nov"."""
     start, end = span
@@ -395,21 +396,21 @@ def _alts(words) -> str:
     return "(" + "|".join(words) + ")"
 
 
-def _month_of(lang: str, word: str) -> Optional[int]:
+def _month_of(lang: str, word: str) -> int | None:
     for i, alts in enumerate(_MONTHS.get(lang, ()), 1):
         if re.fullmatch(alts, word, re.IGNORECASE):
             return i
     return None
 
 
-def _ahead_weekday(lang: str, word: str) -> Optional[int]:
+def _ahead_weekday(lang: str, word: str) -> int | None:
     for i, alts in enumerate(_AHEAD_WEEKDAYS.get(lang, ())):
         if re.fullmatch(alts, word, re.IGNORECASE):
             return i
     return None
 
 
-def _int(raw: str) -> Optional[int]:
+def _int(raw: str) -> int | None:
     """1 to 99 in digits, in Chinese numerals ("十五", "二十三") or in words."""
     raw = (raw or "").strip().lower()
     if raw.isdigit():
@@ -435,35 +436,35 @@ def _month_start(today, months_ahead: int):
     return today.replace(year=y + (m - 1) // 12, month=(m - 1) % 12 + 1, day=1)
 
 
-def _day(d) -> Optional["Due"]:
+def _day(d) -> Due | None:
     return Due(d.isoformat(), "exact") if d else None
 
 
-def _span(a, b, kind: str = "range") -> "Due":
+def _span(a, b, kind: str = "range") -> Due:
     return Due(a.isoformat(), kind, b.isoformat())
 
 
-def _week_day(today, wd: Optional[int], weeks: int):
+def _week_day(today, wd: int | None, weeks: int):
     """Weekday `wd` (Monday 0) of the week `weeks` after this one."""
     if wd is None:
         return None
     return today - timedelta(days=today.weekday()) + timedelta(days=7 * weeks + wd)
 
 
-def _next_weekday(today, wd: Optional[int]):
+def _next_weekday(today, wd: int | None):
     """The next `wd` after today: said on a Monday, "Monday" is a week on."""
     if wd is None:
         return None
     return today + timedelta(days=(wd - today.weekday()) % 7 or 7)
 
 
-def _this_weekday(today, wd: Optional[int]):
+def _this_weekday(today, wd: int | None):
     """`wd` of this week, or of the next once it has gone by."""
     d = _week_day(today, wd, 0)
     return d if d is None or d >= today else d + timedelta(days=7)
 
 
-def _dated(today, month: Optional[int], day: Optional[int]):
+def _dated(today, month: int | None, day: int | None):
     """That day this year, or next year once it has gone by."""
     if not month or not day:
         return None
@@ -474,7 +475,7 @@ def _dated(today, month: Optional[int], day: Optional[int]):
         return None
 
 
-def _nth(today, day: Optional[int]):
+def _nth(today, day: int | None):
     """The next `day`-th of a month, this month's while it is still ahead."""
     if not day or not 1 <= day <= 31:
         return None
@@ -488,7 +489,7 @@ def _nth(today, day: Optional[int]):
 _PARTS = {"early": (1, 7), "mid": (11, 20), "late": (21, 31)}
 
 
-def _part(today, month: Optional[int], part: str, *, roll: bool = True):
+def _part(today, month: int | None, part: str, *, roll: bool = True):
     """Early, mid or late in `month`: this year's, or next year's once over."""
     if not month or not 1 <= month <= 12:
         return None
@@ -499,11 +500,11 @@ def _part(today, month: Optional[int], part: str, *, roll: bool = True):
     return _span(start.replace(day=a), start.replace(day=min(b, _end_of_month(start).day)), "approx")
 
 
-def _part_ahead(today, part: str, months_ahead: Optional[int] = None):
+def _part_ahead(today, part: str, months_ahead: int | None = None):
     """Early/mid/late in a month said without its name: "月初" said late in
     a month is the next one's start."""
     if months_ahead is None:
-        months_ahead = int(part == "early" and today.day > 7 or part == "mid" and today.day > 20)
+        months_ahead = int((part == "early" and today.day > 7) or (part == "mid" and today.day > 20))
     start = _month_start(today, months_ahead)
     return _part(start, start.month, part, roll=False)
 
@@ -525,7 +526,7 @@ def _month(today, months_ahead: int):
     return _span(start, _end_of_month(start))
 
 
-def _in_days(today, n: Optional[int]):
+def _in_days(today, n: int | None):
     return _day(today + timedelta(days=n)) if n and 0 < n <= 400 else None
 
 
@@ -533,7 +534,7 @@ def _few_days(today):
     return _span(today + timedelta(days=2), today + timedelta(days=5), "approx")
 
 
-def _in_weeks(today, n: Optional[int]):
+def _in_weeks(today, n: int | None):
     """"两周后": about n weeks on, three days either way."""
     if not n or not 0 < n <= 52:
         return None
@@ -541,13 +542,13 @@ def _in_weeks(today, n: Optional[int]):
     return _span(mid - timedelta(days=3), mid + timedelta(days=3), "approx")
 
 
-def _next_year_month(today, month: Optional[int]):
+def _next_year_month(today, month: int | None):
     if not month or not 1 <= month <= 12:
         return None
     return _month(today.replace(year=today.year + 1, month=month, day=1), 0)
 
 
-def _in_next_month(today, day: Optional[int]):
+def _in_next_month(today, day: int | None):
     start = _month_start(today, 1)
     return _day(start.replace(day=day)) if day and 1 <= day <= _end_of_month(start).day else None
 
@@ -778,8 +779,8 @@ AHEAD: dict[str, list[tuple[re.Pattern, object]]] = {
     for lang, rules in _AHEAD.items()}
 
 
-def resolve_future(text: str, said_at: float, tz: Optional[tzinfo] = None,
-                   langs: Optional[Iterable[str]] = None) -> Optional[Due]:
+def resolve_future(text: str, said_at: float, tz: tzinfo | None = None,
+                   langs: Iterable[str] | None = None) -> Due | None:
     """When the time words in `text` fall, counted from `said_at` (epoch
     seconds) in `tz`: the first words read in `langs` first and then in every
     language; None when there are none. "下周三" said on Monday 23 Nov is

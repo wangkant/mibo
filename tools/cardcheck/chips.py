@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mibo import recommend  # noqa: E402
-from mibo.library import Library  # noqa: E402
-from mibo.panels import feed  # noqa: E402
+from mibo import recommend
+from mibo.library import Library
+from mibo.panels import feed
 
 
 def main() -> None:

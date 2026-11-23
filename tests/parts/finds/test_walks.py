@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from roam_standin import Recorder, Site
 
 from mibo import installed_browser as web
 from mibo import profile, today
@@ -17,8 +18,6 @@ from mibo.library import PICTURE_MAX_BYTES, Library
 from mibo.settings import AgentSettings
 from mibo.textproc import _WEB_DESC_CLOSE
 from mibo.web import sites
-
-from roam_standin import Recorder, Site
 
 try:
     import playwright  # noqa: F401
@@ -165,8 +164,9 @@ def test_the_model_answer_is_parsed_row_by_row():
 def test_a_small_cover_is_made_and_a_huge_one_skipped():
     from roam_standin import picture
     made = roam_mod.small_picture(picture(1600, 900))
-    from PIL import Image
     import io
+
+    from PIL import Image
     with Image.open(io.BytesIO(made)) as shown:
         assert shown.size == (480, 270)
     assert 0 < len(made) <= PICTURE_MAX_BYTES

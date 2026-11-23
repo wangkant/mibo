@@ -13,6 +13,7 @@ from pathlib import Path
 from harness.app import KEY, App, quiet_start
 from harness.model import MODEL, fail, say, text
 from harness.turn import run_turn
+
 from mibo import review
 
 VERDICT = {"kind_asked": True, "target_named": True, "text_given": True, "nothing_added": True, "decision": "go",

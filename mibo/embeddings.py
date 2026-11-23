@@ -12,7 +12,6 @@ import sys
 from array import array
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
 
 from . import db
 
@@ -81,7 +80,7 @@ class EmbeddingCache:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.db = db.at(self.path)
-        self._model: Optional[str] = None
+        self._model: str | None = None
         self._stored: dict[str, array] = {}
         self._queries: OrderedDict[str, array] = OrderedDict()
 
@@ -93,7 +92,7 @@ class EmbeddingCache:
         self._stored = {key: _vector(blob) for key, blob in self.db.read(
             "SELECT key, vec FROM embeddings WHERE model = ?", (model,))}
 
-    def get(self, model: str, key: str) -> Optional[array]:
+    def get(self, model: str, key: str) -> array | None:
         self._load(model)
         vec = self._stored.get(key)
         return self._queries.get(key) if vec is None else vec

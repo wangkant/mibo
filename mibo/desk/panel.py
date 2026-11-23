@@ -26,11 +26,10 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
-
-from types import SimpleNamespace
 
 from ..cardwait import Card
 from . import grants as g

@@ -14,9 +14,9 @@ import textwrap
 import time
 
 import pytest
-
 from harness import attacks
 from harness.model import call, say, text
+
 from mibo import mcp_tools, review
 
 ROWS = [row for row in attacks.load("asked") if row.values[0]["area"] == "mcp"]

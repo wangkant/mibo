@@ -660,7 +660,7 @@ def mount(app, workspace, body) -> None:
         payload = await body(request)
         key = payload.get("site")
         if (not isinstance(key, str) or not key or len(key) > 300
-                or not ("feed" in payload and isinstance(payload["feed"], bool)
+                or not (("feed" in payload and isinstance(payload["feed"], bool))
                         or payload.get("forget") == "all")):
             raise ValueError("browse_invalid")
         return {"sites": await asyncio.to_thread(change_site, key, payload)}

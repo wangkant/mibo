@@ -10,8 +10,8 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
 from harness.model import call, say, text
+
 from mibo import acting, browsed, crossing, life, review, schedule_tool
 from mibo.cardwait import COSTLY
 from mibo.panels.schedule import Board

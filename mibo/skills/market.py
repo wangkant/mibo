@@ -25,9 +25,9 @@ from functools import cache
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-from . import store
 from .. import reach
 from ..storage import atomic_write_text
+from . import store
 
 logger = logging.getLogger("mibo.skills")
 

@@ -9,8 +9,8 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
 from harness.model import call, say, text
+
 from mibo import browsed, catalog, schedule_tool
 from mibo.turns import current_turn
 from mibo.web import inbox, signin

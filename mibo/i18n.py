@@ -20,7 +20,7 @@ LOCALES = Path(__file__).with_name("locales")
 _SLOT = re.compile(r"\{(\w+)\}")
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def catalog(lang: str) -> dict:
     path = LOCALES / f"{lang}.json"
     return json.loads(path.read_text(encoding="utf-8")) if lang in CODES and path.is_file() else {}
@@ -89,10 +89,10 @@ def words(ns: str, lang: str) -> dict:
 def lang(values: dict | None = None) -> str:
     """The interface's language: UI_LANG, else the character's (AGENT_LANG), else the system's. `values` are the
     home's settings; without them this process's environment over the home's settings, as a start reads them."""
+    from . import settingsfile
     from .home import find_home
     from .langs import normalize
     from .setup_wizard import detect_lang
-    from . import settingsfile
 
     if values is None:
         values = {**settingsfile.values(find_home(), keys=False), **os.environ}

@@ -17,8 +17,8 @@ import socket
 import sys
 import threading
 import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Callable, Iterator
 from urllib.parse import urlsplit, urlunsplit
 
 from . import browsed, petchat, petoff, petshot, quiet
@@ -503,9 +503,14 @@ def _menu_look(scale: float):
     import clr
     from System.Drawing import ColorTranslator, Pen, Rectangle, SolidBrush
     from System.Drawing.Drawing2D import GraphicsPath, SmoothingMode
-    from System.Windows.Forms import (ToolStripArrowRenderEventArgs, ToolStripItemImageRenderEventArgs,
-                                      ToolStripItemRenderEventArgs, ToolStripProfessionalRenderer,
-                                      ToolStripRenderEventArgs, ToolStripSeparatorRenderEventArgs)
+    from System.Windows.Forms import (
+        ToolStripArrowRenderEventArgs,
+        ToolStripItemImageRenderEventArgs,
+        ToolStripItemRenderEventArgs,
+        ToolStripProfessionalRenderer,
+        ToolStripRenderEventArgs,
+        ToolStripSeparatorRenderEventArgs,
+    )
 
     # pythonnet overrides a protected method only when told its .NET signature.
     def override(kind):
@@ -600,7 +605,7 @@ def _menu_look(scale: float):
 class _PetApi:
     """What the pet's page may ask of its window."""
 
-    def __init__(self, owner: "AppWindow"):
+    def __init__(self, owner: AppWindow):
         self._owner = owner
 
     def open(self) -> None:
@@ -702,9 +707,9 @@ class AppWindow:
     wherever the window goes."""
 
     def __init__(self, url: str, *, storage: Path, background: Callable[[], bool] = lambda: False,
-                 words: Callable[[], dict] = lambda: {}, start_hidden: bool = False,
+                 words: Callable[[], dict] = dict, start_hidden: bool = False,
                  pet: bool = False, figure: Callable[[], str] = lambda: "",
-                 figures: Callable[[], list[tuple[str, str]]] = lambda: [],
+                 figures: Callable[[], list[tuple[str, str]]] = list,
                  choose: Callable[[str], object] = lambda key: None,
                  links: Callable[[], str] = lambda: "app", find: Callable[[str], str] = lambda address: "",
                  address: Callable[[str], str] = lambda ident: ""):
@@ -1727,7 +1732,7 @@ class AppWindow:
         bottom = form.Bottom
         grow = bool(width and height and self._pose == "standing")
         if not grow and not self._card:
-            return
+            return None
         if grow and self._card and (form.Width, form.Height) == (max(wide, int(width * scale)), max(high, int(height * scale))):
             # Something else in a card as big: only where the window takes the pointer changes.
             return self._shape()
@@ -1742,7 +1747,7 @@ class AppWindow:
             form.SetBounds(left, bottom - high, wide, high)
         self._shape()
         if self._hushed:
-            return
+            return None
         if grow:
             # Shown at once, it would show the page as it was drawn in the smaller
             # window, the figure out of place and cut by the new shape, for a few frames.

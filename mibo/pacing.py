@@ -164,7 +164,7 @@ def decide(pace: dict, seen: dict, now: float, watch: bool) -> tuple[bool, str]:
     fewer = " (fewer)" if slow > 1 else ""
     if hushed(pace["quiet"], now):
         return False, "quiet hours"
-    if seen["quiet"] or watch and seen["video"]:
+    if seen["quiet"] or (watch and seen["video"]):
         return False, "quiet"
     if kind in NEVER:
         return False, kind
@@ -270,7 +270,7 @@ class Pacer:
                 now - quiet.typed_ago())
             rows = self._rows(now)
             if now < self.snoozed:
-                return {surface: (False, "snoozed") for surface in SURFACES}
+                return dict.fromkeys(SURFACES, (False, "snoozed"))
             return {surface: decide(view(rows, surface, **wanted), self.seen, now, watch) for surface in SURFACES}
 
     def snooze(self, on: bool) -> float:

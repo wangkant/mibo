@@ -29,11 +29,11 @@ import html
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable
 
-from ..textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source
 from ..cardwait import WAIT_S as CARD_S
+from ..textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source
 
 logger = logging.getLogger("mibo.desk")
 

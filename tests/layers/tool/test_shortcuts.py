@@ -63,7 +63,7 @@ def test_the_launcher_takes_the_shortcut_resolve_found_by_its_path(desktop, tmp_
     from mibo.desk import names, win32
     monkeypatch.setattr(resolve, "profile_folders", lambda: {"desktop": str(desktop)})
     monkeypatch.setattr(win32, "link_reader", lambda: lambda path: r"C:\stand-in\wscript.exe")
-    monkeypatch.setattr(names, "open_windows", lambda: [])
+    monkeypatch.setattr(names, "open_windows", list)
     found = names.find(str(desktop / "grok bot.lnk"))
     assert found.app is not None and found.app.file == str(desktop / "grok bot.lnk") and found.app.name == "grok bot"
     (tmp_path / "other.lnk").write_bytes(b"")

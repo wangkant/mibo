@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Iterable
+from collections.abc import Iterable
 
 _CJK = ("⺀-⿟぀-ヿ㄀-ㇿ㐀-䶿一-鿿"
         "가-힯豈-﫿ｦ-ﾟ")

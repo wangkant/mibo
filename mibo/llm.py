@@ -14,8 +14,14 @@ from urllib.parse import urlsplit
 import openai
 
 from . import abilities, context, modelcatalog, schedule_tool, spend, transport
-from .endpoints import (PROBLEMS, adapt_rejected_payload, chat_completions_url, endpoint_for,
-                        model_problem, without_pictures)
+from .endpoints import (
+    PROBLEMS,
+    adapt_rejected_payload,
+    chat_completions_url,
+    endpoint_for,
+    model_problem,
+    without_pictures,
+)
 from .usage import USAGE_FILE, UsageBook
 
 logger = logging.getLogger("agent")

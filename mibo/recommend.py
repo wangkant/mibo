@@ -33,7 +33,6 @@ import random
 import re
 import time
 from collections import Counter
-from typing import Optional
 
 from . import drafting, i18n, life, profile, quiet, subjects
 from .library import DISMISSED, Item, Library
@@ -170,7 +169,7 @@ def grounds(runtime, topics: list[str], rows: list, now: float, lang: str) -> di
 
 
 def prompt(runtime, name: str, persona: str, lang: str, topics: list[str], rows: list, now: float,
-           found: Optional[dict] = None) -> tuple[str, str]:
+           found: dict | None = None) -> tuple[str, str]:
     """`found` is `grounds` of these rows when the caller keeps it to check the answer against."""
     found = grounds(runtime, topics, rows, now, lang) if found is None else found
     # How they asked to be treated goes after the format: their words are theirs, braces and all.
@@ -225,7 +224,7 @@ def backed(source, chosen: str, found: dict) -> bool:
                                            for title in found.get("", ()))
 
 
-def parse(answer: str, rows: list, lang: str, found: Optional[dict] = None) -> Optional[tuple[dict, Item, str]]:
+def parse(answer: str, rows: list, lang: str, found: dict | None = None) -> tuple[dict, Item, str] | None:
     """The candidate the answer named, with its sentence; None when the answer is not that. The tie is
     kept when `found` (`grounds`) backs what it says it rests on and both fit the line's length."""
     value = salvage_json_object(strip_json_fences(str(answer or "")))
@@ -376,7 +375,7 @@ class Why:
 SAID_MAX = 160
 
 
-def _took(before: dict, ident: str, term: str) -> Optional[dict]:
+def _took(before: dict, ident: str, term: str) -> dict | None:
     """The latest earlier find the person liked, opened or played that shares `term` (a subject, or where it
     came from), as {"from", "how"}; None when there is none."""
     family, _, rest = term.partition(":")
@@ -393,7 +392,7 @@ def _took(before: dict, ident: str, term: str) -> Optional[dict]:
     return {"from": found[0], "how": "like" if found[1]["like"] else "play" if found[1]["play"] > 0 else "open"}
 
 
-def facts(item: Item, snap: Optional[dict], slot: str, surface: str, term: str, line: str, before: dict) -> dict:
+def facts(item: Item, snap: dict | None, slot: str, surface: str, term: str, line: str, before: dict) -> dict:
     """What a showing's reason rests on, kept with its "seen" event so the list can say it later (`Why.told`).
     `snap` is the thing as the ranking read it then, `slot` and `term` how the ranking served it (taste.Ranker),
     `line` the character's sentence when it brought it, and `before` the person's history until then
@@ -458,7 +457,7 @@ def size(item: Item, shaped: dict) -> str:
     return f"{length} text" if length else ""
 
 
-def _did(mark: Optional[dict]) -> str:
+def _did(mark: dict | None) -> str:
     if not mark:
         return "no reaction yet"
     if mark["like"]:
@@ -587,8 +586,8 @@ class Chooser:
     def __init__(self, workspace):
         self.ws = workspace
         # {"at", "shaped", "item"}, until shown or stale.
-        self.choice: Optional[dict] = None
-        self._task: Optional[asyncio.Task] = None
+        self.choice: dict | None = None
+        self._task: asyncio.Task | None = None
         # The surfaces that asked while it was being made, told when it is ready.
         self._asked: set[str] = set()
         self._empty_at = -EMPTY_S
@@ -598,8 +597,8 @@ class Chooser:
         self._taken = ""
         # The thing that went out before its sentence was written (`take` with `now`), as it was handed out,
         # and the call writing it.
-        self._late: Optional[dict] = None
-        self._writing: Optional[asyncio.Task] = None
+        self._late: dict | None = None
+        self._writing: asyncio.Task | None = None
 
     def _here(self) -> set[str]:
         return {m["card"]["id"] for m in self.ws._main.shared()} | {self._taken}
@@ -645,7 +644,7 @@ class Chooser:
         if (self._task is None or self._task.done()) and time.monotonic() - self._empty_at >= EMPTY_S:
             self._task = asyncio.create_task(self._choose())
 
-    async def take(self, surface: str, now: bool = False) -> Optional[tuple[dict, Item]]:
+    async def take(self, surface: str, now: bool = False) -> tuple[dict, Item] | None:
         """The choice when one waits that no surface has shown. Else, with `now` (the person asked for one),
         the ranking's first as soon as its picture is there, its sentence written after it (`line`); otherwise None, and one is
         chosen in the background, `surface` told when it is ready (the card through `news`, the chat by the
@@ -733,7 +732,7 @@ class Chooser:
         if not seen["rows"]:
             self._asked.clear()
             self._empty_at = time.monotonic()
-            return
+            return None
         shaped, item, line = await self._pick(seen, seen["rows"])
         await self._cover(seen, shaped, item)
         choice ={"at": life.clock(), "shaped": await asyncio.to_thread(self._dress, seen, shaped, item, line),

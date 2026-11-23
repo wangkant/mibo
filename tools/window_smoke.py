@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from package_smoke import _SCRUBBED_PREFIXES, REPLY, FakeModel  # noqa: E402
+from package_smoke import _SCRUBBED_PREFIXES, REPLY, FakeModel
 
 # A window that never opens must not hold a CI job until its own timeout.
 LIMIT_S = 300

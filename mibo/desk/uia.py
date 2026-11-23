@@ -38,7 +38,7 @@ import io
 import os
 import re
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from ..web.pageops import SECRET_LABEL, STATE_MAX, clip, quote, well_formed
 from ..web.pageops import norm as _norm
@@ -233,8 +233,25 @@ def _cache():
 
 class Node:
     """What one look read of one element, and the live element to act on."""
-    __slots__ = ("el", "role", "name", "auto", "cls", "pid", "enabled", "focused", "secret", "rect", "hwnd",
-                 "patterns", "readonly", "top", "parent", "cells", "where")
+    __slots__ = (
+        "auto",
+        "cells",
+        "cls",
+        "el",
+        "enabled",
+        "focused",
+        "hwnd",
+        "name",
+        "parent",
+        "patterns",
+        "pid",
+        "readonly",
+        "rect",
+        "role",
+        "secret",
+        "top",
+        "where",
+    )
 
     def __init__(self, **kw):
         self.where = ""
@@ -569,7 +586,7 @@ class View:
                 continue
             title = win32.title_of(h)
             if i:
-                lines.append(f"--- window {quote(clip(title, 80))} ({win32.class_of(h) == '#32768' and 'menu' or 'dialog'}) ---")
+                lines.append(f"--- window {quote(clip(title, 80))} ({(win32.class_of(h) == '#32768' and 'menu') or 'dialog'}) ---")
             for child in root.CachedChildren:
                 read(child, h, title.lower(), None)
         self.named = len(small)

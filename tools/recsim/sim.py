@@ -32,12 +32,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from mibo import life, pacing, person as person_rows, profile, recommend, settingsfile, situation, taste  # noqa: E402
+from llm import env_values  # noqa: E402
+from people import DAY, OFFERED, PEOPLE, WORK, Person, activity, top  # noqa: E402
+from people2 import FRESH, Fresh  # noqa: E402
+
+from mibo import life, pacing, profile, recommend, settingsfile, situation, taste  # noqa: E402
+from mibo import person as person_rows
 from mibo.library import Item, Library  # noqa: E402
 from mibo.panels import feed  # noqa: E402
-from llm import env_values  # noqa: E402
-from people import DAY, PEOPLE, OFFERED, WORK, Person, activity, top  # noqa: E402
-from people2 import FRESH, Fresh  # noqa: E402
 
 # The builders' twelve and the twelve written to prove them (people2.py).
 EVERYONE = PEOPLE + FRESH

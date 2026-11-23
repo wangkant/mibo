@@ -141,7 +141,7 @@ class UsageBook:
 
 def _total(rows) -> dict:
     out = {"calls": 0, "tokens": 0, "cost": None, "costed": 0,
-           **{name: 0 for name in TOKENS}}
+           **dict.fromkeys(TOKENS, 0)}
     for row in rows:
         out["calls"] += int(_count(row.get("calls")))
         for name in TOKENS:

@@ -10,9 +10,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from mibo import settingsfile
 from mibo import setup_wizard as sw
 from mibo.panels import models as model_panel
-from mibo import settingsfile
 
 KEY = "sk-or-v1-standin-0123456789abcdef"
 

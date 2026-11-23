@@ -14,11 +14,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 from keyring.errors import KeyringError
 
-from . import lookup_need
-from . import paths
-from . import schedule_tool
-from . import secretstore
-from . import today
+from . import lookup_need, paths, schedule_tool, secretstore, today
 from .textproc import (
     _fence_search_results,
 )
@@ -156,7 +152,6 @@ TOOLS = [
 ]
 # Connecting a site they name: its sign-in in the app's browser, as the Connections page's 登录 (web/connect.py).
 from .web import connect as _connect  # noqa: E402
-
 
 # Search rows one call hands the model. A page's words go through web/pagetext.py: whole when they fit the reply
 # model's room, else its outline and the lines that match.

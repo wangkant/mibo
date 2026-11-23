@@ -17,9 +17,9 @@ import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Iterator, Optional
 
 logger = logging.getLogger("agent.db")
 
@@ -181,7 +181,7 @@ def snapshot(runtime: Path, target: Path) -> bool:
     return True
 
 
-def take_back(runtime: Path, archived: Optional[Path]) -> None:
+def take_back(runtime: Path, archived: Path | None) -> None:
     """A restore: what a backup carries, from the database `archived` (None: an archive with none), in place of
     the runtime's own; the chat record stays as it is."""
     db = at(runtime)
@@ -358,7 +358,7 @@ def _read_finds(runtime: Path, moving: dict[Path, Path]) -> tuple[dict[str, list
     by_name = {path.relative_to(runtime).as_posix(): (path, now) for path, now in moving.items()}
     known = {f.name for f in fields(library.Item)}
 
-    def whole(name: str) -> Optional[dict]:
+    def whole(name: str) -> dict | None:
         path, now = by_name[name]
         try:
             saved = json.loads(now.read_text(encoding="utf-8"))
@@ -382,7 +382,7 @@ def _read_finds(runtime: Path, moving: dict[Path, Path]) -> tuple[dict[str, list
         # An event of five, from before events kept the model's snapshot, gets an empty one.
         rows["feed_events"] = [(None, *e[:5], json.dumps(e[5] if len(e) == 6 else {}, ensure_ascii=False))
                                for e in events if isinstance(e, list)
-                               and (len(e) == 5 or len(e) == 6 and isinstance(e[5], dict))]
+                               and (len(e) == 5 or (len(e) == 6 and isinstance(e[5], dict)))]
         topics = saved.get("topics") if isinstance(saved.get("topics"), list) else []
         rows["feed_topics"] = [(None, t) for t in topics if isinstance(t, str)]
     if "shown.jsonl" in by_name:

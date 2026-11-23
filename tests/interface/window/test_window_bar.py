@@ -5,6 +5,7 @@ from __future__ import annotations
 import types
 
 from harness.app import TOKEN
+
 from mibo import welcome
 from mibo.panels import runtime
 

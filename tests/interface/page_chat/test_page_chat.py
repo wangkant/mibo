@@ -6,10 +6,9 @@ from __future__ import annotations
 import base64
 
 import pytest
-
 from harness.app import TOKEN
-from mibo import welcome
-from mibo import settingsfile
+
+from mibo import settingsfile, welcome
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 # The smallest PNG: one transparent pixel.

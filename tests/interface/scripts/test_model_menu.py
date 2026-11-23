@@ -3,7 +3,6 @@ level the next reply is asked to think at."""
 from __future__ import annotations
 
 import pytest
-
 from harness.model import say
 from harness.page import measured
 

@@ -8,6 +8,7 @@ import gzip
 import threading
 
 from harness.model import say
+
 from mibo.ingestion import ContentIngestion
 
 

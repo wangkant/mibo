@@ -43,7 +43,6 @@ from mibo.web import gate, operate  # noqa: E402
 from mibo.web.tabs import PlaywrightTab  # noqa: E402
 
 
-
 def ident(page: str, pattern: str) -> int:
     """The id the pattern's first group finds in the page's lines."""
     return int(re.search(pattern, page).group(1))

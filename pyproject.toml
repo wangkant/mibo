@@ -108,7 +108,8 @@ app = ["pywebview>=6,<7; sys_platform != 'linux'", "pywebview[qt]>=6,<7; sys_pla
 # no browser is downloaded.
 web = ["playwright>=1.49,<2"]
 # What CI installs on top of the runtime dependencies.
-dev = ["pytest>=8,<10", "ruff>=0.6,<1", "playwright>=1.49,<2"]
+# ruff is pinned: a newer one may format or lint differently, and CI checks both.
+dev = ["pytest>=8,<10", "pytest-xdist>=3.6,<4", "ruff==0.16.8", "playwright>=1.49,<2"]
 
 [project.scripts]
 mibo = "mibo.cli:main"
@@ -137,6 +138,23 @@ dev-mode-dirs = ["."]
 
 [tool.hatch.build.targets.wheel.sources]
 "data" = "mibo/_bundled/data"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PERF", "PIE", "RET", "RUF"]
+ignore = [
+    # The formatter wraps code; a long string or comment stays as written.
+    "E501",
+    # Interface text is written in ten languages: their punctuation is meant.
+    "RUF001", "RUF002", "RUF003",
+    # zip() over lists of one length by construction.
+    "B905",
+    # A loop that survives one bad item needs its try inside.
+    "PERF203",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

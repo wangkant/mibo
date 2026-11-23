@@ -6,6 +6,7 @@ import time
 import types
 
 from harness.app import TOKEN
+
 from mibo import updates, usage, welcome
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}

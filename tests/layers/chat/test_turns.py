@@ -10,10 +10,10 @@ import time
 from pathlib import Path
 
 import pytest
-
 from harness.app import App, quiet_start
 from harness.model import call, fail, say, think
 from harness.turn import run_turn
+
 from mibo import abilities, decision, dm, loop, schedule_tool, turnctx
 from mibo.endpoints import chat_completions_url
 from mibo.prompts import PersonaStyle, dm_style_guide

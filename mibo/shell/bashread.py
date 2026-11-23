@@ -649,7 +649,7 @@ class Sorter:
                 elif child.is_named or child.type == "&":
                     self.statement(child)
                 # A cd that may fail leaves what follows in either folder; only `cd x && ...` is sure of x.
-                if self.cwd not in (before, None) and kind != "list" and not os.path.isdir(self.cwd) or (
+                if (self.cwd not in (before, None) and kind != "list" and not os.path.isdir(self.cwd)) or (
                         either and self.cwd != before):
                     self.cwd = None
             if kind == "subshell":
@@ -984,7 +984,7 @@ class Sorter:
             elif text.startswith("-") and len(text) > 1:
                 if low in ("command", "builtin") and text in ("-v", "-V"):
                     return
-                if low == "env" and text in ("-S", "--split-string") or text.startswith("-S"):
+                if (low == "env" and text in ("-S", "--split-string")) or text.startswith("-S"):
                     self.add("hidden", "hidden", "env -S splits a string into a command")
                     return
                 take = re.fullmatch(r"-[A-Za-z]+", text) is not None and text[-1] in WRAPPERS[low]

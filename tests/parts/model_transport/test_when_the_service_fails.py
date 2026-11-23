@@ -10,10 +10,10 @@ import time
 from pathlib import Path
 
 import pytest
-
 from harness.app import KEY, App, quiet_start
 from harness.model import drop, error_in_200, fail, hang, say
 from harness.turn import run_turn
+
 from mibo import transport
 
 RATE_LIMITED = {"error": {"message": "Rate limit reached for requests", "type": "rate_limit_error"}}

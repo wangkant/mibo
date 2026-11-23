@@ -44,8 +44,8 @@ def _start_check(workspace, url: str, model: str) -> asyncio.Task:
     task = _checks.get(slot)
     if task is None or task.done():
         task = asyncio.create_task(abilities.check(workspace.home, workspace.config()))
-        task.add_done_callback(lambda t: t.cancelled() or t.exception() and logger.warning(
-            "[Agent] ability check failed: %s", type(t.exception()).__name__))
+        task.add_done_callback(lambda t: t.cancelled() or (t.exception() and logger.warning(
+            "[Agent] ability check failed: %s", type(t.exception()).__name__)))
         _checks[slot] = task
     return task
 

@@ -9,11 +9,12 @@ import os
 import sys
 
 import pytest
-
 from harness.folders import Profile
 from harness.model import call, say
+
 from mibo import acting
-from mibo.shell import files, read as reading
+from mibo.shell import files
+from mibo.shell import read as reading
 from mibo.shell.grants import Grants, norm
 
 ASKED = "Write a short note called plan.txt there"  # copy: voice

@@ -150,9 +150,8 @@ def scratch_home(model_url: str, lang: str = "zh", **settings) -> Path:
 def run_tool(suite: Suite, feature: str, argv: list[str], name: str, timeout: float = 1200) -> int:
     """One of tools/'s own measuring scripts as it is, its output kept in <out>/<name>.txt; each `PASS  ` or `FAIL  `
     line it prints (tools/window_driver.py's walk log) becomes a check of `feature`. Its exit code."""
-    import subprocess
-
     import re
+    import subprocess
     suite.log("$", " ".join(argv))
     kept = suite.out / f"{name}.txt"
     try:

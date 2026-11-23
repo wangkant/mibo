@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from harness import attacks
 from harness.home import holding, restarted
 from harness.model import call, say
 from harness.turn import run_turn
+
 from mibo import db, person
 
 ROWS = [param.values[0] for param in attacks.load("secrets")]

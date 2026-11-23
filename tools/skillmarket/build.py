@@ -32,10 +32,18 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from mibo.skills import market  # noqa: E402
 from places import place  # noqa: E402
-from mibo.skills.store import (MAX_MEMBER, MAX_MEMBERS, MAX_UNPACKED, NAME, SKILL_FILE,  # noqa: E402
-                                        _front, _member_path)
+
+from mibo.skills import market  # noqa: E402
+from mibo.skills.store import (  # noqa: E402
+    MAX_MEMBER,
+    MAX_MEMBERS,
+    MAX_UNPACKED,
+    NAME,
+    SKILL_FILE,
+    _front,
+    _member_path,
+)
 
 HERE = Path(__file__).resolve().parent
 OUT = ROOT / "data" / "market"

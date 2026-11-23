@@ -198,7 +198,7 @@ def c_months(d, reply, log):
     for name, (y, m) in MONTHS.items():
         folder = found[name].parent
         digits = [int(x) for x in re.findall(r"\d+", folder.name)]
-        if folder == d or y not in digits and str(y)[2:] not in folder.name or not (m in digits or any(
+        if folder == d or (y not in digits and str(y)[2:] not in folder.name) or not (m in digits or any(
                 str(x).endswith(f"{m:02d}") and len(str(x)) == 6 for x in digits)):
             return False, f"{name} is in {folder.name}"
         by_folder.setdefault(folder, set()).add(m)

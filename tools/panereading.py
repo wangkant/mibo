@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from package_smoke import FakeModel  # noqa: E402
+from package_smoke import FakeModel
 
 PAGE = "/t/t41-profile.html"
 ASK = "看看我这个主页上显示的账号数据：昵称、关注数、粉丝数、获赞数"

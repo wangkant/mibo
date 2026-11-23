@@ -7,20 +7,13 @@ import random
 import re
 import sqlite3
 import time
-from typing import Callable, Iterable, Optional
+from collections.abc import Callable, Iterable
 
-from .storage import num as _num
-from . import channels
+from . import channels, chatlangs, chatlog, db, memstate, memstore, person, timewords
+from .addressing import _HAS_CJK, names_regex
 from .channels import PAGE_PLATFORM
 from .context import CHECKPOINT
-from . import chatlangs
-from . import chatlog
-from . import db
-from . import memstate
-from . import memstore
-from . import person
-from . import timewords
-from .addressing import _HAS_CJK, names_regex
+from .storage import num as _num
 from .textproc import _FULL_STOP_RE, _focus_tokens
 
 logger = logging.getLogger("agent")
@@ -293,7 +286,7 @@ class Memory:
             if told is not None:
                 told(channels.dm_user(conv).split(":", 1)[-1], items)
 
-    def _parse_memory_command(self, text: str) -> Optional[tuple[str, str, str]]:
+    def _parse_memory_command(self, text: str) -> tuple[str, str, str] | None:
         """(kind, what follows the keyword, chat language) when `text` is a
         memory command: remember, forget or recall; a forget naming nothing
         ("把刚才那件事忘了") is "forget_that". None for conversation. The
@@ -321,7 +314,7 @@ class Memory:
                 hit = hit or ("recall", "", lang)
         return hit
 
-    def _handle_memory_command(self, conv: str, text: str) -> Optional[str]:
+    def _handle_memory_command(self, conv: str, text: str) -> str | None:
         """Carry out the memory command `text` in the chat `conv`; its answer,
         or None when it is not one."""
         parsed = self._parse_memory_command(text)
@@ -337,7 +330,7 @@ class Memory:
             not row.get("user_id") and row.get("name") == self.persona_name)
 
     def _purge_lines(self, conv: str, hit: Callable[[str], bool],
-                     cut: Optional[Callable[[str], str]] = None) -> int:
+                     cut: Callable[[str], str] | None = None) -> int:
         """Delete matching recent lines of this chat (the DM turns, their copy
         on disk, the log), so no later consolidation reads them again; with
         `cut`, a matching line keeps cut(its words) instead. The chat's
@@ -758,7 +751,7 @@ class Memory:
         self._tell_profile(facts, now)
         return "", kept
 
-    def _person_settings(self, on: Optional[bool], health: Optional[bool]) -> None:
+    def _person_settings(self, on: bool | None, health: bool | None) -> None:
         """Settings › 记忆's two switches. Memory turned on again does not fold what was said while it was off."""
         store = self.person_store
         use = store.data["use"]
@@ -775,7 +768,7 @@ class Memory:
         logger.info("[Agent] person: memory %s, health details %s", "on" if use["on"] else "off",
                     "kept" if use["health"] else "not kept")
 
-    def _person_said(self, item_id: str) -> Optional[list[dict]]:
+    def _person_said(self, item_id: str) -> list[dict] | None:
         """The chat lines a fact or a plan was kept from, as the log still has them; None when the item is gone."""
         row = self.person_store.get(item_id)
         if row is None:
@@ -825,7 +818,7 @@ class Memory:
         logger.info("[Agent] person: %d imported item(s)", len(rows))
         return len(rows)
 
-    def _person_restore(self, tid: str) -> Optional[dict]:
+    def _person_restore(self, tid: str) -> dict | None:
         """Put a replaced or edited fact or plan back from the person's trash;
         a fact reaches the profile again too."""
         now = time.time()
@@ -838,7 +831,7 @@ class Memory:
 
     # ---- the page's own view of the store (dashboard.py) ----------------------
 
-    def _person_forget(self, conv: str, item_id: str, chats: bool = False) -> Optional[dict]:
+    def _person_forget(self, conv: str, item_id: str, chats: bool = False) -> dict | None:
         """Forget one fact or plan from the page's view, with no undo; with
         `chats`, also from the chats as a forget in the chat does. What the
         page marks in its copies ({} for none), or None when the item is
@@ -852,7 +845,7 @@ class Memory:
         self._forget_everywhere(conv, words, texts, time.time(), chats=chats)
         return self.__dict__.get("_page_scrub", {}).pop(conv, {})
 
-    def _person_edit(self, item_id: str, text: str) -> Optional[dict]:
+    def _person_edit(self, item_id: str, text: str) -> dict | None:
         """The person's own words for one fact or plan; the old ones go to
         the trash, to be put back. None when the item or the words fail."""
         text = self._validate_memory_candidate(text, max_chars=person.TEXT_MAX)

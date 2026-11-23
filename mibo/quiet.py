@@ -29,8 +29,8 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .storage import atomic_write_text
 
@@ -86,7 +86,7 @@ _typed = float("-inf")
 _priority = 0
 # The window in front at the last look (Windows), and the hook that looks.
 _front = {"hwnd": 0, "pid": 0, "path": "", "title": "", "signal": ""}
-_hook: "_Hook | None" = None
+_hook: _Hook | None = None
 # Told by the page (the character service): its own looks no longer count.
 _told = False
 # A video full screen in the app's own window (window.py): it counts as any other program's.
@@ -140,7 +140,7 @@ def own_full_screen(on: bool) -> None:
 def _moved() -> None:
     if _told:
         return
-    for fn in list(_front_listeners):
+    for fn in _front_listeners:
         try:
             fn()
         except Exception:
@@ -173,7 +173,7 @@ def _change(quiet: bool, why: str, now: float) -> None:
     else:
         _calm.set()
     logger.info("quiet: %s", f"on ({why})" if quiet else "off")
-    for fn in list(_listeners):
+    for fn in _listeners:
         try:
             fn(state())
         except Exception:

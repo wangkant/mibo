@@ -23,7 +23,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -44,86 +43,86 @@ class Settings(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     # ---- the model ----------------------------------------------------------------------------------
-    LLM_API_KEY: Optional[str] = Field(None, description="The chat model's key; kept in the credential store")
-    LLM_BASE_URL: Optional[str] = Field(None, description=(
+    LLM_API_KEY: str | None = Field(None, description="The chat model's key; kept in the credential store")
+    LLM_BASE_URL: str | None = Field(None, description=(
         "The API address as the provider documents it: a root such as https://api.deepseek.com, a version base "
         "such as .../v1, or the full /chat/completions URL. Blank = https://api.deepseek.com"))
-    LLM_MODEL: Optional[str] = Field(None, description="The model id as the service names it. Blank = deepseek-flash")
-    LLM_TIMEOUT_S: Optional[float] = Field(None, description=(
+    LLM_MODEL: str | None = Field(None, description="The model id as the service names it. Blank = deepseek-flash")
+    LLM_TIMEOUT_S: float | None = Field(None, description=(
         "Per-request timeout in seconds; a turn's calls share 1.5 times it. Blank = 120"))
-    LLM_MAX_RETRIES: Optional[int] = Field(None, description="Retries after a transient error. Blank = 2")
-    CONTEXT_WINDOW: Optional[int] = Field(None, description=(
+    LLM_MAX_RETRIES: int | None = Field(None, description="Retries after a transient error. Blank = 2")
+    CONTEXT_WINDOW: int | None = Field(None, description=(
         "The main model's context window in tokens. Blank = what the host lists, else the catalogue, else what "
         "an overflow error named, else 32768"))
-    LLM_DM_MODEL: Optional[str] = Field(None, description=(
+    LLM_DM_MODEL: str | None = Field(None, description=(
         "Another model for the chat's replies, on the same endpoint and key. Blank = LLM_MODEL"))
-    LLM_JUDGE_MODEL: Optional[str] = Field(None, description=(
+    LLM_JUDGE_MODEL: str | None = Field(None, description=(
         "The model for the short calls beside a reply. Blank = LLM_FALLBACK_MODEL, else the main model"))
-    LLM_FALLBACK_MODEL: Optional[str] = Field(None, description="A cheaper model while the main one fails or is busy")
-    LLM_FALLBACK_BASE_URL: Optional[str] = Field(None, description=(
+    LLM_FALLBACK_MODEL: str | None = Field(None, description="A cheaper model while the main one fails or is busy")
+    LLM_FALLBACK_BASE_URL: str | None = Field(None, description=(
         "The fallback model's own endpoint. Blank = LLM_BASE_URL with LLM_API_KEY"))
-    LLM_FALLBACK_API_KEY: Optional[str] = Field(None, description="The fallback endpoint's key; kept in the credential store")
-    LLM_FALLBACK_THINKING: Optional[bool] = Field(None, description=(
+    LLM_FALLBACK_API_KEY: str | None = Field(None, description="The fallback endpoint's key; kept in the credential store")
+    LLM_FALLBACK_THINKING: bool | None = Field(None, description=(
         "Send DeepSeek's thinking field to the fallback's host without asking first. Blank = false"))
-    LLM_FALLBACK_DURATION_S: Optional[int] = Field(None, description="Seconds a failed model is skipped. Blank = 180")
-    LLM_RATE_LIMIT_COOLDOWN_S: Optional[int] = Field(None, description=(
+    LLM_FALLBACK_DURATION_S: int | None = Field(None, description="Seconds a failed model is skipped. Blank = 180")
+    LLM_RATE_LIMIT_COOLDOWN_S: int | None = Field(None, description=(
         "Seconds a model that answered 429 is skipped. Blank = 20"))
 
     # ---- the character ------------------------------------------------------------------------------
-    PERSONA_NAME: Optional[str] = Field(None, description="The character's name")
-    PERSONA_AVATAR: Optional[str] = Field(None, description=(
+    PERSONA_NAME: str | None = Field(None, description="The character's name")
+    PERSONA_AVATAR: str | None = Field(None, description=(
         "The portrait: a shipped character's key, or own for avatar.png/.jpg/.webp in the home. Blank = the "
         "name's first letter"))
-    AGENT_LANG: Optional[str] = Field(None, description=(
+    AGENT_LANG: str | None = Field(None, description=(
         "The character's language: en, zh, zh-TW, ja, ko, es, fr, de, pt-BR or ru. Blank = en"))
-    UI_LANG: Optional[str] = Field(None, description="The app's own screens' language. Blank = AGENT_LANG")
-    PERSONA_FILE: Optional[str] = Field(None, description="The persona document, under the home. Blank = persona.txt")
-    PERSONA_CARD_FILE: Optional[str] = Field(None, description=(
+    UI_LANG: str | None = Field(None, description="The app's own screens' language. Blank = AGENT_LANG")
+    PERSONA_FILE: str | None = Field(None, description="The persona document, under the home. Blank = persona.txt")
+    PERSONA_CARD_FILE: str | None = Field(None, description=(
         "The persona's reply-style card, under the home. Blank = persona.card.json"))
-    PERSONA_TZ_OFFSET_HOURS: Optional[float] = Field(None, description=(
+    PERSONA_TZ_OFFSET_HOURS: float | None = Field(None, description=(
         "The character's time zone as a UTC offset in hours, -12 to 14. Blank = UTC+8 for zh and zh-TW, this "
         "computer's otherwise"))
-    ADMIN_NAME: Optional[str] = Field(None, description="What the character calls the person at the app")
-    ADMIN_RELATIONSHIP: Optional[str] = Field(None, description="What that person is to the character")
+    ADMIN_NAME: str | None = Field(None, description="What the character calls the person at the app")
+    ADMIN_RELATIONSHIP: str | None = Field(None, description="What that person is to the character")
 
     # ---- the page, updates and storage --------------------------------------------------------------
-    PAGE_PORT: Optional[int] = Field(None, ge=0, le=65535, description="The page's port on 127.0.0.1. Blank = a free one")
-    UPDATE_CHECK_ENABLED: Optional[bool] = Field(None, description=(
+    PAGE_PORT: int | None = Field(None, ge=0, le=65535, description="The page's port on 127.0.0.1. Blank = a free one")
+    UPDATE_CHECK_ENABLED: bool | None = Field(None, description=(
         "Ask GitHub's release page once a day whether a newer Mibo is out. Blank = true"))
-    AGENT_RUNTIME_DIR: Optional[str] = Field(None, description=(
+    AGENT_RUNTIME_DIR: str | None = Field(None, description=(
         "Where everything the character remembers is written, under the home when relative. Blank = runtime"))
 
     # ---- memory -------------------------------------------------------------------------------------
-    MEMORY_FILE: Optional[str] = Field(None, description="The facts file under the runtime folder. Blank = memory.json")
-    MEMORY_MAX_PER_CONVERSATION: Optional[int] = Field(None, description="Facts each chat keeps. Blank = 50")
-    MEMORY_TIDY_EVERY: Optional[int] = Field(None, description=(
+    MEMORY_FILE: str | None = Field(None, description="The facts file under the runtime folder. Blank = memory.json")
+    MEMORY_MAX_PER_CONVERSATION: int | None = Field(None, description="Facts each chat keeps. Blank = 50")
+    MEMORY_TIDY_EVERY: int | None = Field(None, description=(
         "Notes since the last consolidation that start one; 0 turns memory calls off. Blank = 8"))
-    MEMORY_CALLS_PER_DAY: Optional[int] = Field(None, description="Consolidation calls a day; 0 turns them off. Blank = 40")
-    MEMORY_EPISODES_MAX: Optional[int] = Field(None, description="Events kept per chat. Blank = 120")
-    MEMORY_KEEP_RECENT: Optional[bool] = Field(None, description="Keep each chat's recent messages for 72 hours. Blank = true")
-    MEMORY_LOG_DAYS: Optional[int] = Field(None, description=(
+    MEMORY_CALLS_PER_DAY: int | None = Field(None, description="Consolidation calls a day; 0 turns them off. Blank = 40")
+    MEMORY_EPISODES_MAX: int | None = Field(None, description="Events kept per chat. Blank = 120")
+    MEMORY_KEEP_RECENT: bool | None = Field(None, description="Keep each chat's recent messages for 72 hours. Blank = true")
+    MEMORY_LOG_DAYS: int | None = Field(None, description=(
         "Days each chat's record is kept; 0 keeps none. Blank = 30"))
 
     # ---- pictures -----------------------------------------------------------------------------------
-    VISION_MODEL: Optional[str] = Field(None, description=(
+    VISION_MODEL: str | None = Field(None, description=(
         "A model for pictures. Blank = pictures go to the reply model when it reads them"))
-    VISION_API_KEY: Optional[str] = Field(None, description="The vision endpoint's key; kept in the credential store")
-    VISION_BASE_URL: Optional[str] = Field(None, description="The vision model's endpoint; it has no default")
-    VISION_MAX_IMAGE_BYTES: Optional[int] = Field(None, description="The largest picture accepted, in bytes. Blank = 5000000")
+    VISION_API_KEY: str | None = Field(None, description="The vision endpoint's key; kept in the credential store")
+    VISION_BASE_URL: str | None = Field(None, description="The vision model's endpoint; it has no default")
+    VISION_MAX_IMAGE_BYTES: int | None = Field(None, description="The largest picture accepted, in bytes. Blank = 5000000")
 
     # ---- walks --------------------------------------------------------------------------------------
-    ROAM_ENABLED: Optional[bool] = Field(None, description="The character goes out on its own as a visitor. Blank = true")
-    ROAM_WALKS_A_DAY: Optional[int] = Field(None, description="Walks a day it starts itself, 0 to 6. Blank = 3")
-    ROAM_AT: Optional[str] = Field(None, description="HH:MM before which the day's first walk does not leave")
-    ROAM_GAP_HOURS: Optional[float] = Field(None, description="Least hours between two walks, 1 to 24. Blank = 3")
-    ROAM_PAGES_PER_WALK: Optional[int] = Field(None, description="Most pages read in one walk, 3 to 12. Blank = 8")
-    ROAM_SITE_PAGES_A_DAY: Optional[int] = Field(None, description="Most pages a day on one site, 1 to 60. Blank = 30")
+    ROAM_ENABLED: bool | None = Field(None, description="The character goes out on its own as a visitor. Blank = true")
+    ROAM_WALKS_A_DAY: int | None = Field(None, description="Walks a day it starts itself, 0 to 6. Blank = 3")
+    ROAM_AT: str | None = Field(None, description="HH:MM before which the day's first walk does not leave")
+    ROAM_GAP_HOURS: float | None = Field(None, description="Least hours between two walks, 1 to 24. Blank = 3")
+    ROAM_PAGES_PER_WALK: int | None = Field(None, description="Most pages read in one walk, 3 to 12. Blank = 8")
+    ROAM_SITE_PAGES_A_DAY: int | None = Field(None, description="Most pages a day on one site, 1 to 60. Blank = 30")
 
     # ---- retrieval by meaning -----------------------------------------------------------------------
-    EMBEDDING_MODEL: Optional[str] = Field(None, description=(
+    EMBEDDING_MODEL: str | None = Field(None, description=(
         "An OpenAI-compatible /embeddings model; blank turns retrieval by meaning off"))
-    EMBEDDING_BASE_URL: Optional[str] = Field(None, description="Its endpoint. Blank = LLM_BASE_URL with LLM_API_KEY")
-    EMBEDDING_API_KEY: Optional[str] = Field(None, description="Its key; kept in the credential store")
+    EMBEDDING_BASE_URL: str | None = Field(None, description="Its endpoint. Blank = LLM_BASE_URL with LLM_API_KEY")
+    EMBEDDING_API_KEY: str | None = Field(None, description="Its key; kept in the credential store")
 
 
 FIELDS = frozenset(Settings.model_fields)

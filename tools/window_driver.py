@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from package_smoke import FakeModel  # noqa: E402
+from package_smoke import FakeModel
 
 BUSY = "<<page is busy>>"
 VIEWS = ("[...document.querySelectorAll('section')].filter(s => !s.hidden && s.getClientRects().length)"

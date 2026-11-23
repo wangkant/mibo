@@ -6,8 +6,8 @@ from __future__ import annotations
 import os
 import zipfile
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from mibo import welcome
 from mibo.panels import desk

@@ -207,8 +207,8 @@ class App:
     def __init__(self, home: Path, base: str, model: str, port: int, measure: bool = True):
         import keyring
         import uvicorn
-
         from everyday import no_windows
+
         from mibo import paths, settingsfile, situation, welcome
         from mibo.storage import atomic_write_text
         self.home = home
@@ -392,6 +392,7 @@ def episode(app: App, pane, site: str, name: str, page_seed: int, meter) -> tupl
 
 def worker(args) -> int:
     from everyday import Meter
+
     from mibo import installed_browser
     out = Path(args.out).resolve()
     mine = out / f"w{args.worker}"

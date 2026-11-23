@@ -71,6 +71,7 @@ async def drive(hands, plan: list) -> dict:
     ends, an entry says done or a step does not go. `status` is "done" when every step went and the plan ended,
     else the status of the steps that stopped."""
     from types import SimpleNamespace
+
     from mibo import surface
     lines, noticed, status = [], [], "done"
     for item in plan:

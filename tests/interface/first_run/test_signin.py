@@ -14,13 +14,12 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-
 from harness.app import TOKEN
+
 from mibo import openrouter_signin as osr
+from mibo import settingsfile, welcome
 from mibo import setup_wizard as sw
-from mibo import welcome
 from mibo.panels import signin
-from mibo import settingsfile
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 # The page's port as the callback address names it; nothing listens on it.

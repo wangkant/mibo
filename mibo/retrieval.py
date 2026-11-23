@@ -7,9 +7,9 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
-from .storage import num as _num
 from . import channels, embeddings, ranking, transport
 from .endpoints import embedding_endpoint
+from .storage import num as _num
 from .textproc import (
     _focus_tokens,
 )

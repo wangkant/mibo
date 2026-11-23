@@ -11,10 +11,10 @@ from pathlib import Path
 
 import keyring
 import pytest
-from keyring.errors import NoKeyringError
-
 from harness.app import KEY
 from harness.home import forms, holding
+from keyring.errors import NoKeyringError
+
 from mibo import secretstore, settingsfile
 from mibo import setup_wizard as sw
 from mibo.panels import desk

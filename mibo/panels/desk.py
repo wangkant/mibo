@@ -24,6 +24,7 @@ from keyring.errors import KeyringError
 
 from .. import __version__, autostart, db, secretstore, settingsfile
 from .. import setup_wizard as sw
+
 # The one switch for the person's folders (tests and scratch homes): DIRS_ENV.
 from ..shell.grants import DIRS_ENV, stand_in  # noqa: F401
 from ..storage import atomic_write_text

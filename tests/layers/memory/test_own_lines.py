@@ -10,6 +10,7 @@ import re
 from harness.model import call, say
 from harness.page import measured
 from harness.turn import run_turn
+
 from mibo import pastchats
 
 # Two exchanges in the main chat: the person's line, then the character's own.

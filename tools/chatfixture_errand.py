@@ -230,8 +230,10 @@ def replay(args) -> int:
 
 def window(args) -> int:
     """The fixture's real window, worked through Hands on its worker thread, as desk_manners works its programs."""
-    import chat_fixture
     from concurrent.futures import ThreadPoolExecutor
+
+    import chat_fixture
+
     from mibo.desk import hands as hands_mod
     from mibo.desk import win32
     home = Path(args.home)

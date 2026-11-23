@@ -36,9 +36,9 @@ def test_a_painted_figure_has_every_pose_the_pet_plays_inside_its_picture_and_wi
     assert set(laid["frames"]) == POSES
     for name, frame in laid["frames"].items():
         x, y, w, h = frame["at"]
-        assert 0 <= x and 0 <= y and x + w <= wide and y + h <= high, name
+        assert x >= 0 and y >= 0 and x + w <= wide and y + h <= high, name
         to_x, to_y = frame["to"]
-        assert 0 <= to_x and 0 <= to_y and to_x + w <= window[0] and to_y + h <= window[1], name
+        assert to_x >= 0 and to_y >= 0 and to_x + w <= window[0] and to_y + h <= window[1], name
         assert frame.get("on") == ON.get(name), name
     for name in ("walk1", "walk2", "walk3", "walk4"):
         assert laid["frames"][name]["advance"] > 0, name

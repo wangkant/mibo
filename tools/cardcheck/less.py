@@ -16,8 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from mibo import subjects  # noqa: E402
-from tools.cardcheck.another import App, ask, react  # noqa: E402
+from mibo import subjects
+from tools.cardcheck.another import App, ask, react
 
 
 def about(found: dict) -> set[str]:

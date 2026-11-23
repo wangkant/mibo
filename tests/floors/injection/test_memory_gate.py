@@ -4,13 +4,12 @@ person and the people around them, worded much like those, are kept. The notes a
 memory.jsonl, grouped by family."""
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
+from harness import app, attacks
 
-from harness import attacks, app
-from mibo import welcome
+from mibo import settingsfile, welcome
 from mibo.agent import Agent
-from mibo import settingsfile
 
 NOTES = attacks.load("memory")
 TOKEN = "test-local-capability"

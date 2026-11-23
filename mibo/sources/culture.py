@@ -15,8 +15,7 @@ from itertools import zip_longest
 
 import httpx
 
-from .base import (PER_SOURCE, Find, Source, feed_source, find, get_json, get_text, local_to, read_feed,
-                   written_in)
+from .base import PER_SOURCE, Find, Source, feed_source, find, get_json, get_text, local_to, read_feed, written_in
 
 
 def _https(url: str) -> str:

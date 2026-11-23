@@ -9,6 +9,7 @@ import json
 import time
 
 from harness.model import say, text
+
 from mibo import consolidate
 
 LINES = ["I work at a bakery on Elm Street, early mornings.",

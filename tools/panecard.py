@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import panedock  # noqa: E402
+import panedock
 
 CARD = ".browse-run-card .op-card"
 YES = CARD + " .pa-btn-primary"
