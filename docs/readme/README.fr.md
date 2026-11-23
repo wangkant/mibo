@@ -20,10 +20,12 @@ Mibo s'exécute sur votre ordinateur avec le service de modèles de votre choix.
 | **Mémoire** | Faits et projets datés vous concernant, consultables et modifiables dans Paramètres › Mémoire. Les numéros d'identité ou de carte, mots de passe et codes ne sont jamais conservés. Les discussions temporaires ne laissent aucune trace. |
 | **Sorties** | Parcourt les pages publiques en tant que visiteur, sans connexion et dans le respect de robots.txt. Une page est lue en une fois, titres et tableaux compris. La recherche web ne demande aucune clé. |
 | **Navigateur intégré** (Windows) | Les liens s'ouvrent à côté de la conversation, avec onglets, onglets privés et téléchargements. Le personnage examine la page et y clique, saisit, choisit, fait glisser et téléverse des fichiers. |
+| **Messages** | Interrogé sur vos messages, le personnage lit les sites où vous êtes connecté et signale ce qui est nouveau. Cette étape ne fait que lire : les pages vont à un appel au modèle sans outils. |
 | **Autres programmes** (Windows) | Lit et pilote les fenêtres d'autres programmes via UI Automation, applications Electron comprises, uniquement lorsque vous n'utilisez ni le clavier ni la souris. |
 | **Fichiers et commandes** | Limités à vos dossiers Bureau, Documents, Téléchargements, Images, Musique et Vidéos, et aux dossiers que vous autorisez. Les documents Word, Excel et PowerPoint sont écrits sous forme de fichiers. Les commandes sont analysées avant exécution ; les modifications de fichiers de chaque tour peuvent être annulées ; sous Windows, les suppressions vont dans la Corbeille. |
 | **Compétences et connecteurs** | Compétences (dossiers `SKILL.md`) et serveurs MCP, chacun avec un catalogue sélectionné. Un message commençant par `/name` (le nom de la compétence) la lance. |
-| **Tâches planifiées** | Rappels, tâches et vérifications périodiques. À l'exécution, elles ne font que lire, en plus de ce que vous avez autorisé à leur création ; une demande récurrente d'envoi ou de publication n'agit que sur le site, pour le destinataire et selon le type d'action que vous avez indiqués. |
+| **Paramètres** | Le personnage connaît les paramètres de l'application : il les énumère, ouvre les Paramètres sur un élément et en modifie un. Une modification qui n'élargit rien est faite aussitôt ; les clés ne sont jamais affichées. |
+| **Tâches planifiées** | Rappels, tâches et vérifications périodiques. À l'exécution, elles ne font que lire, en plus de ce que vous avez autorisé à leur création ; une demande récurrente d'envoi ou de publication n'agit que sur le site, pour le destinataire et selon le type d'action et le texte que vous avez indiqués. |
 | **Recommandations** | Une trouvaille à la fois, issue de sources publiques, classée selon le temps que vous y passez plutôt que selon les clics. Chaque carte indique sa raison et accepte un avis annulable. |
 | **Langues** | Dix langues d'interface. |
 
@@ -78,11 +80,12 @@ Les données restent dans un seul dossier : `~/mibo` pour une copie installée, 
 
 | | |
 |---|---|
-| **Votre service de modèles** | Reçoit vos messages, la mémoire utile, les pages et fichiers utilisés pour une réponse, et les étapes soumises à la vérification. Votre clé n'est envoyée qu'à lui. |
+| **Votre service de modèles** | Reçoit vos messages, la mémoire utile, les pages et fichiers utilisés pour une réponse, et les étapes soumises à la vérification. Votre clé n'est envoyée qu'à lui. Un avis le dit une seule fois, à la première sauvegarde d'un service, et ne revient que si le service change. |
 | **Sites web** | Les sorties lisent des pages publiques sans connexion, trois par jour par défaut (Paramètres › Sorties) ; une réponse lit les pages dont elle a besoin. Vos connexions restent dans le navigateur intégré et ne servent que là. |
 | **Autres services** | Une requête de recherche lorsqu'une réponse cherche ; le numéro de version envoyé à GitHub au plus une fois par jour ; des consultations de catalogue à l'ouverture d'une boutique ; ce que le personnage transmet aux outils d'un serveur MCP. |
-| **Demande toujours** | Payer ou acheter, supprimer, modifier la sécurité ou les accès d'un compte, dans tous les modes ; un accord donné pour une autre sorte d'étape ne les couvre pas. Toute action sur les sites de banque, de paiement, de santé et de messagerie. Seul votre propre message saisi dans la discussion vaut accord. |
-| **Jamais** | Lire ou saisir des mots de passe, données de paiement ou codes de vérification ; exécuter quoi que ce soit en administrateur ; modifier les paramètres de sécurité. |
+| **Demande toujours** | Une étape coûteuse est demandée à chaque fois et séparément, dans tous les modes : payer ou dépenser, une suppression que rien ne restaure, le compte lui-même, la remise d'un accès ou de données privées, un envoi engageant, une modification de cet ordinateur que l'annulation ne peut pas défaire. Aucun accord antérieur ni aucune tâche planifiée ne la couvre. Une suppression qui va à la Corbeille n'est pas demandée. Seul votre propre message saisi dans la discussion vaut accord. |
+| **Contenu lu** | Ce qu'un outil lit sur le web ou sur cet ordinateur est de la matière, jamais une instruction. Après cette lecture, l'envoi vers un endroit que vous n'avez pas nommé est demandé, tout comme une commande recopiée mot pour mot. Un programme téléchargé n'est jamais exécuté. |
+| **Jamais** | Saisir à votre place mots de passe, codes ou données de paiement, que vous saisissez toujours vous-même ; exécuter quoi que ce soit en administrateur ; lire les clés du modèle, les paramètres de l'application ou le profil du navigateur intégré, qu'aucun outil ne peut ouvrir. |
 | **Sans surveillance** | Uniquement les sorties et les tâches planifiées que vous créez. |
 
 [SECURITY](../../.github/SECURITY.md) (en anglais) liste toutes les destinations et l'emplacement de chaque type de données.

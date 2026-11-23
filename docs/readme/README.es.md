@@ -20,10 +20,12 @@ Mibo se ejecuta en su equipo con el servicio de modelos que usted elija. No hay 
 | **Memoria** | Hechos y planes sobre usted, con fecha, visibles y editables en Configuración › Memoria. Nunca se guardan números de identidad o de tarjeta, contraseñas ni códigos. Los chats temporales no dejan registro. |
 | **Salidas** | Recorre páginas públicas como visitante, sin iniciar sesión y respetando robots.txt. Lee cada página de una vez, con sus títulos y tablas. La búsqueda web no requiere clave. |
 | **Navegador integrado** (Windows) | Los enlaces se abren junto a la conversación, con pestañas, pestañas privadas y descargas. El personaje examina la página y hace clic, escribe, elige, arrastra y sube archivos en ella. |
+| **Mensajes** | Al preguntarle por sus mensajes, el personaje lee los sitios en los que usted inició sesión e informa de lo nuevo. Ese paso solo lee: las páginas van a una llamada al modelo sin herramientas. |
 | **Otros programas** (Windows) | Lee y maneja ventanas de otros programas mediante UI Automation, también aplicaciones Electron, y solo mientras usted no usa el teclado ni el ratón. |
 | **Archivos y comandos** | Solo en su Escritorio, Documentos, Descargas, Imágenes, Música y Vídeos, y en las carpetas que usted autorice. Los documentos de Word, Excel y PowerPoint se escriben como archivos. Los comandos se analizan antes de ejecutarse; los cambios de archivos de cada turno se pueden deshacer; en Windows, lo eliminado va a la Papelera de reciclaje. |
 | **Habilidades y conectores** | Habilidades (carpetas con `SKILL.md`) y servidores MCP, cada uno con un catálogo seleccionado. Un mensaje que empieza por `/name` (el nombre de la habilidad) la activa. |
-| **Tareas programadas** | Recordatorios, tareas y comprobaciones periódicas. Al ejecutarse solo leen, además de lo que usted permitió al crearlas; un encargo periódico de enviar o publicar actúa solo en el sitio, para el destinatario y con el tipo de acción que usted indicó. |
+| **Configuración** | El personaje conoce la configuración de la aplicación: la enumera, abre Configuración en un apartado y cambia uno. Un cambio que no amplía nada se hace de inmediato; las claves nunca se muestran. |
+| **Tareas programadas** | Recordatorios, tareas y comprobaciones periódicas. Al ejecutarse solo leen, además de lo que usted permitió al crearlas; un encargo periódico de enviar o publicar actúa solo en el sitio, para el destinatario y con el tipo de acción y el texto que usted indicó. |
 | **Recomendaciones** | Un hallazgo cada vez, de fuentes públicas, ordenado por el tiempo que usted le dedica y no por los clics. Cada tarjeta indica su motivo y admite valoraciones que se pueden deshacer. |
 | **Idiomas** | Diez idiomas de interfaz. |
 
@@ -78,11 +80,12 @@ Los datos se guardan en una sola carpeta: `~/mibo` en una copia instalada, el pr
 
 | | |
 |---|---|
-| **Su servicio de modelos** | Recibe sus mensajes, la memoria pertinente, las páginas y archivos usados para una respuesta y los pasos que juzga la revisión. Su clave solo se envía a este servicio. |
+| **Su servicio de modelos** | Recibe sus mensajes, la memoria pertinente, las páginas y archivos usados para una respuesta y los pasos que juzga la revisión. Su clave solo se envía a este servicio. Un aviso lo dice una sola vez, al guardar un servicio por primera vez, y solo vuelve a mostrarse si el servicio cambia. |
 | **Sitios web** | Las salidas leen páginas públicas sin iniciar sesión, tres al día de forma predeterminada (Configuración › Salidas); una respuesta lee las páginas que necesita. Sus sesiones permanecen en el navegador integrado y solo se usan allí. |
 | **Otros servicios** | Una consulta de búsqueda cuando una respuesta busca; el número de versión a GitHub como máximo una vez al día; consultas al catálogo cuando abre un mercado; lo que el personaje pasa a las herramientas de un servidor MCP. |
-| **Siempre pregunta** | Pagar o comprar, eliminar y cambiar la seguridad o el acceso de una cuenta, en cualquier modo; un sí a otro tipo de paso no los cubre. Toda acción en sitios de bancos, pagos, salud y correo. Solo su propio mensaje escrito en el chat cuenta como un sí. |
-| **Nunca** | Leer ni escribir contraseñas, datos de pago o códigos de verificación; ejecutar nada como administrador; cambiar la configuración de seguridad. |
+| **Siempre pregunta** | Un paso costoso se pregunta cada vez y por separado, en cualquier modo: pagar o gastar, una eliminación que nada restaura, la propia cuenta, entregar acceso o datos privados, un envío vinculante, un cambio en este equipo que deshacer no puede revertir. Ningún sí anterior ni tarea programada lo cubre. Una eliminación que va a la Papelera no se pregunta. Solo su propio mensaje escrito en el chat cuenta como un sí. |
+| **Contenido leído** | Lo que una herramienta lee de la web o de este equipo es material, nunca una instrucción. Tras leerlo, se pregunta antes de enviar algo a un lugar que usted no indicó, y también antes de un comando copiado al pie de la letra. Un programa descargado nunca se ejecuta. |
+| **Nunca** | Escribir por usted contraseñas, códigos o datos de pago, que siempre introduce usted; ejecutar nada como administrador; leer las claves del modelo, la configuración de la aplicación o el perfil del navegador integrado, que ninguna herramienta puede abrir. |
 | **Sin supervisión** | Solo las salidas y las tareas programadas que usted cree. |
 
 [SECURITY](../../.github/SECURITY.md) (en inglés) enumera todos los destinos y dónde se guarda cada tipo de dato.

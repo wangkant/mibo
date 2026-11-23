@@ -20,10 +20,12 @@ Mibo läuft auf Ihrem Computer mit einem Modelldienst Ihrer Wahl. Es gibt keinen
 | **Gedächtnis** | Datierte Fakten und Pläne über Sie, einsehbar und bearbeitbar unter Einstellungen › Gedächtnis. Ausweis- und Kartennummern, Passwörter und Codes werden nie gespeichert. Temporäre Chats hinterlassen keine Aufzeichnung. |
 | **Ausflüge** | Besucht öffentliche Seiten als Gast, ohne Anmeldung und unter Beachtung von robots.txt. Eine Seite wird in einem Zug gelesen, mit Überschriften und Tabellen. Die Websuche braucht keinen Schlüssel. |
 | **Integrierter Browser** (Windows) | Links öffnen sich neben der Unterhaltung, mit Tabs, privaten Tabs und Downloads. Die Figur sieht sich die Seite an und klickt, tippt, wählt aus, zieht und lädt Dateien hoch. |
+| **Nachrichten** | Auf die Frage nach Ihren Nachrichten liest die Figur die Seiten, bei denen Sie angemeldet sind, und berichtet, was neu ist. Dieser Schritt liest nur: Die Seiten gehen an einen Modellaufruf ohne Werkzeuge. |
 | **Andere Programme** (Windows) | Liest und bedient Fenster anderer Programme über UI Automation, auch Electron-Apps, und nur, solange Sie Tastatur und Maus ruhen lassen. |
 | **Dateien und Befehle** | Nur in Ihren eigenen Ordnern Desktop, Dokumente, Downloads, Bilder, Musik und Videos und in Ordnern, die Sie freigeben. Word-, Excel- und PowerPoint-Dokumente werden als Dateien geschrieben. Befehle werden vor der Ausführung gelesen; die Dateiänderungen jedes Durchgangs lassen sich rückgängig machen; unter Windows landet Gelöschtes im Papierkorb. |
 | **Skills und Connectoren** | Skills (Ordner mit `SKILL.md`) und MCP-Server, jeweils mit einem kuratierten Katalog. Eine Nachricht, die mit `/name` (dem Namen des Skills) beginnt, startet ihn. |
-| **Geplante Aufgaben** | Erinnerungen, Aufgaben und regelmäßige Prüfungen. Bei der Ausführung wird nur gelesen, dazu kommt, was Sie beim Anlegen erlaubt haben; ein wiederkehrender Auftrag zum Senden oder Veröffentlichen handelt nur auf der genannten Seite, für den genannten Empfänger und in der genannten Art. |
+| **Einstellungen** | Die Figur kennt die Einstellungen der App: Sie listet sie auf, öffnet die Einstellungen an einem Eintrag und ändert einen. Eine Änderung, die nichts erweitert, wird sofort vorgenommen; Schlüssel werden nie angezeigt. |
+| **Geplante Aufgaben** | Erinnerungen, Aufgaben und regelmäßige Prüfungen. Bei der Ausführung wird nur gelesen, dazu kommt, was Sie beim Anlegen erlaubt haben; ein wiederkehrender Auftrag zum Senden oder Veröffentlichen handelt nur auf der genannten Seite, für den genannten Empfänger und in der genannten Art und mit dem genannten Text. |
 | **Empfehlungen** | Jeweils ein Fund aus öffentlichen Quellen, gereiht nach der Verweildauer statt nach Klicks. Jede Karte nennt ihren Grund und nimmt Rückmeldungen an, die sich rückgängig machen lassen. |
 | **Sprachen** | Zehn Oberflächensprachen. |
 
@@ -78,11 +80,12 @@ Die Daten liegen in einem einzigen Ordner: `~/mibo` bei einer installierten Kopi
 
 | | |
 |---|---|
-| **Ihr Modelldienst** | Erhält Ihre Nachrichten, relevante Erinnerungen, die für eine Antwort genutzten Seiten und Dateien sowie die Schritte, die die Prüfung beurteilt. Ihr Schlüssel geht nur an diesen Dienst. |
+| **Ihr Modelldienst** | Erhält Ihre Nachrichten, relevante Erinnerungen, die für eine Antwort genutzten Seiten und Dateien sowie die Schritte, die die Prüfung beurteilt. Ihr Schlüssel geht nur an diesen Dienst. Ein Hinweis darauf erscheint einmal, wenn ein Dienst zum ersten Mal gespeichert wird, und erst wieder, wenn der Dienst wechselt. |
 | **Websites** | Ausflüge lesen öffentliche Seiten ohne Anmeldung, standardmäßig dreimal am Tag (Einstellungen › Ausflüge); eine Antwort liest die Seiten, die sie braucht. Ihre Anmeldungen bleiben im integrierten Browser und werden nur dort verwendet. |
 | **Andere Dienste** | Eine Suchanfrage, wenn eine Antwort sucht; die Versionsnummer an GitHub höchstens einmal am Tag; Katalogabfragen, wenn Sie einen Katalog öffnen; was die Figur an die Werkzeuge eines MCP-Servers übergibt. |
-| **Fragt immer** | Bezahlen oder Kaufen, Löschen und Änderungen an Sicherheit oder Zugang eines Kontos, in jedem Modus; ein Ja zu einem Schritt anderer Art deckt sie nicht ab. Jede Aktion auf Websites von Banken, Zahlungsdiensten, Gesundheitsdiensten und E-Mail-Anbietern. Nur Ihre eigene, im Chat getippte Nachricht gilt als Ja. |
-| **Nie** | Passwörter, Zahlungsdaten oder Bestätigungscodes lesen oder eingeben; etwas als Administrator ausführen; Sicherheitseinstellungen ändern. |
+| **Fragt immer** | Ein kostspieliger Schritt wird in jedem Modus jedes Mal und einzeln erfragt: Bezahlen oder Geld ausgeben, ein Löschen, das nichts wiederherstellt, das Konto selbst, die Weitergabe von Zugang oder privaten Angaben, eine bindende Übermittlung, eine Änderung an diesem Computer, die sich nicht rückgängig machen lässt. Kein früheres Ja und keine geplante Aufgabe deckt ihn ab. Ein Löschen in den Papierkorb wird nicht erfragt. Nur Ihre eigene, im Chat getippte Nachricht gilt als Ja. |
+| **Gelesene Inhalte** | Was ein Werkzeug aus dem Web oder von diesem Computer liest, ist Material und nie eine Anweisung. Danach wird das Senden an einen nicht genannten Ort erfragt, ebenso ein daraus wörtlich übernommener Befehl. Ein heruntergeladenes Programm wird nie ausgeführt. |
+| **Nie** | Passwörter, Codes oder Zahlungsdaten für Sie eingeben (das tun Sie stets selbst); etwas als Administrator ausführen; Modellschlüssel, die Einstellungen der App oder das Profil des integrierten Browsers lesen, was kein Werkzeug kann. |
 | **Unbeaufsichtigt** | Nur Ausflüge und die geplanten Aufgaben, die Sie anlegen. |
 
 [SECURITY](../../.github/SECURITY.md) (Englisch) führt alle Ziele auf und wo welche Daten liegen.

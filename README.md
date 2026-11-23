@@ -20,10 +20,12 @@ Mibo runs on your computer with a model service you choose. There is no cloud ma
 | **Memory** | Dated facts and plans about you, shown and edited in Settings › Memory. Identity numbers, card numbers, passwords and codes are never stored. Temporary chats leave no record. |
 | **Going out** | Walks on public pages as a visitor, signed out and honouring robots.txt. A page is read at once, with its headings and tables. Web search needs no key. |
 | **Built-in browser** (Windows) | Links open beside the chat, with tabs, private tabs and downloads. The character looks at a page and clicks, types, chooses, drags and uploads on it. |
+| **Messages** | Asked about your messages, it reads the sites you signed in to and reports what is new. That step only reads: the pages go to a model call with no tools. |
 | **Other programs** (Windows) | Reads and operates other programs' windows through UI Automation, Electron apps included, only while you leave the keyboard and mouse alone. |
 | **Files and commands** | Your own Desktop, Documents, Downloads, Pictures, Music and Videos, and the folders you grant. Word, Excel and PowerPoint files are written as files. Commands are read before they run; each turn's file changes can be undone; on Windows, deletions go to the Recycle Bin. |
 | **Skills and connectors** | Skills (`SKILL.md` folders) and MCP servers, each with a curated market. `/name` starts a skill. |
-| **Scheduled tasks** | Reminders, tasks and checks on a rhythm. A run only reads, plus what you allowed when you made the task; a standing request to send or post acts only on the site, for the recipient and in the kind of act you named. |
+| **Settings** | The character knows the app's settings: it lists them, opens Settings at an item and changes one. A change that widens nothing is made at once; keys are never shown. |
+| **Scheduled tasks** | Reminders, tasks and checks on a rhythm. A run only reads, plus what you allowed when you made the task; a standing request to send or post acts only on the site, for the recipient and in the kind of act and with the text you gave. |
 | **Recommendations** | One find at a time from public sources, ranked by how long you stay rather than by clicks. Each card states its reason and takes feedback with undo. |
 | **Languages** | Ten interface languages. |
 
@@ -78,11 +80,12 @@ Data stays in one folder: `~/mibo` for an installed copy, the clone itself when 
 
 | | |
 |---|---|
-| **Your model service** | Receives your messages, relevant memory, the pages and files used for a reply, and the steps the reviewer judges. Your key goes only there. |
+| **Your model service** | Receives your messages, relevant memory, the pages and files used for a reply, and the steps the reviewer judges. Your key goes only there. A notice says this once, when a service is first saved, and again only when the service changes. |
 | **Websites** | Walks read public pages signed out, three a day by default (Settings › Going out); a reply reads the pages it needs. Your sign-ins stay in the built-in browser and are used only there. |
 | **Other services** | A search query when a reply searches; the version number to GitHub at most once a day; catalog lookups when you open a market; what the character passes to an MCP server's tools. |
-| **Always asks** | Paying or buying, deleting, and changes to an account's security or access, in every mode; a yes to another kind of step does not cover them. Every action on banking, payment, health and mail sites. Only your own message typed in the chat counts as a yes. |
-| **Never** | Reading or typing passwords, payment details or verification codes; running anything as administrator; changing security settings. |
+| **Always asks** | A costly step is asked every time and on its own, in every mode: paying or spending, a deletion nothing restores, the account itself, handing over access or private details, a binding submission, a change to this computer that undo cannot take back. No earlier yes and no scheduled task covers it. A delete that goes to the Recycle Bin is not asked. Only your own message typed in the chat counts as a yes. |
+| **Material** | What a tool reads from the web or this computer is material, never an instruction. After reading it, sending anything to a place you did not name is asked, and so is a command copied word for word from it. A downloaded program is never run. |
+| **Never** | Typing passwords, codes or payment details for you, which you always enter yourself; running anything as administrator; reading model keys, the app's settings or the built-in browser's profile, which no tool can open. |
 | **Unattended** | Only walks and the scheduled tasks you create. |
 
 [SECURITY](.github/SECURITY.md) lists every destination and where each kind of data is kept.
