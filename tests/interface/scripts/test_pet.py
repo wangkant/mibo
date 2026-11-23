@@ -123,12 +123,15 @@ def test_mibo_walking_keeps_the_foot_it_stands_on_still_and_comes_to_rest_facing
     page = browser.open(awake, "/pet", bridge=True, width=200, height=278)
     page.context.add_init_script(CLOCK)
     page.reload()
-    page.page.wait_for_function("() => document.getElementById('figure').dataset.figure && rig?.kind === 'mibo'")
+    # The waits below look again on a timer: the frames they would wait on by default are the ones held here.
+    page.page.wait_for_function("() => document.getElementById('figure').dataset.figure && rig?.kind === 'mibo'",
+                                polling=50)
     # Nothing of its own while it walks: no blink, no idle clip.
     page.page.evaluate("() => { window.idleLater = window.blinkLater = () => {}; liveOff(); }")
-    page.page.wait_for_function("() => !scene && document.getAnimations().every((motion) => motion.playState !== 'running')")
+    page.page.wait_for_function("() => !scene && document.getAnimations().every((motion) => motion.playState !== 'running')",
+                                polling=50)
     page.page.evaluate("() => { window.__walked = false; play('walk', 1600).then(() => (window.__walked = true)); }")
-    page.page.wait_for_function("() => going")
+    page.page.wait_for_function("() => going", polling=50)
     held: dict[str, list[float]] = {}
     for _ in range(600):
         page.page.evaluate("() => __tick(1000 / 60)")
