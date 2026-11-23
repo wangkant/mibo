@@ -163,8 +163,7 @@ def summary(reading: Reading, lang: str, form: str) -> str:
     if lang == "zh":
         text = "，再".join(parts[:2]) + ("等" if len(parts) > 2 else "")
         return ("正在" + text) if form == "ing" else text
-    text = ", then ".join([parts[0]] + [p[0].lower() + p[1:] for p in parts[1:2]]) + (" and more" if len(parts) > 2 else "")
-    return text
+    return ", then ".join([parts[0]] + [p[0].lower() + p[1:] for p in parts[1:2]]) + (" and more" if len(parts) > 2 else "")
 
 
 def size(n: int, lang: str) -> str:

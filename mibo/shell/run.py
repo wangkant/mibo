@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import collections
+import contextlib
 import html
 import os
 import re
@@ -33,8 +34,14 @@ from pathlib import Path
 
 from .grants import SECRET_NAMES, SECRET_SUFFIXES
 
-POWERSHELL = os.path.join(os.environ.get("SystemRoot") or r"C:\Windows",
-                          r"System32\WindowsPowerShell\v1.0\powershell.exe")
+
+def _windows() -> str:
+    """Windows' own folder. Windows reads the name in any case; written as Windows writes it, it stays apart from
+    the app's own upper-case settings (tests/parts/settings)."""
+    return os.environ.get("SystemRoot") or r"C:\Windows"  # noqa: SIM112 - not one of the app's settings
+
+
+POWERSHELL = os.path.join(_windows(), r"System32\WindowsPowerShell\v1.0\powershell.exe")
 # Seconds a command may run, unless the tool asks for less.
 TIME_LIMIT_S = 60
 TIME_MAX_S = 300
@@ -47,6 +54,7 @@ ENV_KEPT = ("SystemRoot", "windir", "SystemDrive", "ComSpec", "PATHEXT", "TEMP",
             "HOMEPATH", "USERNAME", "USERDOMAIN", "COMPUTERNAME", "APPDATA", "LOCALAPPDATA", "PUBLIC", "ProgramData",
             "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "CommonProgramFiles", "CommonProgramFiles(x86)",
             "CommonProgramW6432", "OS", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS", "OneDrive")
+_ENV_KEPT_UPPER = {name.upper() for name in ENV_KEPT}
 # After dsh's pwsh-local (MIT, see NOTICE): Windows PowerShell writes the OEM code page unless told. Programs
 # it starts still write that code page and are read in it; what PowerShell prints goes out through a UTF-8
 # writer of its own, and file cmdlets read and write UTF-8, not the ANSI code page.
@@ -134,8 +142,8 @@ def hide_secret_names(text: str) -> str:
 
 def environment() -> dict:
     """The environment a command gets: the listed variables and a PATH of system folders and the person's own."""
-    env = {k: v for k, v in os.environ.items() if k in ENV_KEPT or k.upper() in {e.upper() for e in ENV_KEPT}}
-    root = env.get("SystemRoot") or r"C:\Windows"
+    env = {k: v for k, v in os.environ.items() if k.upper() in _ENV_KEPT_UPPER}
+    root = _windows()
     path = [os.path.join(root, "System32"), root, os.path.join(root, r"System32\Wbem"),
             os.path.join(root, r"System32\WindowsPowerShell\v1.0"), os.path.join(root, r"System32\OpenSSH")]
     apps = os.path.join(env.get("LOCALAPPDATA", ""), r"Microsoft\WindowsApps")
@@ -191,7 +199,7 @@ class Spare:
         # It waits in Windows' own folder, so it holds no granted folder open.
         process = subprocess.Popen(
             [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            cwd=os.environ.get("SystemRoot") or None, env=environment(), stdin=subprocess.PIPE,
+            cwd=_windows(), env=environment(), stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return process, _Job(process)
 
@@ -349,10 +357,8 @@ def listing(path: str, most: int = 2000) -> dict:
                 stack.append(entry.path)
             else:
                 files += 1
-                try:
+                with contextlib.suppress(OSError):
                     size += entry.stat(follow_symlinks=False).st_size
-                except OSError:
-                    pass
                 if len(names) < 12:
                     names.append(os.path.relpath(entry.path, os.path.dirname(path)))
     return {"files": files, "folders": folders, "bytes": size, "names": names, "links": links,

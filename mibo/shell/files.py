@@ -10,6 +10,7 @@ show an edit as a difference, and delete to the Recycle Bin.
 from __future__ import annotations
 
 import codecs
+import contextlib
 import difflib
 import fnmatch
 import io
@@ -592,15 +593,10 @@ def bin_keeps(paths: list[str], size: int) -> bool:
             return False
         guid = volume.value[volume.value.find("{"):volume.value.find("}") + 1]
         set_to = {"NukeOnDelete": 0, "MaxCapacity": shutil.disk_usage(root).total * BIN_SHARE / 1024 / 1024}
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BIN_KEY}\\{guid}") as key:
-                for name in set_to:
-                    try:
-                        set_to[name] = winreg.QueryValueEx(key, name)[0]
-                    except OSError:
-                        pass
-        except OSError:
-            pass
+        with contextlib.suppress(OSError), winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"{BIN_KEY}\\{guid}") as key:
+            for name in set_to:
+                with contextlib.suppress(OSError):
+                    set_to[name] = winreg.QueryValueEx(key, name)[0]
         if set_to["NukeOnDelete"] or size > set_to["MaxCapacity"] * 1024 * 1024:
             return False
     return True

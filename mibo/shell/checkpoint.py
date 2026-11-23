@@ -17,7 +17,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from . import files
+from . import files, office
 from . import read as reading
 
 # A file larger than this is listed but not copied, so it cannot be put back.
@@ -221,7 +221,7 @@ class Turn:
         if not name or not (self.dir / name).exists():
             return None
         copy = str(self.dir / name)
-        lines = files.document_lines(copy) if os.path.splitext(path)[1].lower() in (".docx", ".xlsx", ".pptx") else None
+        lines = files.document_lines(copy) if os.path.splitext(path)[1].lower() in office.KINDS else None
         if lines is not None:
             return lines
         decoded = files.decode((self.dir / name).read_bytes())
