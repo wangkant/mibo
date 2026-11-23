@@ -4,6 +4,8 @@ opened to a sign-in until they are signed in there, a hidden source last, nothin
 new, something on a home that knows nothing yet, and the same order for the same seed."""
 from __future__ import annotations
 
+from itertools import pairwise
+
 import pytest
 from harness.clock import Clock
 from harness.finds import Shelf
@@ -155,7 +157,7 @@ def test_the_first_run_offers_samples_from_many_sites_never_two_in_a_row_from_on
     shown = feed.first_round(shelf.library, [], shelf.clock.now, ["food"])
     sites = [row["site"] for row in shown]
     assert len(shown) == feed.FIRST_MAX and max(sites.count(site) for site in sites) <= feed.FIRST_PER_SOURCE
-    assert all(a != b for a, b in zip(sites, sites[1:])), sites
+    assert all(a != b for a, b in pairwise(sites)), sites
 
 
 def test_the_same_seed_brings_the_same_order_and_another_seed_may_explore(shelf):

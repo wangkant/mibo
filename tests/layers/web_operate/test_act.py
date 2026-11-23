@@ -13,6 +13,7 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 from harness.model import call, say, text
@@ -55,7 +56,7 @@ BROWSER = installed_browser.find_browser()
 
 
 class Site(BaseHTTPRequestHandler):
-    posts: list = []
+    posts: ClassVar[list] = []
 
     def do_GET(self):
         page = (BOARD if self.path.startswith("/board") else LATE if self.path.startswith("/late") else

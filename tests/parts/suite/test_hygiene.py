@@ -84,12 +84,10 @@ def test_every_function_and_class_the_suite_defines_is_used() -> None:
                     if isinstance(node, ast.Constant) and isinstance(node.value, str) else None)
             for word in [name] if name else ():
                 used[word] = used.get(word, 0) + 1
-    unused = []
-    for path in _laid_out():
-        for node in _tree(path).body:
-            if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                    and not _called_by_pytest(node) and not used.get(node.name)):
-                unused.append(f"{path.relative_to(SUITE).as_posix()}: {node.name}")
+    unused = [f"{path.relative_to(SUITE).as_posix()}: {node.name}"
+              for path in _laid_out() for node in _tree(path).body
+              if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                  and not _called_by_pytest(node) and not used.get(node.name))]
     assert unused == [], "delete these or use them"
 
 

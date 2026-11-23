@@ -8,6 +8,7 @@ import io
 import json
 import threading
 import time
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -85,7 +86,7 @@ def test_on_a_small_window_a_deferred_tool_is_found_then_called_through_use_tool
     # The same tools block in every round, and every request fits the window with its answer's room.
     assert len({_tools_hash(b) for b in bodies}) == 1
     assert all(tokens(b) + b["max_tokens"] <= 16384 for b in bodies)
-    find, wrong, unknown, plan = done.calls()
+    find, wrong, unknown, _ = done.calls()
     found = json.loads(done.result_of(find["id"]).split("\n", 1)[1])
     assert [(f["tool"], f["parameters"]) for f in found] == [
         ("update_plan", shell_tool.PLAN_TOOL["function"]["parameters"])]
@@ -158,7 +159,7 @@ def _rewrites(bodies: list) -> dict:
         for message in body["messages"]:
             if message.get("role") == "tool":
                 sent.setdefault(message["tool_call_id"], []).append(message["content"])
-    return {ident: sum(a != b for a, b in zip(seen, seen[1:])) for ident, seen in sent.items()}
+    return {ident: sum(a != b for a, b in pairwise(seen)) for ident, seen in sent.items()}
 
 
 @pytest.mark.parametrize("window", [16384, 65536])

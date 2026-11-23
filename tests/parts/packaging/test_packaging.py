@@ -163,7 +163,7 @@ def test_release_notes_come_from_the_changelog_section_of_the_tag() -> None:
         "## [0.4.0] - 2026-09-24", "", "- earlier", "",
         "[1.0.0]: https://github.com/wangkant/mibo/releases/tag/v1.0.0", ""])
     assert notes["changelog_section"](changelog, "1.0.0") == "### Added\n\n- `mibo` command\n"
-    with pytest.raises(ValueError, match="no '## .2.0.0.' section"):
+    with pytest.raises(ValueError, match=r"no '## .2.0.0.' section"):
         notes["changelog_section"](changelog, "2.0.0")
     assert notes["project_version"](_pyproject()) == mibo.__version__
     assert notes["main"](["v0.0.0-not-this"]) == 1

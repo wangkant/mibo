@@ -39,7 +39,7 @@ def brought(served: App) -> dict:
 
 
 def test_one_thing_is_brought_at_a_time_and_held_until_a_card_shows_it(page):
-    served, shelf = page
+    served, _ = page
     first = brought(served)
     assert first["why"]["text"] and brought(served)["id"] == first["id"]
     assert served.post("/api/feed/react", {"id": first["id"], "action": "seen", "surface": "card"}).status_code == 200

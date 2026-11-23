@@ -15,6 +15,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -44,7 +45,7 @@ REPLY = "谢谢支持，下周更新"  # copy: voice
 
 class Site(BaseHTTPRequestHandler):
     """The creator page, and every POST it receives by path."""
-    posts: list = []
+    posts: ClassVar[list] = []
 
     def do_GET(self):
         self._send(200, "text/html; charset=utf-8", PAGE.replace("PORT", str(self.server.server_address[1])))

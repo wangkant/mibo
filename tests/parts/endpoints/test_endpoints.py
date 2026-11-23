@@ -39,7 +39,7 @@ def test_the_embeddings_endpoint_is_spelled_like_the_chat_one() -> None:
 
 
 def test_a_separate_embeddings_address_is_never_sent_the_main_key() -> None:
-    primary = dict(base_url="https://api.openai.com", api_key="sk-primary")
+    primary = {"base_url": "https://api.openai.com", "api_key": "sk-primary"}
     assert embedding_endpoint(**primary, embedding_base_url="", embedding_api_key="") \
         == ("https://api.openai.com/v1/embeddings", "sk-primary")
     assert embedding_endpoint(**primary, embedding_base_url="http://127.0.0.1:11434", embedding_api_key="") \

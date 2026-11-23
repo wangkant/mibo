@@ -9,6 +9,7 @@ import asyncio
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
 
 from mibo import review
 
@@ -21,7 +22,7 @@ class Thinker(BaseHTTPRequestHandler):
     """A reasoning model: with its thinking on it spends the answer budget and says nothing; with it off it answers.
     `refuse` names a field it answers 400 for, as some providers do."""
     refuse = ""
-    bodies: list = []
+    bodies: ClassVar[list] = []
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
