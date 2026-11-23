@@ -87,3 +87,59 @@ def test_a_find_the_pet_brings_shows_on_its_card_and_a_like_reaches_the_server(a
     (kept,) = awake.get("/api/feed?limit=5&kept=true").json()["items"]
     assert (kept["id"], kept["liked"]) == (found.id, True)
     assert page.errors == [] and page.refused == []
+
+
+# The page's own clock for the walk, stepped by the test: performance.now and requestAnimationFrame answer to
+# `__tick(ms)`, and the window is where the page last placed it.
+CLOCK = """
+(() => {
+  let now = 1000;
+  let queue = [];
+  performance.now = () => now;
+  window.requestAnimationFrame = (frame) => queue.push(frame);
+  window.__tick = (ms) => {
+    now += ms;
+    const due = queue;
+    queue = [];
+    due.forEach((frame) => frame(now));
+  };
+  let x = 0;
+  Object.defineProperty(window, "screenX", { get: () => x });
+  const api = window.pywebview.api;
+  window.pywebview.api = new Proxy({}, {
+    get: (target, name) => (name === "place" ? (at, from) => ((x = at), api.place(at, from)) : api[name]),
+  });
+})();
+"""
+# Where each foot's pivot (pet.css) is on the screen, and which foot is down while the other swings.
+FEET = """() => {
+  const at = (el, x) => new DOMPoint(x, 450).matrixTransform(el.getScreenCTM()).x + screenX;
+  return {L: at(rig.parts.footL, 158), R: at(rig.parts.footR, 222), down: going?.phase === 'go' && !going.closing
+          ? `${going.step}${going.swing === 'L' ? 'R' : 'L'}` : null};
+}"""
+
+
+def test_mibo_walking_keeps_the_foot_it_stands_on_still_and_comes_to_rest_facing_the_person(awake, browser):
+    page = browser.open(awake, "/pet", bridge=True, width=200, height=278)
+    page.context.add_init_script(CLOCK)
+    page.reload()
+    page.page.wait_for_function("() => document.getElementById('figure').dataset.figure && rig?.kind === 'mibo'")
+    # Nothing of its own while it walks: no blink, no idle clip.
+    page.page.evaluate("() => { window.idleLater = window.blinkLater = () => {}; liveOff(); }")
+    page.page.wait_for_function("() => !scene && document.getAnimations().every((motion) => motion.playState !== 'running')")
+    page.page.evaluate("() => { window.__walked = false; play('walk', 1600).then(() => (window.__walked = true)); }")
+    page.page.wait_for_function("() => going")
+    held: dict[str, list[float]] = {}
+    for _ in range(600):
+        page.page.evaluate("() => __tick(1000 / 60)")
+        feet = page.page.evaluate(FEET)
+        if feet["down"]:
+            held.setdefault(feet["down"], []).append(feet[feet["down"][-1]])
+        if page.page.evaluate("() => window.__walked"):
+            break
+    assert page.page.evaluate("() => window.__walked")
+    assert len(held) >= 3 and max(max(xs) - min(xs) for xs in held.values()) < 0.05
+    assert [call[0] for call in page.calls() if call[0] in ("place", "rest")][-1] == "rest"
+    parts = page.page.evaluate("() => Object.entries(rig.parts).filter(([, el]) => el?.style.transform).map(([n]) => n)")
+    assert parts == [] and not page.page.evaluate("() => document.getElementById('pet').classList.contains('left')")
+    assert page.errors == [] and page.refused == []
