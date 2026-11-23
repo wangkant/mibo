@@ -52,9 +52,16 @@ ENDS = ("open", "like", "close", "timeout", "hushed", "next", "known")
 # feature leans to less, profile "leans"). "Less from this source" is the action "hide_source".
 SAID_ABOUT = ("thing", "topic")
 QUICK_S = 3
-# The first run's round of sample finds, at most FIRST_PER_SOURCE from one source.
+# The first run's round of sample finds, at most FIRST_PER_SOURCE from one source (`first_round`). FIRST_OUTSIDE
+# of them off the picked topics, to find interests past them: one is a coin toss, three cost the round's first
+# impression. FIRST_APPEAL: a like's chance against an answer's information in each pick. Measured against the
+# old round (tools/recsim/first_round.py): at 2.5 nine in ten picked topics come up (seven before) and a third
+# more subjects, the first twenty the feed then shows are liked about 0.014 more often, and the samples are
+# worth 3 to 6% less to the person; at 2 they are worth 15% less for 0.018, at 3 the same as before for no gain.
 FIRST_MAX = 10
 FIRST_PER_SOURCE = 2
+FIRST_OUTSIDE = 2
+FIRST_APPEAL = 2.5
 # A sample find's summary is at least this wide, a Chinese character counting two (one of a video platform needs
 # none: its title and cover say what it is).
 SUMMARY_MIN = 60
@@ -345,22 +352,6 @@ class Veins:
                 return self.of(shaped, item) if shaped else None
         return None
 
-    def varied(self, rows: list, last: tuple | None = None, mix: bool = False) -> list:
-        """(shaped, item) rows in their order, except that each goes after one from another source and on
-        other topics where one is left; failing that, from another source. With `mix`, text and video take
-        turns where both are left."""
-        veins = {row[1].id: self.of(*row) for row in rows}
-        left, placed, video = list(rows), [], None
-        while left:
-            apart = [r for r in left if not self.same(veins[r[1].id], last)]
-            row = ((mix and next((r for r in apart if is_video(r[1], r[0]) != video), None))
-                   or next(iter(apart), None)
-                   or next((r for r in left if not self.same(veins[r[1].id], last, False)), left[0]))
-            left.remove(row)
-            placed.append(row)
-            last, video = veins[row[1].id], is_video(row[1], row[0])
-        return placed
-
 
 def is_video(item: Item, shaped: dict) -> bool:
     return item.kind == "video" or shaped["kind"] == "video"
@@ -514,46 +505,69 @@ def shown(library: Library, events: list, kept: bool = False, limit: int = LIMIT
 
 
 def first_round(library: Library, events: list, now: float, topics: list[str], chosen: list[str] = ()) -> list[dict]:
-    """The first run's sample finds: the ranking's best unseen that are `presentable`, FIRST_PER_SOURCE from
-    one site and FIRST_MAX in all at most, those the character has read first, never two in a row from one
-    source or on one topic where there is a choice, and text and video in turn where both are left. A site
-    counts as one however many of its lists brought things (a video site has a list for each kind of video);
-    only when too few sites have something presentable yet does one give more. Each platform the person chose
-    (`chosen`) that has one keeps a place for its best before the rest fill."""
+    """The first run's sample finds, chosen to learn the most from the person's likes and skips while keeping them
+    things they can judge and often like: a greedy batch design over the taste model (MacKay 1992; the
+    stratified, informative and likely-liked elicitation of cold-start recommenders, Rashid et al. 2002, Elahi
+    et al. 2016). From the unseen `presentable` things the ranking would show at all, each pick goes to the
+    strata still needed (each picked topic, each `chosen` platform, video and text, FIRST_OUTSIDE off the
+    topics), then to the most of the answer's information plus FIRST_APPEAL times the chance of a like; each
+    pick's answer is counted ahead as precision, which keeps the samples likeable and varied, a near-duplicate
+    of one asked giving way. FIRST_PER_SOURCE from one site (a site counts as one however many of its lists
+    brought things) unless too few sites have something, never one site twice running, and a site with more
+    left than all the others goes first so that the round does not stop short."""
     from ..sources import catalog
+    runtime = library.root.parent
     carried = {key: source.platform for key, source in catalog.all_sources([]).items()}
-    rows, more, per, reserved = [], [], Counter(), {}
-    wanted = set(chosen)
-
-    def waiting() -> bool:
-        return len(reserved) < FIRST_MAX and not wanted <= reserved.keys()
-
-    for shaped, item in ranked(library, events, now, topics, seed=int(now * 1000)):
-        full = len(rows) >= 3 * FIRST_MAX
-        if shaped["seen"] or (full and not waiting()):
-            break
+    hidden = {key for key, row in _by_source(_marks(events, now)[0], library.sources()).items() if row["hides"]}
+    reader, read = model.Reader(runtime, list(topics), events, now), model.readable(runtime)
+    pool = []
+    # In the ranking's order, so a tie goes to the thing it places first; its draw plays no part.
+    for shaped, item in ranked(library, events, now, topics, seed=0, picks=False):
         platform = carried[item.source] if item.source in carried else platforms.of_url(item.url)
-        if not presentable(shaped, bool(platform) and platforms.PLATFORMS[platform].kind == "video"):
+        if shaped["seen"] or item.source in hidden or not presentable(
+                shaped, bool(platform) and platforms.PLATFORMS[platform].kind == "video"):
             continue
-        site = shaped["site"] or item.source
-        if platform in wanted and platform not in reserved and waiting() and per[site] < FIRST_PER_SOURCE:
-            per[site] += 1
-            reserved[platform] = (shaped, item)
-        elif full:
+        snap = reader.snapshot(item, shaped, now)
+        if snap["avoid"]:
             continue
-        elif per[site] < FIRST_PER_SOURCE:
-            per[site] += 1
-            rows.append((shaped, item))
+        strata = {"topic:" + t for t in snap["topics"]} | {"form:video" if is_video(item, shaped) else "form:text"}
+        if platform in chosen:
+            strata.add("platform:" + platform)
+        if topics and not snap["topics"]:
+            strata.add("outside")
+        pool.append({"shaped": shaped, "site": shaped["site"] or item.source,
+                     "x": model.vector(snap, read), "strata": strata})
+    need = Counter({s: FIRST_OUTSIDE if s == "outside" else 1 for c in pool for s in c["strata"]})
+    belief = model.Belief(model.load(runtime), model.Priors(runtime))
+    shown, taken, per = [], set(), Counter()
+
+    def value(c: dict) -> float:
+        return belief.gain(c["x"]) + FIRST_APPEAL * belief.chance(c["x"])[0]
+
+    while len(shown) < FIRST_MAX:
+        last = shown[-1]["site"] if shown else None
+        untaken = [c for c in pool if c["shaped"]["id"] not in taken]
+        left = [c for c in untaken if c["site"] != last]
+        sites = Counter(c["site"] for c in untaken)
+        busiest, most = sites.most_common(1)[0] if sites else (None, 0)
+        rest = len(untaken) - most
+        # A site with more left than all the others together, which they cannot fill the round without, goes
+        # now, or the round runs out of other sites to put between its things (the standard greedy for a row
+        # with no two neighbours alike).
+        if most > rest and busiest != last and rest + max(FIRST_PER_SOURCE - per[busiest], 0) < FIRST_MAX - len(shown):
+            left = [c for c in left if c["site"] == busiest]
         else:
-            more.append((shaped, item))
-    rows.sort(key=lambda row: not row[1].judged)
-    kept = {item.id for _, item in reserved.values()}
-    shown, room = [], FIRST_MAX - len(kept)
-    for row in Veins(topics).varied([*reserved.values(), *rows], mix=True):
-        if row[1].id in kept or room > 0:
-            shown.append(row)
-            room -= row[1].id not in kept
-    return [shaped for shaped, _ in shown + more[:FIRST_MAX - len(shown)]]
+            left = [c for c in left if per[c["site"]] < FIRST_PER_SOURCE] or left
+        if not left:
+            break
+        left = [c for c in left if any(need[s] for s in c["strata"])] or left
+        pick = max(left, key=value)
+        shown.append(pick)
+        taken.add(pick["shaped"]["id"])
+        per[pick["site"]] += 1
+        belief.asked(pick["x"])
+        need.subtract({s: 1 for s in pick["strata"] if need[s]})
+    return [c["shaped"] for c in shown]
 
 
 # What the pet's card was handed, by id, so a find it opens in the chat keeps the character's line and slot.

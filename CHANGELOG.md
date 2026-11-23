@@ -44,6 +44,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - In the first-run tour and in Settings > Recommendations you pick the platforms you use, those of your language and country first. A pick is a preference, not a filter: those platforms are drawn more often, and the sample finds in the tour include one from each where there is one.
 - Platforms whose lists need an account, such as Douyin, Kuaishou, Xiaohongshu, Weibo, TikTok, Instagram and X, are read from your own feed once you have signed in to them in the app's browser, after you agreed the first time you picked one: one notice says what is read, the risk to the account and how to stop. A no keeps the pick a preference and asks again at the next pick. Stop it for a site in Settings > Connections or by telling the character, which turns reading off at once but asks before turning it on; a site you turned off, or that stopped at a check, stays off when you pick it, even after you forget the site. A video found there plays on its card.
 - The preferences card in Settings is simpler: the platforms and the topics you chose, and what the app has learned about you, which you can reset.
+- The sample finds of the first-run tour are chosen to teach the app the most from your answers: each of your topics and platforms, video and text, and a couple outside your topics come up, from different sites and subjects, so ten answers say more about what you like.
 
 ### Settings
 

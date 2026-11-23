@@ -627,6 +627,36 @@ def score(runtime: Path, feats: dict[str, float], seed: int) -> float:
     return Sampler(load(runtime), Priors(runtime), seed).score(feats)[0]
 
 
+class Belief:
+    """The posterior over a thing's score, for choosing what to ask the person (feed.first_round): a like's
+    chance, the score's variance, what one answer would teach, and the precision an answer adds (`asked`),
+    which in a Laplace update does not depend on the answer, so a round can be planned before any comes."""
+
+    def __init__(self, model: dict, prior: Callable[[str], tuple[float, float]]):
+        self.m, self.q, self.prior = model["m"], dict(model["q"]), prior
+
+    def chance(self, x: dict[str, float]) -> tuple[float, float]:
+        """The like's chance at the posterior mean, and the score's variance."""
+        z = sum((self.m[k] if k in self.m else self.prior(k)[0]) * v for k, v in x.items())
+        return _sigmoid(z), sum(v * v / (self.q.get(k) or self.prior(k)[1]) for k, v in x.items())
+
+    @staticmethod
+    def weight(p: float) -> float:
+        """An answer's Fisher weight: c p(1-p), c the confidence of a like or a skip as the fit counts them."""
+        return (p * LIKE[1] + (1 - p) * SKIP[1]) * p * (1 - p)
+
+    def gain(self, x: dict[str, float]) -> float:
+        """The expected information of one answer on x, logistic under a Laplace posterior (MacKay 1992)."""
+        p, var = self.chance(x)
+        return 0.5 * math.log1p(self.weight(p) * var)
+
+    def asked(self, x: dict[str, float]) -> None:
+        """Count one answer on x ahead: a near-duplicate then asks less, which keeps a round likeable and varied."""
+        w = self.weight(self.chance(x)[0])
+        for k, v in x.items():
+            self.q[k] = (self.q.get(k) or self.prior(k)[1]) + w * v * v
+
+
 def _slot(h: dict) -> str:
     """Whose pick a showing was: "character", "model" (its draw's included) or ""."""
     return "character" if h["p"] == "character" else "model" if h["p"] in ("model", "explore") else ""
