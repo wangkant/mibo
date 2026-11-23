@@ -19,7 +19,8 @@ from harness.pane import Pane
 
 from mibo import catalog, installed_browser, resolve, turnon
 from mibo.web import operate
-from mibo.web.pageops import FIND_MAX, Page, view_of
+from mibo.web.pageops import Page
+from mibo.web.pageprint import FIND_MAX, view_of
 from mibo.web.tabs import PaneTab
 
 FRONT = """<!doctype html><meta charset="utf-8"><title>Tide tables</title><h1>Tides</h1><p>High water 06:12.</p>"""

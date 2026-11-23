@@ -31,7 +31,7 @@ import os
 from PIL import Image
 
 from ..desk import win32
-from ..web.pageops import SECRET_LABEL, SECRET_SELECTOR
+from ..web.pagewords import SECRET_LABEL, SECRET_SELECTOR
 from .frame import LONG_EDGE, Frame, fit, paint_over
 
 user32 = win32.user32

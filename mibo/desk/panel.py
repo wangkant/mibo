@@ -398,8 +398,8 @@ class Desk:
 
     def _peek(self, payload: dict) -> dict:
         """A look at a window with Hands that have no task, no strip and no question: its print or a part of it in the
-        page grammar (pageops.view_of), and a picture after the same yes a task's first picture needs."""
-        from ..web.pageops import view_of
+        page grammar (pageprint.view_of), and a picture after the same yes a task's first picture needs."""
+        from ..web.pageprint import view_of
         from . import uia, win32
         from .hands import Hands
         hwnd = int(payload.get("hwnd") or 0)

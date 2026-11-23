@@ -20,7 +20,7 @@ from harness.model import call, say, text
 from harness.pane import Pane
 
 from mibo import catalog, installed_browser
-from mibo.web import pageops
+from mibo.web import pageact
 from mibo.web.pageops import Page
 from mibo.web.tabs import PaneTab
 
@@ -222,7 +222,7 @@ def test_a_click_waits_for_a_control_still_sliding_in_and_not_yet_enabled(pages)
         return line, await page.tab.evaluate("() => said.textContent")
     line, said = asyncio.run(press())
     assert line.startswith("[ok]") and said == "pressed"
-    assert pageops.ACTION_S >= 1
+    assert pageact.ACTION_S >= 1
 
 
 @pytest.mark.browser

@@ -40,8 +40,9 @@ import re
 import time
 from collections.abc import Callable
 
-from ..web.pageops import SECRET_LABEL, STATE_MAX, clip, quote, well_formed
-from ..web.pageops import norm as _norm
+from ..web.pageprint import STATE_MAX
+from ..web.pagewords import SECRET_LABEL, clip, quote, well_formed
+from ..web.pagewords import norm as _norm
 from . import shape, win32
 
 ASSEMBLY = ", Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35"
@@ -198,7 +199,7 @@ def automation():
 
 
 def norm(s) -> str:
-    """pageops.norm, less the invisible direction marks Windows puts round dates."""
+    """pagewords.norm, less the invisible direction marks Windows puts round dates."""
     return _norm(BIDI.sub("", "" if s is None else str(s)))
 
 
@@ -608,7 +609,7 @@ class View:
                 if size > budget:
                     return i
             return len(src)
-        # Uncut, for a look at a part of it (pageops.view_of).
+        # Uncut, for a look at a part of it (pageprint.view_of).
         self.lines = list(body)
         if fit(body, max) < len(body):
             head = fit(body, max * 0.8)

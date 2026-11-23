@@ -25,7 +25,7 @@ from types import SimpleNamespace
 import pytest
 
 from mibo import installed_browser, review
-from mibo.web import gate, operate, pageops
+from mibo.web import gate, operate, pageinput
 from mibo.web.tabs import PaneTab
 
 BROWSER = installed_browser.find_browser()
@@ -489,9 +489,9 @@ def test_a_hover_by_ref_alone_waits_for_its_target_to_show(on, site):
 
 
 def test_keys_are_taken_by_playwright_names_and_by_the_short_ones():
-    assert pageops.chord("Left")[0] == "ArrowLeft" and pageops.chord("shift+Down")[0] == "Shift+ArrowDown"
-    assert [pageops.chord(k)[0] for k in ("Esc", "PgDn", "KeyA", "Digit1", "F5", "Backquote")] == \
+    assert pageinput.chord("Left")[0] == "ArrowLeft" and pageinput.chord("shift+Down")[0] == "Shift+ArrowDown"
+    assert [pageinput.chord(k)[0] for k in ("Esc", "PgDn", "KeyA", "Digit1", "F5", "Backquote")] == \
         ["Escape", "PageDown", "a", "1", "F5", "`"]
-    assert pageops.chord("ControlOrMeta+a")[1] in (2, 4)
+    assert pageinput.chord("ControlOrMeta+a")[1] in (2, 4)
     with pytest.raises(ValueError):
-        pageops.chord("Sideways")
+        pageinput.chord("Sideways")

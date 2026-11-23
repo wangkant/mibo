@@ -21,7 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ..cardwait import WAIT_S
-from ..web.pageops import clip, quote
+from ..web.pagewords import clip, quote
 from . import gate, names, uia, win32
 from . import grants as g
 from .operate import UNANSWERED

@@ -247,7 +247,7 @@ async def _open_file(agent, found: resolve.Resolved, show: bool, lookups) -> str
 def _most(agent) -> int:
     """Characters one look may carry: twice the tokens of page the reply model's measured window leaves a result
     (search.py's page room), between the least able model's part and the most a print gives."""
-    from .web.pageops import STATE_MAX, STATE_MOST
+    from .web.pageprint import STATE_MAX, STATE_MOST
     return max(STATE_MAX, min(STATE_MOST, 2 * int(agent._page_room())))
 
 

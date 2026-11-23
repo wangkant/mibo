@@ -144,7 +144,7 @@ class Operating:
         self.left: dict | None = None
         self.one = asyncio.Lock()
         # The pages looked at and acted in, one per tab, so refs hold between looks and acts; the page words the
-        # model was shown from each (no address to another site carries them, operate._carried); the turn's Hands.
+        # model was shown from each (no address to another site carries them, opcarry.words_carried); the turn's Hands.
         self.pages: dict = {}
         self.seen: dict[int, list[str]] = {}
         self.places: dict = {}

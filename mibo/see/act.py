@@ -109,7 +109,7 @@ class PaneSurface:
 
     async def capture(self, long_edge: int) -> Frame:
         # The ring shown before an action is gone before the picture after it, or it would read as a change.
-        from ..web.pageops import UNRING_JS
+        from ..web.pagejs import UNRING_JS
         with contextlib.suppress(Exception):
             await self.tab.evaluate(f"() => {{ {UNRING_JS} }}")
         return await capture.pane(self.tab, long_edge)
@@ -316,7 +316,7 @@ class WindowSurface:
                             enabled=True, focused=True, secret=c.IsPassword, rect=(0, 0, 0, 0),
                             hwnd=c.NativeWindowHandle, patterns=[], readonly=False, top=self.hwnd, parent=None,
                             cells=[])
-            from ..web.pageops import SECRET_LABEL
+            from ..web.pagewords import SECRET_LABEL
             secret = c.IsPassword or (role == "textbox" and bool(SECRET_LABEL.search(f"{c.Name} {c.AutomationId}")))
             return {"known": role in ("textbox", "document") or bool(c.Name), "secret": secret, "node": node,
                     "role": role, "name": c.Name}
