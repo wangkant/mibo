@@ -86,7 +86,6 @@
   }
   const TICK = "M5 12.5l4.2 4.2L19 7";
   const PLUS = "M12 5v14M5 12h14";
-  const OUT = "M14 5h5v5M19 5l-8 8M10 7H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-4";
   const CROSS = "M7 7l10 10M17 7L7 17";
   const ASK = "M9.1 9a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4M12 18h.01";
 
@@ -159,7 +158,7 @@
       else if (step < ABOUT) go(step + 1);
       else finish();
     });
-    skipButton =el("button", "onboard-skip");
+    skipButton = el("button", "onboard-skip");
     skipButton.type = "button";
     skipButton.addEventListener("click", skipStep);
     foot.append(backButton, el("span", "onboard-gap"), skipButton, nextButton);

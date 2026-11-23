@@ -17,8 +17,8 @@
 //   download.answer {download, yes}     a held download moved to the download folder, or dropped
 //   metrics                             the processes Electron runs, with their memory
 //   quit
-// Events: ready, cdp {tab, method, params, session}, opened {tab, url}, download {download, tab, url, filename,
-// path, bytes}, download.done {download, state, finished, path}.
+// Events: ready, cdp {tab, method, params, session}, detached {tab, reason}, opened {tab, url}, download {download,
+// tab, url, filename, path, bytes}, download.done {download, state, finished, path}.
 "use strict";
 
 const { app, BrowserWindow, WebContentsView, session } = require("electron");

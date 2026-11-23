@@ -6,7 +6,7 @@
 // with the monthly limit (settings below). Reads /api/modelbar and /api/usage (panels/modelbar.py) and
 // /api/chat/context (welcome.py); the chat (chat.js) makes one control per chat view.
 window.paModelBar = (() => {
-  // The problems a failed check names (endpoints.PROBLEMS), as Settings words them.
+  // The thinking levels, in the order the menu offers them.
   const LEVELS = ["auto", "off", "standard", "deep"];
   // A list longer than this gets a search box.
   const SEARCH_FROM = 8;
@@ -130,23 +130,23 @@ window.paModelBar = (() => {
       if (limit.state === "reached") block.append(el("p", "mb-note mb-note-strong", w.limitReached));
       box.append(block);
     }
-    const money_ = el("div", "mb-balance");
+    const funds = el("div", "mb-balance");
     const b = view.balance;
-    if (view.local) money_.append(el("p", "mb-note", w.local));
+    if (view.local) funds.append(el("p", "mb-note", w.local));
     else if (b && b.remaining != null) {
       const row = el("div", "mb-balance-row");
       row.append(el("span", "mb-balance-name", b.kind === "key" ? w.keyLeft : w.balance),
         el("span", "mb-balance-value", money(b.remaining, b.currency)));
-      money_.append(row);
-      if (full && b.at) money_.append(el("p", "mb-note", fill(w.updated, { t: ago(b.at) })));
+      funds.append(row);
+      if (full && b.at) funds.append(el("p", "mb-note", fill(w.updated, { t: ago(b.at) })));
     } else if (b && b.usedMonth != null) {
       const row = el("div", "mb-balance-row");
       row.append(el("span", "mb-balance-name", w.usedOnService), el("span", "mb-balance-value", money(b.usedMonth, b.currency)));
-      money_.append(row);
-    } else money_.append(el("p", "mb-note", view.balanceKnown ? w.balanceFailed : w.noBalance));
-    if (b && b.freeLeft != null && b.freeLimit) money_.append(el("p", "mb-note", fill(w.freeLeft, { n: b.freeLeft, of: b.freeLimit })));
-    if (view.console && !view.local) money_.append(link(view.console, w.console));
-    box.append(money_);
+      funds.append(row);
+    } else funds.append(el("p", "mb-note", view.balanceKnown ? w.balanceFailed : w.noBalance));
+    if (b && b.freeLeft != null && b.freeLimit) funds.append(el("p", "mb-note", fill(w.freeLeft, { n: b.freeLeft, of: b.freeLimit })));
+    if (view.console && !view.local) funds.append(link(view.console, w.console));
+    box.append(funds);
     return box;
   }
 
@@ -256,10 +256,7 @@ window.paModelBar = (() => {
     }
     const head = (text) => el("div", "mb-head", text);
     const rule = () => el("div", "mb-rule");
-    function backRow(title) {
-      const node = item(I.left, title, () => ((view = "main"), draw(), focusFirst()), { cls: "mb-back" });
-      return node;
-    }
+    const backRow = (title) => item(I.left, title, () => ((view = "main"), draw(), focusFirst()), { cls: "mb-back" });
 
     function mainView() {
       const t = w();
