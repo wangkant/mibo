@@ -16,5 +16,5 @@ metadata:
 3. Give the draft in your reply on lines of its own, ready to copy. One draft; offer a shorter or warmer one only
    when it would help.
 4. Never send it, and never say it was sent. Sending is a separate request of theirs, done in the browser or a
-   program, and it waits for their press on the card.
+   program, and it is asked in the chat and waits for their yes there.
 5. Never put in facts you do not know (dates, amounts, names): leave a [placeholder] for them to fill.

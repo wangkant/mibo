@@ -6,7 +6,7 @@
 // Market: the catalog of public skills (/api/skills/market), searched and sorted here, a detail view with what a
 // skill needs, its licence, its source and the scan's result, and its SKILL.md read from the source at that moment.
 // The catalog is data from the network: every string goes on the page as text, never as markup. What a skill may
-// do is decided by the app (mibo/skills): it is guidance only, and every action still asks on its card.
+// do is decided by the app (mibo/skills): it is guidance only, and every action is still asked in the chat.
 (() => {
   const MAX_UPLOAD = 64 * 1024 * 1024;
 

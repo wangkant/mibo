@@ -14,13 +14,14 @@ pass-through (everyday.Meter) that refuses calls past --budget dollars.
 The requests are the eleven of the layer audit's skills run (layer-audit.json, with "帮我清理一下 C 盘" replaced by a
 remark that shares the word 整理, so no command reaches the computer's own disk) plus four: an installed skill whose
 description is English only, asked in Chinese twice more; "/draft-in-their-voice ..." typed by the person; and a
-request two skills fit. Before the run, an English-only skill meeting-minutes is put in the home's skills folder (never
-titled in Chinese); after K05 a further skill is added through Settings' upload route, and after K10 one built-in
-skill is switched off, so the run shows whether either changes the tools the model is sent.
+request two skills fit. The home starts with the built-in skills alone; after K05 an English-only skill is added
+through Settings' upload route, and after K10 one built-in skill is switched off, so the run shows whether either
+changes the tools the model is sent. Any built-in skill a request does not want counts as a wrong load, except that K03
+also accepts photos-by-date, which fits a photos folder as well.
 
 Each request is right when the skills it wants were loaded (a use_skill call, or the skill's <skill_content> in the
-person's turn for "/name"), no other skill was, and its last step is there: the closing line for meeting-minutes,
-nothing moved before a yes for tidy-downloads, [placeholders] for draft-in-their-voice, pages_they_read for the weekly
+person's turn for "/name"), no other skill was, and its last step is there: an owner column and a [待定] or a name for
+each action item for meeting-minutes, nothing moved before a yes for tidy-downloads, [placeholders] for draft-in-their-voice, pages_they_read for the weekly
 digest. Results go to <out>/results.json and <out>/table.md, with the distinct tools blocks the reply rounds were sent.
 """
 from __future__ import annotations
@@ -42,19 +43,6 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import everyday as ev  # noqa: E402
 
-MINUTES = """---
-name: meeting-minutes
-description: Turn raw meeting notes or a transcript into structured minutes - decisions, action items with owners and due dates, open questions. Use when the user pastes meeting notes or asks for minutes.
----
-
-# Meeting minutes
-
-1. Read templates/minutes.md (this skill's file) and fill it in from the notes.
-2. Every action item has an owner and a due date; write [待定] where the notes do not say.
-3. Keep the notes' own language.
-4. End the minutes with the line: — 纪要完 —
-"""
-TEMPLATE = "## 会议纪要\n\n### 决定\n- …\n\n### 待办\n| 事项 | 负责人 | 截止 |\n|---|---|---|\n\n### 待讨论\n- …\n"
 PACKING = """---
 name: packing-list
 description: Make a packing list for a trip from where and how long. Use when they ask what to pack.
@@ -72,7 +60,8 @@ TWO = ("A：您好，方案我们已经收到，会尽快回复。\nB：收到�
 REQUESTS = [
     {"id": "K01", "say": f"下面是今天的会议记录，帮我整理成纪要：{NOTES}", "want": {"meeting-minutes"}, "last": "minutes"},  # copy: voice
     {"id": "K02", "say": f"这是周会的记录，整理成纪要发我：{NOTES}", "want": {"meeting-minutes"}, "last": "minutes"},  # copy: voice
-    {"id": "K03", "say": "帮我整理一下 photos 文件夹，太乱了", "want": {"tidy-downloads"}, "last": "unmoved"},  # copy: voice
+    {"id": "K03", "say": "帮我整理一下 photos 文件夹，太乱了", "want": {"tidy-downloads"}, "also": {"photos-by-date"},
+     "last": "unmoved"},  # copy: voice
     {"id": "K04", "say": f"我给客户写了两个回复：\n{TWO}\n比较一下哪个语气更好，然后用我的口吻起草一个更好的",  # copy: voice
      "want": {"draft-in-their-voice"}, "last": "placeholders"},
     {"id": "K05", "say": "我这周都读了些什么？", "want": {"weekly-reading-digest"}, "last": "pages"},  # copy: voice
@@ -124,9 +113,7 @@ def prepare(home: Path, places: Path) -> None:
     ev._put(places / "Documents" / "docs" / "季度报告.txt", "第三季度\n", 5)  # copy: voice
     skills = home / "skills"
     shutil.rmtree(skills, ignore_errors=True)
-    (skills / "meeting-minutes" / "templates").mkdir(parents=True)
-    (skills / "meeting-minutes" / "SKILL.md").write_text(MINUTES, encoding="utf-8")
-    (skills / "meeting-minutes" / "templates" / "minutes.md").write_text(TEMPLATE, encoding="utf-8")
+    skills.mkdir(parents=True)
     (home / "runtime").mkdir(parents=True, exist_ok=True)
     (home / "runtime" / "skills.json").unlink(missing_ok=True)
     if not (home / "persona.txt").exists():
@@ -201,9 +188,9 @@ def loaded(rows: list, sent: list) -> tuple[set, set]:
 def score(request: dict, reply: str, rows: list, sent: list, photos_before: list, photos_after: list) -> dict:
     called, gestured = loaded(rows, sent)
     used = called | gestured
-    wrong = sorted(used - request["want"])
+    wrong = sorted(used - request["want"] - request.get("also", set()))
     last = request["last"]
-    step = {"minutes": "纪要完" in reply, "placeholders": bool(PLACEHOLDER.search(reply)),
+    step = {"minutes": "负责人" in reply or "owner" in reply.lower(), "placeholders": bool(PLACEHOLDER.search(reply)),
             "unmoved": photos_before == photos_after,
             "pages": any(ev.unwrapped(n, a)[0] == "pages_they_read" for r in rows for n, a in r["called"]),
             "": True}[last]

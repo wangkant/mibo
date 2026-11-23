@@ -13,7 +13,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 
 ### Files
 
-- Word, Excel and PowerPoint files are made as files: asked for a document, a table or slides, the character writes the finished .docx, .xlsx or .pptx instead of typing into the program's window, and changes an existing one in place, keeping its layout. Such changes can be taken back like any other change to a file. Three built-in skills guide a good document, workbook and deck.
+- Word, Excel and PowerPoint files are made as files: asked for a document, a table or slides, the character writes the finished .docx, .xlsx or .pptx instead of typing into the program's window, and changes an existing one in place, keeping its layout. Such changes can be taken back like any other change to a file. Three built-in skills guide a good document, workbook and deck. Thirteen more built-in skills cover everyday jobs: summarizing, translating and studying a document, minutes, invoices into a table, renaming and sorting files, freeing disk space, filling a web form, new messages, research briefs, trip plans and scheduled briefings. Settings shows the skills as tiles.
 - A new file has a plain look unless you ask for another: a document is A4 in SimSun and Times New Roman with SimHei and Arial headings, a workbook has a shaded header row in DengXian, and a deck is 16:9 in Segoe UI and Microsoft YaHei, dark teal with one warm accent. An existing file keeps its own.
 - PDFs are read page by page; a scanned PDF is reported as holding no text.
 

@@ -110,3 +110,17 @@ def test_a_skills_text_cannot_close_its_wrapper_and_the_apps_note_comes_after_it
     # The skill's words sit inside the wrapper; the app's own note follows it.
     inside, after = loaded.split("</skill_content>")
     assert "backup@example.com" in inside and after.strip()
+
+
+def test_every_built_in_skill_loads_under_its_folders_name_and_its_description_reaches_the_listing():
+    from mibo.skills import tool
+    folders = sorted(p for p in store.BUILTIN.iterdir() if p.is_dir())
+    skills = [store.read(folder, builtin=True)[0] for folder in folders]
+    assert len(skills) == 20 and [s.name for s in skills] == [f.name for f in folders]
+    assert all(s.usable and s.model_invocable for s in skills)
+    assert len({s.description for s in skills}) == len(skills)
+    # A description longer than the listing's cut would lose the pointer to the skill next to it.
+    assert all(len(" ".join(s.description.split())) <= tool.DESCRIBED for s in skills)
+    listed = tool.listing(skills)
+    for s in skills:
+        assert f"- {s.name} (version " in listed and tool._line(s.description, tool.DESCRIBED) in listed

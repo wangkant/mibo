@@ -1,6 +1,6 @@
 ---
 name: word-document
-description: Write a Word document someone will hand in, send or print - a report, a summary, a plan, a notice, minutes, a letter - as a finished .docx file, or change one they have. Use when they ask for a document or for something made into Word ("做成 Word", "写一份报告", "整理成文档").
+description: Write a Word document someone will hand in, send or print - a report, a summary, a plan, a notice, a letter - as a finished .docx file, or change one they have. Use when they ask for a document or for something made into Word ("做成 Word", "写一份报告"); the content of minutes is meeting-minutes.
 license: Apache-2.0
 metadata:
   mibo-title-zh: 撰写 Word 文档

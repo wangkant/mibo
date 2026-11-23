@@ -44,7 +44,7 @@ MAX_DEPTH = 8
 # What reading a damaged or crafted archive's member raises.
 _BROKEN = (zipfile.BadZipFile, NotImplementedError, EOFError, zlib.error)
 RECORDS = "skills.json"
-# The card line for a command that runs a file in a skill's folder (shell/panel.py).
+# The line that names the skill for a command that runs a file in a skill's folder (shell/panel.py).
 FROM_SKILL = {"zh": "此命令来自技能「{name}」", "en": "This command comes from the skill “{name}”"}
 
 _lock = threading.Lock()
