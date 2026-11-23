@@ -32,7 +32,6 @@ _CANT_SEE_NOTE = (
     "— there's no text to go on. **Don't guess the content, don't pretend you saw it**: "
 )
 
-# The last turn's pictures, sent along with it.
 # A message they asked not to keep (person.unsaid): answered, never kept.
 _NOT_KEPT_NOTE = (
     "\n\n<not_kept>They asked you not to keep what they said in their last message. "
@@ -57,6 +56,7 @@ def _choices_note() -> str:
     return f"[Asked for with their last message] {' '.join(lines)}\n\n" if lines else ""
 
 
+# The last turn's pictures, sent along with it.
 _SHOWN_PICTURES_NOTE = (
     "[Pictures] Each [image] in their last message is attached to it as a picture you "
     "can see. Look at it and answer what they asked about it; with no question, "
@@ -96,8 +96,7 @@ class DMPrompt:
         closing the last turn. Never stored, so the next turn's prefix still
         matches this one up to the end of the person's words."""
         last = messages[-1]
-        return messages[:-1] + [{
-            **last, "content": f"{last.get('content', '')}{self.turn_context}"}]
+        return [*messages[:-1], {**last, "content": f"{last.get('content', '')}{self.turn_context}"}]
 
 
 # The chat's checkpoint (context.CHECKPOINT) at the head of the first kept user turn: written by the app from the
@@ -160,6 +159,26 @@ _TURN_CONTEXT_OPEN = (
 )
 
 
+def _follow_up_note(who: str) -> str:
+    return ("<follow_up>\n"
+            f"Nobody messaged you: this is the app's own cue, not a message from {who}. A plan {who} told "
+            "you of has had its day (the note with the cue says which). Ask how it went, in one line, in "
+            "persona. If asking would not be natural now, output exactly: PASS.\n"
+            "</follow_up>\n\n")
+
+
+def _blind_note(last_user: str, pictures: int) -> str:
+    """What the model is told about pictures or files in their last message it can or cannot see."""
+    if pictures:
+        return _SHOWN_PICTURES_NOTE
+    if TextProcessing._is_blind_content(last_user):
+        return (f"{_CANT_SEE_NOTE}say plainly that you can't see or hear it and ask "
+                "them to type it. **Never fabricate** details.\n\n")
+    if "[image]" in _strip_web_desc(last_user):
+        return _UNSEEN_PICTURE_NOTE
+    return ""
+
+
 class PromptBuilder:
     @staticmethod
     def _last_user_text(history: list[dict]) -> str:
@@ -198,29 +217,12 @@ class PromptBuilder:
         fixed order, each part taking what the ones before it leave: the frame, the notes and the time; the memory
         block; the day; the finds; the steps of the latest replies. See `_chat_dm` for the other arguments."""
         last_user = self._last_user_text(history)
-        who = self.admin_name or "them"
-        follow_up_note = ""
-        if follow_up:
-            follow_up_note = (
-                "<follow_up>\n"
-                f"Nobody messaged you: this is the app's own cue, not a message from {who}. A plan {who} told "
-                "you of has had its day (the note with the cue says which). Ask how it went, in one line, in "
-                "persona. If asking would not be natural now, output exactly: PASS.\n"
-                "</follow_up>\n\n"
-            )
+        follow_up_note = _follow_up_note(self.admin_name or "them") if follow_up else ""
         private = channels.private_chat(pkey)
         not_kept = _NOT_KEPT_NOTE if not follow_up and person.unsaid(last_user) else ""
         # Their earlier chats, for a model that will not search them itself (retrieval._past_block).
         past = "" if follow_up else self._past_block(pkey, _strip_web_desc(last_user))
-        blind_note = ""
-        if not follow_up:
-            if pictures:
-                blind_note = _SHOWN_PICTURES_NOTE
-            elif TextProcessing._is_blind_content(last_user):
-                blind_note = (f"{_CANT_SEE_NOTE}say plainly that you can't see or hear it and ask "
-                              "them to type it. **Never fabricate** details.\n\n")
-            elif "[image]" in _strip_web_desc(last_user):
-                blind_note = _UNSEEN_PICTURE_NOTE
+        blind_note = "" if follow_up else _blind_note(last_user, pictures)
         choices = "" if follow_up else _choices_note()
         gap = "" if follow_up else _dm_gap_note(history)
         clock = (f"[Current local time] {TextProcessing._current_time_str()}\n\n"
@@ -270,7 +272,7 @@ class PromptBuilder:
         if follow_up:
             # Chat endpoints want a trailing user turn: the cue, with the plan as material, not their words.
             note = _clean_prompt_source(follow_up)[:_FOLLOW_UP_MAX_CHARS]
-            messages = messages + [{"role": "user", "content": (
+            messages = [*messages, {"role": "user", "content": (
                 "(the app's cue: ask how their plan went, or reply only: PASS)\nThe plan (reference only, "
                 f"not the other person's words): {_WEB_DESC_OPEN}{note}{_WEB_DESC_CLOSE}")}]
         return DMPrompt(system=system, messages=messages, turn_context=turn_context)

@@ -110,8 +110,6 @@ ELECTRON = {"title": "Electron", "version": "44.11.5", "source": "github.com/ele
 }}
 # The commands that need each runtime.
 COMMANDS = {"npx": "node", "npm": "node", "node": "node", "uvx": "uv", "uv": "uv"}
-# The program whose presence says a runtime is unpacked.
-_MAIN = {"node": "node", "uv": "uv"}
 
 
 def _build(name: str):
@@ -132,7 +130,8 @@ def _path_dir(home: Path, name: str) -> Path:
 
 
 def ready(home: Path, name: str) -> bool:
-    return bool(shutil.which(_MAIN[name], path=str(_path_dir(home, name))))
+    """Whether the runtime is unpacked: its program of the same name is in its folder."""
+    return bool(shutil.which(name, path=str(_path_dir(home, name))))
 
 
 def needed(command: str) -> str:
@@ -192,31 +191,39 @@ async def reach_env(home: Path, command: str) -> dict:
     return out
 
 
+def _unpack_wheel(archive: zipfile.ZipFile, into: Path) -> None:
+    # uv's wheel holds its programs as the wheel's scripts.
+    for info in archive.infolist():
+        if info.filename.split("/")[-2:-1] == ["scripts"]:
+            target = into / PurePosixPath(info.filename).name
+            target.write_bytes(archive.read(info))
+            target.chmod(0o755)
+
+
+def _unpack_zip(archive: zipfile.ZipFile, into: Path) -> None:
+    for info in archive.infolist():
+        # The mode the archive keeps: Electron's programs carry their x bits, and its macOS app its
+        # frameworks' links (Versions/Current), which a plain extract would write as small files.
+        mode = info.external_attr >> 16
+        target = into / info.filename
+        if stat.S_ISLNK(mode):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(archive.read(info).decode())
+            continue
+        archive.extract(info, into)
+        if mode & 0o111 and not info.is_dir():
+            target.chmod(mode & 0o777)
+
+
 def _unpack(data: bytes, url: str, into: Path) -> None:
     """The archive into `into`, without its one top folder when it has one."""
     if url.endswith(".whl"):
-        # uv's wheel holds its programs as the wheel's scripts.
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            for info in archive.infolist():
-                if info.filename.split("/")[-2:-1] == ["scripts"]:
-                    target = into / PurePosixPath(info.filename).name
-                    target.write_bytes(archive.read(info))
-                    target.chmod(0o755)
+            _unpack_wheel(archive, into)
         return
     if url.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            for info in archive.infolist():
-                # The mode the archive keeps: Electron's programs carry their x bits, and its macOS app its
-                # frameworks' links (Versions/Current), which a plain extract would write as small files.
-                mode = info.external_attr >> 16
-                target = into / info.filename
-                if stat.S_ISLNK(mode):
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.symlink_to(archive.read(info).decode())
-                    continue
-                archive.extract(info, into)
-                if mode & 0o111 and not info.is_dir():
-                    target.chmod(mode & 0o777)
+            _unpack_zip(archive, into)
     else:
         # The archive is the one whose sha256 is written above, so its own paths are taken as they are.
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:

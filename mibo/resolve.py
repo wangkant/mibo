@@ -142,11 +142,11 @@ def pick(name: str, near: str = "", as_: str = "", *, tabs: list[dict] = (),
     folders = folders or {}
     if not name:
         return Resolved("none")
-    if as_ in ("", "page") and "://" in name and address(name):
+    if as_ in ("", "page") and "://" in name and (url := address(name)):
         # A web address in full: the tab showing it, else the page; never a program's name.
-        tab = next((t for t in tabs if t.get("url") == address(name)), None)
+        tab = next((t for t in tabs if t.get("url") == url), None)
         return (Resolved("tab", tab["id"], tab.get("title") or "") if tab
-                else Resolved("page", address(name), urlsplit(name).hostname or ""))
+                else Resolved("page", url, urlsplit(name).hostname or ""))
     if as_ in ("", "page"):
         ranked = sorted(((max(score(name, t.get("title") or ""), score(name, urlsplit(t.get("url") or "").hostname
                                                                         or "")), t) for t in tabs),

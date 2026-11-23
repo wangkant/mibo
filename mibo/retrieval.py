@@ -5,14 +5,12 @@ import asyncio
 import logging
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 
 from . import channels, embeddings, ranking, transport
 from .endpoints import embedding_endpoint
 from .storage import num as _num
-from .textproc import (
-    _focus_tokens,
-)
+from .textproc import _focus_tokens
 
 logger = logging.getLogger("agent")
 
@@ -68,31 +66,6 @@ def turn_before(turns: list, text: str, lang: str) -> tuple[str, float]:
             return items[n - 1], 1.0
     leans = bool(_POINTS_BACK.search(text)) or len(ranking.plain_terms(_focus_tokens(text, lang))) <= _FEW_TERMS
     return "\n".join(t for _, t in said), _LEANS if leans else _FOLLOWS
-
-
-def _moment(t: float, tz) -> str:
-    """"Mon 10 Nov 19:05"."""
-    return f"{ranking.day_label(t, tz)} {datetime.fromtimestamp(t, tz):%H:%M}"
-
-
-def _days_ago(t: float, now: float, tz) -> str:
-    """Calendar days in `tz`, so last night's event is "yesterday" this morning."""
-    days = (datetime.fromtimestamp(now, tz).date()
-            - datetime.fromtimestamp(t, tz).date()).days
-    if days <= 0:
-        return "today"
-    if days == 1:
-        return "yesterday"
-    if days < 60:
-        return f"{days} days ago"
-    return f"{days // 30} months ago"
-
-
-def _overlaps(ep: dict, span: tuple[float, float]) -> bool:
-    t0 = _num(ep.get("t0"))
-    t1 = _num(ep.get("t1")) or t0
-    t0 = t0 or t1
-    return bool(t0) and t0 < span[1] and t1 >= span[0]
 
 
 class Retrieval:
@@ -207,10 +180,6 @@ class Retrieval:
             self._last_recalled = {}
         self._last_recalled[conv] = list(placed)
 
-    def _recalled_row(self, conv: str, kind: str, item_id: str):
-        """The live row a placed id names, or None once it is gone."""
-        return self.person_store.get(item_id)
-
     def _mark_used(self, conv: str, reply_text: str) -> list[dict]:
         """After a sent reply: each item its prompt placed that shares at least
         two focus tokens with the reply gets one more use. Counted in memory,
@@ -226,8 +195,9 @@ class Retrieval:
         now = time.time()
         dirty = self.__dict__.setdefault("_memory_counts_dirty", set())
         used = []
-        for key, kind, item_id in placed:
-            row = self._recalled_row(key, kind, item_id)
+        for _, kind, item_id in placed:
+            # None once the row is gone.
+            row = self.person_store.get(item_id)
             if row is None:
                 continue
             if len(_focus_tokens(str(row.get("text", "")), "zh") & said) >= _USE_OVERLAP:

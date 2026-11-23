@@ -3,6 +3,7 @@ background, and the request carries only the version number. A new release
 comes as a new installer on the release page."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -65,10 +66,9 @@ def _cache(home: Path) -> Path:
 
 def _read(home: Path) -> dict:
     try:
-        data = json.loads(_cache(home).read_text(encoding="utf-8"))
+        return json.loads(_cache(home).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return data
 
 
 def stale(home: Path) -> bool:
@@ -93,11 +93,9 @@ def check(home: Path, timeout: float = TIMEOUT_S) -> str:
     failed = not latest
     latest = latest or str(_read(home).get("latest") or "")
     if home.is_dir():
-        try:
+        with contextlib.suppress(OSError):
             atomic_write_text(_cache(home), json.dumps(
                 {"checked": time.time(), "latest": latest, "failed": failed}), fsync=False)
-        except OSError:
-            pass
     return latest
 
 

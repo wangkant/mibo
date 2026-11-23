@@ -78,7 +78,4 @@ class RecentStore:
     def delete(self) -> None:
         """MEMORY_KEEP_RECENT=false: nothing of the chats stays on disk."""
         self.convs = {}
-        try:
-            self.path.unlink()
-        except FileNotFoundError:
-            pass
+        self.path.unlink(missing_ok=True)

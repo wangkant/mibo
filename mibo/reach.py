@@ -31,10 +31,10 @@ def runtime_of(home: Path) -> Path:
 async def _ask(runtime: Path, host: str) -> bool:
     # No system proxy, as the guarded fetch uses none: what answers here answers for it too.
     try:
-        async with httpx.AsyncClient(timeout=situation.PROBE_TIMEOUT_S, follow_redirects=False, trust_env=False,
-                                     transport=situation.recording_transport(runtime)) as http:
-            async with http.stream("HEAD", f"https://{host}/"):
-                pass
+        async with (httpx.AsyncClient(timeout=situation.PROBE_TIMEOUT_S, follow_redirects=False, trust_env=False,
+                                      transport=situation.recording_transport(runtime)) as http,
+                    http.stream("HEAD", f"https://{host}/")):
+            pass
     except httpx.HTTPError:
         answered = False
     else:

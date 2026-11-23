@@ -6,19 +6,10 @@ import logging
 import re
 from pathlib import Path
 
-from .storage import atomic_write_text
-
 logger = logging.getLogger("agent")
 
 
 class DataViews:
-    @staticmethod
-    def _save_json(path: Path, obj, label: str) -> None:
-        try:
-            atomic_write_text(path, json.dumps(obj, ensure_ascii=False, indent=2))
-        except OSError as e:
-            logger.warning("[Agent] %s save failed: %s", label, e)
-
     @staticmethod
     def _pool_stamp(paths, *, strict: bool = False) -> tuple:
         """Identity, nanosecond mtime and size per file; `strict` raises on an
@@ -70,6 +61,7 @@ class DataViews:
         for f in self._filters_cache:
             reply = f["regex"].sub(f["replacement"], reply)
         return reply
+
 
 def parse_filters(data) -> list:
     """The output filter rules the agent applies: a pattern and what replaces

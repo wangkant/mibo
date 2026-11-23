@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from operator import mul
 
-from .embeddings import text_key
-
 BM25_K1 = 1.2
 BM25_B = 0.75
 
@@ -140,40 +138,6 @@ class Query:
     def word_score(self, doc: Sequence[str], field_weights: Sequence[float]) -> float:
         """`score` from shared words alone: single characters add up on a long page."""
         return sum(weight * lexicon.score(doc, field_weights) for lexicon, weight, words in self.parts if words)
-
-
-def epoch(ts) -> float:
-    """ISO timestamp -> epoch seconds; 0.0 when unparsable. Naive stamps are
-    read as local time, matching every other timestamp in the pipeline."""
-    if not ts:
-        return 0.0
-    try:
-        return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).timestamp()
-    except (ValueError, TypeError, OSError, OverflowError):
-        return 0.0
-
-
-def embedding_text(rec: dict) -> str:
-    """What a row is embedded as: the situation it answers, not the reply."""
-    ctx = rec.get("context") or []
-    if not isinstance(ctx, list):
-        ctx = [ctx]
-    return "\n".join([str(rec.get("scenario") or ""), *(str(c) for c in ctx)])
-
-
-def row_fields(rec: dict) -> tuple[str, str, float, str]:
-    """What scoring needs from a row, computed once at load: lowercased
-    scenario and context, the timestamp as epoch seconds (0.0 means no
-    recency bonus) and the row's embedding key."""
-    ctx = rec.get("context") or []
-    if not isinstance(ctx, list):
-        ctx = [ctx]
-    return (
-        str(rec.get("scenario") or "").lower(),
-        " ".join(str(c) for c in ctx).lower(),
-        epoch(rec.get("ts")),
-        text_key(embedding_text(rec)),
-    )
 
 
 def cosine(a, b) -> float | None:

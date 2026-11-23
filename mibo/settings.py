@@ -208,56 +208,44 @@ class AgentSettings:
         vision_key, vision_base = vision_endpoint_from_env(env)
         # A default is written once, on its field.
         declared = {f.name: f.default for f in fields(cls)}
-        defaults = dict(
-            api_key=_str("LLM_API_KEY"),
-            base_url=_str("LLM_BASE_URL", declared["base_url"]),
-            model=_str("LLM_MODEL", declared["model"]),
-            persona_name=_str("PERSONA_NAME"),
-            persona_avatar=_str("PERSONA_AVATAR"),
-            llm_dm_model=_str("LLM_DM_MODEL"),
-            context_window=env_int("CONTEXT_WINDOW", declared["context_window"], minimum=4096,
-                                   maximum=100_000_000, env=env),
-            memory_file=_str("MEMORY_FILE", declared["memory_file"]),
-            memory_max_per_conversation=env_int(
-                "MEMORY_MAX_PER_CONVERSATION",
-                declared["memory_max_per_conversation"],
-                minimum=1, maximum=10_000, env=env),
-            memory_tidy_every=env_int(
-                "MEMORY_TIDY_EVERY", declared["memory_tidy_every"],
-                minimum=0, maximum=10_000, env=env),
-            memory_calls_per_day=env_int(
-                "MEMORY_CALLS_PER_DAY", declared["memory_calls_per_day"],
-                minimum=0, maximum=10_000, env=env),
-            memory_episodes_max=env_int(
-                "MEMORY_EPISODES_MAX", declared["memory_episodes_max"],
-                minimum=1, maximum=10_000, env=env),
-            memory_keep_recent=env_bool(
-                "MEMORY_KEEP_RECENT", declared["memory_keep_recent"], env=env),
-            memory_log_days=env_int(
-                "MEMORY_LOG_DAYS", declared["memory_log_days"],
-                minimum=0, maximum=3650, env=env),
-            admin_name=_str("ADMIN_NAME"),
-            admin_relationship=_str("ADMIN_RELATIONSHIP"),
-            llm_fallback_model=_str("LLM_FALLBACK_MODEL"),
-            llm_fallback_base_url=_str("LLM_FALLBACK_BASE_URL"),
-            llm_fallback_api_key=_str("LLM_FALLBACK_API_KEY"),
-            llm_fallback_thinking=env_bool(
-                "LLM_FALLBACK_THINKING", declared["llm_fallback_thinking"],
-                env=env),
-            llm_fallback_duration_s=env_int(
-                "LLM_FALLBACK_DURATION_S", declared["llm_fallback_duration_s"],
-                minimum=1, maximum=86_400, env=env),
-            llm_rate_limit_cooldown_s=env_int(
-                "LLM_RATE_LIMIT_COOLDOWN_S", declared["llm_rate_limit_cooldown_s"],
-                minimum=1, maximum=86_400, env=env),
-            vision_model=_str("VISION_MODEL"),
-            vision_api_key=vision_key,
-            vision_base_url=vision_base,
-            embedding_model=_str("EMBEDDING_MODEL"),
-            embedding_base_url=_str("EMBEDDING_BASE_URL"),
-            embedding_api_key=_str("EMBEDDING_API_KEY"),
-            lang=normalize_lang(_str("AGENT_LANG", "en", strip=True)),
-        )
+        def _int(name: str, field_name: str, minimum: int, maximum: int) -> int:
+            return env_int(name, declared[field_name], minimum=minimum, maximum=maximum, env=env)
+
+        def _bool(name: str, field_name: str) -> bool:
+            return env_bool(name, declared[field_name], env=env)
+
+        defaults = {
+            "api_key": _str("LLM_API_KEY"),
+            "base_url": _str("LLM_BASE_URL", declared["base_url"]),
+            "model": _str("LLM_MODEL", declared["model"]),
+            "persona_name": _str("PERSONA_NAME"),
+            "persona_avatar": _str("PERSONA_AVATAR"),
+            "llm_dm_model": _str("LLM_DM_MODEL"),
+            "context_window": _int("CONTEXT_WINDOW", "context_window", 4096, 100_000_000),
+            "memory_file": _str("MEMORY_FILE", declared["memory_file"]),
+            "memory_max_per_conversation": _int("MEMORY_MAX_PER_CONVERSATION", "memory_max_per_conversation",
+                                                1, 10_000),
+            "memory_tidy_every": _int("MEMORY_TIDY_EVERY", "memory_tidy_every", 0, 10_000),
+            "memory_calls_per_day": _int("MEMORY_CALLS_PER_DAY", "memory_calls_per_day", 0, 10_000),
+            "memory_episodes_max": _int("MEMORY_EPISODES_MAX", "memory_episodes_max", 1, 10_000),
+            "memory_keep_recent": _bool("MEMORY_KEEP_RECENT", "memory_keep_recent"),
+            "memory_log_days": _int("MEMORY_LOG_DAYS", "memory_log_days", 0, 3650),
+            "admin_name": _str("ADMIN_NAME"),
+            "admin_relationship": _str("ADMIN_RELATIONSHIP"),
+            "llm_fallback_model": _str("LLM_FALLBACK_MODEL"),
+            "llm_fallback_base_url": _str("LLM_FALLBACK_BASE_URL"),
+            "llm_fallback_api_key": _str("LLM_FALLBACK_API_KEY"),
+            "llm_fallback_thinking": _bool("LLM_FALLBACK_THINKING", "llm_fallback_thinking"),
+            "llm_fallback_duration_s": _int("LLM_FALLBACK_DURATION_S", "llm_fallback_duration_s", 1, 86_400),
+            "llm_rate_limit_cooldown_s": _int("LLM_RATE_LIMIT_COOLDOWN_S", "llm_rate_limit_cooldown_s", 1, 86_400),
+            "vision_model": _str("VISION_MODEL"),
+            "vision_api_key": vision_key,
+            "vision_base_url": vision_base,
+            "embedding_model": _str("EMBEDDING_MODEL"),
+            "embedding_base_url": _str("EMBEDDING_BASE_URL"),
+            "embedding_api_key": _str("EMBEDDING_API_KEY"),
+            "lang": normalize_lang(_str("AGENT_LANG", "en", strip=True)),
+        }
         # The operational knobs' field defaults read os.environ; apply ``env`` to them too.
         if env is not None:
             defaults.update((f.name, f.metadata["env"](env))

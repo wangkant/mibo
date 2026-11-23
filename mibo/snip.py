@@ -130,8 +130,8 @@ def main(argv: list[str]) -> int:
         k = scale_at(left + x, top + y)
         canvas.itemconfigure(tip, font=("Microsoft YaHei UI", -round(11 * 4 / 3 * k)))
         canvas.coords(tip, (left + right) // 2, top + round(36 * k))
-        l, t, r, b = canvas.bbox(tip)
-        canvas.coords(tip_box, l - round(16 * k), t - round(8 * k), r + round(16 * k), b + round(8 * k))
+        x0, y0, x1, y1 = canvas.bbox(tip)
+        canvas.coords(tip_box, x0 - round(16 * k), y0 - round(8 * k), x1 + round(16 * k), y1 + round(8 * k))
 
     def monitors():
         found = []
