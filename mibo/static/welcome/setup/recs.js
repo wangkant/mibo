@@ -1,13 +1,14 @@
 "use strict";
 // Settings › Recommendations: how often and when (the pace and quiet hours pacing.py reads), the person's taste
-// as the ranking holds it (GET/POST /api/profile/taste: picked topics with a lean each, what their reactions
-// taught, every other lean, what they said in the chat, wishes for the next few days, a reset), and the week in numbers
-// (GET /api/feed/numbers). Topics are added and taken out with POST /api/feed/interests, as the first run does.
+// (GET/POST /api/profile/taste) as chips for the topics and the platforms they follow, the ranking's memory of
+// what they did and said folded under them, a reset, and the week in numbers (GET /api/feed/numbers). Topics
+// and platforms are kept with POST /api/feed/interests, as the first run does.
 (() => {
   const PACES = ["less", "normal", "more"];
-  const LEANS = ["-1", "", "1"];
   const QUIET_DEFAULT = { from: "22:00", to: "08:00" };
   const TOPIC_LEN = 40;
+  // The platforms shown before "more": the list comes in the order a reader would look for them.
+  const PLATFORMS_SHOWN = 12;
 
   window.paSetup.part("recs", (kit) => {
     const { el } = kit;
@@ -15,6 +16,7 @@
     const ctx = kit.ctx;
     let view = null;
     let posting = false;
+    let moreShown = false;
     const node = kit.section("recs");
     const error = kit.errorLine();
 
@@ -33,10 +35,9 @@
     quiet.row.append(hours);
     paceCard.append(paceRow.row, quiet.row);
 
-    // ---- Preferences.
+    // ---- Preferences: topics and platforms as chips, what was learned folded under them.
     const tasteCard = kit.item("taste", kit.card(t.tasteTitle));
-    const topicList = el("div", "setup-recs-topics");
-    const offered = el("div", "setup-chips setup-recs-offered");
+    const topicChips = el("div", "setup-chips");
     const typed = kit.input("setup-word-input");
     typed.placeholder = t.addTopic;
     typed.maxLength = TOPIC_LEN;
@@ -47,27 +48,19 @@
       event.preventDefault();
       addTopic(name).then(() => (typed.value = ""));
     });
-    offered.append(typed);
-    const takes = labelled(t.takes);
-    const passes = labelled(t.passes);
-    const learnedNone = el("p", "setup-help", t.learnedNone);
-    // Leans set from a card (its chip, its no) or a taught row, each with a cross that clears it.
-    const leaned = words();
-    const leanBlock = block(t.leaned, leaned);
-    const said = words();
-    const saidNone = el("p", "setup-help", t.saidNone);
-    const wishBlock = el("div", "setup-recs-block");
-    const wishes = words();
-    wishBlock.append(el("p", "setup-option-name", t.wishes), wishes);
+    const platformChips = el("div", "setup-chips");
+    // A chosen platform that is read once the person is signed in says so, with the way to Connections.
+    const note = el("div", "setup-recs-note");
+    note.append(el("span", "setup-help", t.platformNote), kit.button("setup-button-link", t.platformGo, () => ctx.go("setup/connect")));
+    const remembered = kit.fold("");
+    const rememberedName = remembered.summary.lastChild;
+    const memory = el("div", "setup-words");
+    const memoryNone = el("p", "setup-help", t.rememberedNone);
     const reset = kit.button("setup-recs-reset", t.reset, askReset);
-    tasteCard.append(
-      block(t.topics, topicList, offered),
-      block(t.learned, takes.line, passes.line, learnedNone),
-      leanBlock,
-      block(t.said, said, saidNone),
-      wishBlock,
-      reset,
-    );
+    remembered.body.append(memory, memoryNone, reset);
+    const rememberedBlock = el("div", "setup-recs-block");
+    rememberedBlock.append(remembered.node);
+    tasteCard.append(block(t.topics, topicChips), block(t.platforms, platformChips, note), rememberedBlock);
 
     // ---- The week. Nothing shows before the first view has come.
     const week = el("p", "setup-help setup-recs-week");
@@ -84,20 +77,34 @@
       });
       return input;
     }
-    function words() {
-      return el("div", "setup-words");
-    }
-    // A short label, then pills on the same line.
-    function labelled(label) {
-      const line = el("div", "setup-recs-line");
-      const list = words();
-      line.append(el("span", "setup-recs-label", label), list);
-      return { line, list };
-    }
     function block(title, ...parts) {
       const box = el("div", "setup-recs-block");
       box.append(el("p", "setup-option-name", title), ...parts);
       return box;
+    }
+    // A chip that is on or off, with a tick while on; a platform read only once signed in carries a lock.
+    function chip(text, on, toggle, locked = false) {
+      const button = el("button", "setup-chip");
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(on));
+      button.disabled = posting;
+      button.append(kit.icon("check", "setup-icon setup-chip-tick"), el("span", "", text));
+      if (locked) {
+        button.title = t.platformLocked;
+        button.append(kit.icon("lock", "setup-icon setup-chip-lock"));
+      }
+      button.addEventListener("click", toggle);
+      return button;
+    }
+    // The chip that shows the platforms left out.
+    function more() {
+      const button = el("button", "setup-chip setup-chip-quiet", t.more);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        moreShown = true;
+        render();
+      });
+      return button;
     }
     // A name in a pill with a cross that takes it out.
     function pill(text, label, off) {
@@ -125,88 +132,82 @@
         input.disabled = posting;
       }
 
-      topicList.replaceChildren(
-        ...(v.topics.length ? v.topics.map(topicRow) : [el("p", "setup-help", t.topicsNone)]),
-      );
-      const picked = new Set(v.topics.map((row) => row.name.toLowerCase()));
-      offered.replaceChildren(
-        ...v.offered.filter((row) => !picked.has(row.name.toLowerCase())).map((row) => {
-          const chip = el("button", "setup-chip", `+ ${row.name}`);
-          chip.type = "button";
-          chip.disabled = posting;
-          chip.addEventListener("click", () => addTopic(row.name));
-          return chip;
+      // The topics offered, then the ones typed; each is on when followed.
+      const followed = v.topics.map((row) => row.name);
+      const lower = (name) => name.toLowerCase();
+      const offered = v.offered.map((row) => row.name);
+      const names = [...offered, ...followed.filter((name) => !offered.some((one) => lower(one) === lower(name)))];
+      topicChips.replaceChildren(
+        ...names.map((name) => {
+          const on = followed.some((one) => lower(one) === lower(name));
+          return chip(name, on, () => setTopics(on ? followed.filter((one) => lower(one) !== lower(name)) : [...followed, name]));
         }),
         typed,
       );
       typed.disabled = posting;
 
-      const learned = (row) => pill(named(row), paI18n.t("setup_recs.learnedOff", { name: named(row) }), () => change({ leans: { [row.key]: 0 } }));
-      for (const [side, rows] of [[takes, v.takes], [passes, v.passes]]) {
-        side.list.replaceChildren(...rows.map(learned));
-        side.line.hidden = !rows.length;
-      }
-      learnedNone.hidden = Boolean(v.takes.length || v.passes.length);
-      leaned.replaceChildren(
-        ...v.leans.map((row) => {
-          const text = paI18n.t(`setup_recs.leanedRow.${row.lean}`, { name: named(row) });
-          return pill(text, paI18n.t("setup_recs.saidOff", { what: text }), () => change({ leans: { [row.key]: null } }));
-        }),
+      const chosen = new Set(v.platforms);
+      const shown = v.platformsOffered.filter((row, i) => moreShown || i < PLATFORMS_SHOWN || chosen.has(row.key));
+      const unread = (row) => row.reach === "signin" && !row.connected;
+      platformChips.replaceChildren(
+        ...shown.map((row) => chip(row.name, chosen.has(row.key),
+          () => setPlatforms(chosen.has(row.key) ? v.platforms.filter((key) => key !== row.key) : [...v.platforms, row.key]), unread(row))),
+        ...(shown.length < v.platformsOffered.length ? [more()] : []),
       );
-      leanBlock.hidden = !v.leans.length;
+      note.hidden = !v.platformsOffered.some((row) => chosen.has(row.key) && unread(row));
 
-      const rows = [
+      // What the ranking remembers, one flat list: each pill says what it is, and its cross takes it out.
+      const learned = (word, row) => pill(paI18n.t(`setup_recs.${word}`, { name: named(row) }), paI18n.t("setup_recs.learnedOff", { name: named(row) }), () => change({ leans: { [row.key]: 0 } }));
+      const leaned = (row) => {
+        const text = paI18n.t(`setup_recs.leanedRow.${row.lean}`, { name: named(row) });
+        return pill(text, paI18n.t("setup_recs.saidOff", { what: text }), () => change({ leans: { [row.key]: null } }));
+      };
+      const said = [
         ...v.likes.map((x) => [paI18n.t("setup_recs.like", { topic: x.topic }), () => change({ likes: keepLikes(x) })]),
         ...v.rules.map((r) => [
           r.kind === "topic" ? paI18n.t("setup_recs.avoid", { topic: r.topic }) : paI18n.t("setup_recs.hidden", { name: r.name }),
           () => change({ rules: v.rules.filter((other) => other !== r).map(({ kind, key, topic }) => ({ kind, key, topic })) }),
         ]),
+        ...v.wishes.map((x) => {
+          const day = new Date(x.until * 1000).toLocaleDateString(paI18n.locale, { month: "short", day: "numeric" });
+          return [paI18n.t("setup_recs.wish", { topic: x.topic, day }), () => change({ likes: keepLikes(x) })];
+        }),
       ];
       if (v.form) {
         const parts = [
           v.form.short === true ? t.form.short : v.form.short === false ? t.form.long : "",
           t.form[v.form.kind] || "",
         ].filter(Boolean);
-        rows.push([paI18n.t("setup_recs.formRow", { parts: parts.join(t.listSep) }), () => change({ form: null })]);
+        said.push([paI18n.t("setup_recs.formRow", { parts: parts.join(t.listSep) }), () => change({ form: null })]);
       }
-      said.replaceChildren(...rows.map(([text, off]) => pill(text, paI18n.t("setup_recs.saidOff", { what: text }), off)));
-      saidNone.hidden = Boolean(rows.length);
-
-      wishes.replaceChildren(
-        ...v.wishes.map((x) => {
-          const day = new Date(x.until * 1000).toLocaleDateString(paI18n.locale, { month: "short", day: "numeric" });
-          const text = paI18n.t("setup_recs.wish", { topic: x.topic, day });
-          return pill(text, paI18n.t("setup_recs.saidOff", { what: x.topic }), () => change({ likes: keepLikes(x) }));
-        }),
-      );
-      wishBlock.hidden = !v.wishes.length;
+      const pills = [
+        ...v.takes.map((row) => learned("takesRow", row)),
+        ...v.passes.map((row) => learned("passesRow", row)),
+        ...[...v.topics.filter((row) => row.lean != null), ...v.leans].map(leaned),
+        ...said.map(([text, off]) => pill(text, paI18n.t("setup_recs.saidOff", { what: text }), off)),
+      ];
+      memory.replaceChildren(...pills);
+      memoryNone.hidden = Boolean(pills.length);
+      rememberedName.textContent = paI18n.t("setup_recs.remembered", { count: pills.length });
       reset.disabled = posting;
-    }
-
-    // Each picked topic: its name, less / usual / more, and a cross to stop following it.
-    function topicRow(row) {
-      const line = el("div", "setup-recs-topic");
-      const lean = kit.choices(paI18n.t("setup_recs.leanLabel", { name: row.name }), LEANS.map((key) => [key, t.lean[key]]), (key) =>
-        change({ leans: { [row.key]: key === "" ? null : Number(key) } }));
-      lean.set(row.lean == null ? "" : String(row.lean), posting);
-      const cross = kit.iconButton("setup-word-off", "cross", paI18n.t("setup_recs.removeTopic", { name: row.name }), () =>
-        setTopics(view.topics.map((one) => one.name).filter((name) => name !== row.name)));
-      cross.disabled = posting;
-      line.append(el("span", "setup-recs-topic-name", row.name), lean.group, cross);
-      return line;
     }
 
     // Every like and wish but `gone`, as POST /api/profile/taste {likes} takes them.
     const keepLikes = (gone) => [...view.likes, ...view.wishes].filter((x) => x !== gone).map((x) => x.topic);
 
     function addTopic(name) {
-      if (view.topics.some((row) => row.name.toLowerCase() === name.toLowerCase())) return Promise.resolve();
-      return setTopics([...view.topics.map((row) => row.name), name]);
+      const followed = view.topics.map((row) => row.name);
+      if (followed.some((one) => one.toLowerCase() === name.toLowerCase())) return Promise.resolve();
+      return setTopics([...followed, name]);
     }
 
-    async function setTopics(topics) {
+    // The topics and the platforms are kept by one call, as the first run's; platforms left out stay as they were.
+    const setTopics = (topics) => choose({ topics });
+    const setPlatforms = (platforms) => choose({ topics: view.topics.map((row) => row.name), platforms });
+
+    async function choose(body) {
       await send(async () => {
-        await ctx.api("feed/interests", { topics, lang: kit.lang });
+        await ctx.api("feed/interests", { ...body, lang: kit.lang });
         return ctx.api(`profile/taste?lang=${kit.lang}`);
       });
     }

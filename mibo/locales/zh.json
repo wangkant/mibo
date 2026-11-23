@@ -780,7 +780,11 @@
     "platforms": {
       "bilibili": "哔哩哔哩",
       "youtube": "YouTube"
-    }
+    },
+    "platformsHead": "常看的平台",
+    "platformsMore": "更多",
+    "platformLocked": "需登录后读取",
+    "platformsSignin": "带锁的平台须先在内置浏览器中登录，并在 设置 › 连接 中开启后台读取，才会读取。"
   },
   "petbox": {
     "shut": "关闭",
@@ -1558,35 +1562,28 @@
     "quietFrom": "开始时间",
     "quietTo": "结束时间",
     "tasteTitle": "推荐偏好",
-    "topics": "关注的主题",
-    "topicsNone": "尚未选择主题。",
-    "lean": {
-      "1": "较多",
-      "-1": "较少",
-      "": "默认"
-    },
-    "leanLabel": "{name}的推荐量",
-    "removeTopic": "取消关注 {name}",
+    "topics": "主题",
     "addTopic": "添加主题",
-    "add": "添加",
-    "learned": "使用习惯",
-    "takes": "常打开",
-    "passes": "常跳过",
-    "learnedNone": "打开或跳过推荐后，将在此显示。",
+    "platforms": "平台",
+    "more": "更多",
+    "platformNote": "带锁的平台须先登录，并在“连接”中开启后台读取，才会读取。",
+    "platformGo": "前往连接",
+    "platformLocked": "需登录后读取",
+    "remembered": "已记住的喜好（{count}）",
+    "rememberedNone": "暂无。打开或跳过推荐、在对话中表明喜好后，将在此显示。",
+    "takesRow": "常打开：{name}",
+    "passesRow": "常跳过：{name}",
     "learnedOff": "不再参考：{name}",
     "kind": {
       "video": "视频",
       "text": "文章",
       "page": "网页"
     },
-    "leaned": "推荐倾向",
     "leanedRow": {
       "0": "不参考：{name}",
-      "1": "较多：{name}",
-      "-1": "较少：{name}"
+      "1": "多推荐：{name}",
+      "-1": "少推荐：{name}"
     },
-    "said": "对话中提及",
-    "saidNone": "在对话中表明喜好后，将在此显示。",
     "like": "喜欢：{topic}",
     "avoid": "不感兴趣：{topic}",
     "hidden": "屏蔽来源：{name}",
@@ -1598,17 +1595,17 @@
     },
     "formRow": "形式：{parts}",
     "saidOff": "删除 {what}",
-    "wishes": "近期偏好",
-    "wish": "{topic}（至 {day}）",
+    "wish": "近期关注：{topic}（至 {day}）",
     "reset": "重置偏好",
     "resetAsk": "重置推荐偏好？",
-    "resetText": "将清除使用习惯、推荐倾向及对话中提及的偏好。关注的主题、推荐频率和免打扰时段保留。此操作无法撤销。",
+    "resetText": "将清除使用习惯、推荐倾向及对话中提及的偏好。关注的主题和平台、推荐频率和免打扰时段保留。此操作无法撤销。",
     "resetOk": "重置",
     "week": "本周推荐 {shown} 条，已打开 {opened} 条。",
     "weekNone": "本周暂无推荐。",
     "errors": {
       "profile_invalid": "此值未被接受。请刷新后重试。",
-      "feed_topics": "此主题未被接受。"
+      "feed_topics": "此主题未被接受。",
+      "feed_platforms": "此平台未被接受。"
     },
     "listSep": "、"
   },

@@ -24,6 +24,8 @@
                      fr: "Français", de: "Deutsch" };
   // The sites the "where" line checks, by their names in the catalog (onboard.platforms).
   const LINE_PLATFORMS = [["bilibili.com", "bilibili"], ["youtube.com", "youtube"]];
+  // The platforms shown before "more": the list comes in the order a reader would look for them.
+  const PLATFORMS_SHOWN = 10;
   const SVG = "http://www.w3.org/2000/svg";
 
   let ctx, t, done;
@@ -48,6 +50,13 @@
   let pickedAtStart = [];
   // The topics as last saved.
   let pickedSaved = [];
+  // The platforms (keys of platforms.py) offered as {key, name, reach, connected}, picked, as the tour opened and
+  // as last saved; and whether the rest of them are shown.
+  let platformsOffered = [];
+  let platformsPicked = [];
+  let platformsAtStart = [];
+  let platformsSaved = [];
+  let platformsMore = false;
   // After the topics: the finds asked for while `looking` (the ask itself, so a late answer to an earlier one is
   // dropped), then shown one at a time while `finding`.
   let looking = null;
@@ -86,6 +95,7 @@
   }
   const TICK = "M5 12.5l4.2 4.2L19 7";
   const PLUS = "M12 5v14M5 12h14";
+  const LOCK = "M7.5 11V8a4.5 4.5 0 0 1 9 0v3M6 11h12v9H6z";
   const CROSS = "M7 7l10 10M17 7L7 17";
   const ASK = "M9.1 9a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4M12 18h.01";
 
@@ -196,6 +206,12 @@
         picked = Array.isArray(value.topics) ? [...value.topics] : [];
         pickedAtStart = [...picked];
         pickedSaved = [...picked];
+        const chosen = Array.isArray(value.platforms) ? value.platforms : [];
+        platformsOffered = Array.isArray(value.platformsOffered) ? value.platformsOffered : [];
+        // Picks made before the language changed stay: the keys are the same in every language.
+        if (platformsPicked.join("\n") === platformsSaved.join("\n")) platformsPicked = [...chosen];
+        platformsAtStart = [...chosen];
+        platformsSaved = [...chosen];
       })
       .catch(() => (suggested = []))
       .finally(() => step === TOPICS && draw());
@@ -398,8 +414,51 @@
       chips.append(fresh);
       refresh();
     });
-    pane.append(head, chips, form, el("p", "onboard-quiet", t.connectLater));
+    pane.append(head, chips, form, platforms(), el("p", "onboard-quiet", t.connectLater));
     return pane;
+  }
+
+  // The platforms to read, as chips under the topics: the first few, the rest behind "more". A platform read only
+  // after signing in carries a lock, and once one is picked a line says where that is done.
+  function platforms() {
+    const box = el("div", "onboard-platforms");
+    const draw = () => {
+      const row = el("div", "onboard-chips");
+      const picks = new Set(platformsPicked);
+      const shown = platformsOffered.filter((one, i) => platformsMore || i < PLATFORMS_SHOWN || picks.has(one.key));
+      for (const one of shown) row.append(platformChip(one, draw));
+      if (shown.length < platformsOffered.length) {
+        const more = el("button", "onboard-chip onboard-chip-quiet", t.platformsMore);
+        more.type = "button";
+        more.addEventListener("click", () => {
+          platformsMore = true;
+          draw();
+        });
+        row.append(more);
+      }
+      const unread = platformsOffered.some((one) => picks.has(one.key) && one.reach === "signin" && !one.connected);
+      box.replaceChildren(el("p", "onboard-hint onboard-platforms-head", t.platformsHead), row,
+        ...(unread ? [el("p", "onboard-hint onboard-platforms-note", t.platformsSignin)] : []));
+    };
+    if (platformsOffered.length) draw();
+    return box;
+  }
+
+  function platformChip(one, changed) {
+    const node = el("button", "onboard-chip");
+    node.type = "button";
+    node.dataset.key = one.key;
+    node.setAttribute("aria-pressed", String(platformsPicked.includes(one.key)));
+    node.append(icon(TICK, "onboard-chip-tick"), el("span", "", one.name));
+    if (one.reach === "signin" && !one.connected) {
+      node.title = t.platformLocked;
+      node.append(icon(LOCK, "onboard-chip-lock"));
+    }
+    node.addEventListener("click", () => {
+      platformsPicked = platformsPicked.includes(one.key) ? platformsPicked.filter((key) => key !== one.key) : [...platformsPicked, one.key];
+      changed();
+    });
+    return node;
   }
 
   // ------------------------------------------- step 4, then: a few finds --
@@ -413,12 +472,7 @@
     nextButton.disabled = true;
     speak(t.findsLooking);
     draw();
-    if (picked.join("\n") !== pickedSaved.join("\n")) {
-      await ctx
-        .api("feed/interests", { topics: picked, lang: screens(speaks) })
-        .then(() => (pickedSaved = [...picked]))
-        .catch(() => {});
-    }
+    await save().catch(() => {});
     let items = [];
     try {
       items = (await ctx.api("feed/first")).items || [];
@@ -434,6 +488,15 @@
     finding = nextButton.hidden = true;
     speak(t.findsSaying);
     draw();
+  }
+
+  // The topics and platforms, when either differs from what was last saved, by one call.
+  async function save() {
+    const same = (a, b) => a.join("\n") === b.join("\n");
+    if (same(picked, pickedSaved) && same(platformsPicked, platformsSaved)) return;
+    await ctx.api("feed/interests", { topics: picked, platforms: platformsPicked, lang: screens(speaks) });
+    pickedSaved = [...picked];
+    platformsSaved = [...platformsPicked];
   }
 
   // Each answer is kept as a like or a skip from the first run (surface "first").
@@ -665,6 +728,7 @@
     if (step === TOPICS && (finding || looking)) return go(ABOUT);
     if (step === TOPICS) {
       picked = [...pickedAtStart];
+      platformsPicked = [...platformsAtStart];
       return startFinds();
     }
     // Words written but not told are dropped.
@@ -678,11 +742,7 @@
     clearTimeout(whereTimer);
     bubble.textContent = t.bye;
     const said = new Promise((resolve) => setTimeout(resolve, BYE_MS));
-    const lang = screens(speaks);
-    const saves = [
-      picked.join("\n") !== pickedSaved.join("\n") ? ctx.api("feed/interests", { topics: picked, lang }) : null,
-      ctx.api("look/toured", {}),
-    ];
+    const saves = [save(), ctx.api("look/toured", {})];
     // Words written but not told yet go along without being waited for: the app comes in meanwhile.
     if (model.configured && told !== "waiting" && draft.trim() && draft !== sent)
       ctx.api("profile/answer", { text: draft }).catch(() => {});

@@ -769,7 +769,11 @@
       "bilibili": "Bilibili",
       "youtube": "YouTube"
     },
-    "chosenTopics_one": "{count} choisi"
+    "chosenTopics_one": "{count} choisi",
+    "platformsHead": "Plateformes que tu utilises",
+    "platformsMore": "Plus",
+    "platformLocked": "Lue après connexion",
+    "platformsSignin": "Les plateformes avec un cadenas ne sont lues qu'après que tu t'y es connecté dans le navigateur intégré et que tu as activé la lecture en arrière-plan dans Réglages › Connexions."
   },
   "petbox": {
     "shut": "Fermer",
@@ -1550,35 +1554,28 @@
     "quietFrom": "Début",
     "quietTo": "Fin",
     "tasteTitle": "Préférences de recommandation",
-    "topics": "Sujets suivis",
-    "topicsNone": "Aucun sujet choisi pour l'instant.",
-    "lean": {
-      "1": "Plus",
-      "-1": "Moins",
-      "": "Habituel"
-    },
-    "leanLabel": "Quantité de {name}",
-    "removeTopic": "Ne plus suivre {name}",
+    "topics": "Sujets",
     "addTopic": "Ajouter un sujet",
-    "add": "Ajouter",
-    "learned": "D'après votre activité",
-    "takes": "Vous ouvrez souvent",
-    "passes": "Vous passez souvent",
-    "learnedNone": "Apparaît après quelques recommandations ouvertes ou passées.",
+    "platforms": "Plateformes",
+    "more": "Plus",
+    "platformNote": "Les plateformes avec un cadenas ne sont lues qu'après que vous vous y êtes connecté et que vous avez activé la lecture en arrière-plan dans Connexions.",
+    "platformGo": "Ouvrir Connexions",
+    "platformLocked": "Lue après connexion",
+    "remembered": "Préférences retenues ({count})",
+    "rememberedNone": "Rien pour l'instant. Cela apparaît quand vous ouvrez ou ignorez des recommandations, ou dites dans la discussion ce que vous aimez.",
+    "takesRow": "Souvent ouvert : {name}",
+    "passesRow": "Souvent ignoré : {name}",
     "learnedOff": "Ne plus tenir compte de {name}",
     "kind": {
       "video": "vidéos",
       "text": "articles",
       "page": "pages web"
     },
-    "leaned": "Ajusté",
     "leanedRow": {
       "0": "Non pris en compte : {name}",
-      "1": "Plus : {name}",
-      "-1": "Moins : {name}"
+      "1": "Afficher plus : {name}",
+      "-1": "Afficher moins : {name}"
     },
-    "said": "Mentionné dans la discussion",
-    "saidNone": "Apparaît quand vous dites dans la discussion ce que vous aimez.",
     "like": "Aime : {topic}",
     "avoid": "Pas intéressé : {topic}",
     "hidden": "Exclu : {name}",
@@ -1590,17 +1587,17 @@
     },
     "formRow": "Format : {parts}",
     "saidOff": "Supprimer {what}",
-    "wishes": "Pour les prochains jours",
-    "wish": "{topic} (jusqu'au {day})",
+    "wish": "Pour les prochains jours : {topic} (jusqu'au {day})",
     "reset": "Réinitialiser les préférences",
     "resetAsk": "Réinitialiser les préférences de recommandation ?",
-    "resetText": "Ce qui a été appris de votre activité, vos ajustements et ce que vous avez mentionné dans la discussion sont effacés. Vos sujets, la fréquence et les heures calmes sont conservés. Cette action est irréversible.",
+    "resetText": "Ce qui a été appris de votre activité, vos ajustements et ce que vous avez mentionné dans la discussion sont effacés. Vos sujets, plateformes, la fréquence et les heures calmes sont conservés. Cette action est irréversible.",
     "resetOk": "Réinitialiser",
     "week": "Cette semaine : {shown} proposés, {opened} ouverts.",
     "weekNone": "Rien de proposé cette semaine pour l'instant.",
     "errors": {
       "profile_invalid": "Cette valeur n'a pas été acceptée. Actualisez la page et réessayez.",
-      "feed_topics": "Ce sujet n'a pas été accepté."
+      "feed_topics": "Ce sujet n'a pas été accepté.",
+      "feed_platforms": "Cette plateforme n'a pas été acceptée."
     },
     "listSep": ", "
   },

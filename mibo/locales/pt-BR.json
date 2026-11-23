@@ -769,7 +769,11 @@
       "bilibili": "Bilibili",
       "youtube": "YouTube"
     },
-    "chosenTopics_one": "{count} escolhido"
+    "chosenTopics_one": "{count} escolhido",
+    "platformsHead": "Plataformas que você usa",
+    "platformsMore": "Mais",
+    "platformLocked": "Lida após o login",
+    "platformsSignin": "As plataformas com cadeado só são lidas depois que você entra nelas no navegador integrado e ativa a leitura em segundo plano em Configurações › Conexões."
   },
   "petbox": {
     "shut": "Fechar",
@@ -1550,35 +1554,28 @@
     "quietFrom": "Início",
     "quietTo": "Fim",
     "tasteTitle": "Preferências de recomendação",
-    "topics": "Assuntos que você segue",
-    "topicsNone": "Nenhum assunto escolhido ainda.",
-    "lean": {
-      "1": "Mais",
-      "-1": "Menos",
-      "": "Normal"
-    },
-    "leanLabel": "Quanto de {name}",
-    "removeTopic": "Deixar de seguir {name}",
+    "topics": "Assuntos",
     "addTopic": "Adicionar um assunto",
-    "add": "Adicionar",
-    "learned": "Pela sua atividade",
-    "takes": "Você costuma abrir",
-    "passes": "Você costuma pular",
-    "learnedNone": "Aparece depois que você abrir ou pular algumas recomendações.",
+    "platforms": "Plataformas",
+    "more": "Mais",
+    "platformNote": "As plataformas com cadeado só são lidas depois que você entra nelas e ativa a leitura em segundo plano em Conexões.",
+    "platformGo": "Abrir Conexões",
+    "platformLocked": "Lida após o login",
+    "remembered": "Preferências lembradas ({count})",
+    "rememberedNone": "Nada ainda. Aparece quando você abre ou pula recomendações, ou diz na conversa o que gosta.",
+    "takesRow": "Abre com frequência: {name}",
+    "passesRow": "Pula com frequência: {name}",
     "learnedOff": "Deixar de considerar {name}",
     "kind": {
       "video": "vídeos",
       "text": "artigos",
       "page": "páginas web"
     },
-    "leaned": "Ajustado",
     "leanedRow": {
       "0": "Não considerado: {name}",
-      "1": "Mais: {name}",
-      "-1": "Menos: {name}"
+      "1": "Mostrar mais: {name}",
+      "-1": "Mostrar menos: {name}"
     },
-    "said": "Mencionado na conversa",
-    "saidNone": "Aparece quando você disser na conversa do que gosta.",
     "like": "Gosta: {topic}",
     "avoid": "Sem interesse: {topic}",
     "hidden": "Excluído: {name}",
@@ -1590,17 +1587,17 @@
     },
     "formRow": "Formato: {parts}",
     "saidOff": "Excluir {what}",
-    "wishes": "Para os próximos dias",
-    "wish": "{topic} (até {day})",
+    "wish": "Para os próximos dias: {topic} (até {day})",
     "reset": "Redefinir preferências",
     "resetAsk": "Redefinir as preferências de recomendação?",
-    "resetText": "O que foi aprendido com sua atividade, os ajustes que você fez e o que mencionou na conversa são apagados. Seus assuntos, a frequência e o horário de silêncio são mantidos. Esta ação não pode ser desfeita.",
+    "resetText": "O que foi aprendido com sua atividade, os ajustes que você fez e o que mencionou na conversa são apagados. Seus assuntos, plataformas, a frequência e o horário de silêncio são mantidos. Esta ação não pode ser desfeita.",
     "resetOk": "Redefinir",
     "week": "Esta semana: {shown} trazidos, {opened} abertos.",
     "weekNone": "Nada trazido esta semana ainda.",
     "errors": {
       "profile_invalid": "Esse valor não foi aceito. Atualize a página e tente novamente.",
-      "feed_topics": "Esse assunto não foi aceito."
+      "feed_topics": "Esse assunto não foi aceito.",
+      "feed_platforms": "Essa plataforma não foi aceita."
     },
     "listSep": ", "
   },

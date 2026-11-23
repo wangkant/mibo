@@ -38,6 +38,13 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - A standing request that sends or posts, such as a daily post on one site, stores its site, recipient, kind of act and text when you give it. Each run acts within that without asking; anything beyond it is not done and is reported, and a costly step still waits for you. After a run, one line in the chat says what was done.
 - A search on Douyin is made on the site itself.
 
+### Recommendations
+
+- Finds now come from many more platforms without signing in: Tencent Video, iQIYI, Youku, Mango TV, CCTV, Pear Video, Douyu, Bilibili Live, Niconico, Rutube, TED, PeerTube, Odysee, CHZZK, SOOP, France.tv, ARD Mediathek and RTVE Play, and, beside the videos, GitHub, Douban, CSDN, Lemmy, Tumblr, Goodreads, WeRead, WEBTOON and MyAnimeList.
+- In the first-run tour and in Settings > Recommendations you pick the platforms you use, those of your language and country first. A pick is a preference, not a filter: those platforms are drawn more often, and the sample finds in the tour include one from each where there is one.
+- Platforms whose lists need an account, such as Douyin, Kuaishou, Xiaohongshu, Weibo, TikTok, Instagram and X, are read from your own feed once you have signed in to them in the app's browser and turned on background reading in Settings > Connections, which asks first. A video found there plays on its card.
+- The preferences card in Settings is simpler: the platforms and the topics you chose, and what the app has learned about you, which you can reset.
+
 ### Settings
 
 - The character knows the app's settings: it can list them, open Settings at an item and change one. A change that widens nothing is made at once; keys are never shown.

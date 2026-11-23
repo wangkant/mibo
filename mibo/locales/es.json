@@ -769,7 +769,11 @@
       "bilibili": "Bilibili",
       "youtube": "YouTube"
     },
-    "chosenTopics_one": "{count} elegido"
+    "chosenTopics_one": "{count} elegido",
+    "platformsHead": "Plataformas que usas",
+    "platformsMore": "Más",
+    "platformLocked": "Se lee tras iniciar sesión",
+    "platformsSignin": "Las plataformas con candado se leen solo después de que inicias sesión en ellas en el navegador integrado y activas la lectura en segundo plano en Ajustes › Conexiones."
   },
   "petbox": {
     "shut": "Cerrar",
@@ -1550,35 +1554,28 @@
     "quietFrom": "Inicio",
     "quietTo": "Fin",
     "tasteTitle": "Preferencias de recomendación",
-    "topics": "Temas que sigue",
-    "topicsNone": "Aún no ha elegido temas.",
-    "lean": {
-      "1": "Más",
-      "-1": "Menos",
-      "": "Normal"
-    },
-    "leanLabel": "Cuánto de {name}",
-    "removeTopic": "Dejar de seguir {name}",
+    "topics": "Temas",
     "addTopic": "Añadir un tema",
-    "add": "Añadir",
-    "learned": "Según su actividad",
-    "takes": "Suele abrir",
-    "passes": "Suele omitir",
-    "learnedNone": "Aparecerá cuando abra u omita algunas recomendaciones.",
+    "platforms": "Plataformas",
+    "more": "Más",
+    "platformNote": "Las plataformas con candado se leen solo después de que inicia sesión en ellas y activa la lectura en segundo plano en Conexiones.",
+    "platformGo": "Abrir Conexiones",
+    "platformLocked": "Se lee tras iniciar sesión",
+    "remembered": "Preferencias recordadas ({count})",
+    "rememberedNone": "Todavía nada. Aparece cuando abre u omite recomendaciones, o cuando dice en el chat lo que le gusta.",
+    "takesRow": "Abre a menudo: {name}",
+    "passesRow": "Omite a menudo: {name}",
     "learnedOff": "Dejar de tener en cuenta {name}",
     "kind": {
       "video": "vídeos",
       "text": "artículos",
       "page": "páginas web"
     },
-    "leaned": "Ajustado",
     "leanedRow": {
       "0": "No se tiene en cuenta: {name}",
-      "1": "Más: {name}",
-      "-1": "Menos: {name}"
+      "1": "Mostrar más: {name}",
+      "-1": "Mostrar menos: {name}"
     },
-    "said": "Mencionado en el chat",
-    "saidNone": "Aparecerá cuando mencione en el chat lo que le gusta.",
     "like": "Le gusta: {topic}",
     "avoid": "No le interesa: {topic}",
     "hidden": "Excluido: {name}",
@@ -1590,17 +1587,17 @@
     },
     "formRow": "Formato: {parts}",
     "saidOff": "Eliminar {what}",
-    "wishes": "Para los próximos días",
-    "wish": "{topic} (hasta el {day})",
+    "wish": "Para los próximos días: {topic} (hasta el {day})",
     "reset": "Restablecer preferencias",
     "resetAsk": "¿Restablecer las preferencias de recomendación?",
-    "resetText": "Se borra lo aprendido de su actividad, los ajustes que hizo y lo mencionado en el chat. Sus temas, la frecuencia y las horas de silencio se mantienen. Esta acción no se puede deshacer.",
+    "resetText": "Se borra lo aprendido de su actividad, los ajustes que hizo y lo mencionado en el chat. Sus temas, plataformas, la frecuencia y las horas de silencio se mantienen. Esta acción no se puede deshacer.",
     "resetOk": "Restablecer",
     "week": "Esta semana trajo {shown} y usted abrió {opened}.",
     "weekNone": "Aún no ha traído nada esta semana.",
     "errors": {
       "profile_invalid": "No se aceptó ese valor. Actualice la página y vuelva a intentarlo.",
-      "feed_topics": "No se aceptó ese tema."
+      "feed_topics": "No se aceptó ese tema.",
+      "feed_platforms": "No se aceptó esa plataforma."
     },
     "listSep": ", "
   },

@@ -227,7 +227,7 @@ ITEMS = (
          _one_of("less", "normal", "more")),
     Item("recs", "recs-quiet", "setup_recs.quietName", "Quiet hours with no finds brought, as 22:00-08:00, or off",
          field("/api/profile/taste", "quiet_hours"), "/api/profile/taste", lambda v, now: {"quiet_hours": v}, _hours),
-    Item("recs", "taste", "setup_recs.tasteTitle", "Their topics and what their reactions taught, each with a lean"),
+    Item("recs", "taste", "setup_recs.tasteTitle", "Their topics and platforms, and what has been remembered of their reactions and words"),
     Item("walks", "walks-on", "setup_walks.onName", "Going out on its own to public sites, as a visitor",
          field("/api/walks", "on"), "/api/walks", lambda v, now: {"on": v}, _switch, _turned_on),
     Item("walks", "walks-count", "setup_walks.walksName", "Walks a day, 0 to 6",

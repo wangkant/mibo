@@ -769,7 +769,11 @@
       "bilibili": "Bilibili",
       "youtube": "YouTube"
     },
-    "chosenTopics_one": "{count} ausgewählt"
+    "chosenTopics_one": "{count} ausgewählt",
+    "platformsHead": "Plattformen, die du nutzt",
+    "platformsMore": "Mehr",
+    "platformLocked": "Wird nach der Anmeldung gelesen",
+    "platformsSignin": "Plattformen mit Schloss werden erst gelesen, wenn du dich im integrierten Browser dort anmeldest und unter Einstellungen › Verbindungen das Lesen im Hintergrund einschaltest."
   },
   "petbox": {
     "shut": "Schließen",
@@ -1550,35 +1554,28 @@
     "quietFrom": "Beginn",
     "quietTo": "Ende",
     "tasteTitle": "Empfehlungseinstellungen",
-    "topics": "Themen, denen Sie folgen",
-    "topicsNone": "Noch keine Themen gewählt.",
-    "lean": {
-      "1": "Mehr",
-      "-1": "Weniger",
-      "": "Normal"
-    },
-    "leanLabel": "Wie viel {name}",
-    "removeTopic": "{name} nicht mehr folgen",
+    "topics": "Themen",
     "addTopic": "Thema hinzufügen",
-    "add": "Hinzufügen",
-    "learned": "Aus Ihrer Nutzung",
-    "takes": "Öffnen Sie oft",
-    "passes": "Überspringen Sie oft",
-    "learnedNone": "Erscheint, sobald Sie einige Empfehlungen geöffnet oder übersprungen haben.",
+    "platforms": "Plattformen",
+    "more": "Mehr",
+    "platformNote": "Plattformen mit Schloss werden erst gelesen, wenn Sie sich dort angemeldet und unter Verbindungen das Lesen im Hintergrund eingeschaltet haben.",
+    "platformGo": "Verbindungen öffnen",
+    "platformLocked": "Wird nach der Anmeldung gelesen",
+    "remembered": "Gemerkte Vorlieben ({count})",
+    "rememberedNone": "Noch nichts. Erscheint, sobald Sie Empfehlungen öffnen oder überspringen oder im Chat sagen, was Ihnen gefällt.",
+    "takesRow": "Oft geöffnet: {name}",
+    "passesRow": "Oft übersprungen: {name}",
     "learnedOff": "{name} nicht mehr berücksichtigen",
     "kind": {
       "video": "Videos",
       "text": "Artikel",
       "page": "Webseiten"
     },
-    "leaned": "Angepasst",
     "leanedRow": {
       "0": "Nicht berücksichtigt: {name}",
-      "1": "Mehr: {name}",
-      "-1": "Weniger: {name}"
+      "1": "Mehr zeigen: {name}",
+      "-1": "Weniger zeigen: {name}"
     },
-    "said": "Im Chat erwähnt",
-    "saidNone": "Erscheint, sobald Sie im Chat nennen, was Sie mögen.",
     "like": "Mag: {topic}",
     "avoid": "Kein Interesse: {topic}",
     "hidden": "Ausgeschlossen: {name}",
@@ -1590,17 +1587,17 @@
     },
     "formRow": "Form: {parts}",
     "saidOff": "{what} löschen",
-    "wishes": "Für die nächsten Tage",
-    "wish": "{topic} (bis {day})",
+    "wish": "Für die nächsten Tage: {topic} (bis {day})",
     "reset": "Einstellungen zurücksetzen",
     "resetAsk": "Empfehlungseinstellungen zurücksetzen?",
-    "resetText": "Was aus Ihrer Nutzung gelernt wurde, Ihre Gewichtungen und das im Chat Erwähnte werden gelöscht. Ihre Themen, die Häufigkeit und die Ruhezeiten bleiben. Dies kann nicht rückgängig gemacht werden.",
+    "resetText": "Was aus Ihrer Nutzung gelernt wurde, Ihre Gewichtungen und das im Chat Erwähnte werden gelöscht. Ihre Themen, Plattformen, die Häufigkeit und die Ruhezeiten bleiben. Dies kann nicht rückgängig gemacht werden.",
     "resetOk": "Zurücksetzen",
     "week": "Diese Woche: {shown} gebracht, {opened} geöffnet.",
     "weekNone": "Diese Woche wurde noch nichts gebracht.",
     "errors": {
       "profile_invalid": "Dieser Wert wurde nicht angenommen. Aktualisieren Sie die Seite und versuchen Sie es erneut.",
-      "feed_topics": "Dieses Thema wurde nicht angenommen."
+      "feed_topics": "Dieses Thema wurde nicht angenommen.",
+      "feed_platforms": "Diese Plattform wurde nicht angenommen."
     },
     "listSep": ", "
   },

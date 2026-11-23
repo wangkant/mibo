@@ -762,7 +762,11 @@
     "platforms": {
       "bilibili": "嗶哩嗶哩",
       "youtube": "YouTube"
-    }
+    },
+    "platformsHead": "常看的平台",
+    "platformsMore": "更多",
+    "platformLocked": "需登入後讀取",
+    "platformsSignin": "帶鎖的平台須先在內建瀏覽器中登入，並在 設定 › 連接 中開啟背景讀取，才會讀取。"
   },
   "petbox": {
     "shut": "關閉",
@@ -1539,35 +1543,28 @@
     "quietFrom": "開始時間",
     "quietTo": "結束時間",
     "tasteTitle": "推薦偏好",
-    "topics": "關注的主題",
-    "topicsNone": "尚未選擇主題。",
-    "lean": {
-      "1": "較多",
-      "-1": "較少",
-      "": "預設"
-    },
-    "leanLabel": "{name}的推薦量",
-    "removeTopic": "取消關注 {name}",
+    "topics": "主題",
     "addTopic": "新增主題",
-    "add": "新增",
-    "learned": "使用習慣",
-    "takes": "常開啟",
-    "passes": "常略過",
-    "learnedNone": "開啟或略過推薦後，將在此顯示。",
+    "platforms": "平台",
+    "more": "更多",
+    "platformNote": "帶鎖的平台須先登入，並在「連接」中開啟背景讀取，才會讀取。",
+    "platformGo": "前往連接",
+    "platformLocked": "需登入後讀取",
+    "remembered": "已記住的喜好（{count}）",
+    "rememberedNone": "尚無。開啟或略過推薦、在對話中表明喜好後，將顯示於此。",
+    "takesRow": "常開啟：{name}",
+    "passesRow": "常略過：{name}",
     "learnedOff": "不再參考：{name}",
     "kind": {
       "video": "影片",
       "text": "文章",
       "page": "網頁"
     },
-    "leaned": "推薦傾向",
     "leanedRow": {
       "0": "不參考：{name}",
-      "1": "較多：{name}",
-      "-1": "較少：{name}"
+      "1": "多推薦：{name}",
+      "-1": "少推薦：{name}"
     },
-    "said": "對話中提及",
-    "saidNone": "在對話中表明喜好後，將在此顯示。",
     "like": "喜歡：{topic}",
     "avoid": "不感興趣：{topic}",
     "hidden": "封鎖來源：{name}",
@@ -1579,17 +1576,17 @@
     },
     "formRow": "形式：{parts}",
     "saidOff": "刪除 {what}",
-    "wishes": "近期偏好",
-    "wish": "{topic}（至 {day}）",
+    "wish": "近期關注：{topic}（至 {day}）",
     "reset": "重設偏好",
     "resetAsk": "重設推薦偏好？",
-    "resetText": "將清除使用習慣、推薦傾向及對話中提及的偏好。關注的主題、推薦頻率和勿擾時段保留。此操作無法復原。",
+    "resetText": "將清除使用習慣、推薦傾向及對話中提及的偏好。關注的主題和平台、推薦頻率和勿擾時段保留。此操作無法復原。",
     "resetOk": "重設",
     "week": "本週推薦 {shown} 則，已開啟 {opened} 則。",
     "weekNone": "本週尚無推薦。",
     "errors": {
       "profile_invalid": "此值未被接受。請重新整理後重試。",
-      "feed_topics": "此主題未被接受。"
+      "feed_topics": "此主題未被接受。",
+      "feed_platforms": "此平台未被接受。"
     },
     "listSep": "、"
   },

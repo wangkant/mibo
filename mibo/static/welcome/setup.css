@@ -801,6 +801,9 @@
   gap: var(--pa-s2);
 }
 .setup-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 34px;
   padding: 0 14px;
   border: 1px solid var(--pa-line-strong);
@@ -826,6 +829,26 @@
   color: var(--pa-accent-ink);
   box-shadow: inset 0 0 0 1px var(--pa-accent);
   font-weight: 600;
+}
+.setup-chip-tick {
+  display: none;
+  width: 14px;
+  height: 14px;
+  margin-left: -4px;
+}
+.setup-chip[aria-pressed="true"] .setup-chip-tick {
+  display: block;
+}
+/* The lock of a platform read only once signed in, and the chip that shows the rest. */
+.setup-chip-lock {
+  width: 13px;
+  height: 13px;
+  margin-right: -4px;
+  color: var(--pa-faint);
+}
+.setup-chip-quiet {
+  border-style: dashed;
+  color: var(--pa-muted);
 }
 .setup-chip:disabled {
   cursor: default;
@@ -1541,40 +1564,15 @@
   padding-top: 0;
   border-top: 0;
 }
-.setup-recs-topics {
+/* A note under the platforms, with its way to Connections. */
+.setup-recs-note {
   display: flex;
-  flex-direction: column;
-  gap: var(--pa-s2);
-}
-.setup-recs-topic {
-  display: flex;
-  align-items: center;
-  gap: var(--pa-s3);
-}
-.setup-recs-topic-name {
-  flex: 1;
-  min-width: 0;
-  color: var(--pa-ink);
-  font-size: var(--pa-fs-md);
-  overflow-wrap: anywhere;
-}
-.setup-recs-offered {
-  align-items: center;
-}
-.setup-recs-line {
-  display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: var(--pa-s2) var(--pa-s3);
+  gap: 0 var(--pa-s2);
 }
-.setup-recs-line[hidden] {
+.setup-recs-note[hidden] {
   display: none;
-}
-.setup-recs-label {
-  flex: none;
-  min-width: 64px;
-  color: var(--pa-muted);
-  font-size: var(--pa-fs-sm);
 }
 .setup-recs-reset {
   align-self: flex-start;

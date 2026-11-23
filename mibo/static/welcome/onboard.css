@@ -326,6 +326,32 @@
 .onboard-chip-new {
   animation: onboard-pop 0.3s ease-out;
 }
+/* The platforms, a second row under the topics: a lock where a platform is read only once signed in. */
+.onboard-platforms {
+  margin-top: 22px;
+}
+.onboard-platforms-head {
+  margin-bottom: 10px;
+}
+.onboard-platforms-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+.onboard-chip-lock {
+  display: block;
+  width: 13px;
+  height: 13px;
+  margin-right: -6px;
+  fill: none;
+  stroke: var(--pa-faint);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.onboard-chip-quiet {
+  border-style: dashed;
+  color: var(--pa-muted);
+}
 
 /* A field and its button, side by side */
 .onboard-add {

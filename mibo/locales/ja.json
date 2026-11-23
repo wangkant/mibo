@@ -762,7 +762,11 @@
     "platforms": {
       "bilibili": "Bilibili",
       "youtube": "YouTube"
-    }
+    },
+    "platformsHead": "よく見るプラットフォーム",
+    "platformsMore": "もっと見る",
+    "platformLocked": "ログイン後に読み込み",
+    "platformsSignin": "鍵つきのプラットフォームは、内蔵ブラウザでログインし、設定 › 接続 でバックグラウンド読み込みをオンにしてはじめて読み込まれます。"
   },
   "petbox": {
     "shut": "閉じる",
@@ -1539,35 +1543,28 @@
     "quietFrom": "開始",
     "quietTo": "終了",
     "tasteTitle": "おすすめの好み",
-    "topics": "フォロー中のテーマ",
-    "topicsNone": "まだテーマを選んでいません。",
-    "lean": {
-      "1": "多め",
-      "-1": "少なめ",
-      "": "標準"
-    },
-    "leanLabel": "{name} の量",
-    "removeTopic": "{name} のフォローをやめる",
+    "topics": "テーマ",
     "addTopic": "テーマを追加",
-    "add": "追加",
-    "learned": "利用状況から",
-    "takes": "よく開くもの",
-    "passes": "よくスキップするもの",
-    "learnedNone": "おすすめをいくつか開くかスキップすると表示されます。",
+    "platforms": "プラットフォーム",
+    "more": "もっと見る",
+    "platformNote": "鍵つきのプラットフォームは、ログインし、接続 でバックグラウンド読み込みをオンにしてはじめて読み込まれます。",
+    "platformGo": "接続を開く",
+    "platformLocked": "ログイン後に読み込み",
+    "remembered": "記憶された好み（{count}）",
+    "rememberedNone": "まだありません。おすすめを開く・スキップする、またはチャットで好みを伝えると、ここに表示されます。",
+    "takesRow": "よく開く：{name}",
+    "passesRow": "よくスキップ：{name}",
     "learnedOff": "{name} を考慮しない",
     "kind": {
       "video": "動画",
       "text": "記事",
       "page": "Web ページ"
     },
-    "leaned": "調整済み",
     "leanedRow": {
       "0": "考慮しない：{name}",
-      "1": "多め：{name}",
-      "-1": "少なめ：{name}"
+      "1": "多く表示：{name}",
+      "-1": "少なく表示：{name}"
     },
-    "said": "チャットで伝えた内容",
-    "saidNone": "チャットで好みを伝えると表示されます。",
     "like": "好き：{topic}",
     "avoid": "興味なし：{topic}",
     "hidden": "除外：{name}",
@@ -1579,17 +1576,17 @@
     },
     "formRow": "形式：{parts}",
     "saidOff": "{what} を削除",
-    "wishes": "ここ数日の希望",
-    "wish": "{topic}（{day} まで）",
+    "wish": "しばらく見たい：{topic}（{day} まで）",
     "reset": "好みをリセット",
     "resetAsk": "おすすめの好みをリセットしますか？",
-    "resetText": "利用状況から学んだこと、設定した傾向、チャットで伝えた内容が消去されます。テーマ、頻度、おやすみ時間はそのままです。この操作は元に戻せません。",
+    "resetText": "利用状況から学んだこと、設定した傾向、チャットで伝えた内容が消去されます。テーマ、プラットフォーム、頻度、おやすみ時間はそのままです。この操作は元に戻せません。",
     "resetOk": "リセット",
     "week": "今週は {shown} 件おすすめし、{opened} 件開かれました。",
     "weekNone": "今週のおすすめはまだありません。",
     "errors": {
       "profile_invalid": "その値は受け付けられませんでした。ページを更新してもう一度お試しください。",
-      "feed_topics": "そのテーマは受け付けられませんでした。"
+      "feed_topics": "そのテーマは受け付けられませんでした。",
+      "feed_platforms": "そのプラットフォームは受け付けられませんでした。"
     },
     "listSep": "、"
   },

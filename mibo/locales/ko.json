@@ -762,7 +762,11 @@
     "platforms": {
       "bilibili": "Bilibili",
       "youtube": "YouTube"
-    }
+    },
+    "platformsHead": "자주 보는 플랫폼",
+    "platformsMore": "더 보기",
+    "platformLocked": "로그인 후 읽음",
+    "platformsSignin": "자물쇠가 있는 플랫폼은 내장 브라우저에서 로그인하고 설정 › 연결에서 백그라운드 읽기를 켜야 읽어."
   },
   "petbox": {
     "shut": "닫기",
@@ -1539,35 +1543,28 @@
     "quietFrom": "시작",
     "quietTo": "종료",
     "tasteTitle": "추천 선호도",
-    "topics": "팔로우 중인 주제",
-    "topicsNone": "아직 선택한 주제가 없습니다.",
-    "lean": {
-      "1": "많이",
-      "-1": "적게",
-      "": "보통"
-    },
-    "leanLabel": "{name} 비중",
-    "removeTopic": "{name} 팔로우 취소",
+    "topics": "주제",
     "addTopic": "주제 추가",
-    "add": "추가",
-    "learned": "사용 기록에서",
-    "takes": "자주 여는 것",
-    "passes": "자주 건너뛰는 것",
-    "learnedNone": "추천을 몇 개 열거나 건너뛰면 표시됩니다.",
+    "platforms": "플랫폼",
+    "more": "더 보기",
+    "platformNote": "자물쇠가 있는 플랫폼은 로그인하고 연결에서 백그라운드 읽기를 켠 뒤에야 읽습니다.",
+    "platformGo": "연결 열기",
+    "platformLocked": "로그인 후 읽음",
+    "remembered": "기억한 선호({count})",
+    "rememberedNone": "아직 없습니다. 추천을 열거나 건너뛰거나 채팅에서 취향을 말하면 여기에 표시됩니다.",
+    "takesRow": "자주 연 것: {name}",
+    "passesRow": "자주 건너뜀: {name}",
     "learnedOff": "{name} 반영 안 함",
     "kind": {
       "video": "동영상",
       "text": "기사",
       "page": "웹 페이지"
     },
-    "leaned": "조정됨",
     "leanedRow": {
       "0": "반영 안 함: {name}",
-      "1": "많이: {name}",
-      "-1": "적게: {name}"
+      "1": "더 많이: {name}",
+      "-1": "더 적게: {name}"
     },
-    "said": "채팅에서 언급한 내용",
-    "saidNone": "채팅에서 취향을 말하면 표시됩니다.",
     "like": "좋아함: {topic}",
     "avoid": "관심 없음: {topic}",
     "hidden": "제외: {name}",
@@ -1579,17 +1576,17 @@
     },
     "formRow": "형식: {parts}",
     "saidOff": "{what} 삭제",
-    "wishes": "앞으로 며칠 동안",
-    "wish": "{topic}({day}까지)",
+    "wish": "요즘 보고 싶은 것: {topic}({day}까지)",
     "reset": "선호도 초기화",
     "resetAsk": "추천 선호도를 초기화할까요?",
-    "resetText": "사용 기록에서 배운 내용, 설정한 비중, 채팅에서 언급한 내용이 지워집니다. 주제, 빈도, 방해 금지 시간은 유지됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "resetText": "사용 기록에서 배운 내용, 설정한 비중, 채팅에서 언급한 내용이 지워집니다. 주제, 플랫폼, 빈도, 방해 금지 시간은 유지됩니다. 이 작업은 되돌릴 수 없습니다.",
     "resetOk": "초기화",
     "week": "이번 주에 {shown}개를 추천했고 {opened}개를 열었습니다.",
     "weekNone": "이번 주에는 아직 추천이 없습니다.",
     "errors": {
       "profile_invalid": "그 값은 받아들여지지 않았습니다. 새로 고친 후 다시 시도하세요.",
-      "feed_topics": "그 주제는 받아들여지지 않았습니다."
+      "feed_topics": "그 주제는 받아들여지지 않았습니다.",
+      "feed_platforms": "그 플랫폼은 받아들여지지 않았습니다."
     },
     "listSep": ", "
   },

@@ -769,7 +769,11 @@
     "platforms": {
       "bilibili": "Bilibili",
       "youtube": "YouTube"
-    }
+    },
+    "platformsHead": "Platforms you use",
+    "platformsMore": "More",
+    "platformLocked": "Read after you sign in",
+    "platformsSignin": "Platforms with a lock are read only after you sign in to them in the built-in browser and turn on background reading under Settings › Connections."
   },
   "petbox": {
     "shut": "Close",
@@ -1548,35 +1552,28 @@
     "quietFrom": "Start",
     "quietTo": "End",
     "tasteTitle": "Recommendation preferences",
-    "topics": "Topics you follow",
-    "topicsNone": "No topics chosen yet.",
-    "lean": {
-      "1": "More",
-      "-1": "Less",
-      "": "Usual"
-    },
-    "leanLabel": "How much {name}",
-    "removeTopic": "Stop following {name}",
+    "topics": "Topics",
     "addTopic": "Add a topic",
-    "add": "Add",
-    "learned": "From your activity",
-    "takes": "You often open",
-    "passes": "You often skip",
-    "learnedNone": "Appears once you open or skip a few recommendations.",
+    "platforms": "Platforms",
+    "more": "More",
+    "platformNote": "Platforms with a lock are read only after you sign in to them and turn on background reading under Connections.",
+    "platformGo": "Open Connections",
+    "platformLocked": "Read after you sign in",
+    "remembered": "Remembered preferences ({count})",
+    "rememberedNone": "Nothing yet. It appears once you open or skip a few recommendations, or say in a chat what you like.",
+    "takesRow": "Often opened: {name}",
+    "passesRow": "Often skipped: {name}",
     "learnedOff": "Stop counting {name}",
     "kind": {
       "video": "videos",
       "text": "articles",
       "page": "web pages"
     },
-    "leaned": "Adjusted",
     "leanedRow": {
       "0": "Not counted: {name}",
-      "1": "More: {name}",
-      "-1": "Less: {name}"
+      "1": "Show more: {name}",
+      "-1": "Show less: {name}"
     },
-    "said": "Mentioned in chat",
-    "saidNone": "Appears once you mention in a chat what you like.",
     "like": "Likes: {topic}",
     "avoid": "Not interested: {topic}",
     "hidden": "Not from: {name}",
@@ -1588,17 +1585,17 @@
     },
     "formRow": "Form: {parts}",
     "saidOff": "Delete {what}",
-    "wishes": "For the next few days",
-    "wish": "{topic} (until {day})",
+    "wish": "For the next few days: {topic} (until {day})",
     "reset": "Reset preferences",
     "resetAsk": "Reset recommendation preferences?",
-    "resetText": "Clears what was learned from your activity, the leans you set and what you mentioned in chat. Your topics, how often and quiet hours stay. This cannot be undone.",
+    "resetText": "Clears what was learned from your activity, the leans you set and what you mentioned in chat. Your topics, platforms, how often and quiet hours stay. This cannot be undone.",
     "resetOk": "Reset",
     "week": "This week it brought {shown} and you opened {opened}.",
     "weekNone": "Nothing brought this week yet.",
     "errors": {
       "profile_invalid": "That value was not accepted. Refresh and try again.",
-      "feed_topics": "That topic was not accepted."
+      "feed_topics": "That topic was not accepted.",
+      "feed_platforms": "That platform was not accepted."
     },
     "listSep": ", "
   },
