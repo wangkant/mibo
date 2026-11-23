@@ -349,7 +349,8 @@
   stroke-linejoin: round;
 }
 .onboard-chip-quiet {
-  border-style: dashed;
+  border-color: transparent;
+  background: var(--pa-sunken);
   color: var(--pa-muted);
 }
 
