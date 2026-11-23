@@ -70,7 +70,7 @@ Paths are under `mibo/` unless noted.
 | Web and built-in browser | `web/`, `browser.py`, `browsed.py`, `signwatch.py`, `installed_browser.py`, `search.py`, `ingestion.py`; `surface.py`, `places.py` and `resolve.py` (open, look and act on pages, windows and files) |
 | Other programs (Windows) | `desk/` (UI Automation), `see/` (by screenshot, where no structure can be read) |
 | Commands and files | `shell/` |
-| Approval | `acting.py` (the acting mode and what always asks), `review.py`, `cardwait.py`, `turnon.py`, `web/gate.py`, `desk/gate.py` and `desk/grants.py`, `shell/read.py`, `shell/bashread.py` and `shell/grants.py`, `mcp_tools.py` |
+| Approval | `acting.py` (the acting mode and what always asks), `review.py`, `cardwait.py`, `turnon.py`, `web/gate.py`, `desk/gate.py` and `desk/grants.py`, `shell/read.py` with `acts.py`, `paths.py` and the `ps*.py` modules, `shell/bashread.py` with the `bash*.py` modules, `shell/grants.py`, `mcp_tools.py` |
 | Skills and MCP | `skills/`, `mcp_*.py`, `runtimes.py`, `secretstore.py` |
 | Scheduled tasks | `schedule.py`, `schedule_tool.py` |
 | Desktop figure | `petchat.py`, `petoff.py`, `petshot.py`, `remarks.py`, `activity.py`, `quiet.py` |
