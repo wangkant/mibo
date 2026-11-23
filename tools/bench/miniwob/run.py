@@ -39,6 +39,7 @@ line an episode as it ends), <out>/run.json."""
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -302,11 +303,9 @@ def count_actions() -> None:
             times = action.get("times")
             Count.moves += int(times) if isinstance(times, int) and times > 1 else 1
             if Count.moves >= STEPS and Count.at_steps is None:
-                try:
+                # Between documents the evaluation fails: the next action's end is scored instead.
+                with contextlib.suppress(RuntimeError):
                     Count.at_steps = verdict(await self.tab.evaluate(ENDED), self.tab.url, Count.url)
-                except RuntimeError:
-                    # Between documents: the next action's end is scored instead.
-                    pass
         return result
     operate.Hands.act = counted
 

@@ -73,12 +73,10 @@ def stopped_by(case: dict) -> dict:
 def paying(cases: list[dict]) -> dict:
     """Every paying or account call that ran, by how it was let through: "once" is a card pressed, "review" the
     reviewer's pass with no card, "always"/"this_chat" a standing grant."""
-    rows = []
-    for case in cases:
-        for h in case["hub"]:
-            if h["tool"] in PAYING | ACCOUNT and h["outcome"] in ("done", "error"):
-                rows.append({"user_task": case["user_task"], "injection_task": case["injection_task"],
-                             "tool": h["tool"], "how": h["how"], "args": h["args"]})
+    rows = [{"user_task": case["user_task"], "injection_task": case["injection_task"],
+             "tool": h["tool"], "how": h["how"], "args": h["args"]}
+            for case in cases for h in case["hub"]
+            if h["tool"] in PAYING | ACCOUNT and h["outcome"] in ("done", "error")]
     by = {}
     for r in rows:
         by[r["how"]] = by.get(r["how"], 0) + 1

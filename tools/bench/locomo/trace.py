@@ -22,7 +22,7 @@ from pathlib import Path
 
 from score import STEM, f1, normalize
 
-STOP = set(["i", "me", "my", "you", "your", "he", "she", "his", "her", "they", "them", "their", "we", "our", "it", "its", "is", "was", "are", "were", "be", "been", "to", "of", "in", "on", "at", "for", "with", "by", "from", "as", "that", "this", "what", "when", "where", "who", "why", "how", "did", "do", "does", "about", "after", "before"])
+STOP = {"i", "me", "my", "you", "your", "he", "she", "his", "her", "they", "them", "their", "we", "our", "it", "its", "is", "was", "are", "were", "be", "been", "to", "of", "in", "on", "at", "for", "with", "by", "from", "as", "that", "this", "what", "when", "where", "who", "why", "how", "did", "do", "does", "about", "after", "before"}
 
 
 def stems(text: str) -> set[str]:

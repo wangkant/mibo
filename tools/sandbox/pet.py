@@ -30,7 +30,7 @@ STUB = """(() => {
   window.fetch = (url, opts) => {
     const u = String(url); window.__calls.push(u);
     const answer = (v) => Promise.resolve(new Response(JSON.stringify(v)));
-    if (u.startsWith('/api/compose/capture')) return answer({ picture: '%s' });
+    if (u.startsWith('/api/compose/capture')) return answer({ picture: '__PIXEL__' });
     if (u.startsWith('/api/compose/recent')) return answer({ pages: [] });
     if (u.startsWith('/api/feed/next') && window.__item) { window.__given++; return answer({ item: window.__given === 1 ? window.__item : null }); }
     if (u.startsWith('/api/feed/react') || u.startsWith('/api/feed/end')) return answer({ ok: true });
@@ -39,7 +39,7 @@ STUB = """(() => {
     return real(url, opts);
   };
   return true;
-})()""" % PIXEL
+})()""".replace("__PIXEL__", PIXEL)
 
 
 class Desk:
@@ -127,8 +127,13 @@ def wait_for(fn, secs: float = 3.0, step: float = 0.05):
 
 def walk(w: Window, suite: Suite, desk: Desk, ended: dict) -> None:
     app = w.app
-    pet_js = lambda code: w.js(code, window=app._pet)
-    main_js = lambda code: w.js(code)
+
+    def pet_js(code):
+        return w.js(code, window=app._pet)
+
+    def main_js(code):
+        return w.js(code)
+
     ready = "typeof pose !== 'undefined' && pose === 'standing' && Boolean(rig) && typeof quick === 'object'"
     suite.check("figure", "the figure stands on the desktop", w.until(ready, 60, window=app._pet) is True)
     hwnd = app._pet_hwnd
@@ -143,9 +148,9 @@ def walk(w: Window, suite: Suite, desk: Desk, ended: dict) -> None:
         time.sleep(0.4)
 
     def css_to_screen(x, y):
-        l, t, r, _ = desk.rect(hwnd)
-        d = (r - l) / pet_js("innerWidth")
-        return round(l + x * d), round(t + y * d)
+        x0, y0, x1, _ = desk.rect(hwnd)
+        d = (x1 - x0) / pet_js("innerWidth")
+        return round(x0 + x * d), round(y0 + y * d)
 
     def box(selector):
         return pet_js(f"(() => {{ const e = document.querySelector({json.dumps(selector)}); if (!e) return null;"
@@ -252,7 +257,9 @@ def walk(w: Window, suite: Suite, desk: Desk, ended: dict) -> None:
         desk.glide(middle(f".quick-{name}"), 150)
         desk.click(middle(f".quick-{name}"))
 
-    shown_main = lambda: bool(app._attached and app._shown())
+    def shown_main() -> bool:
+        return bool(app._attached and app._shown())
+
     press("chat")
     suite.check("dial", "聊天 brings the compact chat", wait_for(out_now, 4)[0])
     chat_js("pywebview.api.away()")
@@ -346,7 +353,7 @@ def walk(w: Window, suite: Suite, desk: Desk, ended: dict) -> None:
     # ---- a drag
     reset()
     moves = []
-    for rep in range(2):
+    for _ in range(2):
         stand()
         time.sleep(1.0)
         was = desk.rect(hwnd)

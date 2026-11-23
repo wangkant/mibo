@@ -20,6 +20,7 @@ import asyncio
 import json
 import subprocess
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -49,14 +50,16 @@ def main() -> None:
     names = [t.name for t in FRESH] if args.people == "fresh" else args.people.split(",")
     if not args.report_only:
         args.work.mkdir(parents=True, exist_ok=True)
-        procs = {name: subprocess.Popen([sys.executable, str(HERE / "sim.py"), "--snapshot", str(args.snapshot),
-                                         "--env", str(args.env), "--work", str(args.work), "--person", name,
-                                         "--days", str(args.days), "--seed", str(args.seed), *more],
-                                        stderr=open(args.work / f"{name}.err", "w", encoding="utf-8"))
-                 for name in names}
-        for name, proc in procs.items():
-            if proc.wait():
-                print(f"{name}: the simulation failed, see {args.work / (name + '.err')}")
+        with ExitStack() as files:
+            procs = {name: subprocess.Popen([sys.executable, str(HERE / "sim.py"), "--snapshot", str(args.snapshot),
+                                             "--env", str(args.env), "--work", str(args.work), "--person", name,
+                                             "--days", str(args.days), "--seed", str(args.seed), *more],
+                                            stderr=files.enter_context(
+                                                (args.work / f"{name}.err").open("w", encoding="utf-8")))
+                     for name in names}
+            for name, proc in procs.items():
+                if proc.wait():
+                    print(f"{name}: the simulation failed, see {args.work / (name + '.err')}")
     results = []
     for name in names:
         path = args.work / f"{name}.json"

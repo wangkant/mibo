@@ -68,7 +68,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     for name, rows in (("THE CHIP SAYS 因为你选了", kept), ("THE RANKING NAMES IT, THE CHIP DOES NOT", [r for r in said if not r[3]])):
         out.append(f"\n===== {name}: {min(args.sample, len(rows))} of {len(rows)}")
-        for n, (topic, item, shaped, _, right) in enumerate(rng.sample(rows, min(args.sample, len(rows))), 1):
+        for n, (topic, _item, shaped, _, right) in enumerate(rng.sample(rows, min(args.sample, len(rows))), 1):
             out.append(f"{n:2} [{taste._topic_name(topic, 'zh')}] {shaped['site']} | {shaped['title'][:110]}\n"
                        f"     {' '.join(shaped['text'].split())[:170]}\n     label: {'-' if right is None else 'agrees' if right else 'differs'}")
     text = "\n".join(out)

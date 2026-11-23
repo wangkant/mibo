@@ -137,10 +137,7 @@ def beats(a: list, b: list, window: int = 20):
     for t in range(len(a)):
         ca += a[t]
         cb += b[t]
-        if ca >= cb:
-            first_stay = first_stay or t + 1
-        else:
-            first_stay = None
+        first_stay = (first_stay or t + 1) if ca >= cb else None
     first_window = next((t + window for t in range(0, len(a) - window + 1, window)
                          if mean(a[t:t + window]) > mean(b[t:t + window])), None)
     return first_stay, first_window

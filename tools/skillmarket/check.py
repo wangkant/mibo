@@ -66,12 +66,10 @@ def problems_offline(catalog: dict, cache: Path) -> list[str]:
             out.append(f"{sid}: fit")
         if e["scan"]["risk"] not in ("none", "low", "high"):
             out.append(f"{sid}: risk")
-        for lang in ("zh", "en"):
-            if not e["title"][lang] or not e["about"][lang]:
-                out.append(f"{sid}: missing {lang} text")
-        for text in (e["title"]["zh"], e["about"]["zh"], e["fit_note"], e["licence"]["note"]):
-            if SPOKEN.search(text or ""):
-                out.append(f"{sid}: spoken Chinese in {text!r}")
+        out.extend(f"{sid}: missing {lang} text" for lang in ("zh", "en") if not e["title"][lang] or not e["about"][lang])
+        out.extend(f"{sid}: spoken Chinese in {text!r}"
+                   for text in (e["title"]["zh"], e["about"]["zh"], e["fit_note"], e["licence"]["note"])
+                   if SPOKEN.search(text or ""))
         fact = facts.get((src["repo"], src["commit"], src["path"]))
         if not fact:
             out.append(f"{sid}: no build record at its commit")
@@ -101,7 +99,7 @@ def check_online(catalog: dict, per_repo: int) -> tuple[int, list[str]]:
         by_repo[(e["source"]["repo"], e["source"]["commit"])].append(e)
     checked, out = 0, []
     home = Path(tempfile.mkdtemp(prefix="skillmarket-check-"))
-    for (repo, commit), entries in sorted(by_repo.items()):
+    for (repo, _commit), entries in sorted(by_repo.items()):
         sample = entries[:per_repo]
         for e in sample:
             # The installer's own path: each file from the first host that answers, checked against the entry.

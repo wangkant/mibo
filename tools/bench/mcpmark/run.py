@@ -129,7 +129,7 @@ def _mtime(info: zipfile.ZipInfo) -> float:
         if kind == 0x5455 and size >= 5 and extra[4] & 1:
             return float(struct.unpack("<I", extra[5:9])[0])
         extra = extra[4 + size:]
-    return time.mktime(info.date_time + (0, 0, -1))
+    return time.mktime((*info.date_time, 0, 0, -1))
 
 
 def fetch(data: Path) -> None:
@@ -432,7 +432,7 @@ def answers(task: dict, folder: Path, right: bool) -> list:
             text = (folder / name).read_text(encoding="utf-8")
             steps.append(write(folder / "uppercase" / name, text.upper() if right else text))
             counts.append(f"{name}:{len(text.split())}")
-        return steps + [write(folder / "uppercase" / "answer.txt", "\n".join(counts))]
+        return [*steps, write(folder / "uppercase" / "answer.txt", "\n".join(counts))]
     if task["id"] == "file_context/file_merging":
         # The ten files verify.py expects, each after its name and one empty line between (the description's rules).
         names = _held(task, "get_expected_files")()
@@ -462,7 +462,7 @@ def check(checkout: Path, data: Path, work: Path) -> int:
             place = work / "plumbing" / task["id"].replace("/", "__")
             folder = place / "files" / task["category"]
             fresh_copy(data, task["category"], place / "files")
-            stub.steps = [("find_tools", {"query": "write file", "server": "filesystem"})] + answers(task, folder, right)
+            stub.steps = [("find_tools", {"query": "write file", "server": "filesystem"}), *answers(task, folder, right)]
             record = one({**task}, data, work / "plumbing", shared, f"http://127.0.0.1:{STUB_PORT}/v1", "stub", "stub",
                          None)
             plumbing.append({"task": name, "answer": "right" if right else "wrong", "pass": record["pass"],

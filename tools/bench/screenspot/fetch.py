@@ -30,44 +30,56 @@ class Remote(io.RawIOBase):
         r = cl.head(url, follow_redirects=True)
         self.cl, self.url, self.size, self.pos = cl, str(r.url), int(r.headers["content-length"]), 0
 
-    def readable(self): return True
-    def seekable(self): return True
-    def tell(self): return self.pos
+    def readable(self):
+        return True
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self.pos
 
     def seek(self, off, whence=0):
         self.pos = off if whence == 0 else self.pos + off if whence == 1 else self.size + off
         return self.pos
 
     def readinto(self, b):
-        if self.pos >= self.size: return 0
+        if self.pos >= self.size:
+            return 0
         end = min(self.pos + len(b), self.size) - 1
         data = self.cl.get(self.url, headers={"Range": f"bytes={self.pos}-{end}"}).content
-        b[:len(data)] = data; self.pos += len(data)
+        b[:len(data)] = data
+        self.pos += len(data)
         return len(data)
 
 
 def get(cl, url, dest):
-    if dest.exists(): return dest
+    if dest.exists():
+        return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    r = cl.get(url, follow_redirects=True); r.raise_for_status()
+    r = cl.get(url, follow_redirects=True)
+    r.raise_for_status()
     dest.write_bytes(r.content)
     return dest
 
 
 def v2(cl, root):
-    d = root / "v2"; (d / "img").mkdir(parents=True, exist_ok=True)
+    d = root / "v2"
+    (d / "img").mkdir(parents=True, exist_ok=True)
     need = set()
     for part in ("desktop", "web"):
         f = get(cl, V2 + f"screenspot_{part}_v2.json", d / f"screenspot_{part}_v2.json")
         need |= {x["img_filename"] for x in json.loads(f.read_text(encoding="utf-8"))}
     need = {n for n in need if not (d / "img" / n).exists()}
     print("v2:", len(need), "images to fetch")
-    if not need: return
+    if not need:
+        return
     z = zipfile.ZipFile(io.BufferedReader(Remote(cl, V2 + "screenspotv2_image.zip"), buffer_size=1 << 20))
     for info in z.infolist():
         name = info.filename.rsplit("/", 1)[-1]
         if name in need:
-            (d / "img" / name).write_bytes(z.read(info)); need.discard(name)
+            (d / "img" / name).write_bytes(z.read(info))
+            need.discard(name)
     print("v2: missing from zip:", sorted(need))
 
 
@@ -79,11 +91,13 @@ def pro(cl, root, n):
         items += json.loads(get(cl, PRO + f, d / f).read_text(encoding="utf-8"))
     rng = random.Random(7)
     by = {}
-    for it in items: by.setdefault((it["application"], it["ui_type"]), []).append(it)
-    keys = sorted(by); rng.shuffle(keys)
-    pick = []
-    for k in keys[:n]: pick.append(rng.choice(by[k]))
-    for it in pick: get(cl, PRO + "images/" + it["img_filename"], d / "images" / it["img_filename"])
+    for it in items:
+        by.setdefault((it["application"], it["ui_type"]), []).append(it)
+    keys = sorted(by)
+    rng.shuffle(keys)
+    pick = [rng.choice(by[k]) for k in keys[:n]]
+    for it in pick:
+        get(cl, PRO + "images/" + it["img_filename"], d / "images" / it["img_filename"])
     (d / "sample.json").write_text(json.dumps(pick, ensure_ascii=False, indent=1), encoding="utf-8")
     print("pro:", len(pick), "items,", len({p["img_filename"] for p in pick}), "images")
 
@@ -96,7 +110,8 @@ def main():
     a.data.mkdir(parents=True, exist_ok=True)
     with httpx.Client(timeout=120, headers={"User-Agent": "bench-fetch"}) as cl:
         v2(cl, a.data)
-        if a.pro: pro(cl, a.data, a.pro)
+        if a.pro:
+            pro(cl, a.data, a.pro)
 
 
 if __name__ == "__main__":

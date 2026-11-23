@@ -149,7 +149,7 @@ async def judge(results: list[dict], items: dict, model, sample: int = 40, seed:
     for start in range(0, len(picked), 10):
         batch = picked[start:start + 10]
         text = []
-        for n, (who, c) in enumerate(batch, 1):
+        for n, (_who, c) in enumerate(batch, 1):
             it = items[c["id"]]
             summary = " ".join((it.get("description") or it.get("text") or "").split())[:300]
             knew = "; ".join(c["knew"]) or "(nothing)"

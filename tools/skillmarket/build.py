@@ -565,7 +565,7 @@ def installs_of(net: Net, repo: str) -> dict[str, int]:
 
 def _count(text: str) -> int:
     mult = {"K": 1e3, "M": 1e6, "B": 1e9}.get(text[-1:].upper(), 1)
-    return int(round(float(text.rstrip("KMBkmb").replace(",", "")) * mult))
+    return round(float(text.rstrip("KMBkmb").replace(",", "")) * mult)
 
 
 # ---------------------------------------------------------------- assembling

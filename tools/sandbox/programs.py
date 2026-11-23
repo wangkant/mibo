@@ -42,8 +42,8 @@ def chromium_box(bench, home) -> dict:
     import shutil
     page = os.path.join(str(home), "chromium_box.html")
     shutil.copyfile(BOX_PAGE, page)
-    edge = os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Microsoft", "Edge",
-                        "Application", "msedge.exe")
+    program_files = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")  # noqa: SIM112 the Windows name
+    edge = os.path.join(program_files, "Microsoft", "Edge", "Application", "msedge.exe")
     win32 = bench.win32
     hwnd = bench.launch([edge, "--app=" + "file:///" + page.replace("\\", "/"), f"--user-data-dir={home}\\edge",
                          "--no-first-run", "--no-default-browser-check"],

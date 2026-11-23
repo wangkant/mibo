@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import io
 import json
 import os
@@ -419,10 +420,8 @@ async def main_async(args, out: Path, site: str, frames: str, report: dict) -> N
             except Exception as error:
                 ok, seen = False, {"status": "error", "steps": [f"{type(error).__name__}: {error}"[:400]]}
             if play.tab is not None:
-                try:
+                with contextlib.suppress(Exception):
                     await play.tab.close()
-                except Exception:
-                    pass
             report["checks"][label] = {"ok": bool(ok), "status": seen.get("status"), "cards": play.cards,
                                        "steps": seen.get("steps", [])}
             print(f"{'PASS' if ok else 'FAIL'}  {label}: {seen.get('status')}, {len(play.cards)} cards", flush=True)
@@ -453,10 +452,8 @@ async def main_async(args, out: Path, site: str, frames: str, report: dict) -> N
                                      "harness": listening({os.getpid()})}
         print(f"{'PASS' if not ports else 'FAIL'}  ports: {len(pids)} Electron processes, listening: {ports or 'none'};"
               f" the harness listens on {report['checks']['ports']['harness']}", flush=True)
-        try:
+        with contextlib.suppress(RuntimeError):
             await asyncio.to_thread(bridge.call, "quit", 5)
-        except RuntimeError:
-            pass
     finally:
         try:
             shell.wait(15)

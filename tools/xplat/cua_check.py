@@ -389,8 +389,8 @@ def report(folder: Path) -> str:
             cells.append("" if step is None else ("pass" if step["ok"] else "FAIL" if step["required"] else "no") +
                          ("" if step["ms"] is None else f" {step['ms']:.0f} ms"))
         rows.append(f"| {name} | " + " | ".join(cells) + " |")
-    for key in ("toolkit", "look_ms", "act_ms", "apps", "uia", "window_pid"):
-        rows.append(f"| {key} | " + " | ".join(str(r["facts"].get(key, "")) for r in found) + " |")
+    rows.extend(f"| {key} | " + " | ".join(str(r["facts"].get(key, "")) for r in found) + " |"
+                for key in ("toolkit", "look_ms", "act_ms", "apps", "uia", "window_pid"))
     return "\n".join(rows)
 
 

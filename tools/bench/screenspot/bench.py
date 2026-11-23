@@ -54,7 +54,7 @@ CROP_FRAC, CROP_W = 0.30, 1280
 
 
 def env(out):
-    e = dict(l.split("=", 1) for l in (out / ".env").read_text(encoding="utf-8").splitlines() if "=" in l)
+    e = dict(line.split("=", 1) for line in (out / ".env").read_text(encoding="utf-8").splitlines() if "=" in line)
     return e["LLM_API_KEY"].strip().strip('"'), e.get("LLM_BASE_URL", "https://openrouter.ai/api/v1").strip().strip('"').rstrip("/")
 
 
@@ -80,10 +80,13 @@ def stratified(pool, n, rng):
     for typ, k in (("text", n - n // 2), ("icon", n // 2)):
         sub = [x for x in pool if x["type"] == typ]
         by = {}
-        for x in sub: by.setdefault(x["source"], []).append(x)
+        for x in sub:
+            by.setdefault(x["source"], []).append(x)
         quota = {s: k * len(v) // len(sub) for s, v in by.items()}
-        for s in sorted(by, key=lambda s: -len(by[s]))[: k - sum(quota.values())]: quota[s] += 1
-        for s in sorted(by): pick += rng.sample(by[s], min(quota[s], len(by[s])))
+        for s in sorted(by, key=lambda s: -len(by[s]))[: k - sum(quota.values())]:
+            quota[s] += 1
+        for s in sorted(by):
+            pick += rng.sample(by[s], min(quota[s], len(by[s])))
     return pick
 
 
@@ -104,12 +107,16 @@ def probe_set(data):
 
 
 def png(im):
-    b = io.BytesIO(); im.save(b, "PNG"); return "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()
+    b = io.BytesIO()
+    im.save(b, "PNG")
+    return "data:image/png;base64," + base64.b64encode(b.getvalue()).decode()
 
 
 def crop_view(im, pt):
-    W, H = im.size; cw, ch = int(W * CROP_FRAC), int(H * CROP_FRAC)
-    x0 = int(min(max(pt[0] - cw / 2, 0), W - cw)); y0 = int(min(max(pt[1] - ch / 2, 0), H - ch))
+    W, H = im.size
+    cw, ch = int(W * CROP_FRAC), int(H * CROP_FRAC)
+    x0 = int(min(max(pt[0] - cw / 2, 0), W - cw))
+    y0 = int(min(max(pt[1] - ch / 2, 0), H - ch))
     k = CROP_W / cw
     return im.crop((x0, y0, x0 + cw, y0 + ch)).resize((CROP_W, round(ch * k)), Image.LANCZOS), (x0, y0, k)
 
@@ -138,7 +145,8 @@ async def call(cl, key, base, model, prompt, url):
                 return {"text": j["choices"][0]["message"].get("content") or "", "cost": u.get("cost") or 0,
                         "ptk": u.get("prompt_tokens"), "ctk": u.get("completion_tokens"), "prov": j.get("provider")}
             err = str(j.get("error", j))[:300]
-            if r.status_code in (400, 401, 402, 404): break
+            if r.status_code in (400, 401, 402, 404):
+                break
         except Exception as e:
             err = repr(e)[:200]
         await asyncio.sleep(4 * (attempt + 1))
@@ -146,45 +154,57 @@ async def call(cl, key, base, model, prompt, url):
 
 
 def load(path):
-    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
 
 
 async def run(a):
     key, base = env(a.out)
-    ans = a.out / "answers.jsonl"; rows = load(ans)
+    ans = a.out / "answers.jsonl"
+    rows = load(ans)
     have = {(r["model"], r["mode"], r["id"], r["way"]) for r in rows if "error" not in r}
     ways = json.loads((a.out / "ways.json").read_text()) if (a.out / "ways.json").exists() else {}
     first = {(r["model"], r["id"]): r for r in rows if r["mode"] == "main" and "error" not in r}
-    if a.mode == "probe": items, plan = probe_set(a.data), lambda m: ["px", "k"]
-    elif a.mode == "pro": items, plan = items_pro(a.data), lambda m: [ways[m]]
-    else: items, plan = sample(a.data, a.n), lambda m: [ways[m]]
+    if a.mode == "probe":
+        items, plan = probe_set(a.data), lambda m: ["px", "k"]
+    elif a.mode == "pro":
+        items, plan = items_pro(a.data), lambda m: [ways[m]]
+    else:
+        items, plan = sample(a.data, a.n), lambda m: [ways[m]]
     spent, lock, imgs = [0.0], asyncio.Lock(), {}
     import score
     check = check_ids(a.data)
 
     def image(p):
-        if p not in imgs: imgs[p] = Image.open(p).convert("RGB")
+        if p not in imgs:
+            imgs[p] = Image.open(p).convert("RGB")
         return imgs[p]
 
     async def one(cl, sem, m, it, way):
-        im = image(it["img"]); meta = {}
+        im = image(it["img"])
+        meta = {}
         if a.mode == "crop":
             f = first.get((m, it["id"]))
-            if not f or f.get("pt") is None: return
-            if it["id"] not in check and score.hit(f["pt"], it["box"]): return
-            im, (x0, y0, k) = crop_view(im, f["pt"]); meta = {"crop": [x0, y0, k], "first": f["pt"]}
+            if not f or f.get("pt") is None:
+                return
+            if it["id"] not in check and score.hit(f["pt"], it["box"]):
+                return
+            im, (x0, y0, k) = crop_view(im, f["pt"])
+            meta = {"crop": [x0, y0, k], "first": f["pt"]}
         W, H = im.size
         prompt = (CROP_NOTE if a.mode == "crop" else "") + ASK[way].format(W=W, H=H, d=it["d"])
         async with sem:
-            if spent[0] > a.cap: return
+            if spent[0] > a.cap:
+                return
             r = await call(cl, key, base, m, prompt, png(im))
         xy = parse(r.get("text"))
         pt = to_px(way, xy, (W, H)) if xy else None
-        if pt and a.mode == "crop": pt = [meta["crop"][0] + pt[0] / meta["crop"][2], meta["crop"][1] + pt[1] / meta["crop"][2]]
+        if pt and a.mode == "crop":
+            pt = [meta["crop"][0] + pt[0] / meta["crop"][2], meta["crop"][1] + pt[1] / meta["crop"][2]]
         r.update({"model": m, "mode": a.mode, "id": it["id"], "way": way, "pt": pt, **meta})
         async with lock:
             spent[0] += r.get("cost") or 0
-            with ans.open("a", encoding="utf-8") as fh: fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+            with ans.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     jobs = []
     async with httpx.AsyncClient(limits=httpx.Limits(max_connections=48)) as cl:
@@ -198,7 +218,7 @@ async def run(a):
         for m in a.models:
             acc = {w: score.acc([r for r in load(ans) if r["model"] == m and r["mode"] == "probe" and r["way"] == w and "error" not in r], items) for w in ("px", "k")}
             ways[m] = "px" if acc["px"] > acc["k"] else "k"
-            print(m, "probe accuracy px %.2f  k %.2f  -> %s" % (acc["px"], acc["k"], ways[m]))
+            print(m, f"probe accuracy px {acc['px']:.2f}  k {acc['k']:.2f}  -> {ways[m]}")
         (a.out / "ways.json").write_text(json.dumps(ways, indent=1))
 
 
@@ -210,13 +230,18 @@ def spend(out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("data", type=Path); ap.add_argument("out", type=Path)
+    ap.add_argument("data", type=Path)
+    ap.add_argument("out", type=Path)
     ap.add_argument("mode", choices=["probe", "main", "crop", "pro", "spend"])
     ap.add_argument("models", nargs="?", default="")
-    ap.add_argument("--cap", type=float, default=0.05); ap.add_argument("--n", type=int, default=150)
-    a = ap.parse_args(); a.models = [m for m in a.models.split(",") if m]
-    if a.mode == "spend": return spend(a.out)
-    asyncio.run(run(a))
+    ap.add_argument("--cap", type=float, default=0.05)
+    ap.add_argument("--n", type=int, default=150)
+    a = ap.parse_args()
+    a.models = [m for m in a.models.split(",") if m]
+    if a.mode == "spend":
+        spend(a.out)
+    else:
+        asyncio.run(run(a))
 
 
 if __name__ == "__main__":

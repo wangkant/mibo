@@ -41,11 +41,11 @@ class Metered(BasePipelineElement):
         self.pipeline, self.meter, self.name = pipeline, meter, pipeline.name
         self.messages: list = []
 
-    def query(self, query, runtime, env, messages=(), extra_args={}):
+    def query(self, query, runtime, env, messages=(), extra_args=None):
         if self.meter.spent >= self.meter.budget:
             raise BudgetSpent()
         mark = len(self.meter.rows)
-        out = self.pipeline.query(query, runtime, env, messages, extra_args)
+        out = self.pipeline.query(query, runtime, env, messages, extra_args or {})
         if self.meter.spent >= self.meter.budget:
             raise BudgetSpent()
         self.messages, self.rows = out[3], self.meter.rows[mark:]

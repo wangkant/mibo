@@ -62,7 +62,7 @@ import time
 import urllib.error
 import urllib.request
 from ast import literal_eval
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -82,6 +82,7 @@ from agentdojo.types import text_content_block_from_string  # noqa: E402
 from everyday import PRICE, Meter  # noqa: E402
 
 VERSION = "v1.2.2"
+NO_ENV = EmptyEnv()
 SERVERS = {"banking": "banking", "slack": "slack"}
 READ_PREFIXES = ("get_", "read_", "search_", "list_")
 # Arguments a careful person reads as the message's own words, not as who or how much.
@@ -251,10 +252,8 @@ class App:
     def stop(self) -> None:
         if self.proc is None:
             return
-        try:
+        with suppress(Exception):
             self.api("exit", {}, timeout=30)
-        except Exception:
-            pass
         try:
             self.proc.wait(60)
         except subprocess.TimeoutExpired:
@@ -355,7 +354,7 @@ class Mibo(BasePipelineElement):
         self.injection = None
         self.started = False
 
-    def query(self, query, runtime, env=EmptyEnv(), messages=(), extra_args={}):
+    def query(self, query, runtime, env=NO_ENV, messages=(), extra_args=None):
         if self.model.spent >= self.model.budget:
             raise BudgetSpent()
         user_task = self.by_prompt[query]

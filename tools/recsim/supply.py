@@ -98,7 +98,7 @@ def draws(snaps: list[tuple[dict, dict]], rounds: int) -> None:
             catalog.pulls = pulls
         wanted = [s for s, w in who.interests.items() if w >= STRONG] + ([who.new] if who.new else [])
         for subject in wanted:
-            def expected(p: dict) -> float:
+            def expected(p: dict, subject: str = subject, who=who) -> float:
                 total = 0.0
                 for key, share_of in p.items():
                     rows = by_source.get(key)

@@ -31,8 +31,10 @@ def acc(rows, items):
 
 
 def area_share(it):
-    if it["img"] not in _sizes: _sizes[it["img"]] = Image.open(it["img"]).size
-    W, H = _sizes[it["img"]]; b = it["box"]
+    if it["img"] not in _sizes:
+        _sizes[it["img"]] = Image.open(it["img"]).size
+    W, H = _sizes[it["img"]]
+    b = it["box"]
     return (b[2] - b[0]) * (b[3] - b[1]) / (W * H)
 
 
@@ -43,9 +45,11 @@ def size_bin(it):
 
 def ci(k, n):
     """Wilson 95% interval, in percent."""
-    if not n: return (0, 0)
+    if not n:
+        return (0, 0)
     p, z = k / n, 1.96
-    c = (p + z * z / (2 * n)) / (1 + z * z / n); h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    c = (p + z * z / (2 * n)) / (1 + z * z / n)
+    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
     return (100 * (c - h), 100 * (c + h))
 
 
@@ -73,7 +77,8 @@ def main():
         return k, len(rs)
 
     def fmt(k, n):
-        if not n: return "-"
+        if not n:
+            return "-"
         lo, hi = ci(k, n)
         return f"{100 * k / n:.1f} ({lo:.0f}-{hi:.0f}) n={n}"
 
@@ -82,11 +87,12 @@ def main():
         groups[part] = [i for i in main_ids if items[i]["part"] == part]
         for typ in ("text", "icon"):
             groups[f"{part} {typ}"] = [i for i in groups[part] if items[i]["type"] == typ]
-    for lo, hi, lab in SIZE_BINS:
+    for *_, lab in SIZE_BINS:
         groups[f"size {lab}"] = [i for i in main_ids if size_bin(items[i]) == lab]
     pro_ids = [it["id"] for it in bench.items_pro(data)]
     groups["pro (sample)"] = pro_ids
-    for typ in ("text", "icon"): groups[f"pro {typ}"] = [i for i in pro_ids if items[i]["type"] == typ]
+    for typ in ("text", "icon"):
+        groups[f"pro {typ}"] = [i for i in pro_ids if items[i]["type"] == typ]
 
     md.append("\n## Accuracy of the first look, % (95% Wilson interval)\n")
     md.append("| group | " + " | ".join(models) + " |\n|---|" + "---|" * len(models))
@@ -94,7 +100,8 @@ def main():
         cells = []
         for m in models:
             k, n = cell(ids, m, "pro" if g.startswith("pro") else "main")
-            cells.append(fmt(k, n)); rep["models"].setdefault(m, {})[g] = [k, n]
+            cells.append(fmt(k, n))
+            rep["models"].setdefault(m, {})[g] = [k, n]
         md.append(f"| {g} | " + " | ".join(cells) + " |")
 
     check = bench.check_ids(data)
@@ -103,14 +110,23 @@ def main():
               "Estimated after-crop accuracy on all 300 = (first-look hits x (1 - broken share of subset hits) + rescued) / 300.\n")
     md.append("| model | misses | rescued | subset before | subset after | subset broken | est. all-300 after, % |\n|---|---|---|---|---|---|---|")
     for m in models:
-        w = ways.get(m); miss = resc = h1s = h2s = brk = n = hits = 0
+        w = ways.get(m)
+        miss = resc = h1s = h2s = brk = n = hits = 0
         for i in main_ids:
             f, c = look.get((m, "main", i, w)), look.get((m, "crop", i, w))
-            if not f: continue
-            h1 = hit(f.get("pt"), items[i]["box"]); hits += h1
+            if not f:
+                continue
+            h1 = hit(f.get("pt"), items[i]["box"])
+            hits += h1
             h2 = c is not None and hit(c.get("pt"), items[i]["box"])
-            if not h1: miss += 1; resc += h2
-            if i in check and c is not None: n += 1; h1s += h1; h2s += h2; brk += h1 and not h2
+            if not h1:
+                miss += 1
+                resc += h2
+            if i in check and c is not None:
+                n += 1
+                h1s += h1
+                h2s += h2
+                brk += h1 and not h2
         est = (hits * (1 - (brk / h1s if h1s else 0)) + resc) / len(main_ids)
         md.append(f"| {m} | {miss} | {resc} | {h1s}/{n} | {h2s}/{n} | {brk} | {100 * est:.1f} |")
         rep["models"][m]["crop_pass"] = {"misses": miss, "rescued": resc, "subset": [h1s, h2s, n], "broken": brk, "est_after": est}
@@ -119,8 +135,10 @@ def main():
     for m in models:
         for mode in ("probe", "main", "crop", "pro"):
             rs = [r for r in rows if r["model"] == m and r["mode"] == mode]
-            if not rs: continue
-            cost = sum(r.get("cost") or 0 for r in rs); un = sum(r.get("pt") is None for r in rs)
+            if not rs:
+                continue
+            cost = sum(r.get("cost") or 0 for r in rs)
+            un = sum(r.get("pt") is None for r in rs)
             mean_pt = sum(r["ptk"] for r in rs if r.get("ptk")) / max(1, sum(1 for r in rs if r.get("ptk")))
             md.append(f"| {m} | {mode} | {len(rs)} | {un} | {mean_pt:.0f} | {1000 * cost / len(rs):.3f} |")
             rep["models"][m][f"cost_{mode}"] = {"looks": len(rs), "dollars": cost, "unparsed": un}

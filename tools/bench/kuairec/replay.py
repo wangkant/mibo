@@ -82,7 +82,7 @@ def item_row(vid: str, v: dict, arm: str, seen_at: int, love: int = -1) -> dict:
     source = ("" if arm == "app_site" else "ks-author-" + v["author"] if arm == "app_author"
               else "ks-" + (v["c1"] or "其他"))
     return {"url": f"https://www.kuaishou.com/short-video/{vid}", "id": "ks" + vid, "site": "快手", "kind": "video",
-            "title": title_of(v, vid), "description": excerpt_of(v), "length": int(round(v["dur_s"])),
+            "title": title_of(v, vid), "description": excerpt_of(v), "length": round(v["dur_s"]),
             # Kuaishou's player is not on the app's list: a listed player address stands in, so each counts
             # as the video it is (a real Kuaishou link would be drawn as a text card).
             "embed": f"https://open.douyin.com/player/video?vid={vid}&autoplay=0",
@@ -165,7 +165,7 @@ def run_app(arm: str, person: dict, reactions: dict, videos: dict, library: list
     taste.ALPHA = {"app_greedy": 0.0, "app_explore": 1.0}.get(arm, a["alpha"])
     if arm == "app_tags":
         base = a["vector"]
-        taste.vector = lambda snap, read, families=(): base(snap, read, tuple(families) + ("tags",))
+        taste.vector = lambda snap, read, families=(): base(snap, read, (*families, "tags"))
     else:
         taste.vector = a["vector"]
     open_at = 0.5 if arm == "app_open05" else 1.0
@@ -191,7 +191,7 @@ def run_app(arm: str, person: dict, reactions: dict, videos: dict, library: list
     now = T0 + 3600 + int(uid) * 7919 % 86400
     out = []
     try:
-        for step in range(cards):
+        for _ in range(cards):
             a["clock"][0] = now
             rows = recommend.candidates(lib, feed.events(rt), now, topics, set())
             if not rows:
@@ -310,7 +310,7 @@ def main() -> None:
     ap.add_argument("--data", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--work", type=Path, default=None, help="where the runtimes live while they run (default <out>/work)")
-    ap.add_argument("--arms", default=",".join(("app",) + BASE_ARMS))
+    ap.add_argument("--arms", default=",".join(("app", *BASE_ARMS)))
     ap.add_argument("--people", type=int, default=0, help="the first N/5 of each stratum's people (default all)")
     ap.add_argument("--cards", type=int, default=300)
     ap.add_argument("--workers", type=int, default=8)

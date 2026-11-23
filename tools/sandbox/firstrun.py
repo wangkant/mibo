@@ -24,9 +24,16 @@ TOPIC = "沙盒测试"  # copy: voice
 
 
 def walk(w: Window, suite: Suite) -> None:
-    press = lambda selector: w.js(f"(() => {{ const b = document.querySelector({json.dumps(selector)}); if (!b || b.disabled) return false; b.click(); return true; }})()")
-    shown = lambda selector, seconds=20: w.until(f"{VISIBLE}({json.dumps(selector)})", seconds) is True
-    at = lambda n, seconds=20: w.until(f"{STEP} === {n}", seconds) is True
+
+    def press(selector):
+        return w.js(f"(() => {{ const b = document.querySelector({json.dumps(selector)}); if (!b || b.disabled) return false; b.click(); return true; }})()")
+
+    def shown(selector, seconds=20):
+        return w.until(f"{VISIBLE}({json.dumps(selector)})", seconds) is True
+
+    def at(n, seconds=20):
+        return w.until(f"{STEP} === {n}", seconds) is True
+
     if sys.platform == "win32":
         # The app starts as the figure alone; opening the window is what its double-click does.
         w.app.show()

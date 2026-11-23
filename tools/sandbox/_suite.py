@@ -46,7 +46,7 @@ class Suite:
         self.shots = 0
         self.began = time.time()
         getattr(sys.stdout, "reconfigure", lambda **_: None)(encoding="utf-8", errors="replace")
-        self._log = open(self.out / "log.txt", "a", encoding="utf-8")
+        self._log = (self.out / "log.txt").open("a", encoding="utf-8")
 
     def log(self, *parts) -> None:
         line = f"[{time.time() - self.began:6.1f}] " + " ".join(str(p) for p in parts)

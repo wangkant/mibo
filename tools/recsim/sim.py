@@ -37,7 +37,7 @@ from people import DAY, OFFERED, PEOPLE, WORK, Person, activity, top  # noqa: E4
 from people2 import FRESH, Fresh  # noqa: E402
 
 from mibo import life, pacing, profile, recommend, settingsfile, situation, taste  # noqa: E402
-from mibo import person as person_rows
+from mibo import person as person_rows  # noqa: E402
 from mibo.library import Item, Library  # noqa: E402
 from mibo.panels import feed  # noqa: E402
 
@@ -72,7 +72,7 @@ ARMS = ("app", "random", "random_read", "popular", "oracle")
 # rank1_clicks: rank1 learning as it did while an open counted as a yes by itself, however short the stay.
 VARIANTS = ("rank1", "rank1_mixed", "rank1_mean", "rank1_tags", "rank1_subject", "rank1_half", "rank1_soft",
             "rank1_warm", "rank1_nolang", "rank1_clicks")
-APP = ("app",) + VARIANTS
+APP = ("app", *VARIANTS)
 # Day 0 is Thursday 19 November 2026, local midnight.
 T0 = datetime(2026, 11, 19).timestamp()
 NEW_SHARE, ROUND_HOURS = 0.25, (8, 12, 16, 20)
@@ -360,7 +360,7 @@ async def run(arm: Arm, days: int, minutes_seed: int) -> dict:
     cards, first = [], []
     start = T0 + 8.5 * 3600
     CLOCK[0] = start
-    for rank, it in enumerate(arm.first(start)):
+    for it in arm.first(start):
         w = who.worth(it, start, 0)
         like = who.rng.random() < w and not getattr(who.t, "mute", False)
         who.shown.append((start, top(who.labels[it["id"]])))
