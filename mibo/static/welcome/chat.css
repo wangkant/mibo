@@ -246,7 +246,7 @@
   text-overflow: ellipsis;
 }
 
-/* The character's words, drawn from their Markdown (chat.js sayNode). */
+/* The character's words, drawn from their Markdown (chattext.js sayNode). */
 .say.rich > * + *,
 .say.rich li > * + *,
 .say.rich blockquote > * + * {

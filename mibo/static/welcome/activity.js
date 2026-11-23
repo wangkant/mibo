@@ -38,7 +38,7 @@ window.paActivity = (() => {
   }
 
   // ---- While it works
-  // The waiting row (chat.js typingRow): its dots give way to the step under way, its icon and words.
+  // The waiting row (chatthread.js typingRow): its dots give way to the step under way, its icon and words.
   function live(row, step) {
     const label = row?.querySelector(".doing");
     if (!label) return "";

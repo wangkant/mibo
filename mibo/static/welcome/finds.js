@@ -1,7 +1,7 @@
 "use strict";
 // 推荐记录: every find the character put in front of the person (the pet's card, the main chat, the first
 // run), newest first under a line for each day, and beside it the ones they liked. Each is drawn as the main
-// chat draws a find (chat.js findCard), so liking, replying, playing and 不感兴趣 work as they do there; the
+// chat draws a find (findcard.js), so liking, replying, playing and 不感兴趣 work as they do there; the
 // list reads GET /api/feed a page at a time as it is scrolled.
 window.paFinds = (() => {
   const { el, dayLabel } = window.paKit;
