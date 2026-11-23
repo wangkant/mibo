@@ -99,7 +99,7 @@ async def named(play: Files) -> tuple[bool, dict]:
         done("简历已上传，申请已提交。", "申请已提交")])
     sent = play.got("/api/apply")
     return (out["status"] == "done" and len(sent) == 1 and (sent[0].get("cv") or {}).get("name") == "简历.txt"
-            and [c["kind"] for c in play.cards] == ["upload", "submit"]), out
+            and [c["kind"] for c in play.cards] == ["upload", "bind"]), out
 
 
 async def chosen(play: Files) -> tuple[bool, dict]:

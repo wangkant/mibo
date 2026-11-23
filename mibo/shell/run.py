@@ -36,9 +36,8 @@ from .grants import SECRET_NAMES, SECRET_SUFFIXES
 
 
 def _windows() -> str:
-    """Windows' own folder. Windows reads the name in any case; written as Windows writes it, it stays apart from
-    the app's own upper-case settings (tests/parts/settings)."""
-    return os.environ.get("SystemRoot") or r"C:\Windows"  # noqa: SIM112 - not one of the app's settings
+    """Windows' own folder, as the computer names it."""
+    return os.environ.get("SYSTEMROOT") or r"C:\Windows"
 
 
 POWERSHELL = os.path.join(_windows(), r"System32\WindowsPowerShell\v1.0\powershell.exe")

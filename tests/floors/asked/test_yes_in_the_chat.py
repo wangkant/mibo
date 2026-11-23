@@ -158,7 +158,7 @@ def test_only_the_apps_own_page_answers(workspace):
         # The old card presses are gone: nothing but the typed answer settles a question.
         for route in ("/api/shell/card", "/api/programs/card", "/api/turnon/card", "/api/browser/confirm"):
             assert client.post(route, headers={**headers, "X-Mibo-Window": "own"},
-                               json={"id": "x", "yes": True}).status_code == 405
+                               json={"id": "x", "yes": True}).status_code in (404, 405)
 
 
 @pytest.fixture

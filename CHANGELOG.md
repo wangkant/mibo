@@ -57,6 +57,8 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - In first-run setup, a model service that is not in the list is reported as an invalid service, not as a general failure.
 - In Settings, clicking the label of a key field focuses the field.
 - The line a scheduled task writes when it stops at a limit or fails is in the language in use when it is written.
+- Stop pressed while a reply is still starting always ends that reply; after a slow start the press used to be lost.
+- On a busy computer, the first command after the app starts is no longer treated as unreadable when Windows PowerShell is slow to start.
 - The app starts about 0.2 s sooner: the feed parser is loaded when the first feed is read.
 
 ### Development

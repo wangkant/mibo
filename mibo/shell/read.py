@@ -34,6 +34,9 @@ from .pssort import Sorter
 from .pstables import CONTENT_READS
 
 READ_TIMEOUT_S = 20
+# A parser just started loads PowerShell and compiles parse.ps1 before its first answer; on a busy computer
+# that alone has taken more than READ_TIMEOUT_S.
+START_TIMEOUT_S = 90
 
 # ---------------------------------------------------------------- the parser process
 
@@ -58,9 +61,10 @@ class Parser:
         request = json.dumps({"b64": base64.b64encode(command.encode("utf-8")).decode("ascii"), "cwd": cwd}) + "\n"
         with self.lock:
             for _ in range(2):
-                if self.process is None or self.process.poll() is not None:
+                started = self.process is None or self.process.poll() is not None
+                if started:
                     self.process = self._start()
-                parsed = _answer(self.process, request.encode("utf-8"))
+                parsed = _answer(self.process, request.encode("utf-8"), START_TIMEOUT_S if started else READ_TIMEOUT_S)
                 if parsed is not None:
                     return parsed
                 self.process.kill()
@@ -74,9 +78,9 @@ class Parser:
                 self.process = None
 
 
-def _answer(process: subprocess.Popen, request: bytes):
-    """parse.ps1's answer to one request, or None when it gives none in time or one that is not JSON. The
-    exchange runs on a thread of its own, so a parser that hangs is left behind after READ_TIMEOUT_S."""
+def _answer(process: subprocess.Popen, request: bytes, within: float):
+    """parse.ps1's answer to one request, or None when it gives none in `within` seconds or one that is not JSON.
+    The exchange runs on a thread of its own, so a parser that hangs is left behind."""
     answer: list[bytes] = []
 
     def ask() -> None:
@@ -86,7 +90,7 @@ def _answer(process: subprocess.Popen, request: bytes):
 
     worker = threading.Thread(target=ask, daemon=True)
     worker.start()
-    worker.join(READ_TIMEOUT_S)
+    worker.join(within)
     if not answer or not answer[0].strip():
         return None
     try:
