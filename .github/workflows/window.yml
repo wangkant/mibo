@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
     paths:
-      - mibo/window.py
+      - mibo/window/**
       - mibo/welcome.py
       - mibo/services.py
       - mibo/panels/**

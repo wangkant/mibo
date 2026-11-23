@@ -63,7 +63,7 @@ Paths are under `mibo/` unless noted.
 
 | Area | Where |
 |---|---|
-| App, window and Settings | `cli.py`, `welcome.py` (local page, token, API), `window.py`, `static/welcome/`, `panels/` (one module per Settings section) |
+| App, window and Settings | `cli.py`, `welcome.py` (local page, token, API), `window/`, `static/welcome/`, `panels/` (one module per Settings section) |
 | Character and chat | `agent.py`, `character.py`, `dm.py`, `turns.py`, `prompt.py`, `prompts.py`, `loop.py` (one turn of tool calls), `catalog.py` (the tools offered), `context.py` (the context budget and compaction), `llm.py`, `transport.py` (every model call, on the OpenAI SDK), `endpoints.py`, `abilities.py` (what the model can do, measured by probes), `modelcatalog.py` (what the bundled models.dev snapshot lists for it) |
 | Memory | `person.py`, `consolidate.py`, `memory.py`, `memstore.py`, `chatlog.py`, `pastchats.py`, `retrieval.py`, `ranking.py`, `embeddings.py` |
 | Recommendations and walks | `recommend.py`, `taste.py`, `pacing.py`, `roam.py`, `library.py`, `today.py`, `sources/` |
