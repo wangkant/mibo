@@ -41,8 +41,8 @@ Téléchargez-le depuis la [dernière version](https://github.com/wangkant/mibo/
 
 | Système | Fichier | Premier lancement |
 |---|---|---|
-| Windows 10 ou 11 (x64) | `mibo-0.1.0-setup.exe` | Si le navigateur signale le fichier, choisissez **Conserver**. Lorsque SmartScreen affiche « Windows a protégé votre ordinateur », choisissez **Informations complémentaires**, puis **Exécuter quand même**. L'installation se fait pour votre compte seul, sans droits d'administrateur. |
-| macOS (Apple silicon) | `mibo-0.1.0-macos-arm64.dmg` | Ouvrez l'image disque et faites glisser `mibo.app` dans Applications. La première ouverture est bloquée, car l'application n'est pas notarisée : fermez le message, puis choisissez **Ouvrir quand même** dans Réglages Système › Confidentialité et sécurité, et confirmez. |
+| Windows 10 ou 11 (x64) | `mibo-0.2.0-setup.exe` | Si le navigateur signale le fichier, choisissez **Conserver**. Lorsque SmartScreen affiche « Windows a protégé votre ordinateur », choisissez **Informations complémentaires**, puis **Exécuter quand même**. L'installation se fait pour votre compte seul, sans droits d'administrateur. |
+| macOS (Apple silicon) | `mibo-0.2.0-macos-arm64.dmg` | Ouvrez l'image disque et faites glisser `mibo.app` dans Applications. La première ouverture est bloquée, car l'application n'est pas notarisée : fermez le message, puis choisissez **Ouvrir quand même** dans Réglages Système › Confidentialité et sécurité, et confirmez. |
 
 Une nouvelle version s'installe de la même manière, par-dessus l'ancienne. La désinstallation conserve le dossier de données.
 
@@ -50,7 +50,7 @@ Une nouvelle version s'installe de la même manière, par-dessus l'ancienne. La 
 
 | | |
 |---|---|
-| **Windows, version portable** | Téléchargez `mibo-0.1.0-windows-x64.zip`, décompressez-le où vous voulez et lancez `mibo.exe`. Ce fichier n'est pas signé non plus. |
+| **Windows, version portable** | Téléchargez `mibo-0.2.0-windows-x64.zip`, décompressez-le où vous voulez et lancez `mibo.exe`. Ce fichier n'est pas signé non plus. |
 | **Scoop** (Windows) | Exécutez `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`, puis `scoop install mibo`. |
 | **Homebrew** (macOS, Apple silicon) | Exécutez `brew install --cask wangkant/mibo/mibo`. |
 | **Avec Python** (3.10–3.14, tout système) | Exécutez `pipx install "mibo[app,web]"` ou `uv tool install "mibo[app,web]"`, puis `mibo`. |

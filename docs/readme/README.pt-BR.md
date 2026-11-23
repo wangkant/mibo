@@ -41,8 +41,8 @@ Baixe da [versão mais recente](https://github.com/wangkant/mibo/releases/latest
 
 | Sistema | Arquivo | Primeira execução |
 |---|---|---|
-| Windows 10 ou 11 (x64) | `mibo-0.1.0-setup.exe` | Se o navegador alertar sobre o arquivo, escolha **Manter**. Quando o SmartScreen mostrar "O Windows protegeu o computador", escolha **Mais informações** e depois **Executar assim mesmo**. A instalação é feita só para a sua conta, sem permissões de administrador. |
-| macOS (Apple silicon) | `mibo-0.1.0-macos-arm64.dmg` | Abra a imagem de disco e arraste `mibo.app` para Aplicativos. A primeira abertura é bloqueada porque o aplicativo não é notarizado: feche a mensagem e, em Ajustes do Sistema › Privacidade e Segurança, escolha **Abrir Mesmo Assim** e confirme. |
+| Windows 10 ou 11 (x64) | `mibo-0.2.0-setup.exe` | Se o navegador alertar sobre o arquivo, escolha **Manter**. Quando o SmartScreen mostrar "O Windows protegeu o computador", escolha **Mais informações** e depois **Executar assim mesmo**. A instalação é feita só para a sua conta, sem permissões de administrador. |
+| macOS (Apple silicon) | `mibo-0.2.0-macos-arm64.dmg` | Abra a imagem de disco e arraste `mibo.app` para Aplicativos. A primeira abertura é bloqueada porque o aplicativo não é notarizado: feche a mensagem e, em Ajustes do Sistema › Privacidade e Segurança, escolha **Abrir Mesmo Assim** e confirme. |
 
 Uma nova versão é instalada da mesma forma, por cima da anterior. A desinstalação mantém a pasta de dados.
 
@@ -50,7 +50,7 @@ Uma nova versão é instalada da mesma forma, por cima da anterior. A desinstala
 
 | | |
 |---|---|
-| **Windows, versão portátil** | Baixe `mibo-0.1.0-windows-x64.zip`, descompacte em qualquer pasta e execute `mibo.exe`. O arquivo também não é assinado. |
+| **Windows, versão portátil** | Baixe `mibo-0.2.0-windows-x64.zip`, descompacte em qualquer pasta e execute `mibo.exe`. O arquivo também não é assinado. |
 | **Scoop** (Windows) | Execute `scoop bucket add mibo https://github.com/wangkant/scoop-mibo` e, em seguida, `scoop install mibo`. |
 | **Homebrew** (macOS, Apple silicon) | Execute `brew install --cask wangkant/mibo/mibo`. |
 | **Com Python** (3.10–3.14, qualquer sistema) | Execute `pipx install "mibo[app,web]"` ou `uv tool install "mibo[app,web]"` e, em seguida, `mibo`. |

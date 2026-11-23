@@ -1,6 +1,6 @@
 """Write the package managers' manifests for a published release from its SHA256SUMS.txt.
 
-    python tools/release_manifests.py 0.1.0 --sums SHA256SUMS.txt --out manifests/
+    python tools/release_manifests.py 0.2.0 --sums SHA256SUMS.txt --out manifests/
 
 It writes, under --out:
     scoop/mibo.json                      a Scoop bucket's manifest (the Windows zip)

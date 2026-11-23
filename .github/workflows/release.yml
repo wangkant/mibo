@@ -42,7 +42,7 @@ jobs:
       - name: Run the test suite
         run: |
           python -m pip install -e ".[dev]"
-          python -m pytest -q
+          python -m pytest -q -n auto --dist loadfile
       - name: Check the tag and take its notes from CHANGELOG.md
         if: startsWith(github.ref, 'refs/tags/v')
         run: |

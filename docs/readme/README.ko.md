@@ -41,8 +41,8 @@ Mibo는 사용자의 컴퓨터에서 사용자가 고른 모델 서비스로 실
 
 | 시스템 | 파일 | 처음 실행 |
 |---|---|---|
-| Windows 10 또는 11(x64) | `mibo-0.1.0-setup.exe` | 브라우저가 파일에 대해 경고하면 '유지'를 선택합니다. SmartScreen에 'Windows의 PC 보호'가 표시되면 '추가 정보'를 선택한 다음 '실행'을 선택합니다. 현재 계정에만 설치되며 관리자 권한이 필요하지 않습니다. |
-| macOS(Apple 실리콘) | `mibo-0.1.0-macos-arm64.dmg` | 디스크 이미지를 열고 `mibo.app`을 '응용 프로그램' 폴더로 끌어 옵니다. 앱이 공증되지 않았으므로 처음에는 열리지 않습니다. 메시지를 닫은 다음 '시스템 설정 › 개인정보 보호 및 보안'에서 '그래도 열기'를 선택하고 확인합니다. |
+| Windows 10 또는 11(x64) | `mibo-0.2.0-setup.exe` | 브라우저가 파일에 대해 경고하면 '유지'를 선택합니다. SmartScreen에 'Windows의 PC 보호'가 표시되면 '추가 정보'를 선택한 다음 '실행'을 선택합니다. 현재 계정에만 설치되며 관리자 권한이 필요하지 않습니다. |
+| macOS(Apple 실리콘) | `mibo-0.2.0-macos-arm64.dmg` | 디스크 이미지를 열고 `mibo.app`을 '응용 프로그램' 폴더로 끌어 옵니다. 앱이 공증되지 않았으므로 처음에는 열리지 않습니다. 메시지를 닫은 다음 '시스템 설정 › 개인정보 보호 및 보안'에서 '그래도 열기'를 선택하고 확인합니다. |
 
 새 릴리스도 같은 방법으로 덮어써서 설치합니다. 제거해도 데이터 폴더는 남습니다.
 
@@ -50,7 +50,7 @@ Mibo는 사용자의 컴퓨터에서 사용자가 고른 모델 서비스로 실
 
 | | |
 |---|---|
-| **Windows 포터블 버전** | `mibo-0.1.0-windows-x64.zip`을 내려받아 원하는 위치에 압축을 풀고 `mibo.exe`를 실행합니다. 이 파일도 코드 서명되어 있지 않습니다. |
+| **Windows 포터블 버전** | `mibo-0.2.0-windows-x64.zip`을 내려받아 원하는 위치에 압축을 풀고 `mibo.exe`를 실행합니다. 이 파일도 코드 서명되어 있지 않습니다. |
 | **Scoop**(Windows) | `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`를 실행한 다음 `scoop install mibo`를 실행합니다. |
 | **Homebrew**(macOS, Apple 실리콘) | `brew install --cask wangkant/mibo/mibo`를 실행합니다. |
 | **Python으로 설치**(3.10–3.14, 모든 시스템) | `pipx install "mibo[app,web]"` 또는 `uv tool install "mibo[app,web]"`를 실행한 다음 `mibo`를 실행합니다. |

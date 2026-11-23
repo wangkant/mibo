@@ -16,12 +16,12 @@ Run from a clone, the clone is the home folder: `settings.json`, `persona.txt` a
 Run what CI runs before opening a pull request:
 
 ```bash
-python -m pytest -q
-ruff check . --select F401,F811,F821,F841
+python -m pytest -q -n auto --dist loadfile
+ruff check .
 python -m compileall -q mibo tools tests
 ```
 
-The suite stubs the model and needs no key. The ruff line catches dead and undefined names only.
+The suite stubs the model and needs no key. The suite runs one process per core. The lint rule set is in `pyproject.toml` (`[tool.ruff.lint]`); the formatter is not used.
 
 | Workflow | Runs |
 |---|---|

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mibo"
-version = "0.1.0"
+version = "0.2.0"
 description = "A personal AI agent that lives on your own computer: tell it what you need, and it gets it done across the web, your files and your other programs, asking only before what costs you something."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -108,7 +108,8 @@ app = ["pywebview>=6,<7; sys_platform != 'linux'", "pywebview[qt]>=6,<7; sys_pla
 # no browser is downloaded.
 web = ["playwright>=1.49,<2"]
 # What CI installs on top of the runtime dependencies.
-# ruff is pinned: a newer one may format or lint differently, and CI checks both.
+# ruff is pinned: a newer one may lint differently. Its formatter is not used: it unpacks the tables
+# the code keeps one row to a line.
 dev = ["pytest>=8,<10", "pytest-xdist>=3.6,<4", "ruff==0.16.8", "playwright>=1.49,<2"]
 
 [project.scripts]
@@ -146,7 +147,7 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "PERF", "PIE", "RET", "RUF"]
 ignore = [
-    # The formatter wraps code; a long string or comment stays as written.
+    # Line length is not enforced: a long string or comment stays as written.
     "E501",
     # Interface text is written in ten languages: their punctuation is meant.
     "RUF001", "RUF002", "RUF003",

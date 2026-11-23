@@ -30,7 +30,7 @@ the agent keeps at runtime goes to <home>/runtime/ (paths.ROOT is the home).
 
 from mibo import consoles
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Started without a console (pythonw, a packaged shell): what it starts opens no console window.
 consoles.hush()

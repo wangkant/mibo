@@ -7,9 +7,14 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
+The character asks in the chat instead of on cards, and asks less. It makes Word, Excel and PowerPoint files as files, reads the sites you are signed in to, and knows the app's own settings. Attached below are the same downloads as for 0.1.0.
+
 ### Files
 
 - Word, Excel and PowerPoint files are made as files: asked for a document, a table or slides, the character writes the finished .docx, .xlsx or .pptx instead of typing into the program's window, and changes an existing one in place, keeping its layout. Such changes can be taken back like any other change to a file. Three built-in skills guide a good document, workbook and deck.
+- A new file has a plain look unless you ask for another: a document is A4 in SimSun and Times New Roman with SimHei and Arial headings, a workbook has a shaded header row in DengXian, and a deck is 16:9 in Segoe UI and Microsoft YaHei, dark teal with one warm accent. An existing file keeps its own.
 - PDFs are read page by page; a scanned PDF is reported as holding no text.
 
 ### Approvals
@@ -45,6 +50,21 @@ It is kept in English; the README describes the app in all ten interface languag
 ### Documentation
 
 - The READMEs, the in-app about line and the package descriptions now present Mibo as a personal agent on your own computer, with the character second.
+
+### Fixes
+
+- A command's `PATH` starts from Windows' real folder. On a computer where Windows is not in `C:\Windows` it named a folder that does not exist.
+- In first-run setup, a model service that is not in the list is reported as an invalid service, not as a general failure.
+- In Settings, clicking the label of a key field focuses the field.
+- The line a scheduled task writes when it stops at a limit or fails is in the language in use when it is written.
+- The app starts about 0.2 s sooner: the feed parser is loaded when the first feed is read.
+
+### Development
+
+- The largest modules and scripts are split by what they do; the largest source file went from 2,700 lines to under 900. Behaviour changes only where this list says so.
+- The lint rule set is written in `pyproject.toml`, and CI runs `ruff check .` over the whole repository.
+- The suite runs one process per core: `python -m pytest -q -n auto --dist loadfile`.
+- `python -m mibo.taste_replay replay` replaces `python -m mibo.taste replay`.
 
 ## [0.1.0] - 2026-11-22
 
@@ -128,5 +148,6 @@ First release. Attached below: an installer and a zip that needs no installing f
 - **Walks** need Edge, Chrome or Chromium installed.
 - **Spending** shown from catalogue prices ignores peak-hour and long-context pricing, so it can read low for some services.
 
-[Unreleased]: https://github.com/wangkant/mibo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wangkant/mibo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/wangkant/mibo/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/wangkant/mibo/releases/tag/v0.1.0

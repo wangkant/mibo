@@ -1,6 +1,6 @@
 ; Inno Setup 6: the frozen folder (PyInstaller, dist\mibo) as
 ; dist\mibo-<version>-setup.exe. build.ps1 passes the version:
-;   ISCC.exe /DAppVersion=0.1.0 mibo.iss
+;   ISCC.exe /DAppVersion=0.2.0 mibo.iss
 ; Per user, no administrator. The shortcuts are the ones `mibo shortcut`
 ; writes, so the app's own settings see them as its own; the data home
 ; (~\mibo, as the pip install has it) is never removed.

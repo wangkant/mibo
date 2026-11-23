@@ -41,8 +41,8 @@ Mibo 在本機執行，使用你自己選擇的模型服務，不依賴雲端主
 
 | 系統 | 檔案 | 首次啟動 |
 |---|---|---|
-| Windows 10 或 11（x64） | `mibo-0.1.0-setup.exe` | 如瀏覽器提示此檔案不常被下載，請選擇「保留」。SmartScreen 顯示「Windows 已保護您的電腦」時，請選擇「其他資訊」，再選擇「仍要執行」。安裝程式僅為目前帳戶安裝，無需系統管理員權限。 |
-| macOS（Apple 晶片） | `mibo-0.1.0-macos-arm64.dmg` | 開啟磁碟映像檔，將 `mibo.app` 拖入「應用程式」檔案夾。應用程式未經公證，首次開啟會遭到阻擋：請關閉提示，然後在「系統設定 › 隱私權與安全性」中選擇「強制打開」並確認。 |
+| Windows 10 或 11（x64） | `mibo-0.2.0-setup.exe` | 如瀏覽器提示此檔案不常被下載，請選擇「保留」。SmartScreen 顯示「Windows 已保護您的電腦」時，請選擇「其他資訊」，再選擇「仍要執行」。安裝程式僅為目前帳戶安裝，無需系統管理員權限。 |
+| macOS（Apple 晶片） | `mibo-0.2.0-macos-arm64.dmg` | 開啟磁碟映像檔，將 `mibo.app` 拖入「應用程式」檔案夾。應用程式未經公證，首次開啟會遭到阻擋：請關閉提示，然後在「系統設定 › 隱私權與安全性」中選擇「強制打開」並確認。 |
 
 新版本以相同方式覆蓋安裝。解除安裝時保留資料資料夾。
 
@@ -50,7 +50,7 @@ Mibo 在本機執行，使用你自己選擇的模型服務，不依賴雲端主
 
 | | |
 |---|---|
-| **Windows 免安裝版** | 下載 `mibo-0.1.0-windows-x64.zip`，解壓縮到任意位置後執行 `mibo.exe`。此檔案同樣未經程式碼簽章。 |
+| **Windows 免安裝版** | 下載 `mibo-0.2.0-windows-x64.zip`，解壓縮到任意位置後執行 `mibo.exe`。此檔案同樣未經程式碼簽章。 |
 | **Scoop**（Windows） | 執行 `scoop bucket add mibo https://github.com/wangkant/scoop-mibo`，然後執行 `scoop install mibo`。 |
 | **Homebrew**（macOS，Apple 晶片） | 執行 `brew install --cask wangkant/mibo/mibo`。 |
 | **透過 Python 安裝**（3.10–3.14，任何系統） | 執行 `pipx install "mibo[app,web]"` 或 `uv tool install "mibo[app,web]"`，然後執行 `mibo`。 |
