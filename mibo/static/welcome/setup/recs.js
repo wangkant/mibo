@@ -102,7 +102,7 @@
       return button;
     }
     // What reading a platform's own feed does, its risk and how to stop it, with the person's answer: a yes is kept
-    // once, a no leaves the pick a preference until the next one.
+    // once, a no leaves the pick a preference until the next one. It names the picked platforms it covers.
     function feedNotice() {
       const words = t.feedNotice;
       const node = el("div", "setup-recs-feed");
@@ -116,9 +116,10 @@
       const yes = kit.button("setup-button-primary setup-button-sm", words.agree, () =>
         choose({ topics: view.topics.map((row) => row.name), agree: true }));
       actions.append(no, yes);
-      node.append(el("p", "setup-option-name", words.title), el("p", "setup-help", words.text),
+      const names = el("p", "setup-help setup-recs-feed-names");
+      node.append(el("p", "setup-option-name", words.title), names, el("p", "setup-help", words.text),
         el("p", "setup-help setup-recs-feed-warn", words.warn), el("p", "setup-help", words.stop), actions);
-      return { node, buttons: [no, yes] };
+      return { node, names, buttons: [no, yes] };
     }
     // The chip that shows the platforms left out.
     function more() {
@@ -184,6 +185,8 @@
       );
       // Open while a platform read only signed in is chosen and nothing was agreed yet.
       notice.node.hidden = !(asking && !v.agreed && v.platformsOffered.some((row) => chosen.has(row.key) && row.reach === "signin"));
+      notice.names.textContent = v.platformsOffered.filter((row) => chosen.has(row.key) && row.reach === "signin")
+        .map((row) => row.name).join(t.listSep);
       for (const button of notice.buttons) button.disabled = posting;
       note.hidden = !notice.node.hidden || !v.platformsOffered.some((row) => chosen.has(row.key) && unread(row));
 

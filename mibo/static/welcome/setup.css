@@ -1590,6 +1590,10 @@
 .setup-recs-feed p {
   margin: 0;
 }
+.setup-recs-feed-names {
+  color: var(--pa-ink);
+  font-weight: 600;
+}
 .setup-recs-feed-warn {
   color: var(--pa-amber700);
 }

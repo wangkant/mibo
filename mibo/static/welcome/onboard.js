@@ -447,7 +447,7 @@
       feedAsking = feedAsking && locked.length > 0;
       const unread = locked.some((one) => !one.connected);
       box.replaceChildren(el("p", "onboard-hint onboard-platforms-head", t.platformsHead), row,
-        ...(feedAsking ? [feedNotice(draw)] : unread ? [el("p", "onboard-hint onboard-platforms-note", t.platformsSignin)] : []));
+        ...(feedAsking ? [feedNotice(draw, locked)] : unread ? [el("p", "onboard-hint onboard-platforms-note", t.platformsSignin)] : []));
     };
     if (platformsOffered.length) draw();
     return box;
@@ -476,7 +476,8 @@
   }
 
   // What reading a platform's own feed does, its risk and how to stop it; agreed once, declined until the next pick.
-  function feedNotice(changed) {
+  // It names the picked platforms it covers (`locked`), so a yes is a yes to those.
+  function feedNotice(changed, locked) {
     const words = t.feedNotice;
     const box = el("div", "onboard-reading");
     box.setAttribute("role", "group");
@@ -492,7 +493,9 @@
       });
       actions.append(button);
     }
-    box.append(el("p", "onboard-reading-title", words.title), el("p", "onboard-reading-text", words.text),
+    box.append(el("p", "onboard-reading-title", words.title),
+      el("p", "onboard-reading-text onboard-reading-names", locked.map((one) => one.name).join(t.listSep)),
+      el("p", "onboard-reading-text", words.text),
       el("p", "onboard-reading-text onboard-reading-warn", words.warn), el("p", "onboard-reading-text", words.stop), actions);
     return box;
   }
