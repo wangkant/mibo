@@ -34,11 +34,22 @@ def test_the_first_run_walks_five_steps_and_keeps_each_choice(app, browser):
     p.locator(".onboard-add .onboard-field").fill("潮汐")
     p.locator(".onboard-add .onboard-field").press("Enter")
     p.locator(".onboard-chip[data-name='潮汐'][aria-pressed='true']").wait_for()
-    # A platform read without signing in, and one read only after it, which brings its line.
+    # A platform read without signing in, and one read only after it, which brings the notice on reading the
+    # person's own feed there, under the row; a no leaves the line, and the next such pick asks again.
     p.locator(".onboard-chip[data-key='bilibili.com']").click()
-    assert p.locator(".onboard-platforms-note").count() == 0
+    assert p.locator(".onboard-platforms-note").count() == 0 and p.locator(".onboard-reading").count() == 0
     p.locator(".onboard-chip[data-key='douyin.com']").click()
+    notice = p.locator(".onboard-platforms .onboard-reading")
+    notice.locator(".onboard-reading-title", has_text="推荐流").wait_for()
+    assert p.locator("dialog[open]").count() == 0
+    notice.locator(".onboard-reading-no").click()
     p.locator(".onboard-platforms-note").wait_for()
+    assert notice.count() == 0
+    p.locator(".onboard-chip[data-key='weibo.com']").click()
+    notice.locator(".onboard-reading-yes").click()
+    p.locator(".onboard-platforms-note").wait_for()
+    p.locator(".onboard-chip[data-key='kuaishou.com']").click()
+    assert notice.count() == 0
     following.click()
 
     now.filter(has_text="关于你").wait_for()
@@ -51,7 +62,8 @@ def test_the_first_run_walks_five_steps_and_keeps_each_choice(app, browser):
     assert (settings["AGENT_LANG"], settings["UI_LANG"]) == ("zh", "zh")
     interests = app.get("/api/feed/interests?lang=zh").json()
     assert "潮汐" in interests["topics"]
-    assert interests["platforms"] == ["bilibili.com", "douyin.com"]
+    assert interests["platforms"] == ["bilibili.com", "douyin.com", "weibo.com", "kuaishou.com"]
+    assert interests["agreed"] is True
     assert {"key": "douyin.com", "name": "抖音", "reach": "signin", "connected": False} in interests["platformsOffered"]
     assert app.get("/api/characters").json()["chosen"] != "mibo"
     assert page.errors == [] and page.refused == []
@@ -87,4 +99,33 @@ def test_a_platform_picked_in_the_tour_stays_through_a_language_change_and_is_dr
     p.locator(".onboard-skip").click()
     now.filter(has_text="关于你").wait_for()
     assert app.get("/api/feed/interests?lang=zh").json()["platforms"] == []
+    assert page.errors == [] and page.refused == []
+
+
+def test_a_no_on_the_notice_keeps_the_pick_a_preference_and_skip_drops_a_yes(app, browser):
+    measured(app)
+    page = browser.open(app)
+    p = page.page
+    now = p.locator(".onboard-dot-now .onboard-dot-name")
+    following = p.locator(".onboard-next")
+    p.locator(".onboard-lang[lang='zh']").click()
+    now.filter(has_text="语言").wait_for()
+    for _ in range(3):
+        following.click()
+    now.filter(has_text="喜好").wait_for()
+    p.locator(".onboard-chip[data-key='douyin.com']").click()
+    p.locator(".onboard-reading-no").click()
+    following.click()
+    now.filter(has_text="关于你").wait_for()
+    interests = app.get("/api/feed/interests?lang=zh").json()
+    assert interests["platforms"] == ["douyin.com"] and interests["agreed"] is False
+
+    # Back at the platforms, a yes given and then the step skipped is not kept.
+    p.locator(".onboard-foot .onboard-back").click()
+    now.filter(has_text="喜好").wait_for()
+    p.locator(".onboard-chip[data-key='weibo.com']").click()
+    p.locator(".onboard-reading-yes").click()
+    p.locator(".onboard-skip").click()
+    now.filter(has_text="关于你").wait_for()
+    assert app.get("/api/feed/interests?lang=zh").json()["agreed"] is False
     assert page.errors == [] and page.refused == []

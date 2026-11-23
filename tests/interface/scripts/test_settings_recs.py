@@ -1,7 +1,10 @@
 """Settings › Recommendations (setup/recs.js) against the app: topics and platforms as chips that keep what is
-pressed, a platform read only once signed in saying so, and what the ranking remembers in one folded list, each
-pill taking its own preference out."""
+pressed, a platform read only once signed in saying so, the notice on reading the person's own feed there asked
+until it is agreed once, and what the ranking remembers in one folded list, each pill taking its own preference
+out."""
 from __future__ import annotations
+
+import re
 
 import pytest
 from harness.page import measured
@@ -44,10 +47,15 @@ def test_a_topic_chip_and_a_platform_chip_toggle_and_are_kept(app, browser):
     platforms.locator(".setup-chip", has_text="More").click()
     platforms.locator(".setup-chip", has_text="YouTube").click()
     platforms.locator(".setup-chip[aria-pressed='true']:has-text('YouTube')").wait_for()
-    assert p.locator(".setup-recs-note").is_hidden()
+    assert p.locator(".setup-recs-note").is_hidden() and p.locator(".setup-recs-feed").is_hidden()
+    # One read only signed in brings the notice on reading the person's own feed; a no keeps the pick a preference.
     platforms.locator(".setup-chip", has_text="Reddit").click()
-    p.locator(".setup-recs-note").wait_for()
+    notice = p.locator("[data-item='platforms'] .setup-recs-feed")
+    notice.wait_for()
     assert app.get("/api/feed/interests?lang=en").json()["platforms"] == ["youtube.com", "reddit.com"]
+    notice.locator(".setup-button-ghost").click()
+    p.locator(".setup-recs-note").wait_for()
+    assert notice.is_hidden() and app.get("/api/feed/interests?lang=en").json()["agreed"] is False
     assert app.get("/api/feed/interests?lang=en").json()["topics"] == ["tide pools"]
 
     p.locator(".setup-recs-note .setup-button-link").click()
@@ -77,4 +85,40 @@ def test_the_fold_lists_what_was_remembered_and_a_pill_takes_its_preference_out(
     taste = app.get("/api/profile/taste?lang=en").json()
     assert [x["topic"] for x in taste["likes"]] == ["tide pools"] and taste["rules"] == []
     assert fold.get_attribute("open") is not None
+    assert page.errors == [] and page.refused == []
+
+
+def test_the_notice_on_reading_a_feed_is_asked_again_after_a_no_and_never_after_a_yes(app, browser):
+    page = open_recs(app, browser)
+    p = page.page
+    offered = app.get("/api/feed/interests?lang=en").json()["platformsOffered"]
+    first, second, third = [row for row in offered if row["reach"] == "signin"][:3]
+    platforms = p.locator(CHIPS).nth(1)
+    notice = p.locator(".setup-recs-feed")
+
+    def chip(row, pressed=""):
+        return platforms.locator(f".setup-chip{pressed}", has=p.locator("span", has_text=re.compile(f"^{row['name']}$")))
+
+    platforms.locator(".setup-chip", has_text="More").click()
+    chip(first).click()
+    notice.locator(".setup-button-ghost").click()
+    notice.wait_for(state="hidden")
+    chip(second).click()
+    notice.locator(".setup-button-primary").click()
+    notice.wait_for(state="hidden")
+    interests = app.get("/api/feed/interests?lang=en").json()
+    assert interests["agreed"] is True and interests["platforms"] == [first["key"], second["key"]]
+    chip(first).click()
+    chip(first, "[aria-pressed='false']").wait_for()
+    chip(first).click()
+    chip(first, "[aria-pressed='true']").wait_for()
+    assert notice.is_hidden()
+    p.reload()
+    p.locator("#side-settings").click()
+    p.locator(".setup-nav-item[data-part='recs']").click()
+    p.locator(f"{CHIPS} .setup-chip").first.wait_for()
+    platforms.locator(".setup-chip", has_text="More").click()
+    chip(third).click()
+    chip(third, "[aria-pressed='true']").wait_for()
+    assert notice.is_hidden()
     assert page.errors == [] and page.refused == []

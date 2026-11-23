@@ -6,7 +6,8 @@ the runtime database's `feed_events` table (db.py). Taste is read back from thos
 kinds of the things the person opened and liked count for a thing, the ones
 they skipped count against it. The topics the person named on the first run
 are kept beside them (`feed_topics`) and count before there is any behaviour to go on, and so do the platforms
-they chose (`feed_platforms`, keys of platforms.py).
+they chose (`feed_platforms`, keys of platforms.py). Once they agreed on the page's notice (`agree`), a chosen
+platform read only signed in is read from their own feed there when they are signed in to it (`read_chosen`).
 A thing a public source brought also counts what was learned of that source
 (`sources.weights`, fed from `remember`), and no source fills more than
 SOURCE_CAP of any PAGE_WINDOW things in a row.
@@ -33,7 +34,8 @@ from .. import browsed, db, life, platforms, profile, situation, subjects
 from .. import taste as model
 from ..library import DISMISSED, KEPT, Item, Library
 from ..sources import weights
-from ..web import signin
+from ..storage import atomic_write_text
+from ..web import signin, sites
 
 # "hide_source" is "less like this source": the thing is skipped and its source read and ranked far less.
 # "play" carries the seconds the app's own player ran, sent when it stops or the card closes; "read" the
@@ -56,6 +58,8 @@ FIRST_PER_SOURCE = 2
 # A sample find's summary is at least this wide, a Chinese character counting two (one of a video platform needs
 # none: its title and cover say what it is).
 SUMMARY_MIN = 60
+# Where the person's agreement to `read_chosen` is kept: the desktop folder, beside the app's other notices.
+AGREED_FILE = "ownfeeds.json"
 # A title that is only a name and a version number ("llm-gemini 0.38"): a release, not a thing to read.
 RELEASE = re.compile(r"[\w.-]+ v?\d+(\.\d+)+[a-z]*\d*", re.I)
 # Shops and booking sites by their name: their pages are for buying and booking, not for reading.
@@ -692,11 +696,56 @@ def keep_topics(runtime: Path, topics: list[str]) -> None:
 
 
 def keep_platforms(runtime: Path, keys: list[str]) -> None:
-    """The person's chosen platforms (clean_platforms' keys). Reading a signed-in platform's own feed stays the
-    switch in Settings > Connections, which asks first."""
+    """The person's chosen platforms (clean_platforms' keys), each row keeping whether its choice turned its feed on
+    (`fed`). A platform no longer chosen has such a feed turned off; then the chosen are read (`read_chosen`)."""
     with db.at(runtime).write() as conn:
+        fed = {key for key, in conn.execute("SELECT key FROM feed_platforms WHERE fed")}
         conn.execute("DELETE FROM feed_platforms")
-        conn.executemany("INSERT INTO feed_platforms (key) VALUES (?)", [(key,) for key in keys])
+        conn.executemany("INSERT INTO feed_platforms (key, fed) VALUES (?, ?)", [(key, key in fed) for key in keys])
+    for key in fed - set(keys):
+        sites._change(runtime, key, _unfed)
+    read_chosen(runtime)
+
+
+def _unfed(card: dict) -> None:
+    # Off, and nobody's choice again, so a later choice may turn it on; one a wall stopped stays as it is.
+    feed = card.get("feed") or {}
+    if feed.get("on"):
+        feed.pop("on")
+
+
+def agreed(runtime: Path) -> bool:
+    """Whether the person agreed that a chosen platform read only signed in is read from their own feed there."""
+    try:
+        saved = json.loads((Path(runtime) / "desktop" / AGREED_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(saved, dict) and saved.get("agreed") is True
+
+
+def agree(runtime: Path) -> None:
+    """Their yes on the page's notice, asked once (onboard.js, setup/recs.js)."""
+    path = Path(runtime) / "desktop" / AGREED_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, json.dumps({"agreed": True}))
+
+
+def read_chosen(runtime: Path, site: str = "") -> None:
+    """With their agreement, each chosen platform read only signed in (platforms.SIGNIN) that they are signed in to
+    has its own feed read in the background, by the switch Settings uses (browser.switch_feed: its pace, day's cap
+    and walls), unless that feed is a choice already: turned on or off by the person, or stopped by a wall. `site`:
+    that platform alone (a sign-in just seen)."""
+    if not agreed(runtime):
+        return
+    from .browser import switch_feed
+    saved, cards = signin.load(Path(runtime) / "desktop"), sites.load(runtime)
+    for key in load_platforms(runtime):
+        card = cards.get(key) if isinstance(cards.get(key), dict) else {}
+        feed = card.get("feed") if isinstance(card.get("feed"), dict) else {}
+        if ((site and key != site) or platforms.PLATFORMS[key].reach != platforms.SIGNIN
+                or not _signed_in(saved, key) or "on" in feed or feed.get("stopped")):
+            continue
+        switch_feed(runtime, key, True, saved[key].get("home") or f"https://{key}/", chosen=True)
 
 
 def forget_said(runtime: Path, match: re.Pattern) -> int:

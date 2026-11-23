@@ -2,7 +2,8 @@
 // Settings › Recommendations: how often and when (the pace and quiet hours pacing.py reads), the person's taste
 // (GET/POST /api/profile/taste) as chips for the topics and the platforms they follow, the ranking's memory of
 // what they did and said folded under them, a reset, and the week in numbers (GET /api/feed/numbers). Topics
-// and platforms are kept with POST /api/feed/interests, as the first run does.
+// and platforms are kept with POST /api/feed/interests, as the first run does, and so is the person's yes on the
+// notice the first platform read only signed in brings: its own feed read there (feed.agreed).
 (() => {
   const PACES = ["less", "normal", "more"];
   const QUIET_DEFAULT = { from: "22:00", to: "08:00" };
@@ -17,6 +18,8 @@
     let view = null;
     let posting = false;
     let moreShown = false;
+    // The notice on reading a platform's own feed, open under the platforms.
+    let asking = false;
     const node = kit.section("recs");
     const error = kit.errorLine();
 
@@ -52,6 +55,7 @@
     // A chosen platform that is read once the person is signed in says so, with the way to Connections.
     const note = el("div", "setup-recs-note");
     note.append(el("span", "setup-help", t.platformNote), kit.button("setup-button-link", t.platformGo, () => ctx.go("setup/connect")));
+    const notice = feedNotice();
     const remembered = kit.fold("");
     const rememberedName = remembered.summary.lastChild;
     const memory = el("div", "setup-words");
@@ -60,7 +64,8 @@
     remembered.body.append(memory, memoryNone, reset);
     const rememberedBlock = el("div", "setup-recs-block");
     rememberedBlock.append(remembered.node);
-    tasteCard.append(block(t.topics, topicChips), block(t.platforms, platformChips, note), rememberedBlock);
+    tasteCard.append(block(t.topics, topicChips), kit.item("platforms", block(t.platforms, platformChips, note, notice.node)),
+      rememberedBlock);
 
     // ---- The week. Nothing shows before the first view has come.
     const week = el("p", "setup-help setup-recs-week");
@@ -95,6 +100,25 @@
       }
       button.addEventListener("click", toggle);
       return button;
+    }
+    // What reading a platform's own feed does, its risk and how to stop it, with the person's answer: a yes is kept
+    // once, a no leaves the pick a preference until the next one.
+    function feedNotice() {
+      const words = t.feedNotice;
+      const node = el("div", "setup-recs-feed");
+      node.setAttribute("role", "group");
+      node.setAttribute("aria-label", words.title);
+      const actions = el("div", "setup-recs-feed-actions");
+      const no = kit.button("setup-button-ghost setup-button-sm", words.decline, () => {
+        asking = false;
+        render();
+      });
+      const yes = kit.button("setup-button-primary setup-button-sm", words.agree, () =>
+        choose({ topics: view.topics.map((row) => row.name), agree: true }));
+      actions.append(no, yes);
+      node.append(el("p", "setup-option-name", words.title), el("p", "setup-help", words.text),
+        el("p", "setup-help setup-recs-feed-warn", words.warn), el("p", "setup-help", words.stop), actions);
+      return { node, buttons: [no, yes] };
     }
     // The chip that shows the platforms left out.
     function more() {
@@ -149,12 +173,19 @@
       const chosen = new Set(v.platforms);
       const shown = v.platformsOffered.filter((row, i) => moreShown || i < PLATFORMS_SHOWN || chosen.has(row.key));
       const unread = (row) => row.reach === "signin" && !row.connected;
+      const pick = (row) => {
+        if (chosen.has(row.key)) return setPlatforms(v.platforms.filter((key) => key !== row.key));
+        asking = asking || row.reach === "signin";
+        return setPlatforms([...v.platforms, row.key]);
+      };
       platformChips.replaceChildren(
-        ...shown.map((row) => chip(row.name, chosen.has(row.key),
-          () => setPlatforms(chosen.has(row.key) ? v.platforms.filter((key) => key !== row.key) : [...v.platforms, row.key]), unread(row))),
+        ...shown.map((row) => chip(row.name, chosen.has(row.key), () => pick(row), unread(row))),
         ...(shown.length < v.platformsOffered.length ? [more()] : []),
       );
-      note.hidden = !v.platformsOffered.some((row) => chosen.has(row.key) && unread(row));
+      // Open while a platform read only signed in is chosen and nothing was agreed yet.
+      notice.node.hidden = !(asking && !v.agreed && v.platformsOffered.some((row) => chosen.has(row.key) && row.reach === "signin"));
+      for (const button of notice.buttons) button.disabled = posting;
+      note.hidden = !notice.node.hidden || !v.platformsOffered.some((row) => chosen.has(row.key) && unread(row));
 
       // What the ranking remembers, one flat list: each pill says what it is, and its cross takes it out.
       const learned = (word, row) => pill(paI18n.t(`setup_recs.${word}`, { name: named(row) }), paI18n.t("setup_recs.learnedOff", { name: named(row) }), () => change({ leans: { [row.key]: 0 } }));

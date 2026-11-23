@@ -369,11 +369,14 @@ def home_of(url: str) -> str:
 def became(desktop: Path, url: str, how: str, marks: list[str] | None = None, hint_off: bool = False,
            name: str = "") -> None:
     """Evidence of an account on the site of `url`: "signin" (the person finished its sign-in here), "session"
-    (its account cookies are there) or "page"."""
+    (its account cookies are there) or "page". A site signed in to just now, if the person chose it among their
+    platforms, has its own feed read when they agreed to that (feed.read_chosen)."""
     now = round(time.time())
+    fresh = []
 
     def edit(entry: dict) -> None:
         if entry.get("state") != "in" or entry.get("gone"):
+            fresh.append(True)
             entry.update(at=now)
             # The first time it is signed in here, Settings opens its choices once.
             if not entry.get("told"):
@@ -389,6 +392,9 @@ def became(desktop: Path, url: str, how: str, marks: list[str] | None = None, hi
             entry["hint_off"] = True
     change(desktop, key(url), edit)
     forget_wall(desktop, url)
+    if fresh:
+        from ..panels import feed
+        feed.read_chosen(Path(desktop).parent, bare(key(url)))
 
 
 def gone(desktop: Path, url: str) -> None:

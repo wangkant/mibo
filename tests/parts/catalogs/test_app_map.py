@@ -1,18 +1,22 @@
 """The character's map of its own app (mibo/appmap.py): one catalogue that follows the Settings pages, a look-up that
 never shows a key, a change made when the person asks, a change that widens the character's permissions asked in the
-chat after outside material, and the one notice of where page text, window pictures and file text go."""
+chat after outside material (a site's own feed read among them, while turning one off is not), and the one notice of
+where page text, window pictures and file text go."""
 from __future__ import annotations
 
 import json
 import re
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from harness.app import TOKEN
 
-from mibo import appmap, cardwait, crossing, i18n, secretstore, welcome
+from mibo import appmap, cardwait, crossing, i18n, secretstore, signedread, welcome
 from mibo import setup_wizard as sw
+from mibo.panels import feed
 from mibo.see import when
+from mibo.web import signin, sites
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 SETUP = welcome.ASSETS / "setup"
@@ -157,3 +161,81 @@ def test_the_pictures_switch_is_on_until_turned_off_and_a_host_change_keeps_it(t
     # A file from before the notice kept "always": "" for off.
     (tmp_path / when.SWITCH_FILE).write_text(json.dumps({"always": ""}), encoding="utf-8")
     assert not switch.on()
+
+
+def test_the_character_turns_a_sites_feed_off_with_no_question_and_on_only_asked(client, workspace, asked):
+    runtime = workspace.home / "runtime"
+    client.post("/api/browser/sites", headers=HEADERS, json={"site": "douyin.com", "feed": True})
+    listed = _settings(client, do="list", item="privacy/sites")["items"][0]
+    assert listed["now"] == "douyin.com" and listed["change"] == "asks"
+    done = _settings(client, do="change", item="privacy/sites", value="douyin.com off")
+    assert done["status"] == "changed" and asked == [] and signedread.feeds_on(runtime) == {}
+    assert _settings(client, do="change", item="privacy/sites", value="douyin.com on")["status"] == "declined"
+    ((question,),) = [asked]
+    assert question["risk"] == "widen" and "douyin.com" in question["card"]["zh"]["title"]
+    assert signedread.feeds_on(runtime) == {}
+    assert _settings(client, do="change", item="privacy/sites", value="douyin.com")["status"] == "invalid"
+
+
+def test_the_character_changes_the_platforms_asking_only_for_a_new_one_read_signed_in(client, workspace, asked):
+    client.app.state.sources = SimpleNamespace(ask=lambda **kw: None)
+    done = _settings(client, do="change", item="recs/platforms", value="bilibili.com, youtube.com")
+    assert done["status"] == "changed" and asked == []
+    assert _settings(client, do="change", item="recs/platforms", value="bilibili.com, douyin.com")["status"] == "declined"
+    assert len(asked) == 1 and asked[0]["risk"] == "widen"
+    assert client.get("/api/feed/interests", headers=HEADERS).json()["platforms"] == ["bilibili.com", "youtube.com"]
+    assert _settings(client, do="change", item="recs/platforms", value="none")["status"] == "changed"
+    assert _settings(client, do="change", item="recs/platforms", value="evil.example")["status"] == "invalid"
+    assert len(asked) == 1
+
+
+def test_a_platform_the_character_chose_is_not_read_before_the_persons_own_agreement(client, workspace, monkeypatch):
+    async def yes(self, card, conversation, what, ended=None, *, yes=True, no=False, risk="act", typed=True):
+        return True
+
+    monkeypatch.setattr(cardwait.Card, "ask", yes)
+    client.app.state.sources = SimpleNamespace(ask=lambda **kw: None)
+    runtime = workspace.home / "runtime"
+    signin.became(runtime / "desktop", "https://www.douyin.com/", "signin")
+    assert _settings(client, do="change", item="recs/platforms", value="douyin.com")["status"] == "changed"
+    assert not feed.agreed(runtime) and signedread.feeds_on(runtime) == {}
+
+
+def test_a_generic_word_for_sites_or_platforms_does_not_skip_the_question(client, workspace, asked, monkeypatch):
+    # Only the site's or platform's own name counts, not the item's label (网站, 平台) in their message.
+    said = ["这个网站好慢，我用的平台也不多"]
+    monkeypatch.setattr(crossing, "widening_in",
+                        lambda workspace, change: crossing.widening(change, said, {}))
+    client.app.state.sources = SimpleNamespace(ask=lambda **kw: None)
+    assert _settings(client, do="change", item="privacy/sites", value="douyin.com on")["status"] == "declined"
+    assert _settings(client, do="change", item="recs/platforms", value="douyin.com")["status"] == "declined"
+    assert [row["risk"] for row in asked] == ["widen", "widen"]
+    # The card carries the site's terms beside the question.
+    assert i18n.t("setup_privacy.feedWarn", "en") in asked[0]["card"]["en"]["lines"]
+    said[:] = ["turn on douyin.com and douyin.com for me"]
+    assert _settings(client, do="change", item="privacy/sites", value="douyin.com on")["status"] == "changed"
+    assert _settings(client, do="change", item="recs/platforms", value="douyin.com")["status"] == "changed"
+    assert len(asked) == 2
+
+
+def test_no_change_to_the_recommendations_carries_the_agreement():
+    # The agreement is the person's own yes on the page; the character's changes never store it.
+    for item in appmap.ITEMS:
+        if item.route == "/api/feed/interests":
+            assert "agree" not in item.body(["douyin.com"], {"topics": [], "platforms": [], "agree": True})
+
+
+def test_forgetting_a_site_keeps_the_persons_off_and_a_walls_stop(client, workspace):
+    runtime = workspace.home / "runtime"
+    feed.agree(runtime)
+    signin.became(runtime / "desktop", "https://www.douyin.com/", "signin")
+    signin.became(runtime / "desktop", "https://www.xiaohongshu.com/", "signin")
+    feed.keep_platforms(runtime, ["douyin.com", "xiaohongshu.com"])
+    assert set(signedread.feeds_on(runtime)) == {"douyin.com", "xiaohongshu.com"}
+    client.post("/api/browser/sites", headers=HEADERS, json={"site": "douyin.com", "feed": False})
+    sites._change(runtime, "xiaohongshu.com", lambda card: card.update(feed={"on": False, "stopped": "verification"}))
+    for site in ("douyin.com", "xiaohongshu.com"):
+        client.post("/api/browser/sites", headers=HEADERS, json={"site": site, "forget": "all"})
+    feed.keep_platforms(runtime, ["douyin.com", "xiaohongshu.com"])
+    assert signedread.feeds_on(runtime) == {}
+

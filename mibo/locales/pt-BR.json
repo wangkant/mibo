@@ -773,7 +773,15 @@
     "platformsHead": "Plataformas que você usa",
     "platformsMore": "Mais",
     "platformLocked": "Lida após o login",
-    "platformsSignin": "As plataformas com cadeado só são lidas depois que você entra nelas no navegador integrado e ativa a leitura em segundo plano em Configurações › Conexões."
+    "platformsSignin": "As plataformas com cadeado são lidas a partir do seu próprio feed depois que você entra nelas no navegador integrado. A primeira que você escolher pergunta uma vez.",
+    "feedNotice": {
+      "title": "Ler seu próprio feed nessas plataformas?",
+      "text": "Depois que você entrar em uma plataforma com cadeado no navegador integrado, o personagem lê seu próprio feed lá em segundo plano e traz recomendações dele. Somente leitura: nunca publica, curte nem faz mais nada, no máximo 24 vezes por dia, e para em qualquer verificação.",
+      "warn": "Os termos desses sites podem proibir leitura automatizada, e sua conta pode ser solicitada a fazer uma verificação ou ser limitada.",
+      "stop": "Para parar, desative para o site em Configurações › Conexões ou diga ao personagem.",
+      "agree": "Concordar",
+      "decline": "Agora não"
+    }
   },
   "petbox": {
     "shut": "Fechar",
@@ -1558,9 +1566,17 @@
     "addTopic": "Adicionar um assunto",
     "platforms": "Plataformas",
     "more": "Mais",
-    "platformNote": "As plataformas com cadeado só são lidas depois que você entra nelas e ativa a leitura em segundo plano em Conexões.",
+    "platformNote": "As plataformas com cadeado são lidas a partir do seu próprio feed depois que você entra nelas. A primeira que você escolher pergunta uma vez.",
     "platformGo": "Abrir Conexões",
     "platformLocked": "Lida após o login",
+    "feedNotice": {
+      "title": "Ler seu próprio feed nessas plataformas?",
+      "text": "Depois que você entrar em uma plataforma com cadeado no navegador integrado, o personagem lê seu próprio feed lá em segundo plano e traz recomendações dele. Somente leitura: nunca publica, curte nem faz mais nada, no máximo 24 vezes por dia, e para em qualquer verificação.",
+      "warn": "Os termos desses sites podem proibir leitura automatizada, e sua conta pode ser solicitada a fazer uma verificação ou ser limitada.",
+      "stop": "Para parar, desative para o site em Conexões ou diga ao personagem.",
+      "agree": "Concordar",
+      "decline": "Agora não"
+    },
     "remembered": "Preferências lembradas ({count})",
     "rememberedNone": "Nada ainda. Aparece quando você abre ou pula recomendações, ou diz na conversa o que gosta.",
     "takesRow": "Abre com frequência: {name}",

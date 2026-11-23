@@ -773,7 +773,15 @@
     "platformsHead": "Plateformes que tu utilises",
     "platformsMore": "Plus",
     "platformLocked": "Lue après connexion",
-    "platformsSignin": "Les plateformes avec un cadenas ne sont lues qu'après que tu t'y es connecté dans le navigateur intégré et que tu as activé la lecture en arrière-plan dans Réglages › Connexions."
+    "platformsSignin": "Les plateformes avec un cadenas sont lues depuis ton propre fil une fois que tu t'y es connecté dans le navigateur intégré. La première que tu choisis te le demande une fois.",
+    "feedNotice": {
+      "title": "Lire ton propre fil sur ces plateformes ?",
+      "text": "Une fois que tu t'es connecté à une plateforme avec un cadenas dans le navigateur intégré, le personnage y lit ton propre fil en arrière-plan et t'en rapporte des recommandations. Lecture seule : il ne publie, n'aime et ne fait rien d'autre, 24 fois par jour au maximum, avec arrêt à la moindre vérification.",
+      "warn": "Les conditions de ces sites peuvent interdire la lecture automatisée, et ton compte peut être soumis à une vérification ou limité.",
+      "stop": "Pour arrêter, désactive-la pour le site dans Réglages › Connexions, ou dis-le au personnage.",
+      "agree": "Accepter",
+      "decline": "Pas maintenant"
+    }
   },
   "petbox": {
     "shut": "Fermer",
@@ -1558,9 +1566,17 @@
     "addTopic": "Ajouter un sujet",
     "platforms": "Plateformes",
     "more": "Plus",
-    "platformNote": "Les plateformes avec un cadenas ne sont lues qu'après que vous vous y êtes connecté et que vous avez activé la lecture en arrière-plan dans Connexions.",
+    "platformNote": "Les plateformes avec un cadenas sont lues depuis votre propre fil une fois que vous vous y êtes connecté. La première que vous choisissez vous le demande une fois.",
     "platformGo": "Ouvrir Connexions",
     "platformLocked": "Lue après connexion",
+    "feedNotice": {
+      "title": "Lire votre propre fil sur ces plateformes ?",
+      "text": "Une fois que vous vous êtes connecté à une plateforme avec un cadenas dans le navigateur intégré, le personnage y lit votre propre fil en arrière-plan et vous en rapporte des recommandations. Lecture seule : il ne publie, n'aime et ne fait rien d'autre, 24 fois par jour au maximum, avec arrêt à la moindre vérification.",
+      "warn": "Les conditions de ces sites peuvent interdire la lecture automatisée, et votre compte peut être soumis à une vérification ou limité.",
+      "stop": "Pour arrêter, désactivez-la pour le site dans Connexions, ou dites-le au personnage.",
+      "agree": "Accepter",
+      "decline": "Pas maintenant"
+    },
     "remembered": "Préférences retenues ({count})",
     "rememberedNone": "Rien pour l'instant. Cela apparaît quand vous ouvrez ou ignorez des recommandations, ou dites dans la discussion ce que vous aimez.",
     "takesRow": "Souvent ouvert : {name}",

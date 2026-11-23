@@ -1,6 +1,8 @@
 """The platforms the person chose (推荐偏好) as a preference, not a filter: a lift in the sources' prior shared
 among a platform's lists that the person reads, a place in the first run's samples for each chosen platform that
-has a find, no switch of a signed-in feed by a choice; a video from that feed plays on its card."""
+has a find. A chosen platform read only signed in has its own feed read once the person agreed and is signed in to
+it, never a feed they turned off or a wall stopped, and only the feeds a choice turned on go with that choice; a
+video from that feed plays on its card."""
 from __future__ import annotations
 
 from itertools import pairwise
@@ -14,7 +16,7 @@ from mibo.library import Library
 from mibo.panels import browser, feed
 from mibo.sources import weights
 from mibo.sources.base import Source
-from mibo.web import signin
+from mibo.web import signin, sites
 
 NOW = 1_800_000_000
 
@@ -67,17 +69,77 @@ def test_the_first_run_keeps_a_place_for_each_chosen_platform_with_a_find(shelf)
             assert {live.id, show.id} <= {row["id"] for row in shown}, sites_
 
 
-def test_a_chosen_platform_is_a_preference_only_and_never_switches_a_signed_in_feed(tmp_path):
+def signed(runtime, *urls: str) -> None:
+    for url in urls:
+        signin.became(runtime / "desktop", url, "signin")
+
+
+def reading(runtime) -> set[str]:
+    return set(signedread.feeds_on(runtime))
+
+
+def test_without_the_agreement_no_choice_reads_a_feed(tmp_path):
     runtime = tmp_path / "runtime"
-    desktop = runtime / "desktop"
-    for url in ("https://www.douyin.com/", "https://x.com/"):
-        signin.became(desktop, url, "signin")
+    signed(runtime, "https://www.douyin.com/", "https://x.com/")
     browser.switch_feed(runtime, "x.com", True, "https://x.com/")
-    feed.keep_platforms(runtime, ["douyin.com", "bilibili.com", "x.com"])
-    assert feed.load_platforms(runtime) == ["douyin.com", "bilibili.com", "x.com"]
-    assert set(signedread.feeds_on(runtime)) == {"x.com"}
+    feed.keep_platforms(runtime, ["douyin.com", "bilibili.com", "x.com", "weibo.com"])
+    assert feed.load_platforms(runtime) == ["douyin.com", "bilibili.com", "x.com", "weibo.com"]
+    signed(runtime, "https://weibo.com/")
+    assert reading(runtime) == {"x.com"}
     feed.keep_platforms(runtime, ["bilibili.com"])
-    assert set(signedread.feeds_on(runtime)) == {"x.com"}
+    assert reading(runtime) == {"x.com"}
+
+
+def test_with_the_agreement_a_chosen_platform_is_read_once_signed_in_now_or_later(tmp_path):
+    runtime = tmp_path / "runtime"
+    signed(runtime, "https://www.douyin.com/")
+    feed.keep_platforms(runtime, ["douyin.com", "weibo.com"])
+    assert not feed.agreed(runtime) and reading(runtime) == set()
+    feed.agree(runtime)
+    feed.keep_platforms(runtime, ["douyin.com", "weibo.com"])
+    assert feed.agreed(runtime) and reading(runtime) == {"douyin.com"}
+    assert signedread.feeds_on(runtime)["douyin.com"]["url"] == "https://www.douyin.com/"
+    signed(runtime, "https://www.weibo.com/home")
+    assert reading(runtime) == {"douyin.com", "weibo.com"}
+
+
+def test_a_feed_the_person_turned_off_or_a_wall_stopped_stays_off_after_a_choice(tmp_path):
+    runtime = tmp_path / "runtime"
+    feed.agree(runtime)
+    signed(runtime, "https://www.douyin.com/", "https://www.xiaohongshu.com/")
+    browser.switch_feed(runtime, "douyin.com", False, "https://www.douyin.com/")
+    sites._change(runtime, "xiaohongshu.com", lambda card: card.update(feed={"on": False, "stopped": "verification"}))
+    feed.keep_platforms(runtime, ["douyin.com", "xiaohongshu.com"])
+    assert reading(runtime) == set()
+    # A sign-in seen again does not turn it on either.
+    signin.signed_out(runtime / "desktop", "douyin.com")
+    signed(runtime, "https://www.douyin.com/")
+    assert reading(runtime) == set()
+
+
+def test_letting_a_platform_go_turns_off_only_the_feed_its_choice_turned_on(tmp_path):
+    runtime = tmp_path / "runtime"
+    feed.agree(runtime)
+    signed(runtime, "https://www.douyin.com/", "https://x.com/", "https://www.kuaishou.com/")
+    browser.switch_feed(runtime, "x.com", True, "https://x.com/")
+    feed.keep_platforms(runtime, ["douyin.com", "x.com", "kuaishou.com"])
+    assert reading(runtime) == {"douyin.com", "x.com", "kuaishou.com"}
+    # The person's own switch takes a feed a choice turned on over.
+    browser.switch_feed(runtime, "kuaishou.com", True, "https://www.kuaishou.com/")
+    feed.keep_platforms(runtime, [])
+    assert reading(runtime) == {"x.com", "kuaishou.com"}
+    # Let go, it is nobody's choice: a new choice reads it again.
+    feed.keep_platforms(runtime, ["douyin.com"])
+    assert reading(runtime) == {"douyin.com", "x.com", "kuaishou.com"}
+
+
+def test_an_open_platform_or_one_the_registry_does_not_know_never_touches_a_feed(tmp_path):
+    runtime = tmp_path / "runtime"
+    feed.agree(runtime)
+    signed(runtime, "https://www.bilibili.com/", "https://www.youtube.com/", "https://gone.example/")
+    feed.keep_platforms(runtime, ["bilibili.com", "youtube.com", "gone.example"])
+    signed(runtime, "https://news.example/")
+    assert reading(runtime) == set() and sites.load(runtime) == {}
 
 
 def test_a_saved_platform_the_registry_no_longer_knows_is_left_out(tmp_path):

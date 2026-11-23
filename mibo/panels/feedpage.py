@@ -129,20 +129,26 @@ class Feed:
             self.ws.pace.ended(ident, how, "chat")
 
     def interests(self, lang: str) -> dict:
-        """The topics and platforms chosen, and those offered in `lang` (platformsOffered: feed.offered_platforms)."""
+        """The topics and platforms chosen, those offered in `lang` (platformsOffered: feed.offered_platforms), and
+        whether the person agreed that a chosen platform read only signed in is read (feed.agreed)."""
         runtime = self.ws._runtime()
         lang = langs.normalize(lang) or langs.normalize(self.ws.config().get("AGENT_LANG")) or "en"
         return {"topics": feed.load_topics(runtime), "suggested": feed.suggested(lang),
-                "platforms": feed.load_platforms(runtime), "platformsOffered": feed.offered_platforms(runtime, lang)}
+                "platforms": feed.load_platforms(runtime), "platformsOffered": feed.offered_platforms(runtime, lang),
+                "agreed": feed.agreed(runtime)}
 
     def choose(self, payload: dict) -> dict:
-        """The topics, and the platforms when the page sent them (none sent leaves those chosen before)."""
+        """The topics, and the platforms when the page sent them (none sent leaves those chosen before); "agree":
+        true is the person's yes on the page's notice, kept once."""
         runtime = self.ws._runtime()
         topics = feed.clean_topics(payload.get("topics"))
         chosen = feed.clean_platforms(payload["platforms"]) if "platforms" in payload else None
+        agree = payload.get("agree") is True
+        if agree:
+            feed.agree(runtime)
         feed.keep_topics(runtime, topics)
-        if chosen is not None:
-            feed.keep_platforms(runtime, chosen)
+        if chosen is not None or agree:
+            feed.keep_platforms(runtime, feed.load_platforms(runtime) if chosen is None else chosen)
         return self.interests(payload.get("lang") or "")
 
     async def react(self, payload: dict) -> dict:

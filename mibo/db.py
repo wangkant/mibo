@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS feed_events (
     kind TEXT NOT NULL, extra TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS feed_events_id ON feed_events (id);
 CREATE TABLE IF NOT EXISTS feed_topics (n INTEGER PRIMARY KEY, topic TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS feed_platforms (n INTEGER PRIMARY KEY, key TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS feed_platforms (n INTEGER PRIMARY KEY, key TEXT NOT NULL, fed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS shown (
     n INTEGER PRIMARY KEY, at REAL NOT NULL, id TEXT NOT NULL, gated INTEGER NOT NULL, row TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS shown_id ON shown (id);
@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS hosts (
     site TEXT PRIMARY KEY, fails INTEGER NOT NULL, fail_at REAL NOT NULL, ok_at REAL NOT NULL, wall_at REAL NOT NULL,
     mode TEXT NOT NULL) WITHOUT ROWID;
 """
+# Columns added since a table was first made, which a database from before gets when it opens.
+ADDED = {"feed_platforms": ("fed INTEGER NOT NULL DEFAULT 0",)}
 # What a backup carries: everything but the chat record, which a forget must reach in full.
 BACKED_UP = ("page_chats", "page_messages", "embeddings", "library", "feed_events", "feed_topics", "feed_platforms",
              "shown", "browsed", "source_state", "own_feeds", "source_reads", "situation", "hosts")
@@ -92,6 +94,11 @@ class Db:
                        f"journal_size_limit={JOURNAL_MAX}"):
             self._conn.execute(f"PRAGMA {pragma}")
         self._conn.executescript(SCHEMA)
+        for table, columns in ADDED.items():
+            have = {row[1] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+            for column in columns:
+                if column.split()[0] not in have:
+                    self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
         # Windows ACLs do not map to POSIX mode bits.
         with contextlib.suppress(OSError):
             os.chmod(path, 0o600)
@@ -183,7 +190,8 @@ def snapshot(runtime: Path, target: Path) -> bool:
 
 def take_back(runtime: Path, archived: Path | None) -> None:
     """A restore: what a backup carries, from the database `archived` (None: an archive with none), in place of
-    the runtime's own; the chat record stays as it is. A table an older backup does not have is left empty."""
+    the runtime's own; the chat record stays as it is. A table an older backup does not have is left empty, and a
+    column it does not have takes its default."""
     db = at(runtime)
     with db._lock:
         held: set[str] = set()
@@ -195,7 +203,11 @@ def take_back(runtime: Path, archived: Path | None) -> None:
                 for table in BACKED_UP:
                     conn.execute(f"DELETE FROM {table}")
                     if table in held:
-                        conn.execute(f"INSERT INTO {table} SELECT * FROM archived.{table}")
+                        # By the names this table has: the archive's own are never written into the statement.
+                        own = [row[1] for row in conn.execute(f"PRAGMA main.table_info({table})")]
+                        kept = {row[1] for row in conn.execute(f"PRAGMA archived.table_info({table})")}
+                        columns = ", ".join(name for name in own if name in kept)
+                        conn.execute(f"INSERT INTO {table} ({columns}) SELECT {columns} FROM archived.{table}")
         finally:
             if archived is not None:
                 db._conn.execute("DETACH DATABASE archived")

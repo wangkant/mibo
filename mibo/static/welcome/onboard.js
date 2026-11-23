@@ -57,6 +57,11 @@
   let platformsAtStart = [];
   let platformsSaved = [];
   let platformsMore = false;
+  // The notice on reading a platform's own feed (feed.agreed): agreed before, agreed in this tour (sent with the
+  // next save), and open under the platforms now.
+  let feedAgreed = false;
+  let feedAgreeing = false;
+  let feedAsking = false;
   // After the topics: the finds asked for while `looking` (the ask itself, so a late answer to an earlier one is
   // dropped), then shown one at a time while `finding`.
   let looking = null;
@@ -212,6 +217,7 @@
         if (platformsPicked.join("\n") === platformsSaved.join("\n")) platformsPicked = [...chosen];
         platformsAtStart = [...chosen];
         platformsSaved = [...chosen];
+        feedAgreed = value.agreed === true;
       })
       .catch(() => (suggested = []))
       .finally(() => step === TOPICS && draw());
@@ -419,7 +425,8 @@
   }
 
   // The platforms to read, as chips under the topics: the first few, the rest behind "more". A platform read only
-  // after signing in carries a lock, and once one is picked a line says where that is done.
+  // after signing in carries a lock, and once one is picked a line says so; the first such pick opens the notice on
+  // reading the person's own feed there, in the page under the row, until they agree or decline.
   function platforms() {
     const box = el("div", "onboard-platforms");
     const draw = () => {
@@ -436,9 +443,11 @@
         });
         row.append(more);
       }
-      const unread = platformsOffered.some((one) => picks.has(one.key) && one.reach === "signin" && !one.connected);
+      const locked = platformsOffered.filter((one) => picks.has(one.key) && one.reach === "signin");
+      feedAsking = feedAsking && locked.length > 0;
+      const unread = locked.some((one) => !one.connected);
       box.replaceChildren(el("p", "onboard-hint onboard-platforms-head", t.platformsHead), row,
-        ...(unread ? [el("p", "onboard-hint onboard-platforms-note", t.platformsSignin)] : []));
+        ...(feedAsking ? [feedNotice(draw)] : unread ? [el("p", "onboard-hint onboard-platforms-note", t.platformsSignin)] : []));
     };
     if (platformsOffered.length) draw();
     return box;
@@ -455,10 +464,37 @@
       node.append(icon(LOCK, "onboard-chip-lock"));
     }
     node.addEventListener("click", () => {
-      platformsPicked = platformsPicked.includes(one.key) ? platformsPicked.filter((key) => key !== one.key) : [...platformsPicked, one.key];
+      const adding = !platformsPicked.includes(one.key);
+      platformsPicked = adding ? [...platformsPicked, one.key] : platformsPicked.filter((key) => key !== one.key);
+      const asks = adding && one.reach === "signin" && !feedAgreed && !feedAgreeing && !feedAsking;
+      feedAsking = feedAsking || asks;
       changed();
+      // A notice just opened comes into sight under the row.
+      if (asks) document.querySelector(".onboard-reading")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
     return node;
+  }
+
+  // What reading a platform's own feed does, its risk and how to stop it; agreed once, declined until the next pick.
+  function feedNotice(changed) {
+    const words = t.feedNotice;
+    const box = el("div", "onboard-reading");
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", words.title);
+    const actions = el("div", "onboard-reading-actions");
+    for (const [cls, label, yes] of [["onboard-reading-no", words.decline, false], ["onboard-reading-yes", words.agree, true]]) {
+      const button = el("button", cls, label);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        feedAgreeing = yes;
+        feedAsking = false;
+        changed();
+      });
+      actions.append(button);
+    }
+    box.append(el("p", "onboard-reading-title", words.title), el("p", "onboard-reading-text", words.text),
+      el("p", "onboard-reading-text onboard-reading-warn", words.warn), el("p", "onboard-reading-text", words.stop), actions);
+    return box;
   }
 
   // ------------------------------------------- step 4, then: a few finds --
@@ -490,13 +526,16 @@
     draw();
   }
 
-  // The topics and platforms, when either differs from what was last saved, by one call.
+  // The topics and platforms, when either differs from what was last saved, by one call, with the person's yes on
+  // the notice when they gave it in this tour.
   async function save() {
     const same = (a, b) => a.join("\n") === b.join("\n");
-    if (same(picked, pickedSaved) && same(platformsPicked, platformsSaved)) return;
-    await ctx.api("feed/interests", { topics: picked, platforms: platformsPicked, lang: screens(speaks) });
+    const agree = feedAgreeing && !feedAgreed;
+    if (same(picked, pickedSaved) && same(platformsPicked, platformsSaved) && !agree) return;
+    await ctx.api("feed/interests", { topics: picked, platforms: platformsPicked, lang: screens(speaks), ...(agree ? { agree } : {}) });
     pickedSaved = [...picked];
     platformsSaved = [...platformsPicked];
+    feedAgreed = feedAgreed || agree;
   }
 
   // Each answer is kept as a like or a skip from the first run (surface "first").
@@ -729,6 +768,7 @@
     if (step === TOPICS) {
       picked = [...pickedAtStart];
       platformsPicked = [...platformsAtStart];
+      feedAgreeing = feedAsking = false;
       return startFinds();
     }
     // Words written but not told are dropped.

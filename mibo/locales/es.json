@@ -773,7 +773,15 @@
     "platformsHead": "Plataformas que usas",
     "platformsMore": "Más",
     "platformLocked": "Se lee tras iniciar sesión",
-    "platformsSignin": "Las plataformas con candado se leen solo después de que inicias sesión en ellas en el navegador integrado y activas la lectura en segundo plano en Ajustes › Conexiones."
+    "platformsSignin": "Las plataformas con candado se leen desde tu propio feed después de que inicias sesión en ellas en el navegador integrado. La primera que elijas te lo pregunta una vez.",
+    "feedNotice": {
+      "title": "¿Leer tu propio feed en estas plataformas?",
+      "text": "Después de que inicies sesión en una plataforma con candado en el navegador integrado, el personaje lee tu propio feed allí en segundo plano y te trae recomendaciones. Solo lee: nunca publica, da me gusta ni hace nada más, como máximo 24 veces al día, y se detiene ante cualquier verificación.",
+      "warn": "Las condiciones de estos sitios pueden prohibir la lectura automatizada, y es posible que se pida verificar tu cuenta o que se limite.",
+      "stop": "Para dejarlo, desactívalo para el sitio en Ajustes › Conexiones o díselo al personaje.",
+      "agree": "Aceptar",
+      "decline": "Ahora no"
+    }
   },
   "petbox": {
     "shut": "Cerrar",
@@ -1558,9 +1566,17 @@
     "addTopic": "Añadir un tema",
     "platforms": "Plataformas",
     "more": "Más",
-    "platformNote": "Las plataformas con candado se leen solo después de que inicia sesión en ellas y activa la lectura en segundo plano en Conexiones.",
+    "platformNote": "Las plataformas con candado se leen desde su propio feed después de que inicia sesión en ellas. La primera que elija se lo pregunta una vez.",
     "platformGo": "Abrir Conexiones",
     "platformLocked": "Se lee tras iniciar sesión",
+    "feedNotice": {
+      "title": "¿Leer su propio feed en estas plataformas?",
+      "text": "Después de que inicie sesión en una plataforma con candado en el navegador integrado, el personaje lee su propio feed allí en segundo plano y le trae recomendaciones. Solo lee: nunca publica, da me gusta ni hace nada más, como máximo 24 veces al día, y se detiene ante cualquier verificación.",
+      "warn": "Las condiciones de estos sitios pueden prohibir la lectura automatizada, y es posible que se pida verificar su cuenta o que se limite.",
+      "stop": "Para dejarlo, desactívelo para el sitio en Conexiones o dígaselo al personaje.",
+      "agree": "Aceptar",
+      "decline": "Ahora no"
+    },
     "remembered": "Preferencias recordadas ({count})",
     "rememberedNone": "Todavía nada. Aparece cuando abre u omite recomendaciones, o cuando dice en el chat lo que le gusta.",
     "takesRow": "Abre a menudo: {name}",

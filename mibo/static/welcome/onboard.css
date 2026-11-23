@@ -353,6 +353,65 @@
   background: var(--pa-sunken);
   color: var(--pa-muted);
 }
+/* The notice on reading a platform's own feed, in the page under the platforms: a quiet panel, its answer at the end. */
+.onboard-reading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 560px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+  text-align: left;
+  animation: onboard-pop 0.2s ease-out;
+}
+.onboard-reading-title {
+  margin: 0 0 2px;
+  color: var(--pa-ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+.onboard-reading-text {
+  margin: 0;
+  color: var(--pa-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.onboard-reading-warn {
+  color: var(--pa-amber700);
+}
+.onboard-reading-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.onboard-reading-no,
+.onboard-reading-yes {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--pa-r-sm);
+  font-size: 13.5px;
+}
+.onboard-reading-no {
+  background: transparent;
+  color: var(--pa-muted);
+}
+.onboard-reading-no:hover {
+  background: var(--pa-line);
+  color: var(--pa-ink);
+}
+.onboard-reading-yes {
+  background: var(--pa-ink);
+  color: var(--pa-surface);
+  font-weight: 600;
+}
+.onboard-reading-yes:hover {
+  opacity: 0.9;
+}
 
 /* A field and its button, side by side */
 .onboard-add {

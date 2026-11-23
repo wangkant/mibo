@@ -163,3 +163,30 @@ def test_a_backup_from_before_a_table_existed_restores_with_that_table_empty(tmp
     feed.keep_platforms(runtime, ["bilibili.com"])
     db.take_back(runtime, archive)
     assert feed.load_topics(runtime) == ["tides"] and feed.load_platforms(runtime) == []
+
+
+def test_a_backup_from_before_a_column_existed_restores_with_its_default(tmp_path):
+    runtime, archive = tmp_path / "runtime", tmp_path / "archive.db"
+    feed.keep_topics(runtime, ["tides"])
+    assert db.snapshot(runtime, archive)
+    old = sqlite3.connect(archive)
+    old.executescript("DROP TABLE feed_platforms;"
+                      "CREATE TABLE feed_platforms (n INTEGER PRIMARY KEY, key TEXT NOT NULL);"
+                      "INSERT INTO feed_platforms (key) VALUES ('douyin.com'), ('bilibili.com');")
+    old.close()
+    with db.at(runtime).write() as conn:
+        conn.execute("INSERT INTO feed_platforms (key, fed) VALUES ('x.com', 1)")
+    db.take_back(runtime, archive)
+    assert db.at(runtime).read("SELECT key, fed FROM feed_platforms ORDER BY n") == [("douyin.com", 0), ("bilibili.com", 0)]
+
+
+def test_a_database_from_before_a_column_existed_gains_it_when_opened(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    old = sqlite3.connect(runtime / db.FILE)
+    old.executescript("CREATE TABLE feed_platforms (n INTEGER PRIMARY KEY, key TEXT NOT NULL);"
+                      "INSERT INTO feed_platforms (key) VALUES ('douyin.com');")
+    old.close()
+    assert db.at(runtime).read("SELECT key, fed FROM feed_platforms") == [("douyin.com", 0)]
+    feed.keep_platforms(runtime, ["douyin.com", "x.com"])
+    assert feed.load_platforms(runtime) == ["douyin.com", "x.com"]

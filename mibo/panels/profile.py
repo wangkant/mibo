@@ -68,6 +68,7 @@ class Profile:
         return {"topics": [{"name": t, "key": key, "lean": known["leans"].get(key)} for t, key in keys.items()],
                 "offered": feed.suggested(lang),
                 "platforms": feed.load_platforms(runtime), "platformsOffered": feed.offered_platforms(runtime, lang),
+                "agreed": feed.agreed(runtime),
                 **taught,
                 "leans": leans,
                 "likes": [x for x in known["likes"] if not x.get("until")],

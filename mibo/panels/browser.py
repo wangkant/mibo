@@ -109,8 +109,12 @@ def _scale(value) -> bool:
     return _number(value) and 0.25 <= value <= 8
 
 
-def switch_feed(runtime, key: str, on: bool, home: str) -> None:
-    """A site's feed read in the background, on or off, from Settings; read at the address it has, else `home`."""
+def switch_feed(runtime, key: str, on: bool, home: str, chosen: bool = False) -> None:
+    """A site's feed read in the background, on or off: the person's switch in Settings or their word to the
+    character, or with `chosen` turned on for a platform they chose (feed.read_chosen). Read at the address it has,
+    else `home`. The platform's row keeps whether its choice turned it on (feed_platforms.fed), so the person's own
+    switch takes it over."""
+    from .. import db
     from ..web import sites
 
     def switch(card: dict) -> None:
@@ -118,6 +122,8 @@ def switch_feed(runtime, key: str, on: bool, home: str) -> None:
         feed.update(on=on, url=feed.get("url") or home)
         feed.pop("stopped", None)
     sites._change(runtime, key, switch)
+    with db.at(runtime).write() as conn:
+        conn.execute("UPDATE feed_platforms SET fed = ? WHERE key = ?", (chosen, key))
 
 
 class Operating:
@@ -662,7 +668,11 @@ def mount(app, workspace, body) -> None:
             parts = urlsplit(seen)
             switch_feed(runtime, key, on, f"{parts.scheme}://{parts.netloc}/" if seen else f"https://{key}/")
         elif payload.get("forget") == "all":
+            # What the person switched off or a wall stopped is not learned of the site: forgetting keeps it.
+            feed = (sites.load(runtime).get(key) or {}).get("feed") or {}
             sites.forget(runtime, f"https://{key}/")
+            if feed and not feed.get("on"):
+                sites._change(runtime, key, lambda card: card.update(feed=feed))
             allowed = gate.Allowed(desktop)
             for site, kinds in allowed.all().items():
                 if sites.key_of(f"http://{site}") == key:

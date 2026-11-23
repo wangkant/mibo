@@ -773,7 +773,15 @@
     "platformsHead": "Platforms you use",
     "platformsMore": "More",
     "platformLocked": "Read after you sign in",
-    "platformsSignin": "Platforms with a lock are read only after you sign in to them in the built-in browser and turn on background reading under Settings › Connections."
+    "platformsSignin": "Platforms with a lock are read from your own feed after you sign in to them in the built-in browser. The first one you pick asks you once.",
+    "feedNotice": {
+      "title": "Read your own feed on these platforms?",
+      "text": "After you sign in to a platform with a lock in the built-in browser, the character reads your own feed there in the background and brings you finds from it. It only reads: it never posts, likes or does anything else there, at most 24 times a day, and it stops at any check.",
+      "warn": "These sites' terms may forbid automated reading, and your account may be asked to verify or be limited.",
+      "stop": "To stop, turn it off for the site under Settings › Connections, or tell the character.",
+      "agree": "Agree",
+      "decline": "Not now"
+    }
   },
   "petbox": {
     "shut": "Close",
@@ -1556,9 +1564,17 @@
     "addTopic": "Add a topic",
     "platforms": "Platforms",
     "more": "More",
-    "platformNote": "Platforms with a lock are read only after you sign in to them and turn on background reading under Connections.",
+    "platformNote": "Platforms with a lock are read from your own feed after you sign in to them. The first one you pick asks you once.",
     "platformGo": "Open Connections",
     "platformLocked": "Read after you sign in",
+    "feedNotice": {
+      "title": "Read your own feed on these platforms?",
+      "text": "After you sign in to a platform with a lock in the built-in browser, the character reads your own feed there in the background and brings you finds from it. It only reads: it never posts, likes or does anything else there, at most 24 times a day, and it stops at any check.",
+      "warn": "These sites' terms may forbid automated reading, and your account may be asked to verify or be limited.",
+      "stop": "To stop, turn it off for the site under Connections, or tell the character.",
+      "agree": "Agree",
+      "decline": "Not now"
+    },
     "remembered": "Remembered preferences ({count})",
     "rememberedNone": "Nothing yet. It appears once you open or skip a few recommendations, or say in a chat what you like.",
     "takesRow": "Often opened: {name}",

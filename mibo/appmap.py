@@ -9,9 +9,9 @@ Settings opened at "setup/<page>/<key>" brings that item into view (setup.js).
 Everything runs in the page's process (/api/settings): a value is read, and a change is made, through the same
 routes the page itself calls, so there is one way to each setting. A change the character may make goes ahead when
 the person asks for it; one that widens its permissions (acting on this computer, reading what is in front, going
-out on its own...) first passes crossing.widening, which asks in the chat with the risk "widen" after outside
-material, or when the person's own words do not name it. A key or a token is never read: an item says only whether
-one is set.
+out on its own, reading a site's own feed...) first passes crossing.widening, which asks in the chat with the risk
+"widen" after outside material, or when the person's own words do not name it. A key or a token is never read: an
+item says only whether one is set.
 """
 from __future__ import annotations
 
@@ -95,6 +95,24 @@ def _hours(text: str) -> dict | None:
     return {"from": walk_time(start.strip()), "to": walk_time(end.strip())}
 
 
+def _feed(text: str) -> dict:
+    from .web import sites
+    site, _, said = text.strip().rpartition(" ")
+    if not site.strip() or said.lower() not in ("on", "off"):
+        raise ValueError("a site and on or off, as douyin.com off")
+    return {"site": sites.key_of(site.strip()), "on": said.lower() == "on"}
+
+
+def _platforms(text: str) -> list[str]:
+    from . import platforms
+    keys = [k for k in re.split(r"[\s,，、]+", text.strip().lower()) if k]
+    if keys == ["none"]:
+        return []
+    if not keys or not all(platforms.known(k) for k in keys):
+        raise ValueError("the platforms' keys, as douyin.com, bilibili.com, or none")
+    return list(dict.fromkeys(keys))
+
+
 def _colour(text: str) -> str:
     if not COLOUR.fullmatch(text.strip()):
         raise ValueError("a colour as #rrggbb")
@@ -109,6 +127,8 @@ def shown(value: Any) -> str:
         return "off"
     if isinstance(value, dict) and "from" in value:
         return f"{value['from']}-{value['to']}"
+    if isinstance(value, dict) and "site" in value:
+        return f"{value['site']} {shown(value['on'])}"
     if isinstance(value, (list, tuple)):
         return ", ".join(map(str, value)) or "none"
     return str(value)
@@ -153,11 +173,15 @@ class Item:
     route: str = ""
     body: Callable[[Any, dict], dict] | None = None
     parse: Callable[[str], Any] | None = None
-    # Which new values widen the character's permissions; None for an item none does.
-    widens: Callable[[Any], bool] | None = None
+    # Which new values widen the character's permissions, given the value before; None for an item none does.
+    widens: Callable[[Any, Any], bool] | None = None
     # The locale namespace that names its values (setup_shell.modes), for the question.
     values: str = ""
     merged: bool = False
+    # The names a new value goes by, given the value before, for the question to be skipped when their words name
+    # them; none: the item's own name. And the locale key of the risk its card says besides.
+    named: Callable[[Any, Any], list[str]] | None = None
+    warn: str = ""
 
     @property
     def id(self) -> str:
@@ -168,12 +192,33 @@ class Item:
         """Where Settings opens for it (app.js follow)."""
         return f"setup/{self.id}"
 
-    def widening(self, value: Any) -> bool:
-        return self.widens is not None and self.widens(value)
+    def widening(self, value: Any, was: Any) -> bool:
+        return self.widens is not None and self.widens(value, was)
 
 
-def _turned_on(value: Any) -> bool:
+def _turned_on(value: Any, was: Any) -> bool:
     return value is True
+
+
+def _feed_on(value: dict, was: Any) -> bool:
+    return value["on"]
+
+
+def _signin_new(value: list[str], was: Any) -> list[str]:
+    # The platforms read only signed in that are newly chosen: read from their own feed once they agreed (feed.read_chosen).
+    from . import platforms
+    return [key for key in value
+            if platforms.PLATFORMS[key].reach == platforms.SIGNIN and not (isinstance(was, list) and key in was)]
+
+
+def _signin_added(value: list[str], was: Any) -> bool:
+    return bool(_signin_new(value, was))
+
+
+def _signin_names(value: list[str], was: Any) -> list[str]:
+    from . import platforms
+    return [name for key in _signin_new(value, was)
+            for name in (key, *{platforms.PLATFORMS[key].name(lang) for lang in ("zh", "en", "zh-TW")})]
 
 
 async def _model(here: Here) -> str:
@@ -193,6 +238,10 @@ async def _search(here: Here) -> str:
 async def _ui_lang(here: Here) -> str:
     from . import i18n
     return i18n.lang(await asyncio.to_thread(here.workspace.config))
+
+
+async def _feeds(here: Here) -> list[str]:
+    return [row["site"] for row in (await here.get("/api/browser/sites"))["sites"] if row["feed"]["on"]]
 
 
 async def _login(here: Here) -> bool:
@@ -227,6 +276,12 @@ ITEMS = (
          _one_of("less", "normal", "more")),
     Item("recs", "recs-quiet", "setup_recs.quietName", "Quiet hours with no finds brought, as 22:00-08:00, or off",
          field("/api/profile/taste", "quiet_hours"), "/api/profile/taste", lambda v, now: {"quiet_hours": v}, _hours),
+    Item("recs", "platforms", "setup_recs.platforms",
+         "The platforms they use, as keys (douyin.com, bilibili.com) or none; the list given replaces it. One read "
+         "only signed in is read from their own feed in the background once they agreed and signed in to it",
+         field("/api/feed/interests", "platforms"), "/api/feed/interests",
+         lambda v, now: {"topics": now["topics"], "platforms": v}, _platforms, _signin_added, merged=True,
+         named=_signin_names, warn="setup_privacy.feedWarn"),
     Item("recs", "taste", "setup_recs.tasteTitle", "Their topics and platforms, and what has been remembered of their reactions and words"),
     Item("walks", "walks-on", "setup_walks.onName", "Going out on its own to public sites, as a visitor",
          field("/api/walks", "on"), "/api/walks", lambda v, now: {"on": v}, _switch, _turned_on),
@@ -256,12 +311,16 @@ ITEMS = (
          field("/api/browser", "shared"), "/api/browser", lambda v, now: {"shared": v}, _switch, _turned_on),
     Item("privacy", "history", "setup_privacy.historyTitle", "The app browser's history, searched or cleared"),
     Item("privacy", "permits", "setup_privacy.permitsFold", "Camera, microphone, location and other site permissions"),
-    Item("privacy", "sites", "setup_privacy.sitesFold", "Per site: kinds of act allowed without asking, the feed read"),
+    Item("privacy", "sites", "setup_privacy.sitesFold",
+         "Per site: kinds of act allowed without asking; their own feed read in the background, now the sites read, "
+         "changed as douyin.com off or douyin.com on",
+         _feeds, "/api/browser/sites", lambda v, now: {"site": v["site"], "feed": v["on"]}, _feed, _feed_on,
+         named=lambda v, was: [v["site"]], warn="setup_privacy.feedWarn"),
     Item("shell", "shell-on", "setup_shell.onTitle", "Doing things on this computer by command and file tools",
          field("/api/shell", "on"), "/api/shell", lambda v, now: {"on": v}, _switch, _turned_on),
     Item("shell", "shell-mode", "setup_shell.modeName", "read (read only) or auto (automatic review)",
          field("/api/shell", "mode"), "/api/shell", lambda v, now: {"mode": v}, _one_of("read", "auto"),
-         lambda v: v == "auto", "setup_shell.modes"),
+         lambda v, was: v == "auto", "setup_shell.modes"),
     Item("shell", "folders", "setup_shell.foldersTitle", "The folders it may use; granted when it asks in the chat"),
     Item("shell", "rules", "setup_shell.rulesTitle", "Programs always allowed in a folder, each taken back there"),
     Item("shell", "record", "setup_shell.logFold", "Every command run, with its result"),
@@ -269,7 +328,7 @@ ITEMS = (
          field("/api/programs", "on"), "/api/programs", lambda v, now: {"on": v}, _switch, _turned_on),
     Item("programs", "programs-mode", "setup_programs.modeName", "read (read only) or auto (automatic review)",
          field("/api/programs", "mode"), "/api/programs", lambda v, now: {"mode": v}, _one_of("read", "auto"),
-         lambda v: v == "auto", "setup_programs.modes"),
+         lambda v, was: v == "auto", "setup_programs.modes"),
     Item("programs", "programs-pictures", "setup_programs.pictures",
          "Pictures of a window only a picture can work, sent to the model service with no question",
          field("/api/programs", "pictures", "on"), "/api/programs", lambda v, now: {"pictures": v}, _switch,
@@ -314,6 +373,8 @@ def value_words(item: Item, value: Any, lang: str) -> str:
     from . import i18n
     if isinstance(value, bool):
         return i18n.t("appmap.on" if value else "appmap.off", lang)
+    if isinstance(value, dict) and "site" in value:
+        return f"{value['site']}: {value_words(item, value['on'], lang)}"
     return i18n.t(f"{item.values}.{value}", lang) if item.values else shown(value)
 
 
@@ -375,12 +436,13 @@ def mount(app, workspace, body, token: str) -> None:
         was = await now(item, here)
         if value == was:
             return {"status": "same", "now": shown(value)}
-        names = [i18n.t(item.label, code, count=0) for code in CODES]
-        if item.widening(value) and crossing.widening_in(workspace, {"names": names}):
+        names = item.named(value, was) if item.named else [i18n.t(item.label, code, count=0) for code in CODES]
+        if item.widening(value, was) and crossing.widening_in(workspace, {"names": names}):
             card = {"type": "setting", **{code: {
                 "title": i18n.t("appmap.ask", code, name=i18n.t(item.label, code, count=0),
                                 value=value_words(item, value, code)),
-                "lines": [i18n.t("appmap.widens", code)]} for code in CODES}}
+                "lines": [i18n.t("appmap.widens", code), *([i18n.t(item.warn, code)] if item.warn else [])]}
+                for code in CODES}}
             yes = await cards.ask(card, conversation, {code: card[code]["title"] for code in ("zh", "en")},
                                   risk="widen")
             if not yes:

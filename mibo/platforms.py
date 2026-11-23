@@ -6,7 +6,8 @@ A platform is named by its registrable host, the key web/seeds.json and web/sign
 is WeChat's). `reach` is "open" when the app reads its lists without signing in (a catalogue source carries it, or
 seeds.json gives it a walkable hot list) and "signin" when its lists answer only a signed-in person. The person's
 chosen platforms (feed_platforms, panels/feed.py) are a preference: the sources' prior, the first run's samples
-and the walks' order. A "signin" platform's own feed is read only by its switch in Settings > Connections.
+and the walks' order. A chosen "signin" platform's own feed is read once the person signed in to it, when they
+agreed to that on the page's notice (feed.read_chosen); its switch in Settings > Connections stays theirs.
 
 The catalogue's sources from before `Source.platform` get theirs from PREFIXES, by key.
 """

@@ -1575,6 +1575,31 @@
 .setup-recs-note[hidden] {
   display: none;
 }
+/* The notice on reading a platform's own feed, under the platforms: a quiet panel, its answer at the end. */
+.setup-recs-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pa-s1);
+  padding: var(--pa-s3) var(--pa-s4);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+}
+.setup-recs-feed[hidden] {
+  display: none;
+}
+.setup-recs-feed p {
+  margin: 0;
+}
+.setup-recs-feed-warn {
+  color: var(--pa-amber700);
+}
+.setup-recs-feed-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
+  margin-top: var(--pa-s1);
+}
 .setup-recs-reset {
   align-self: flex-start;
 }

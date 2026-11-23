@@ -773,7 +773,15 @@
     "platformsHead": "Plattformen, die du nutzt",
     "platformsMore": "Mehr",
     "platformLocked": "Wird nach der Anmeldung gelesen",
-    "platformsSignin": "Plattformen mit Schloss werden erst gelesen, wenn du dich im integrierten Browser dort anmeldest und unter Einstellungen › Verbindungen das Lesen im Hintergrund einschaltest."
+    "platformsSignin": "Plattformen mit Schloss werden aus deinem eigenen Feed gelesen, sobald du dich im integrierten Browser dort anmeldest. Bei der ersten Auswahl wirst du einmal gefragt.",
+    "feedNotice": {
+      "title": "Deinen eigenen Feed auf diesen Plattformen lesen?",
+      "text": "Sobald du dich im integrierten Browser bei einer Plattform mit Schloss anmeldest, liest die Figur dort im Hintergrund deinen eigenen Feed und bringt dir Empfehlungen daraus. Nur lesend: Es wird nichts gepostet, geliked oder sonst getan, höchstens 24-mal am Tag, und bei jeder Prüfung wird angehalten.",
+      "warn": "Die Nutzungsbedingungen dieser Websites können automatisiertes Lesen verbieten; dein Konto kann zur Bestätigung aufgefordert oder eingeschränkt werden.",
+      "stop": "Zum Beenden schalte es für die Website unter Einstellungen › Verbindungen aus oder sag es der Figur.",
+      "agree": "Zustimmen",
+      "decline": "Nicht jetzt"
+    }
   },
   "petbox": {
     "shut": "Schließen",
@@ -1558,9 +1566,17 @@
     "addTopic": "Thema hinzufügen",
     "platforms": "Plattformen",
     "more": "Mehr",
-    "platformNote": "Plattformen mit Schloss werden erst gelesen, wenn Sie sich dort angemeldet und unter Verbindungen das Lesen im Hintergrund eingeschaltet haben.",
+    "platformNote": "Plattformen mit Schloss werden aus Ihrem eigenen Feed gelesen, sobald Sie sich dort angemeldet haben. Bei der ersten Auswahl werden Sie einmal gefragt.",
     "platformGo": "Verbindungen öffnen",
     "platformLocked": "Wird nach der Anmeldung gelesen",
+    "feedNotice": {
+      "title": "Ihren eigenen Feed auf diesen Plattformen lesen?",
+      "text": "Sobald Sie sich im integrierten Browser bei einer Plattform mit Schloss anmelden, liest die Figur dort im Hintergrund Ihren eigenen Feed und bringt Ihnen Empfehlungen daraus. Nur lesend: Es wird nichts gepostet, geliked oder sonst getan, höchstens 24-mal am Tag, und bei jeder Prüfung wird angehalten.",
+      "warn": "Die Nutzungsbedingungen dieser Websites können automatisiertes Lesen verbieten; Ihr Konto kann zur Bestätigung aufgefordert oder eingeschränkt werden.",
+      "stop": "Zum Beenden schalten Sie es für die Website unter Verbindungen aus oder sagen es der Figur.",
+      "agree": "Zustimmen",
+      "decline": "Nicht jetzt"
+    },
     "remembered": "Gemerkte Vorlieben ({count})",
     "rememberedNone": "Noch nichts. Erscheint, sobald Sie Empfehlungen öffnen oder überspringen oder im Chat sagen, was Ihnen gefällt.",
     "takesRow": "Oft geöffnet: {name}",
