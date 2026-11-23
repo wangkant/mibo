@@ -117,11 +117,15 @@ async def bring(agent, args: dict, lookups) -> str:
     from .roam import fence_pages
     on_words = [line for _, _, line, words in listed if words]
     by_taste = [line for _, _, line, words in listed if not words]
+    lines: list[str] = []
+    if on_words:
+        lines += ["On the words of the wish:", *on_words]
+    if by_taste:
+        lines += ["By their taste:", *by_taste]
     return ("Your finds, to pick from. Pick one only if it is on what they asked: its subject, not only its site or "
             "its kind; when they named nothing, the one most for them. Then write about the one you picked by its "
             "title. There is no card under your reply until you call bring_find with pick or url. " + LOOK + "\n"
-            + fence_pages("\n".join((["On the words of the wish:"] + on_words if on_words else [])
-                                    + (["By their taste:"] + by_taste if by_taste else []))))
+            + fence_pages("\n".join(lines)))
 
 
 def _list(agent, runtime, wish: str, avoid: list, kind: str, length: str) -> list[tuple[str, str, str, bool]]:

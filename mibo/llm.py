@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,7 +37,8 @@ _call_purpose: contextvars.ContextVar[str] = contextvars.ContextVar(
 
 
 @contextmanager
-def purpose(label: str):
+def purpose(label: str) -> Iterator[None]:
+    """The model calls made inside are counted under `label`."""
     token = _call_purpose.set(label)
     try:
         yield
@@ -55,6 +57,8 @@ _ENABLE_THINKING_HOSTS = ("aliyuncs.com", "siliconflow.cn", "siliconflow.com",
 _BILLING_WORDS = ("payment required", "insufficient", "balance", "quota",
                   "billing", "arrear", "good standing", "overdue", "欠费", "余额不足",
                   "资源包")
+# A refusal that speaks of tools, in the start of its body.
+_TOOL_WORDS = re.compile(r"tool|function", re.IGNORECASE)
 
 
 def _host(url: str) -> str:
@@ -100,6 +104,45 @@ def answer_text(message: dict) -> str:
         content = "".join(str(p.get("text") or "") for p in content
                           if isinstance(p, dict) and p.get("type") == "text")
     return _THINK_RE.sub("", str(content)).strip()
+
+
+def _picked(body: dict) -> tuple[str, str]:
+    """(the answer's words, its finish_reason) from a chat completion's body."""
+    choice = (body.get("choices") or [{}])[0]
+    return answer_text(choice.get("message") or {}), choice.get("finish_reason", "?")
+
+
+def _hidden_reasoning(body: dict) -> str:
+    """The answer's reasoning, only to decide on a retry and never to take text from: salvaging a reasoning fragment
+    would cross the protocol boundary. `reasoning` is OpenRouter's and Ollama's spelling."""
+    message = (body.get("choices") or [{}])[0].get("message") or {}
+    return str(message.get("reasoning_content") or message.get("reasoning") or "").strip()
+
+
+def _starved(text: str, finish: str, json_object: bool) -> bool:
+    """Cut off at the token cap with no visible text, or with a half-written JSON object the parser would drop."""
+    if finish != "length":
+        return False
+    if not text:
+        return True
+    if json_object:
+        try:
+            json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return True
+    return False
+
+
+def _log_cache(usage: dict, model: str) -> None:
+    """The prompt cache's hits, in DeepSeek's and the OpenAI-style spelling; logged at hit=0 too, since a zero hit
+    rate is what is worth noticing."""
+    hit = usage.get("prompt_cache_hit_tokens")
+    miss = usage.get("prompt_cache_miss_tokens")
+    if hit is None and isinstance(usage.get("prompt_tokens_details"), dict):
+        hit = usage["prompt_tokens_details"].get("cached_tokens")
+    prompt = usage.get("prompt_tokens")
+    if prompt or hit or miss:
+        logger.info("[Agent] cache: hit=%s miss=%s in=%s (model=%s)", hit or 0, miss, prompt, model)
 
 
 def _provider_message(e: BaseException) -> str:
@@ -170,10 +213,7 @@ class ModelCalls:
         """What each endpoint has shown it refuses or takes, learned per
         process: ("thinking", url, model) -> bool, and (field, url, model) ->
         True for a `max_tokens` or `temperature` it refused."""
-        quirks = self.__dict__.get("_api_quirks_map")
-        if quirks is None:
-            quirks = self.__dict__["_api_quirks_map"] = {}
-        return quirks
+        return self.__dict__.setdefault("_api_quirks_map", {})
 
     def _thinking_verdict(self, url: str, model: str):
         """Whether `model` at `url` takes DeepSeek's `thinking` switch: True,
@@ -252,7 +292,8 @@ class ModelCalls:
         return ("images", url, self.llm_dm_model) not in self._api_quirks
 
     def _remember_refusal(self, url: str, model: str, field: str) -> None:
-        self._api_quirks[(field, url, model)] = False if field == "thinking" else True
+        # A refused `thinking` is learned as False (no switch); every other field as True (refused).
+        self._api_quirks[(field, url, model)] = field != "thinking"
         abilities.note_quirk(self, url, model, field, self._api_quirks[(field, url, model)])
         instead = {"max_tokens": "sending max_completion_tokens instead",
                    "reasoning": "asking for the lowest effort instead",
@@ -303,26 +344,22 @@ class ModelCalls:
         if asking and "thinking" in payload:
             self._api_quirks[("thinking", url, model)] = True
         # Working again, so a later failure is worth a line again.
-        reported = self._fatal_reported_hosts()
-        for item in [k for k in reported if k[0] == _host(url)]:
-            reported.discard(item)
+        reported, host = self._fatal_reported_hosts(), _host(url)
+        reported.difference_update([k for k in reported if k[0] == host])
         if model == getattr(self, "model", None):
             self.__dict__["model_unreachable"] = False
         return body
 
     async def _tool_round(self, system: str, messages: list[dict], model: str,
                           tools: list[dict], *, timeout: float, choice: str = "auto") -> dict | None:
-        """One reply-model call that may call `tools`, with no response_format
-        (with it, models stop calling tools), thinking at the person's effort
-        where the model was measured to think (abilities.reply_effort), and room
-        for the answer from the model's budget (context.budget): the answer's
-        message. A reply's reported prompt tokens feed the count (context.measured). A call that fails is retried and moved to the fallback model
-        as every model call is (`_recovered`), and raises when that fails too.
-        None when the endpoint takes no tool calls (`_refuses_tools`) or model
-        spending is paused.
-        `choice` "required": a call must be made, where the endpoint takes it;
-        "none": no call may be, and an endpoint that refuses it is asked without
-        tools."""
+        """One reply-model call that may call `tools`, with no response_format (with it, models stop calling tools),
+        thinking at the person's effort where the model was measured to think (abilities.reply_effort), and room for
+        the answer from the model's budget (context.budget): the answer's message. A reply's reported prompt tokens
+        feed the count (context.measured). A call that fails is retried and moved to the fallback model as every
+        model call is (`_recovered`), and raises when that fails too. None when the endpoint takes no tool calls
+        (`_refuses_tools`) or model spending is paused.
+        `choice` "required": a call must be made, where the endpoint takes it; "none": no call may be, and an
+        endpoint that refuses it is asked without tools."""
         if spend.paused_for(self, _call_purpose.get()):
             return None
         began = time.monotonic()
@@ -363,16 +400,12 @@ class ModelCalls:
                 if body is not None:
                     self._remember_refusal(url, mdl, "tool_choice")
             if refusal:
-                if (re.search(r"tool|function", refusal.response.text[:300], re.IGNORECASE)
+                if (_TOOL_WORDS.search(refusal.response.text[:300])
                         and await self._refuses_tools(url, key, mdl, timeout)):
                     self._remember_refusal(url, mdl, "tools")
                     return None
                 raise refusal
-            if body.get("error") or not body.get("choices"):
-                raise ProviderError(body)
-            if _call_purpose.get() == "reply":
-                context.measured(self, url, mdl, payload, body.get("usage"))
-            return body
+            return self._answered(url, mdl, payload, body)
 
         body, used = await self._recovered(ask, model)
         if body is not None and body["choices"][0].get("finish_reason") == "length":
@@ -403,9 +436,17 @@ class ModelCalls:
         try:
             await self._post_chat(url, key, payload, timeout=timeout)
         except openai.APIStatusError as e:
-            return (e.status_code in (400, 404, 422)
-                    and bool(re.search(r"tool|function", e.response.text[:300], re.IGNORECASE)))
+            return e.status_code in (400, 404, 422) and bool(_TOOL_WORDS.search(e.response.text[:300]))
         return False
+
+    def _answered(self, url: str, model: str, payload: dict, body: dict) -> dict:
+        """An answer's body, or the ProviderError of one that carries an error or no choices; a reply's reported
+        prompt tokens feed the count (context.measured)."""
+        if body.get("error") or not body.get("choices"):
+            raise ProviderError(body)
+        if _call_purpose.get() == "reply":
+            context.measured(self, url, model, payload, body.get("usage"))
+        return body
 
     def _count_usage(self, model: str, body: dict) -> None:
         """Add one answered request to the per-model tally the page shows; a
@@ -437,10 +478,8 @@ class ModelCalls:
             logger.debug("[Agent] model use tally not written: %s", e)
 
     def _fatal_reported_hosts(self) -> set:
-        reported = self.__dict__.get("_fatal_reported")
-        if reported is None:
-            reported = self.__dict__["_fatal_reported"] = set()
-        return reported
+        """The (host, "billing" or "auth") problems already said once (`_report_fatal`)."""
+        return self.__dict__.setdefault("_fatal_reported", set())
 
     def _report_fatal(self, e: BaseException, model: str) -> None:
         """One operator line per provider when the key or the account is the
@@ -599,31 +638,14 @@ class ModelCalls:
             sent["room"] = payload["max_tokens"]
             body = await self._post_chat(_url, _key, payload, timeout=self.llm_timeout_s,
                                          retries=self._retries(mdl))
-            if body.get("error") or not body.get("choices"):
-                raise ProviderError(body)
-            if _call_purpose.get() == "reply":
-                context.measured(self, _url, mdl, payload, body.get("usage"))
-            return body
+            return self._answered(_url, mdl, payload, body)
 
         # OpenAI endpoint uses a single system message; provider auto prefix-caches.
         _oai_messages = ([{"role": "system", "content": system}] if system else []) + list(messages)
 
-        def _pick(d: dict) -> tuple[str, str]:
-            choice = (d.get("choices") or [{}])[0]
-            return (answer_text(choice.get("message") or {}),
-                    choice.get("finish_reason", "?"))
-
-        def _hidden_reasoning(d: dict) -> str:
-            # Only to decide on a retry, never to take text from: salvaging a
-            # reasoning fragment would cross the protocol boundary.
-            choice = (d.get("choices") or [{}])[0]
-            message = choice.get("message") or {}
-            # `reasoning` is OpenRouter's and Ollama's spelling.
-            return str(message.get("reasoning_content") or message.get("reasoning") or "").strip()
-
         data, used_model = await self._recovered(lambda mdl: _do_call(max_tokens, mdl), model)
         try:
-            text, finish = _pick(data)
+            text, finish = _picked(data)
             reasoning = _hidden_reasoning(data)
         except Exception as e:
             logger.warning("[Agent] failed to parse LLM response: %s; data=%.300s", e, str(data))
@@ -633,20 +655,6 @@ class ModelCalls:
             abilities.note_reasoning(abilities.reasoning_of((data.get("choices") or [{}])[0].get("message") or {}),
                                      time.monotonic() - began)
 
-        def _budget_starved(t: str, fin: str) -> bool:
-            # Truncation: no visible text, or a half-emitted JSON object the
-            # parser would drop.
-            if fin != "length":
-                return False
-            if not t:
-                return True
-            if json_object:
-                try:
-                    json.loads(t)
-                except (json.JSONDecodeError, TypeError):
-                    return True
-            return False
-
         async def _once_more(what: str, mtok: int, **force):
             """Ask the model that answered one more time: (text, finish), or
             None when that failed. `data` becomes the new response, whose
@@ -654,13 +662,13 @@ class ModelCalls:
             nonlocal data
             try:
                 data = await _do_call(mtok, used_model, **force)
-                return _pick(data)
+                return _picked(data)
             except Exception as e:
                 logger.warning("[Agent] %s failed: %s: %s",
                                what, type(e).__name__, e)
                 return None
 
-        if _budget_starved(text, finish) and not disable_thinking:
+        if _starved(text, finish, json_object) and not disable_thinking:
             # Thinking may have used the whole budget: with it off the answer fits.
             logger.warning(
                 "[Agent] empty reply, finish_reason=length (model=%s, max_tokens=%d); "
@@ -669,7 +677,7 @@ class ModelCalls:
                                      force_disable_thinking=True)
             if again is not None:
                 text, finish = again
-        if _budget_starved(text, finish):
+        if _starved(text, finish, json_object):
             # A reasoning model can spend the whole budget thinking: retry once
             # with four times the room, within what the window leaves, then say
             # plainly what happened.
@@ -715,17 +723,7 @@ class ModelCalls:
         elif not text:
             logger.warning("[Agent] LLM returned empty text; finish_reason=%s (model=%s)",
                            finish, used_model)
-        # Cache usage comes in DeepSeek's and the OpenAI-style spelling.
-        usage = data.get("usage") or {}
-        _hit = usage.get("prompt_cache_hit_tokens")
-        _miss = usage.get("prompt_cache_miss_tokens")
-        if _hit is None and isinstance(usage.get("prompt_tokens_details"), dict):
-            _hit = usage["prompt_tokens_details"].get("cached_tokens")
-        _in = usage.get("prompt_tokens")
-        # Logged at hit=0 too: a zero hit rate is what is worth noticing.
-        if _in or _hit or _miss:
-            logger.info("[Agent] cache: hit=%s miss=%s in=%s (model=%s)",
-                        _hit or 0, _miss, _in, used_model)
+        _log_cache(data.get("usage") or {}, used_model)
         return text
 
     async def probe_models(self) -> None:

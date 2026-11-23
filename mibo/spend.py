@@ -363,22 +363,27 @@ def paused_for(caller, label: str) -> bool:
     return True
 
 
-async def view(home: Path, values: dict, *, fresh: bool = False) -> dict:
-    """Everything the usage popover and the Settings section show."""
+def _spent(home: Path, values: dict) -> tuple[dict, dict | None]:
+    """This month's use and the limit's state, read from the tallies on disk; the prices of the models used are kept
+    for the limit's check in the service process."""
     from . import drafting
     runtime = drafting.usage_path(Path(home), values).parent
-    base = values.get("LLM_BASE_URL", "").strip()
-    known = service_of(base)
     days = usage.merged(usage.load(runtime / usage.USAGE_FILE), usage.load(runtime / usage.PAGE_USAGE_FILE))
     used_models = {m for models in days.values() for m in models}
     prices = prices_of(values, used_models)
     if prices:
-        await asyncio.to_thread(keep_prices, runtime, prices, used_models)
-    else:
-        prices = None
-    month = month_view(runtime, prices)
+        keep_prices(runtime, prices, used_models)
+    month = month_view(runtime, prices or None)
+    return month, limit_state(runtime, month)
+
+
+async def view(home: Path, values: dict, *, fresh: bool = False) -> dict:
+    """Everything the usage popover and the Settings section show; the files are read off the event loop."""
+    base = values.get("LLM_BASE_URL", "").strip()
+    known = service_of(base)
+    month, limit = await asyncio.to_thread(_spent, home, values)
     return {"usage": month, "balance": await balance(values, fresh=fresh),
             "balanceKnown": bool(known and known.key in BALANCE),
             "local": bool(known and not known.needs_key),
             "console": console_of(base), "service": known.key if known else "other",
-            "limit": limit_state(runtime, month)}
+            "limit": limit}

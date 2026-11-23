@@ -392,5 +392,3 @@ class Agent(Turns, DirectMessages, MessageParsing, ReplyDecision, PromptBuilder,
             await asyncio.gather(*tasks, return_exceptions=True)
 
         self.flush_state()
-
-    CORE_MEMORY_MAX_CHARS = 400

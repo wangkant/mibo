@@ -150,6 +150,7 @@ def _drop_orphan_close(segment: str) -> str:
     after an unclosed block, so engine syntax doesn't reach the model."""
     return _STYLE_ORPHAN_CLOSE_RE.sub("", segment, count=1)
 
+
 #: The longest knob value; derived, so a new longer option's typos still pass
 #: the shape test.
 _LONGEST_KNOB_VALUE = max(len(v) for values in STYLE_KNOBS.values()

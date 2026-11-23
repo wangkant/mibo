@@ -96,7 +96,7 @@ async def _settings(agent, called: dict, args: dict, lookups) -> str:
 
 
 MODULES = (
-    Module("web", lambda: search.TOOLS + [connect.TOOL], _web),
+    Module("web", lambda: [*search.TOOLS, connect.TOOL], _web),
     # search_past_chats next: the prompt's rules never name it, so even a small window sends it.
     Module("chats", lambda: [pastchats.TOOL], _chats),
     # bring_find and react: the person's finds in the chat (findtool.py).

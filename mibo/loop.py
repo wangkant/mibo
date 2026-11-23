@@ -5,6 +5,7 @@ after dsh (MIT, NOTICE)."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -64,6 +65,9 @@ _DSML_CALL = re.compile(r"<｜DSML｜invoke name=\"([^\"]+)\">(.*?)</｜DSML｜i
 _DSML_ARG = re.compile(r"<｜DSML｜parameter name=\"([^\"]*)\"([^>]*)>(.*?)</｜DSML｜parameter>", re.S)
 _DSML_TAG = re.compile(r"</?｜DSML｜[^>]*>")
 _TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+# A lone surrogate escaped in a call's JSON text, and one as a character.
+_ESCAPED_SURROGATE = re.compile(r"\\u[dD][89a-fA-F]")
+_SURROGATE = re.compile("[\ud800-\udfff]")
 
 
 def _leaked_calls(content: str, offered: set) -> list[dict]:
@@ -72,10 +76,9 @@ def _leaked_calls(content: str, offered: set) -> list[dict]:
     for name, body in _DSML_CALL.findall(content):
         args: dict = {}
         for key, attrs, value in _DSML_ARG.findall(body):
-            try:
-                value = json.loads(value) if 'string="false"' in attrs else value
-            except ValueError:
-                pass
+            if 'string="false"' in attrs:
+                with contextlib.suppress(ValueError):
+                    value = json.loads(value)
             if key:
                 args[key] = value
             elif isinstance(value, dict):
@@ -91,6 +94,35 @@ def _words_of(content: str) -> str:
     for written in (_DSML_CALL, _DSML_TAG, _written._BLOCK, lookup_need._WRITTEN, lookup_need._WRITTEN_FN):
         content = written.sub("", content)
     return content.strip()
+
+
+def _calls_in(message: dict, offered: set) -> tuple[str, list[dict]]:
+    """A round's words and its calls, each with valid Unicode arguments: the calls the endpoint sent, else those
+    written into the text (whose words are then only what is around them)."""
+    content = str(message.get("content") or "").strip()
+    calls = [c for c in message.get("tool_calls") or []
+             if isinstance(c, dict) and isinstance(c.get("function"), dict)]
+    if not calls:
+        calls = (_leaked_calls(content, offered) or _written.calls(content, offered)
+                 or lookup_need.written_calls(content, offered))
+        if calls:
+            content = _words_of(content)
+    for one in calls:
+        # Valid Unicode before the round keeps the call in the chat and runs it.
+        one["function"]["arguments"] = _whole(one["function"].get("arguments"))
+    return content, calls
+
+
+def _own_words(said: str) -> str:
+    """The person's message without what the app put ahead of it (up to the last ETX)."""
+    return said.rsplit(chr(3), 1)[-1]
+
+
+def _app_call(convo: list[dict], ident: str, name: str, arguments: str, result: str) -> None:
+    """A call the app made for the model before its first round, and its result, put in `convo`."""
+    convo += [{"role": "assistant", "content": "", "tool_calls": [
+                  {"id": ident, "type": "function", "function": {"name": name, "arguments": arguments}}]},
+              {"role": "tool", "tool_call_id": ident, "content": result}]
 
 
 def _arguments(value) -> str:
@@ -133,12 +165,12 @@ def _whole(arguments: str) -> str:
     """A call's JSON text with each lone surrogate (half an emoji a model cut mid-pair) as U+FFFD, so every step,
     record and card made from it is valid Unicode. It comes escaped (a native call's JSON) or as a character (a call
     written in the reply, shell/written.py)."""
-    if re.search(r"\\u[dD][89a-fA-F]", arguments or ""):
+    if _ESCAPED_SURROGATE.search(arguments or ""):
         try:
             arguments = json.dumps(json.loads(arguments), ensure_ascii=False)
         except ValueError:
             return arguments
-    if not re.search("[\ud800-\udfff]", arguments or ""):
+    if not _SURROGATE.search(arguments or ""):
         return arguments
     return arguments.encode("utf-16", "surrogatepass").decode("utf-16", "replace")
 
@@ -289,6 +321,16 @@ class ToolLoop:
             # The fit ladder: results held and cut (context.Fit), then the history compacted now (dm.py).
             return fit(convo) or await self._fit_history(system, tools, convo, fit, lookups)
 
+        async def refitted(e: openai.APIStatusError) -> bool:
+            # Past the window: the request counted what the error states, or at least what the window left, the
+            # window is the one the error stated (llm._recovered learned it), and the request is fitted again to be
+            # sent once more (dsh compaction-basic's overflow retry).
+            room = fit.plan.answer
+            fit.plan = planned()
+            context.refused(self, url, model, {"messages": lead + convo, "tools": tools},
+                            max(fit.plan.window - room + 1, context.stated_input(e.response.text)))
+            return await fitted()
+
         async def asked(left: float) -> dict | None:
             with purpose("reply"):
                 if _written.wanted(self, model):
@@ -303,13 +345,7 @@ class ToolLoop:
         overflowed = False
         token = review.turn_verdicts.set(lookups.verdicts)
         try:
-            if "read_page" in schemas:
-                # A hot list the message asks for is read before the first round, which may answer from it.
-                await self._live_list(said, convo, [], lookups)
-            if turn_choices() & _ON_PAGE and "look" in schemas:
-                # Asked to work in the app's browser: the page in front comes with the task, as browser agents hand
-                # the model the page's state with it, and the first act takes its refs from there.
-                await self._page_in_front(convo, lookups)
+            await self._before_rounds(said, convo, schemas, lookups)
             for _ in range(ROUNDS):
                 left = WITHIN_S - (time.monotonic() - started - lookups.away())
                 if left < 5 or lookups.refused():
@@ -322,36 +358,19 @@ class ToolLoop:
                 except openai.APIStatusError as e:
                     if overflowed or model_problem(e.status_code, e.response.text) != "context":
                         raise
-                    # Past the window: the request counted what the error states, or at least what the window
-                    # left, the window is the one the error stated (llm._recovered learned it), and the request is
-                    # fitted again and sent once more (dsh compaction-basic's overflow retry).
-                    overflowed, room = True, fit.plan.answer
-                    fit.plan = planned()
-                    context.refused(self, url, model, {"messages": lead + convo, "tools": tools},
-                                    max(fit.plan.window - room + 1, context.stated_input(e.response.text)))
-                    if not await fitted():
+                    overflowed = True
+                    if not await refitted(e):
                         return await self._last_word(system, convo, model, fit)
                     message = await asked(left)
                 if message is None:
                     # No tools at this endpoint: the answer without them.
                     lookups.sent = (system, None)
                     return await self._plain_reply(system, convo, model)
-                content = str(message.get("content") or "").strip()
-                calls = [c for c in message.get("tool_calls") or []
-                         if isinstance(c, dict) and isinstance(c.get("function"), dict)]
-                if not calls:
-                    calls = (_leaked_calls(content, set(schemas)) or _written.calls(content, set(schemas))
-                             or lookup_need.written_calls(content, set(schemas)))
-                    if calls:
-                        # Calls written into the text: the words around them alone are what was said.
-                        content = _words_of(content)
-                for one in calls:
-                    # Valid Unicode before the round keeps the call in the chat and runs it.
-                    one["function"]["arguments"] = _whole(one["function"].get("arguments"))
+                content, calls = _calls_in(message, set(schemas))
                 if not calls:
                     # An empty answer (thinking alone, a blank message) is asked for once more without tools.
                     return content or await self._plain_reply(
-                        system, convo + [{"role": "user", "content": ANSWER_NOW}], model)
+                        system, [*convo, {"role": "user", "content": ANSWER_NOW}], model)
                 if content:
                     lookups.text.append(content)
                 await self._round(message, calls, convo, schemas, made, lookups)
@@ -365,16 +384,29 @@ class ToolLoop:
         finally:
             review.turn_verdicts.reset(token)
             if any(step.get("tool") == "operate" for step in lookups.trace):
-                # The pages acted in this turn let go (panels/browser.py, place_done) before the reply goes; a stopped
-                # turn's at once, from a thread of its own.
-                done = (today.runtime_of(self).parent, "/api/browser/op", 30,
-                        {"op": "place_done", "stopped": lookups.stopped})
-                if sys.exc_info()[0] is None:
-                    await asyncio.to_thread(surface._ask, *done)
-                else:
-                    threading.Thread(target=surface._ask, args=done, daemon=True).start()
+                await self._let_pages_go(lookups, ended_well=sys.exc_info()[0] is None)
             if fit.rewrites:
                 logger.info("[Agent] %d older results cut to fit the model's window", fit.rewrites)
+
+    async def _before_rounds(self, said: str, convo: list[dict], schemas: dict, lookups: ChatLookups) -> None:
+        """What the app reads for the model before its first round."""
+        from .turns import turn_choices
+        if "read_page" in schemas:
+            # A hot list the message asks for is read before the first round, which may answer from it.
+            await self._live_list(said, convo, [], lookups)
+        if turn_choices() & _ON_PAGE and "look" in schemas:
+            # Asked to work in the app's browser: the page in front comes with the task, as browser agents hand
+            # the model the page's state with it, and the first act takes its refs from there.
+            await self._page_in_front(convo, lookups)
+
+    async def _let_pages_go(self, lookups: ChatLookups, *, ended_well: bool) -> None:
+        """The pages acted in this turn let go (panels/browser.py, place_done) before the reply goes; a stopped or
+        failed turn's at once, from a thread of its own."""
+        done = (today.runtime_of(self).parent, "/api/browser/op", 30, {"op": "place_done", "stopped": lookups.stopped})
+        if ended_well:
+            await asyncio.to_thread(surface._ask, *done)
+        else:
+            threading.Thread(target=surface._ask, args=done, daemon=True).start()
 
     async def _last_word(self, system: str, convo: list, model: str, fit: context.Fit) -> str:
         """A request still past the input limit with the older results cut and the history compacted: the turn's
@@ -382,7 +414,7 @@ class ToolLoop:
         logger.info("[Agent] turn past the model's input limit: answered from what was done")
         fit.last(convo)
         note = PART_READ if fit.partial else ANSWER_NOW
-        return await self._plain_reply(system, convo + [{"role": "user", "content": note}], model)
+        return await self._plain_reply(system, [*convo, {"role": "user", "content": note}], model)
 
     async def _round(self, message: dict, calls: list, convo: list, schemas: dict, made: dict,
                      lookups: ChatLookups) -> None:
@@ -404,7 +436,7 @@ class ToolLoop:
             for c in calls[CALLS:]:
                 results[c["id"]] = TOO_MANY
             batch: list = []
-            for c in calls[:CALLS] + [None]:
+            for c in [*calls[:CALLS], None]:
                 if c is not None and c["function"]["name"] in catalog.READS:
                     batch.append(c)
                     continue
@@ -494,7 +526,7 @@ class ToolLoop:
         """At a ceiling: one last call that may call nothing, answering from what was done; without tools where
         the endpoint refuses tool_choice none."""
         logger.info("[Agent] turn at a ceiling: answered from what was done")
-        asked = convo + [{"role": "user", "content": ANSWER_NOW}]
+        asked = [*convo, {"role": "user", "content": ANSWER_NOW}]
         with purpose("reply"):
             message = await self._tool_round(system, asked, model, tools, timeout=self.llm_timeout_s, choice="none")
         content = str(message.get("content") or "").strip() if message is not None else ""
@@ -511,7 +543,7 @@ class ToolLoop:
         call the app made, before any search; whether one was."""
         from .roam import fence_pages
         from .sources import live
-        wanted = live.asked(said.rsplit(chr(3), 1)[-1])
+        wanted = live.asked(_own_words(said))
         if wanted is None:
             return False
         lang = getattr(self, "chat_lang", "") or "zh"
@@ -526,10 +558,7 @@ class ToolLoop:
         lookups.source(title, wanted.page, read=True)
         lookups.crossing.saw(crossing.OUTSIDE, wanted.page, text)
         found.append(fence_pages(text))
-        convo += [{"role": "assistant", "content": "", "tool_calls": [
-                      {"id": "live_0", "type": "function",
-                       "function": {"name": "read_page", "arguments": json.dumps({"url": wanted.page})}}]},
-                  {"role": "tool", "tool_call_id": "live_0", "content": found[-1]}]
+        _app_call(convo, "live_0", "read_page", json.dumps({"url": wanted.page}), found[-1])
         return True
 
     async def _page_in_front(self, convo: list[dict], lookups: ChatLookups) -> bool:
@@ -539,9 +568,7 @@ class ToolLoop:
         if not seen.startswith("Place "):
             return False
         lookups.crossing.saw(crossing.OUTSIDE, "look", seen)
-        convo += [{"role": "assistant", "content": "", "tool_calls": [
-                      {"id": "front_0", "type": "function", "function": {"name": "look", "arguments": "{}"}}]},
-                  {"role": "tool", "tool_call_id": "front_0", "content": seen}]
+        _app_call(convo, "front_0", "look", "{}", seen)
         return True
 
     async def _beside_page(self, said: str) -> None:
@@ -552,7 +579,7 @@ class ToolLoop:
         waits_on = (await asyncio.to_thread(surface._ask, home, "/api/browser/op", 10, {"op": "left"})).get("said")
         if waits_on:
             await asyncio.to_thread(surface._ask, home, "/api/browser/op", 10,
-                                    {"op": "keep", "yes": said_yes(said.rsplit(chr(3), 1)[-1])})
+                                    {"op": "keep", "yes": said_yes(_own_words(said))})
 
 
 def _flat(convo: list[dict]) -> list[dict]:

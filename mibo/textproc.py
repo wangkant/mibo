@@ -19,19 +19,18 @@ logger = logging.getLogger("agent")
 # STX/ETX wrap web-derived enrichment. Control decisions run with these spans
 # removed, so page content can't trigger them; the prompt keeps them.
 _WEB_DESC_OPEN = "\x02"
-
 _WEB_DESC_CLOSE = "\x03"
-
 _WEB_DESC_SPAN = re.compile("\x02[^\x03]*\x03")
+
 
 def _strip_web_desc(text: str) -> str:
     """Control-plane view: web-derived enrichment spans removed entirely."""
     return _WEB_DESC_SPAN.sub("", text)
 
-# RS/US frame what a person wrote; a separate pair so a user turn can nest
-# enrichment spans. `_extract_text` strips all four from sender text.
-_USER_DATA_OPEN = "\x1e"
 
+# RS/US frame what a person wrote; a separate pair so a user turn can nest
+# enrichment spans. `_clean_prompt_source` strips all four from framed text.
+_USER_DATA_OPEN = "\x1e"
 _USER_DATA_CLOSE = "\x1f"
 
 _PROMPT_SENTINELS = (_WEB_DESC_OPEN, _WEB_DESC_CLOSE,
@@ -187,8 +186,8 @@ def scrub_third_party_text(value: object) -> str:
         text = text.replace(separator, "\n")
     kept: list[str] = []
     for i, ch in enumerate(text):
-        if ch in "\t\n" or (ch == "\u200d" and _joins_emoji(text, i)) or (unicodedata.category(ch) not in _STRIPPED_CATEGORIES
-                and ch not in _RESERVED_DEFAULT_IGNORABLES):
+        if (ch in "\t\n" or (ch == "\u200d" and _joins_emoji(text, i))
+                or (unicodedata.category(ch) not in _STRIPPED_CATEGORIES and ch not in _RESERVED_DEFAULT_IGNORABLES)):
             kept.append(ch)
     return "".join(kept)
 
@@ -209,6 +208,7 @@ def neutralize_markup_tags(value: object) -> str:
     out.append(text[cursor:])
     return "".join(out)
 
+
 # Function words that would inflate every relevance score; chat-signal words
 # like lol stay, since they carry meaning for scenario matching.
 _EN_STOPWORDS = frozenset({
@@ -220,6 +220,7 @@ _EN_STOPWORDS = frozenset({
     "what", "when", "where", "why", "how", "who", "will", "would", "could",
     "should", "here", "very", "really", "still", "also", "even", "some",
 })
+
 
 def _focus_tokens(text: str, lang: str = "en") -> set:
     """Retrieval tokens, matched as substrings: ASCII words of 3+ chars minus
@@ -233,9 +234,7 @@ def _focus_tokens(text: str, lang: str = "en") -> set:
     ascii_part = focus_lc
     for word in accented:
         ascii_part = ascii_part.replace(word, " ")
-    tokens = accented | {
-        t for t in re.findall(r"[a-z0-9]{3,}", ascii_part) if t not in _EN_STOPWORDS
-    }
+    tokens = accented | {t for t in _ASCII_WORD_RE.findall(ascii_part) if t not in _EN_STOPWORDS}
     # Per run, so bigrams never span punctuation.
     for pattern in _BIGRAM_RUNS:
         for run in pattern.findall(focus_lc):
@@ -248,6 +247,7 @@ def _focus_tokens(text: str, lang: str = "en") -> set:
     return tokens
 
 
+_ASCII_WORD_RE = re.compile(r"[a-z0-9]{3,}")
 _HAN_RUN_RE = re.compile(r"[一-鿿]+")
 _BIGRAM_RUNS = (_HAN_RUN_RE,
                 re.compile(r"[ァ-ヺー]+"),   # katakana
@@ -256,6 +256,7 @@ _BIGRAM_RUNS = (_HAN_RUN_RE,
 # scripts tokenized above.
 _SPACED_WORD_RE = re.compile(
     r"[^\W\d_぀-ヿ㐀-鿿가-힣ᄀ-ᇿ㄰-㆏]{3,}")
+
 
 def _detect_image_mime(data: bytes) -> str:
     """Return a supported image MIME type from its file signature."""
@@ -279,6 +280,8 @@ def _detect_image_mime(data: bytes) -> str:
 
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+# From the first opening brace of prose-wrapped output to its last closing one.
+_OBJECT_SPAN_RE = re.compile(r"\{.*\}", re.S)
 
 
 def strip_json_fences(raw: str) -> str:
@@ -292,17 +295,14 @@ def salvage_json_object(raw: str) -> dict | None:
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        m = re.search(r"\{.*\}", raw, re.S)
+        m = _OBJECT_SPAN_RE.search(raw)
         if not m:
             return None
         try:
-            data = json.loads(m.group(0))
+            # The object alone, should braces in the prose after it end the span.
+            data = json.JSONDecoder().raw_decode(m.group(0))[0]
         except json.JSONDecodeError:
-            # Braces in the prose after the object: the object alone.
-            try:
-                data = json.JSONDecoder().raw_decode(m.group(0))[0]
-            except json.JSONDecodeError:
-                return None
+            return None
     return data if isinstance(data, dict) else None
 
 
@@ -354,6 +354,7 @@ _BLIND_NOTE_RE = re.compile(r"\[image\]")
 
 # A Chinese or Japanese full stop that ends a sentence, not the one in "3。5" (memory.py).
 _FULL_STOP_RE = re.compile(r"。+(?!\d)")
+
 
 @dataclass(frozen=True)
 class ReplyStyle:

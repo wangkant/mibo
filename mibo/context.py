@@ -133,6 +133,7 @@ def budget(window: int, level: str = "", fixed: int = 0) -> Budget:
 # ------------------------------------------------------------------ count --
 
 def text_tokens(text: str) -> float:
+    """Estimated tokens of `text`: CJK characters at CJK_TOKENS each, the rest at OTHER_TOKENS."""
     cjk = len(_CJK.findall(text))
     return cjk * CJK_TOKENS + (len(text) - cjk) * OTHER_TOKENS
 
@@ -161,6 +162,7 @@ def _learned(caller) -> dict:
 
 
 def ratio(caller, url: str, model: str) -> float:
+    """The endpoint's reported tokens per estimated one: learned in this process, else recorded, else RATIO_FIRST."""
     from . import abilities
     mine = _learned(caller).get((url, model)) or {}
     rec = abilities.record(abilities.runtime_of(caller), url, model) or {}
@@ -343,8 +345,8 @@ class Fit:
         # could have with every older result it may clear cleared, FIT_TO of it for the estimate's error on new text;
         # its short results take only what they hold, the others share the rest. Below LEAST of the small size it
         # cannot be read and the request does not fit: the history is compacted, or the turn takes its last word.
-        room =plan.limit - total + ratio * (sum(map(self._clearable, older))
-                                             + sum(text_tokens(m["content"]) for m in fresh))
+        room = plan.limit - total + ratio * (sum(map(self._clearable, older))
+                                              + sum(text_tokens(m["content"]) for m in fresh))
         floor = plan.small
         for n, message in enumerate(sorted(fresh, key=lambda m: text_tokens(m["content"]))):
             each = FIT_TO * room / (len(fresh) - n)
