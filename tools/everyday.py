@@ -222,7 +222,7 @@ def tiny_server(home: Path, places: Path) -> None:
 def _seed_chat(home: Path) -> None:
     """A page chat of seven days ago in which the person names a film they want to see, in the home's database
     (as recall_chats.py seeds)."""
-    from mibo import chatlog, db, welcome
+    from mibo import chatlog, db, pagechat
     runtime = home / "runtime"
     conversation, ident = "c00000000000000000000e23", "e23e23e23e23e23e"
     talk = [("p", "今天好累，下班就想窝着"), ("m", "辛苦啦，早点休息。"),  # copy: voice
@@ -235,7 +235,7 @@ def _seed_chat(home: Path) -> None:
         rows.append({"seq": n, "t": t, "user_id": "" if who == "m" else f"browser:{conversation}",
                      "name": "Mibo" if who == "m" else "林晓", "text": text, **({"self": True} if who == "m" else {})})
     chatlog.ChatLog(runtime, 30).take(f"private:browser:{conversation}", rows)
-    chat = welcome.PageChat(db.at(runtime), ident)
+    chat = pagechat.PageChat(db.at(runtime), ident)
     chat.conversation, chat.title = conversation, "闲聊"
     chat.at = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(t))
     chat.save()

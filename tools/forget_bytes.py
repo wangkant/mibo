@@ -48,7 +48,7 @@ def main(argv: list[str]) -> int:
         log.take(conv, [{"seq": s, "t": now - 3000 + s, "user_id": "browser:check", "name": "",
                          "text": f"line {s} " + (FORGOTTEN if s % 97 == 0 else "words " * 12)}
                         for s in range(start, start + 300)])
-    # A long page chat, its rows as welcome.PageChat writes them.
+    # A long page chat, its rows as pagechat.PageChat writes them.
     page = [(n, json.dumps({"role": "user", "text": f"message {n} " + (FORGOTTEN if n % 41 == 0 else "talk " * 20),
                             "seq": n}, ensure_ascii=False)) for n in range(1, 401)]
     with store.write() as conn:

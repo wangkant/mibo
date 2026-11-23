@@ -36,7 +36,7 @@ from pathlib import Path
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-# How long a question waits before its step ends unanswered; inside the reply's own limit (welcome.REPLY_WITHIN_S).
+# How long a question waits before its step ends unanswered; inside the reply's own limit (workspace.REPLY_WITHIN_S).
 WAIT_S = 600.0
 TICK_S = 0.5
 

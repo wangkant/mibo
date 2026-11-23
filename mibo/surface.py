@@ -400,8 +400,67 @@ class _Reading:
                 "text": text.get("text", ""), "goes_on": bool(text.get("goes_on"))}
 
 
-async def act(agent, args: dict, lookups) -> str:
+def _groups(steps: list[dict]) -> list[list[dict]]:
+    """A read step goes alone, read by the reply model; the steps between reads go to the app together."""
+    groups: list[list[dict]] = []
+    for step in steps:
+        if step.get("do") == "read" or not groups or groups[-1][-1].get("do") == "read":
+            groups.append([step])
+        else:
+            groups[-1].append(step)
+    return groups
+
+
+async def _read_step(agent, home, place: places.Place, step: dict, lang: str) -> tuple[str, str]:
+    """A read step, the page's whole text read for its question by the reply model: its status and line."""
     from .web import operate
+
+    async def ask_model(system: str, messages: list[dict]) -> str:
+        # The reader of a read step (web/pagetext.py): one JSON answer a call.
+        with purpose("operate"):
+            return await agent._call_llm(system, messages, agent.llm_dm_model, max_tokens=READ_ANSWER,
+                                         disable_thinking=True, temperature=0.2, json_object=True)
+    reading = await operate.read_page(ask_model, _Reading(home, place.handle, lang), step,
+                                      str(step.get("question") or ""), agent._page_room())
+    status = str(reading.get("status") or "failed")
+    line = str(reading.get("line") or "")
+    if status == "ok":
+        line += f"\n{reading.get('found') or 'answer'}: {reading.get('answer') or ''} ({reading.get('read')})"
+    return status, line
+
+
+async def _do_steps(agent, home, place: places.Place, steps: list[dict], what: str,
+                    lookups) -> tuple[str, str, list[str], list[str]] | str:
+    """The steps done in the page, until one does not end ok: (status, the address after, the step lines, what the
+    app noticed), or the line the call answers with when the tab or the browser is gone."""
+    lang = _lang()
+    lines: list[str] = []
+    noticed: list[str] = []
+    status, url = "ok", ""
+    for group in _groups(steps):
+        if group[0].get("do") == "read":
+            status, line = await _read_step(agent, home, place, group[0], lang)
+            lines.append(line)
+        else:
+            out = await _browser(home, "place_act", 600, tab=place.handle, steps=group, lang=lang, what=what)
+            status = str(out.get("status") or "")
+            if status in ("gone", "private", "no_app", ""):
+                if status == "gone":
+                    places.drop(lookups.conversation, place.id)
+                return {"gone": f"Error: place {place.id} is closed: its tab is no longer open.",
+                        "private": "Error: that tab is private: nothing is done in it."}.get(
+                    status, "Error: the app's browser is not open, so nothing was done.")
+            lines += out.get("lines") or []
+            if out.get("noticed"):
+                noticed.append(out["noticed"])
+            url = str(out.get("url") or url)
+            place.title = out.get("title") or place.title
+        if status != "ok":
+            break
+    return status, url, lines, noticed
+
+
+async def act(agent, args: dict, lookups) -> str:
     home = today.runtime_of(agent).parent
     place = await _place_of(home, lookups.conversation, str(args.get("place") or "").strip())
     if isinstance(place, str):
@@ -412,55 +471,16 @@ async def act(agent, args: dict, lookups) -> str:
     refused = file_floor(steps, lookups)
     if refused:
         return refused
-    lang = _lang()
-
-    async def ask_model(system: str, messages: list[dict]) -> str:
-        # The reader of a read step (web/pagetext.py): one JSON answer a call.
-        with purpose("operate"):
-            return await agent._call_llm(system, messages, agent.llm_dm_model, max_tokens=READ_ANSWER,
-                                         disable_thinking=True, temperature=0.2, json_object=True)
     what = next((str(s.get("what") or "") for s in steps if s.get("what")), "")[:80] or place.title[:80]
     lookups.doing("operate", what)
-    lines: list[str] = []
-    noticed: list[str] = []
-    status, url = "ok", ""
     lookups.away_since = time.monotonic()
     try:
-        # A read step goes alone, read by the reply model; the steps between reads go to the app together.
-        groups: list[list[dict]] = []
-        for step in steps:
-            if step.get("do") == "read" or not groups or groups[-1][-1].get("do") == "read":
-                groups.append([step])
-            else:
-                groups[-1].append(step)
-        for group in groups:
-            if group[0].get("do") == "read":
-                reading = await operate.read_page(ask_model, _Reading(home, place.handle, lang),
-                                                  group[0],
-                                                  str(group[0].get("question") or ""), agent._page_room())
-                status = str(reading.get("status") or "failed")
-                line = str(reading.get("line") or "")
-                if status == "ok":
-                    line += f"\n{reading.get('found') or 'answer'}: {reading.get('answer') or ''} ({reading.get('read')})"
-                lines.append(line)
-            else:
-                out = await _browser(home, "place_act", 600, tab=place.handle, steps=group, lang=lang, what=what)
-                status = str(out.get("status") or "")
-                if status in ("gone", "private", "no_app", ""):
-                    if status == "gone":
-                        places.drop(lookups.conversation, place.id)
-                    return {"gone": f"Error: place {place.id} is closed: its tab is no longer open.",
-                            "private": "Error: that tab is private: nothing is done in it."}.get(
-                        status, "Error: the app's browser is not open, so nothing was done.")
-                lines += out.get("lines") or []
-                if out.get("noticed"):
-                    noticed.append(out["noticed"])
-                url = str(out.get("url") or url)
-                place.title = out.get("title") or place.title
-            if status != "ok":
-                break
+        done = await _do_steps(agent, home, place, steps, what, lookups)
     finally:
         lookups.away_s, lookups.away_since = lookups.away(), None
+    if isinstance(done, str):
+        return done
+    status, url, lines, noticed = done
     if status in ("stopped", "paused", "declined"):
         # How the person ended it: no new act until they ask.
         lookups.errand_held = status

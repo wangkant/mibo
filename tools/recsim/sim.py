@@ -8,7 +8,7 @@ the person's simulated activity (pacing.see / decide / outcome, the day cap), th
 (recommend.candidates), the model's choice and sentence (recommend.prompt, profile.ask,
 recommend.parse), every reaction written back as the card and the page write it (feed.remember),
 the taste model refit as it refits (taste.train), and what the person says in the chat reaching
-the profile the way memory._tell_profile and welcome._chat_finds pass it on. The others use the
+the profile the way memory._tell_profile and chatfinds.ChatFinds._chat_finds pass it on. The others use the
 same days, pacing and person: at random, the most popular, and an oracle that knows the truth.
 One JSON of every card per arm goes to <work>/<person>.json.
 
@@ -332,7 +332,7 @@ class Arm:
             feed.remember(rt, item, "end", at, surface=surface, end="timeout", shown_s=got["shown_s"])
 
     def chat(self, said: list[tuple[str, str]], now: float) -> None:
-        """What the person said, as memory._tell_profile and welcome._chat_finds pass it to the app,
+        """What the person said, as memory._tell_profile and chatfinds.ChatFinds._chat_finds pass it to the app,
         taking the reply model's reading of each row as right."""
         if self.name not in APP:
             return

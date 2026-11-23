@@ -2,7 +2,7 @@
 (recommend.matching), the model picks one for the card under its reply or none, and the last pick of the turn is the
 card (dm.py); a page read this turn can be the card instead, and a wish can wait for a walk when they said yes to
 that. react keeps what the person said of a find this chat showed, as the page records it in the feed
-(welcome._chat_finds)."""
+(chatfinds.ChatFinds._chat_finds)."""
 from __future__ import annotations
 
 import asyncio
@@ -183,7 +183,7 @@ async def _later(runtime, wish: str, lookups) -> str:
 
 def react(agent, args: dict, lookups) -> str:
     """react: what the person said of a find this chat showed, kept with the turn; the page records it in the feed
-    (welcome._chat_finds)."""
+    (chatfinds.ChatFinds._chat_finds)."""
     from . import recommend, today
     ident = str(args.get("id") or "").strip()
     shown = recommend.chat_shown(today.runtime_of(agent), lookups.conversation, time.time())

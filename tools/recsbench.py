@@ -107,7 +107,7 @@ SEARCH = ("web_search", "read_page")
 def seed(home: Path) -> None:
     """The library, the page read in a chat, and the two finds the main chat showed, through the app's own
     functions."""
-    from mibo import db, life, welcome
+    from mibo import db, life, pagechat
     from mibo.library import CHAT, Item, Library
     from mibo.panels import feed
     from mibo.players import player_for
@@ -124,7 +124,7 @@ def seed(home: Path) -> None:
         item(row, 2 + n)
     library.add(Item(url=READ[0], site=READ[1], kind="article", title=READ[2], description=READ[3],
                      text=READ[3] * 20, seen_at=int(now - HOUR), via=CHAT))
-    chat = welcome.PageChat(db.at(runtime), welcome.MAIN_CHAT)
+    chat = pagechat.PageChat(db.at(runtime), pagechat.MAIN_CHAT)
     shown = [item(row, 20 + n, told=True) for n, row in enumerate(SHOWN)]
     chat.append([life.said(one) for one in shown])
     chat.save()

@@ -37,7 +37,7 @@ LINKED = 4
 
 
 def page_chats(runtime: Path) -> dict[str, tuple[str, str]]:
-    """{conversation: (chat id, title)} of the chats the page lists (welcome.PageChat's rows)."""
+    """{conversation: (chat id, title)} of the chats the page lists (pagechat.PageChat's rows)."""
     return {conv: (ident, title) for ident, conv, title in db.at(runtime).read(
         "SELECT id, conversation, title FROM page_chats")}
 

@@ -375,10 +375,19 @@ async def _context(url: str, key: str, model: str) -> int:
     return next((int(v) for v in found if isinstance(v, int) and v > 0), 0)
 
 
-async def _measure(caller, url: str, key: str, model: str) -> dict:
-    quirks = caller._api_quirks
-    out: dict = {}
+def _called(message: dict | None) -> bool:
+    return any((c.get("function") or {}).get("name") == "get_time"
+               for c in (message or {}).get("tool_calls") or [] if isinstance(c, dict))
 
+
+async def _plain(caller, url: str, key: str, payload: dict) -> dict | None:
+    """One call with thinking off; the body of a 200, else None."""
+    caller._thinking_off(payload, url)
+    return await _post(caller, url, key, payload)
+
+
+async def _measure_tools(caller, url: str, model: str) -> str:
+    """One tool round, and one more with the tool required when the first answered in words."""
     async def tool_round(said: str, **how) -> dict | None:
         """One round with one small tool, as the reply's rounds call them; None when the call failed."""
         try:
@@ -388,90 +397,92 @@ async def _measure(caller, url: str, key: str, model: str) -> dict:
             return None
 
     message = await tool_round("Call get_time now. Do not answer in words.")
-    called = lambda m: any((c.get("function") or {}).get("name") == "get_time"  # noqa: E731
-                           for c in (m or {}).get("tool_calls") or [] if isinstance(c, dict))
-    if ("tools", url, model) in quirks:
-        out["tools"] = "no"
-    elif called(message):
-        out["tools"] = "yes"
-    elif message is not None:
-        again = await tool_round("Call get_time.", choice="required")
-        out["tools"] = "unstable" if called(again) else ("no" if ("tools", url, model) in quirks else "unstable")
-    else:
-        out["tools"] = ""
+    if ("tools", url, model) in caller._api_quirks:
+        return "no"
+    if _called(message):
+        return "yes"
+    if message is None:
+        return ""
+    again = await tool_round("Call get_time.", choice="required")
+    return "unstable" if _called(again) else ("no" if ("tools", url, model) in caller._api_quirks else "unstable")
 
-    # Pictures: a 16 px red square.
-    payload = {"model": model, "max_tokens": 60, "messages": [{"role": "user", "content": [
+
+async def _measure_pictures(caller, url: str, key: str, model: str) -> str:
+    """A 16 px red square, its colour asked."""
+    body = await _plain(caller, url, key, {"model": model, "max_tokens": 60, "messages": [{"role": "user", "content": [
         {"type": "text", "text": "What colour is this square? Answer with one word."},
-        {"type": "image_url", "image_url": {"url": _png()}}]}]}
-    caller._thinking_off(payload, url)
-    body = await _post(caller, url, key, payload)
-    if ("images", url, model) in quirks:
-        out["pictures"] = "no"
-    elif body is None:
-        out["pictures"] = ""
-    else:
-        said = _answer(body)
-        if _RED.search(said):
-            out["pictures"] = "yes"
-        elif _BLIND.search(said):
-            # Took the picture and could not see it: the words alone from now on.
-            caller._remember_refusal(url, model, "images")
-            out["pictures"] = "no"
-        elif not said:
-            # No words at all (a model still thinking at 60 tokens says nothing): unknown, not blind.
-            out["pictures"] = ""
-        else:
-            out["pictures"] = "unstable"
-    if out["pictures"] in ("yes", "unstable"):
-        from .see import profile
+        {"type": "image_url", "image_url": {"url": _png()}}]}]})
+    if ("images", url, model) in caller._api_quirks:
+        return "no"
+    if body is None:
+        return ""
+    said = _answer(body)
+    if _RED.search(said):
+        return "yes"
+    if _BLIND.search(said):
+        # Took the picture and could not see it: the words alone from now on.
+        caller._remember_refusal(url, model, "images")
+        return "no"
+    # No words at all (a model still thinking at 60 tokens says nothing): unknown, not blind.
+    return "unstable" if said else ""
 
-        async def ask(system: str, messages: list[dict]) -> str | None:
-            payload = {"model": model, "max_tokens": 80,
-                       "messages": [{"role": "system", "content": system}, *messages]}
-            caller._thinking_off(payload, url)
-            body = await _post(caller, url, key, payload)
-            return None if body is None else _answer(body)
-        out["pointing"] = await profile.selftest(ask, model)
 
-    # JSON mode with thinking off, at about 60 tokens; its answer also shows whether thinking went off.
-    payload = {"model": model, "max_tokens": 60, "response_format": {"type": "json_object"},
-               "messages": [{"role": "system", "content": "Answer with one JSON object and nothing else."},
-                            {"role": "user", "content": 'Return {"ok": true} as JSON.'}]}
-    caller._thinking_off(payload, url)
-    body = await _post(caller, url, key, payload)
-    quiet = None
-    if body is not None:
-        quiet = not _reasoned(body)
-        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", _answer(body).strip())
-        try:
-            parsed = isinstance(json.loads(text), dict)
-        except ValueError:
-            parsed = False
-    if ("response_format", url, model) in quirks:
-        out["json"] = "no"
-    elif body is None:
-        out["json"] = ""
-    else:
-        out["json"] = "yes" if parsed else "unstable"
+async def _measure_pointing(caller, url: str, key: str, model: str):
+    """How the model points at a drawn picture (see/profile.py's self-test)."""
+    from .see import profile
 
-    # Thinking on: a short question with each spelling the host may take, the first taken kept.
+    async def ask(system: str, messages: list[dict]) -> str | None:
+        body = await _plain(caller, url, key, {"model": model, "max_tokens": 80,
+                                               "messages": [{"role": "system", "content": system}, *messages]})
+        return None if body is None else _answer(body)
+    return await profile.selftest(ask, model)
+
+
+async def _measure_json(caller, url: str, key: str, model: str) -> tuple[str, bool | None]:
+    """JSON mode with thinking off, at about 60 tokens: the ability, and whether the answer came without reasoning
+    (None when nothing answered), which shows whether thinking goes off."""
+    body = await _plain(caller, url, key, {
+        "model": model, "max_tokens": 60, "response_format": {"type": "json_object"},
+        "messages": [{"role": "system", "content": "Answer with one JSON object and nothing else."},
+                     {"role": "user", "content": 'Return {"ok": true} as JSON.'}]})
+    if body is None:
+        return ("no" if ("response_format", url, model) in caller._api_quirks else ""), None
+    quiet = not _reasoned(body)
+    if ("response_format", url, model) in caller._api_quirks:
+        return "no", quiet
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", _answer(body).strip())
+    try:
+        parsed = isinstance(json.loads(text), dict)
+    except ValueError:
+        parsed = False
+    return ("yes" if parsed else "unstable"), quiet
+
+
+async def _measure_thinking(caller, url: str, key: str, model: str, quiet: bool | None) -> dict:
+    """Thinking on: a short question with each spelling the host may take, the first taken kept."""
     reasons, param = quiet is False, ""
     for name in _params_for(caller, url, model):
         payload = {"model": model, "max_tokens": 300,
                    "messages": [{"role": "user", "content": "Is 391 a prime number? Answer yes or no."}]}
         payload["max_tokens"] += thinking_on(payload, url, "probe", name)
         body = await _post(caller, url, key, payload)
-        if body is None:
-            continue
         # Taken when the field survived the call (a refusal drops it) and the answer shows reasoning.
-        if _reasoned(body):
+        if body is not None and _reasoned(body):
             reasons = True
             if name in payload:
                 param = name
                 break
-    out["thinking_detail"] = {"reasons": reasons, "off": quiet is not False, "param": param}
-    out["thinking"] = "yes" if reasons else ("no" if quiet is not None else "")
+    return {"reasons": reasons, "off": quiet is not False, "param": param}
+
+
+async def _measure(caller, url: str, key: str, model: str) -> dict:
+    out: dict = {"tools": await _measure_tools(caller, url, model),
+                 "pictures": await _measure_pictures(caller, url, key, model)}
+    if out["pictures"] in ("yes", "unstable"):
+        out["pointing"] = await _measure_pointing(caller, url, key, model)
+    out["json"], quiet = await _measure_json(caller, url, key, model)
+    out["thinking_detail"] = await _measure_thinking(caller, url, key, model, quiet)
+    out["thinking"] = "yes" if out["thinking_detail"]["reasons"] else ("no" if quiet is not None else "")
     # The window as the host lists it, one source of the budget's (context.window); the catalogue's stands for it.
     if not modelcatalog.entry(url, model):
         out["context"] = await _context(url, key, model)

@@ -46,7 +46,7 @@ PROBES = [("上个月我跟你说我在读的那本书叫什么来着？", "克�
 
 
 def seed(home: Path) -> None:
-    from mibo import chatlog, db, welcome
+    from mibo import chatlog, db, pagechat
     runtime = home / "runtime"
     log, store = chatlog.ChatLog(runtime, 30), db.at(runtime)
     now = time.time()
@@ -57,7 +57,7 @@ def seed(home: Path) -> None:
             rows.append({"seq": n, "t": t, "user_id": "" if who == "m" else f"browser:{conversation}",
                          "name": "Mibo" if who == "m" else "林晓", "text": text, **({"self": True} if who == "m" else {})})
         log.take(f"private:browser:{conversation}", rows)
-        chat = welcome.PageChat(store, ident)
+        chat = pagechat.PageChat(store, ident)
         chat.conversation = conversation
         if ident != "main":
             chat.title, chat.at = title, time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(t))

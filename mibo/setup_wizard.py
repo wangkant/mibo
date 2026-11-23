@@ -2,6 +2,7 @@
 picture, a key probe, and how this install spells its own command."""
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import locale
@@ -370,11 +371,13 @@ def name_for(key: str, name: str, lang: str) -> str:
         return character.name_in(lang) or DEFAULT_NAMES[lang]
     return name
 
+
 NAME_LINE = {"en": "Your name is {name}.", "zh": "你叫{name}。", "zh-TW": "你叫{name}。",
              "ja": "あなたの名前は{name}です。", "ko": "당신의 이름은 {name}입니다.",
              "es": "Te llamas {name}.", "fr": "Tu t'appelles {name}.",
              "de": "Du heißt {name}.", "pt-BR": "Seu nome é {name}.",
              "ru": "Тебя зовут {name}."}
+
 
 def _normal(text: str) -> str:
     return text.replace("\r\n", "\n").strip()
@@ -563,10 +566,8 @@ class Launcher:
         tail = f"{extra} {sub}" if extra else sub
         if self.in_checkout:
             python = Path(self.python)
-            try:
+            with contextlib.suppress(ValueError):
                 python = python.relative_to(homes.CHECKOUT)
-            except ValueError:
-                pass
             return [f"cd {_quote(str(homes.CHECKOUT))}",
                     f"{_program(str(python))} -m mibo {tail}"]
         if shutil.which("mibo"):

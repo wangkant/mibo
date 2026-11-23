@@ -19,9 +19,6 @@ import subprocess
 import sys
 from typing import NamedTuple
 
-ACTIVITIES = ("homework", "writing", "coding", "reading", "studying", "video", "music", "gaming",
-              "chatting", "meeting", "designing", "spreadsheet", "shopping", "browsing", "none")
-
 
 class Sample(NamedTuple):
     activity: str
@@ -235,7 +232,8 @@ def _page(text: str, ending) -> str:
 
 
 def classify(program: str, title: str) -> str:
-    """The kind of activity a window shows, from its program's name and its title."""
+    """The kind of activity a window shows, from its program's name and its title: homework, writing, coding,
+    reading, studying, video, music, gaming, chatting, meeting, designing, spreadsheet, shopping, browsing or none."""
     name = _norm(program)
     kind = PROGRAMS.get(name)
     if kind is None and name == "applicationframehost":
@@ -332,23 +330,19 @@ def _mic_on() -> bool:
     Windows keeps when each program last started and stopped using it; a stop of 0 is still on."""
     import winreg
 
+    def in_use(key, sub: str) -> bool:
+        with winreg.OpenKey(key, sub) as app:
+            try:
+                return bool(winreg.QueryValueEx(app, "LastUsedTimeStart")[0]) and \
+                    not winreg.QueryValueEx(app, "LastUsedTimeStop")[0]
+            except OSError:
+                # Never used by this program.
+                return False
+
     def on(path: str) -> bool:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
-            for i in range(winreg.QueryInfoKey(key)[0]):
-                sub = winreg.EnumKey(key, i)
-                if sub == "NonPackaged":
-                    if on(path + "\\" + sub):
-                        return True
-                    continue
-                with winreg.OpenKey(key, sub) as app:
-                    try:
-                        if winreg.QueryValueEx(app, "LastUsedTimeStart")[0] and \
-                                not winreg.QueryValueEx(app, "LastUsedTimeStop")[0]:
-                            return True
-                    except OSError:
-                        # Never used by this program.
-                        pass
-        return False
+            subs = [winreg.EnumKey(key, i) for i in range(winreg.QueryInfoKey(key)[0])]
+            return any(on(path + "\\" + sub) if sub == "NonPackaged" else in_use(key, sub) for sub in subs)
 
     try:
         return on(_MIC)

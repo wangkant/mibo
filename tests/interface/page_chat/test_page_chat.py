@@ -8,7 +8,7 @@ import base64
 import pytest
 from harness.app import TOKEN
 
-from mibo import settingsfile, welcome
+from mibo import character, chatmedia, settingsfile, welcome
 
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 # The smallest PNG: one transparent pixel.
@@ -66,7 +66,7 @@ def test_a_picture_reply_is_kept_shown_and_served_only_to_the_page(client, works
     answer = _said(client, "hi")
     picture = answer["messages"][-1]["picture"]
     assert [m.get("text") for m in answer["messages"][:2]] == ["hi", "look"]
-    assert welcome.PICTURE_NAME.fullmatch(picture)
+    assert chatmedia.PICTURE_NAME.fullmatch(picture)
     served = client.get(f"/api/chat/picture/{picture}", headers=HEADERS)
     assert served.status_code == 200 and served.content == PNG
     assert served.headers["content-type"] == "image/png"
@@ -122,7 +122,7 @@ def test_a_failed_message_is_kept_unanswered_and_can_be_sent_again(client, works
 
 def test_a_character_that_does_not_start_keeps_the_message(client, workspace, monkeypatch):
     async def broken(conversation, parts, **kwargs):
-        raise welcome.NotReady("the memory file is damaged")
+        raise character.NotReady("the memory file is damaged")
 
     monkeypatch.setattr(workspace.character, "reply", broken)
     assert client.post("/api/chat", headers=HEADERS, json={"text": "hello"}).status_code == 502

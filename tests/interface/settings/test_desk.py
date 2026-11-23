@@ -12,7 +12,7 @@ import zipfile
 import pytest
 from harness.app import TOKEN
 
-from mibo import browsed, chatlog, db, i18n, secretstore, settingsfile, shortcut, taste, welcome
+from mibo import browsed, chatlog, db, i18n, pagechat, secretstore, settingsfile, shortcut, taste, welcome
 from mibo.library import Item, Library
 from mibo.panels import desk, feed
 
@@ -84,7 +84,7 @@ def seed(home):
 
 
 def _page_chat(runtime, text: str) -> None:
-    chat = welcome.PageChat(db.at(runtime))
+    chat = pagechat.PageChat(db.at(runtime))
     chat.append([{"role": "user", "text": text}])
     chat.save()
 

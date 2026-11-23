@@ -1,5 +1,5 @@
 """The runtime database (runtime/mibo.db): one SQLite file, through Python's own sqlite3, for each chat's record
-(chatlog.py), the page's copy of each chat (welcome.PageChat), the embedding cache (embeddings.py), the finds
+(chatlog.py), the page's copy of each chat (pagechat.PageChat), the embedding cache (embeddings.py), the finds
 (library.py), the feed's events, topics and showings (panels/feed.py, taste.py), the pages read in the app's browser
 (browsed.py), the sources' state (sources/weights.py, sources/catalog.py) and the situation (situation.py).
 

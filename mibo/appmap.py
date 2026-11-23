@@ -360,12 +360,11 @@ def mount(app, workspace, body, token: str) -> None:
 
     async def listing(name: str, lang: str) -> dict:
         here = Here(get, workspace)
-        rows = []
-        for item in selected(name):
-            rows.append({"id": item.id, "where": where(item, lang), "about": item.about,
-                         "now": shown(await now(item, here)) if item.now is not None else "",
-                         "change": "no" if item.parse is None else "asks" if item.widens is not None else "yes"})
-        return {"status": "ok", "items": rows}
+        return {"status": "ok", "items": [
+            {"id": item.id, "where": where(item, lang), "about": item.about,
+             "now": shown(await now(item, here)) if item.now is not None else "",
+             "change": "no" if item.parse is None else "asks" if item.widens is not None else "yes"}
+            for item in selected(name)]}
 
     async def change(item: Item, text: str, conversation: str) -> dict:
         try:
@@ -398,6 +397,16 @@ def mount(app, workspace, body, token: str) -> None:
         logger.info("[Agent] settings %s changed", item.id)
         return {"status": "changed", "was": shown(was), "now": shown(value)}
 
+    async def open_at(item: Item, at_item: bool, lang: str) -> dict:
+        """Settings opened for the person at the item, or with `at_item` false at its page."""
+        window = getattr(app.state, "window", None)
+        place, shown_as = (item.place, where(item, lang)) if at_item else (
+            f"setup/{item.page}", i18n.t(f"setup.names.{item.page}", lang))
+        if window is None:
+            return {"status": "no_window", "where": shown_as}
+        await asyncio.to_thread(window.open_at, place)
+        return {"status": "opened", "where": shown_as}
+
     @app.post("/api/settings")
     async def settings_do(request: Request):
         """From the character's turn (appmap.use): {"do": list | open | change, "item", "value", "conversation"}."""
@@ -411,13 +420,7 @@ def mount(app, workspace, body, token: str) -> None:
         if do not in ("open", "change") or item is None:
             return {"status": "unknown"}
         if do == "open":
-            window = getattr(app.state, "window", None)
-            place, shown_as = (item.place, where(item, lang)) if name in BY_ID else (
-                f"setup/{item.page}", i18n.t(f"setup.names.{item.page}", lang))
-            if window is None:
-                return {"status": "no_window", "where": shown_as}
-            await asyncio.to_thread(window.open_at, place)
-            return {"status": "opened", "where": shown_as}
+            return await open_at(item, name in BY_ID, lang)
         if name not in BY_ID or item.parse is None:
             return {"status": "theirs", "where": where(item, lang)}
         conversation = payload.get("conversation")

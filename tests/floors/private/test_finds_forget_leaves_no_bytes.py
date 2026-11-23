@@ -61,7 +61,7 @@ def test_the_words_of_a_no_leave_no_byte_once_what_they_named_is_forgotten(app, 
     runtime, now = app.home / "runtime", time.time()
     _crowd(runtime, now)
     item = Library(runtime).add(Item(url="https://bakery.example/cake/1", title="A layered cake", seen_at=int(now)))
-    # 不感兴趣 in the chat, with the person's own words (welcome._chat_finds).
+    # 不感兴趣 in the chat, with the person's own words (chatfinds.ChatFinds._chat_finds).
     assert feed.remember(runtime, item, "skip", now, surface="chat",
                          said={"about": "topic", "words": f"我不爱吃{DISLIKE}"})  # copy: voice
     _crowd(runtime, now - 86400)

@@ -75,7 +75,7 @@ def _done_so_far(lookups: ChatLookups) -> str:
 
 
 def _at(stamp) -> float:
-    """A page message's time (welcome.PageChat stamps ISO with its offset) as seconds; 0 without one."""
+    """A page message's time (pagechat.PageChat stamps ISO with its offset) as seconds; 0 without one."""
     return datetime.fromisoformat(stamp).timestamp() if isinstance(stamp, str) and stamp else 0.0
 
 
@@ -105,7 +105,7 @@ def _foldable(rows: list[dict], start: int) -> bool:
 
 
 def _page_turns(runtime, conversation: str) -> list[dict]:
-    """The page's own saved copy of the chat `conversation` (welcome.PageChat, in the runtime database) as turns,
+    """The page's own saved copy of the chat `conversation` (pagechat.PageChat, in the runtime database) as turns,
     for a page chat that has no recent window yet: its checkpoint first (the page's summary row), then the turns
     from where the checkpoint's verbatim turns began; [] if the page keeps no such chat."""
     mark = _page_mark(runtime, conversation)
