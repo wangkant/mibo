@@ -26,8 +26,8 @@ from mibo.agent import Agent
 def test_an_embedding_neighbour_with_no_shared_words_needs_embeddings() -> None:
     w = ranking.MEMORY_WEIGHTS
     query = [1.0, 0.0, 0.0]
-    paraphrase = dict(lexical=0.0, vec=[0.6, 0.8, 0.0])  # unit length, cosine 0.6
-    word_match = dict(lexical=0.3, vec=[0.0, 0.0, 1.0])
+    paraphrase = {"lexical": 0.0, "vec": [0.6, 0.8, 0.0]}  # unit length, cosine 0.6
+    word_match = {"lexical": 0.3, "vec": [0.0, 0.0, 1.0]}
 
     def rank(q) -> list[str]:
         scored = {name: ranking.score(w, lexical=r["lexical"],
@@ -90,8 +90,8 @@ class StubEndpoint:
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
-        self.embedding = dict(embedding_model="stub-embed",
-                              embedding_base_url=f"http://127.0.0.1:{self.server.server_address[1]}/v1")
+        self.embedding = {"embedding_model": "stub-embed",
+                              "embedding_base_url": f"http://127.0.0.1:{self.server.server_address[1]}/v1"}
 
     def close(self) -> None:
         self.server.shutdown()

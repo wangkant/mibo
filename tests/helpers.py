@@ -16,12 +16,11 @@ def isolated_agent(tmp: Path, **settings) -> Agent:
 
     `settings` override the Agent keywords below."""
     tmp.mkdir(parents=True, exist_ok=True)
-    a = Agent(**{
+    return Agent(**{
         "api_key": "test-key", "persona_name": "TestBot",
         "persona": "test persona", "lang": "en",
         "memory_file": str(tmp / "memory.json"),
         "memory_tidy_every": 0, **settings})
-    return a
 
 
 def make_agent(tmp: Path, **overrides) -> Agent:

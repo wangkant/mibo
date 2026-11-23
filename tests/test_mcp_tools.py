@@ -58,7 +58,7 @@ async def test_the_client_speaks_streamable_http(tmp: Path, options) -> None:
     try:
         conn = await _open({"url": f"http://127.0.0.1:{server.server_address[1]}/mcp"}, tmp, 10)
         try:
-            assert [t["name"] for t in await conn.list_tools(10, 50)][0] == "echo"
+            assert next(t["name"] for t in await conn.list_tools(10, 50)) == "echo"
             assert (await conn.call_tool("echo", {"text": "hi"}, 10)).text == "hi"
         finally:
             await conn.close()

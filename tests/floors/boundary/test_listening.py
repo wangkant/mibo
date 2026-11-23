@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import socket
 import sys
+from typing import ClassVar
 
 import primp
 from harness.model import call, say
@@ -27,7 +28,7 @@ sys.addaudithook(_audit)
 
 class NativeClient:
     """Stands in for primp's client: records how each was made, and answers nothing."""
-    made: list = []
+    made: ClassVar[list] = []
 
     def __init__(self, **options) -> None:
         NativeClient.made.append(options)

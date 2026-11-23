@@ -288,8 +288,9 @@ class ScriptedModel:
                     model.requests[-1]["purpose"] = "embeddings"
                     inputs = body.get("input")
                     inputs = [inputs] if isinstance(inputs, str) else list(inputs or [])
-                    return self._send(200, {"object": "list", "model": MODEL, "data": [
+                    self._send(200, {"object": "list", "model": MODEL, "data": [
                         {"object": "embedding", "index": n, "embedding": _vector(str(v))} for n, v in enumerate(inputs)]})
+                    return
                 status, answer, headers = model._answer(body)
                 if answer == "hang":
                     # Held until the test ends or the asker closes the connection, which the record notes.

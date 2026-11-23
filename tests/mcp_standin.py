@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
 
 ARGS = sys.argv[1:]
 TOOLS = [
@@ -113,7 +114,7 @@ def stdio() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    sessions: set = set()
+    sessions: ClassVar[set] = set()
     # Requests seen, for the tests that count them.
     count = 0
 

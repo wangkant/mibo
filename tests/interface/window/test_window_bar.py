@@ -17,8 +17,8 @@ NO_BAR = {"frameless": False, "maximized": False, "figure": "mibo", "goto": ""}
 
 def _window(**overrides) -> types.SimpleNamespace:
     """A window the page can ask: its key is 'its-key', and it does what it is asked."""
-    values = dict(can_hide=True, frameless=True, maximized=False, frame_seen=lambda: None, figure=lambda: "deepseek",
-                  take_goto=lambda: "", control=lambda action: True, is_own_page=lambda key: key == "its-key")
+    values = {"can_hide": True, "frameless": True, "maximized": False, "frame_seen": lambda: None, "figure": lambda: "deepseek",
+                  "take_goto": lambda: "", "control": lambda action: True, "is_own_page": lambda key: key == "its-key"}
     return types.SimpleNamespace(**{**values, **overrides})
 
 

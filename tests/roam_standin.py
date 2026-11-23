@@ -157,10 +157,12 @@ class Site:
                 url = urlsplit(self.path)
                 site.loads.append(url.path)
                 if url.path == "/cover.png":
-                    return self._send(200, "image/png", site.cover)
+                    self._send(200, "image/png", site.cover)
+                    return
                 if url.path == "/api/hot":
                     rows = [{"id": ident, "title": title} for ident, title in site.videos.items()]
-                    return self._send(200, "application/json", json.dumps({"rows": rows}).encode())
+                    self._send(200, "application/json", json.dumps({"rows": rows}).encode())
+                    return
                 status, kind, body, headers = site.page(url.path, parse_qs(url.query))
                 self._send(status, kind, body.encode("utf-8"), headers)
 

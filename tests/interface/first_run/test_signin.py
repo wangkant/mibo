@@ -59,12 +59,14 @@ class OpenRouter:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 stand_in.seen.append(body)
                 if stand_in.exchange_status != 200:
-                    return self._send(stand_in.exchange_status, b'{"error": "nope"}')
+                    self._send(stand_in.exchange_status, b'{"error": "nope"}')
+                    return
                 challenge = stand_in.codes.pop(body.get("code"), None)
                 verifier = body.get("code_verifier", "")
                 expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
                 if challenge is None or challenge != expected or body.get("code_challenge_method") != "S256":
-                    return self._send(403, b'{"error": "Invalid code or code_verifier"}')
+                    self._send(403, b'{"error": "Invalid code or code_verifier"}')
+                    return
                 self._send(200, json.dumps({"key": KEY, "user_id": "u1"} if stand_in.answer is None
                                            else stand_in.answer).encode())
 

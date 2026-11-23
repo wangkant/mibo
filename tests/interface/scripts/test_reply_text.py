@@ -21,7 +21,8 @@ def _replies(browser, app, *texts: str):
     def with_replies(route) -> None:
         # The page's later asks are for what came since: nothing more.
         if "after=" in route.request.url:
-            return route.continue_()
+            route.continue_()
+            return
         answer = route.fetch().json()
         answer["messages"] = [{"role": "assistant", "text": text, "seq": n, "at": SAID_AT + n}
                               for n, text in enumerate(texts, 1)]

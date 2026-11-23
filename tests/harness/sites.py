@@ -105,23 +105,28 @@ class Site(roam_standin.Site):
             def do_GET(self) -> None:
                 url = urlsplit(self.path)
                 if url.path in site.tarpits:
-                    return self._trickle(url.path, site.tarpits[url.path])
+                    self._trickle(url.path, site.tarpits[url.path])
+                    return
                 if url.path in site.written:
                     site.loads.append(url.path)
                     data, kind, status, headers, sized, before = site.written[url.path]
                     if before:
                         before()
-                    return self._send(status, kind, data, headers, sized)
+                    self._send(status, kind, data, headers, sized)
+                    return
                 if url.path == "/cover.png":
                     site.loads.append(url.path)
-                    return self._send(200, "image/png", site.cover)
+                    self._send(200, "image/png", site.cover)
+                    return
                 if url.path == "/api/hot":
                     rows = [{"id": ident, "title": title} for ident, title in site.videos.items()]
-                    return self._send(200, "application/json", json.dumps({"rows": rows}).encode())
+                    self._send(200, "application/json", json.dumps({"rows": rows}).encode())
+                    return
                 status, kind, body, headers = site.page(url.path, parse_qs(url.query))
                 if status != 404:
                     site.loads.append(url.path)
-                    return self._send(status, kind, body.encode("utf-8"), headers)
+                    self._send(status, kind, body.encode("utf-8"), headers)
+                    return
                 super().do_GET()
 
             def do_POST(self) -> None:

@@ -73,9 +73,9 @@ class Pane:
             return future.result(timeout)
         except concurrent.futures.TimeoutError:
             future.cancel()
-            raise RuntimeError("the browser did not answer in time")
+            raise RuntimeError("the browser did not answer in time") from None
         except Exception as e:
-            raise RuntimeError(str(e))
+            raise RuntimeError(str(e)) from e
 
     def stop(self) -> None:
         self.loop.call_soon_threadsafe(self._ended.set)
