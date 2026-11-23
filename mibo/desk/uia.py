@@ -41,7 +41,7 @@ SKIPPED = {"titlebar", "scrollbar", "thumb", "tooltip", "separator"}
 CONTROLS = {"button", "textbox", "document", "link", "checkbox", "radio", "combobox", "listitem", "menuitem",
             "tab", "treeitem", "slider", "spinbutton", "row", "columnheader"}
 KEY_NAMES = set(win32.VK) - {"Ctrl", "Shift", "Alt", "Apps"}
-BIDI = re.compile(r"[‎‏‪-‮⁦-⁩]")
+BIDI = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]")
 
 
 class Refused(Exception):
