@@ -26,7 +26,6 @@ BACK_S = 600
 TELL_DAYS = 7
 # What the page's frame-src lists: the official players (players.py), on their paths where it can.
 PLAYER_HOSTS = players.frame_sources()
-STATES = ("home", "answering", "out", "asleep", "back", "off")
 _PICTURE = re.compile(r"/api/library/picture/[0-9a-f]{16}")
 _TEXT_MAX = 300
 

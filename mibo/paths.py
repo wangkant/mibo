@@ -8,9 +8,7 @@ a checkout reads its tracked data), else the copy shipped in the package.
 """
 from __future__ import annotations
 
-import json
 import os
-from collections.abc import Iterable
 from pathlib import Path
 
 from .home import find_home, resource
@@ -59,8 +57,7 @@ def runtime_dir_for(home: Path, configured: str = "") -> Path:
 
 
 def resolve_runtime_state_file(value: str | Path) -> Path:
-    """Resolve a relative state path under the runtime dir, copying a legacy
-    root-level file once. An absolute path is used as given."""
+    """Resolve a relative state path under the runtime dir. An absolute path is used as given."""
     path = Path(value)
     if path.is_absolute():
         return path
@@ -73,39 +70,6 @@ def resolve_runtime_state_file(value: str | Path) -> Path:
             f"relative runtime state path must stay under {base}: {value}"
         ) from exc
     return target
-
-
-def resolve_runtime_lang_file(stem: str, ext: str, lang: str) -> Path:
-    return runtime_dir() / f"{stem}.{lang}.{ext}"
-
-
-def parse_jsonl(blob: bytes) -> list[dict]:
-    """The object rows of a JSONL blob; blank and malformed lines are skipped."""
-    rows: list[dict] = []
-    # Decoded with "replace": one bad byte costs its row, not the whole file.
-    for line in blob.decode("utf-8", "replace").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
-
-
-def read_jsonl(paths: Iterable[Path]) -> list[dict]:
-    """Read valid object rows from multiple JSONL files, in path order."""
-    rows: list[dict] = []
-    for path in paths:
-        try:
-            blob = path.read_bytes()
-        except OSError:
-            continue
-        rows.extend(parse_jsonl(blob))
-    return rows
 
 
 def use_home(home: Path) -> None:

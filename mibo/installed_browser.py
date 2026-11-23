@@ -7,6 +7,7 @@ fingerprint, no solved verification.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import shutil
@@ -85,16 +86,12 @@ def end_profile(profile: Path, process: subprocess.Popen | None = None) -> None:
     helper processes behind when only its first one is ended."""
     if process is not None and process.poll() is None:
         if os.name == "posix":
-            try:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
                 os.killpg(process.pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                pass
         else:
             process.terminate()
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired):
             process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            pass
     if os.name == "nt":
         # The first process hands over to another and ends, so they are found by
         # the profile each was started with (quoted in some, bare in others).
@@ -110,15 +107,11 @@ def end_profile(profile: Path, process: subprocess.Popen | None = None) -> None:
             logger.warning("browser: leftover processes of a profile were not ended")
         return
     if process is not None:
-        try:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
-    try:
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         subprocess.run(["pkill", "-9", "-f", f"user-data-dir={profile}"], stdin=subprocess.DEVNULL,
                        capture_output=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
 
 
 class Browser:
@@ -158,7 +151,7 @@ class Browser:
             try:
                 self.context = await self._driver.chromium.launch_persistent_context(
                     str(self.profile), executable_path=str(program), headless=self.headless, no_viewport=True,
-                    ignore_default_args=True, args=arguments + ["about:blank"], timeout=START_S * 1000)
+                    ignore_default_args=True, args=[*arguments, "about:blank"], timeout=START_S * 1000)
             except DriverError:
                 raise ConnectionError(NO_START) from None
             self._browser = self.context.browser
@@ -175,20 +168,14 @@ class Browser:
         if browser is not None:
             gone = asyncio.Event()
             browser.on("disconnected", lambda *_: gone.set())
-            try:
+            with contextlib.suppress(Exception):
                 session = await browser.new_browser_cdp_session()
                 await asyncio.wait_for(session.send("Browser.close"), 3)
-            except Exception:
-                pass
-            try:
+            with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(gone.wait(), CLOSE_S)
                 # The connection drops a moment before the profile is written out.
                 await asyncio.sleep(1.0)
-            except asyncio.TimeoutError:
-                pass
         if driver is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await asyncio.wait_for(driver.stop(), 5)
-            except Exception:
-                pass
         await asyncio.to_thread(end_profile, self.profile)

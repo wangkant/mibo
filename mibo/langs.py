@@ -4,6 +4,7 @@ i18n.py's catalogs.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import unicodedata
@@ -49,10 +50,8 @@ def content(lang: str) -> str:
 def utf8_console() -> None:
     """Every language's output must not crash a pipe on a legacy code page."""
     for stream in (sys.stdout, sys.stderr):
-        try:
+        with contextlib.suppress(AttributeError, OSError, ValueError):
             stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, OSError, ValueError):
-            pass
 
 
 def interactive() -> bool:
