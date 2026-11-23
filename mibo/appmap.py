@@ -492,7 +492,7 @@ def mount(app, workspace, body, token: str) -> None:
 
     @app.get("/api/settings/card")
     async def settings_card():
-        """The question waiting in the chat, if any (chat.js draws it; /api/confirm answers it)."""
+        """The gate's reading of the question waiting, if any (said in the chat as the character's message (cardwait.py); /api/confirm answers it)."""
         return {"card": cards.card}
 
 

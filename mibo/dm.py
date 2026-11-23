@@ -487,11 +487,24 @@ class DirectMessages:
                     # A forget, a clear or a compaction changed the chat while the model answered: the turns as
                     # that left them, then this turn's own. The copy taken before the call is not written back.
                     history = [*self.dm_history.get(user_id, []), history[-1]]
-                history.append({"role": "assistant", "content": reply,
-                                "t": time.time(), "seq": self._next_seq(pkey),
-                                # What it did on the way, short: the next turns read it (prompt._recent_steps).
-                                **({"steps": [f"{s['tool']} {s.get('what') or ''}".strip()[:160]
-                                              for s in lookups.trace[-12:]]} if lookups.trace else {})})
+                # The questions the turn asked in the chat and the person's yes to them, then the reply: the
+                # conversation as the page shows it (cardwait.exchange). A no or no answer is followed by the
+                # reply, and the words of a no are the next turn's own. A row of the character's after another
+                # joins it, so two never sit in a row.
+                from .cardwait import exchange
+                rows = []
+                for asked in exchange(conversation, lookups.turn):
+                    rows += [("assistant", asked["question"])] + ([("user", asked["answer"])] if asked["answer"] else [])
+                for role, content in [*rows, ("assistant", reply)]:
+                    if role == history[-1]["role"] == "assistant":
+                        history[-1]["content"] += "\n\n" + content
+                    else:
+                        history.append({"role": role, "content": content, **({"name": _THEM} if role == "user" else {}),
+                                        "t": time.time(), "seq": self._next_seq(pkey)})
+                if lookups.trace:
+                    # What it did on the way, short: the next turns read it (prompt._recent_steps).
+                    history[-1]["steps"] = [f"{s['tool']} {s.get('what') or ''}".strip()[:160]
+                                            for s in lookups.trace[-12:]]
                 self._commit_dm_history(user_id, pkey, history)
                 self._dm_unanswered.pop(user_id, None)
                 committed = True

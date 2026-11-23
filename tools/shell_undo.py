@@ -3,10 +3,10 @@
 Starts the app with no window on a fresh home and a stand-in model that makes a fixed set of file tool and command
 calls over three turns, in a folder of the script's own (--work, on the drive whose Recycle Bin is checked):
 
-  1. edit_file on an indented a.py (a card, pressed yes), write_file of a new note.txt
-  2. a command overwriting b.txt (a card), a command making 日志 and moving the .log files into it (no card),
-     Remove-Item of the folder 临时 (a card)
-  3. delete_files of c.txt (a card)
+  1. edit_file on an indented a.py (a question, answered 确定), write_file of a new note.txt
+  2. a command overwriting b.txt (a question), a command making 日志 and moving the .log files into it (no
+     question), Remove-Item of the folder 临时 (a question)
+  3. delete_files of c.txt (a question)
 
 Then it prints: whether what was deleted is in the Recycle Bin, what the fold 本次改动 lists for each turn and the
 lines of a.py's difference, and after 撤销这次的改动 for turn 2, then 1 (from the API) and 3 (from the page, pressed
@@ -26,15 +26,33 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools.card_wait import Page
-
 A_PY = "def total(rows):\n    s = 0\n    for row in rows:\n        if row > 0:\n            s += row\n    return s\n" + \
        "".join(f"# note {n}\n" for n in range(1, 30))
+
+
+class Page:
+    """The app's API as its page calls it, with the page's token."""
+
+    def __init__(self, home: Path) -> None:
+        url = json.loads((home / "runtime" / "desktop" / "welcome.json").read_text(encoding="utf-8"))["url"]
+        parts = urlsplit(url)
+        self.base, self.token = f"{parts.scheme}://{parts.netloc}/api/", parts.fragment.partition("token=")[2]
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def __call__(self, path: str, body=None, timeout: float = 30):
+        request = urllib.request.Request(self.base + path, method="GET" if body is None else "POST",
+                                         data=None if body is None else json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json",
+                                                  "X-Mibo-Setup-Token": self.token})
+        with self.opener.open(request, timeout=timeout) as answer:
+            return json.loads(answer.read().decode() or "{}")
 
 
 def fixture(work: Path) -> dict:
@@ -110,7 +128,8 @@ def stand_in(port: int, work: Path) -> None:
 
 
 def turn(page: Page, chat: str, text: str) -> dict:
-    """One message; every card it raises is pressed yes. The reply's steps and the turn's name."""
+    """One message; every question it asks is answered 确定, as typed in the chat box (POST /api/confirm). The
+    reply's steps and the turn's name."""
     box: dict = {}
     worker = threading.Thread(target=lambda: box.update(page("chat", {"text": text, "chat": chat,
                                                                       "choices": ["computer"]}, timeout=900)))
@@ -120,7 +139,7 @@ def turn(page: Page, chat: str, text: str) -> dict:
         card = page("shell/card").get("card")
         if card:
             cards.append(card["zh"]["title"])
-            page("shell/card", {"id": card["id"], "yes": True})
+            page("confirm", {"id": card["id"], "text": "确定"})
         worker.join(0.5)
     steps = [s for m in box.get("messages") or [] if m.get("role") == "assistant" for s in m.get("trace") or []]
     return {"cards": cards, "steps": [(s["tool"], s.get("status", ""), s["what"][:60]) for s in steps],

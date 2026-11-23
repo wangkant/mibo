@@ -1561,231 +1561,141 @@ button.find-why:hover,
     font-size: var(--pa-fs-3xl);
   }
 }
-/* A card asking the person before something with an effect outside happens in the browser (chat.js showCard). */
-.op-card {
-  margin: 10px 0 6px;
-  padding: 18px;
-  max-width: 440px;
-  border: 1px solid var(--pa-line);
-  border-radius: 16px;
+/* A very important step's question (chatthread.js, cardwait.ALONE): the app's sentence with the decisive facts, the
+   step's first lines, a fold for the rest, and two buttons, the act's the one accent; once answered, one quiet line
+   of what was decided. A task's offer (schedulechat.js) and a form an MCP server asks for (toolcard.js) look the
+   same. */
+.ask-card {
+  max-width: 480px;
+  padding: 14px 16px;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-lg);
   background: var(--pa-surface);
-  box-shadow: var(--pa-shadow-1);
   color: var(--pa-text);
-  font: var(--pa-fs-sm) / 1.5 var(--pa-font);
+  font: var(--pa-fs-md) / 1.6 var(--pa-font);
 }
-.op-card-head {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin: 0 0 14px;
+.ask-card.answered {
+  border-color: var(--pa-line);
 }
-.op-card-icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--pa-accent-soft);
-  color: var(--pa-accent-ink);
-}
-.op-card-icon .i {
-  width: 16px;
-  height: 16px;
-}
-.op-card-words {
-  min-width: 0;
-  align-self: center;
-}
-.op-card-title {
-  margin: 0 0 8px;
-  font-size: var(--pa-fs-md);
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--pa-ink);
-}
-.op-card-head .op-card-title {
+.ask-card-text {
   margin: 0;
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-lg);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
-.op-card-meta {
+.ask-card-meta {
   margin: 2px 0 0;
   color: var(--pa-faint);
   font-size: var(--pa-fs-xs);
   overflow-wrap: anywhere;
 }
-/* The request the card is for, in the person's own words. */
-.op-card-quote {
-  margin: 0;
+/* What a server says with its form, in its own words. */
+.ask-card-quote {
+  margin: 10px 0 0;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--pa-r-sm);
   background: var(--pa-sunken);
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-/* Why the automatic review left this to the person: one muted line. */
-.op-card-why {
-  margin: 0 0 8px;
-  color: var(--pa-muted);
+/* The step's own lines (which files, what is sent), each on a row of its own. */
+.ask-card-lines {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ask-card-lines li {
+  padding: 6px 0;
+  border-top: 1px solid var(--pa-line);
   font-size: var(--pa-fs-sm);
   overflow-wrap: anywhere;
 }
-.op-card-facts {
+.ask-card-lines li:last-child {
+  padding-bottom: 0;
+}
+.ask-card > .act-more {
+  margin-top: 8px;
+}
+.ask-card-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 10px;
-  margin: 0 0 8px;
+  gap: 4px 12px;
+  margin: 10px 0 0;
+  font-size: var(--pa-fs-sm);
 }
-.op-card-facts dt {
+.ask-card-facts dt {
   color: var(--pa-muted);
 }
-.op-card-facts dd {
+.ask-card-facts dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.op-card-text {
-  white-space: pre-wrap;
-  padding: 4px 8px;
-  border-radius: var(--pa-r-sm);
-  background: var(--pa-hover);
-}
-.op-card-shot {
-  display: block;
-  width: 100%;
-  margin: 0 0 8px;
-  border: 1px solid var(--pa-line);
-  border-radius: var(--pa-r-sm);
-}
-.op-card-never {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  margin: 0 0 8px;
-  color: var(--pa-muted);
-}
-.op-card-buttons {
+.ask-card-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
-/* Answered: the buttons give way to one line saying what was decided. */
-.op-card.answered .op-card-buttons {
-  display: none;
+/* The act is the card's one filled control, in the ink of the send button rather than the character's colour. */
+.ask-card-buttons .pa-btn-primary {
+  background: var(--pa-send);
+  color: var(--pa-send-ink);
 }
-.op-card-told {
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--pa-line);
-  color: var(--pa-muted);
+.ask-card-buttons .pa-btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--pa-send) 86%, var(--pa-canvas));
 }
-/* What the person types in the chat box to let the step run (cardwait.py): gone once they have answered. */
-.op-card-ask {
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--pa-line);
-  color: var(--pa-text);
-  font-weight: 500;
+.ask-card-told {
+  margin: 10px 0 0;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-sm);
 }
-.op-card.answered .op-card-ask {
-  display: none;
-}
-/* A form an MCP server asks the person to fill (toolcard.js): one labelled field a row. */
-.op-card-form {
+/* A server's form (toolcard.js): one labelled field a row. */
+.ask-form {
   display: grid;
   gap: 12px;
   margin: 12px 0 8px;
 }
-.op-card-field {
+.ask-field {
   display: grid;
   gap: 4px;
 }
-.op-card-field-name {
+.ask-field-name {
   color: var(--pa-muted);
 }
-.op-card-field-check {
+.ask-field-meta {
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.ask-field-check {
   grid-template-columns: auto 1fr;
   align-items: center;
 }
-.op-card-field-check .op-card-field-name {
+.ask-field-check .ask-field-name {
   order: 2;
 }
-.op-card-field-check .op-card-meta {
+.ask-field-check .ask-field-meta {
   grid-column: 1 / -1;
   order: 3;
 }
-.op-card-field-choices {
+.ask-field-choices {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
 }
-.op-card-field-choice {
+.ask-field-choice {
   display: inline-flex;
   gap: 6px;
   align-items: center;
+}
+.line.typing + .mcp-form {
+  margin-top: var(--pa-s2);
 }
 /* Under a memory command's answer: the way to Settings › Memory (chat.js). */
 .chat-manage {
   margin-top: var(--pa-s1);
   font-size: var(--pa-fs-sm);
-}
-/* A card answered beside the page (browse.js): one line in the chat. */
-.op-note {
-  margin: 6px 0 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--pa-line-strong);
-  color: var(--pa-muted);
-  font-size: var(--pa-fs-sm);
-}
-/* A card before a command runs on this computer (chat.js showShellCard). */
-.shell-card-lines {
-  display: grid;
-  gap: 4px;
-  margin: 0 0 10px;
-  padding: 0;
-  list-style: none;
-}
-.shell-card-lines li {
-  padding: 7px 10px;
-  border-radius: 9px;
-  background: var(--pa-sunken);
-  overflow-wrap: anywhere;
-}
-/* Where it runs and the command itself: small print under the steps. */
-.shell-card .op-card-facts {
-  margin: 0 0 2px;
-  color: var(--pa-faint);
-  font-size: var(--pa-fs-xs);
-}
-.shell-card .op-card-facts dt {
-  color: inherit;
-}
-.shell-card .op-card-facts dd {
-  color: var(--pa-muted);
-}
-.shell-card-command {
-  margin: 0;
-  color: var(--pa-faint);
-  font-size: var(--pa-fs-xs);
-}
-.shell-card-command summary {
-  cursor: pointer;
-  width: fit-content;
-}
-.shell-card-command summary:hover {
-  color: var(--pa-muted);
-}
-.shell-card-command pre {
-  margin: 4px 0 0;
-  padding: 6px 8px;
-  max-height: 180px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  border-radius: var(--pa-r-sm);
-  background: var(--pa-hover);
-  color: var(--pa-text);
-  font-size: var(--pa-fs-xs);
-  line-height: 1.45;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 /* A 无痕对话 (chat.js): its mark heads the chat, and a new plain chat offers the switch under its ideas. */
 .chat-private {

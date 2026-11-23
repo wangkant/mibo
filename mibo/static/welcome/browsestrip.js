@@ -1,9 +1,9 @@
 "use strict";
 // What a site asks of the person, under the pane's bar at the page's top left, as browsers ask: the camera, the
 // microphone, the location and the rest (允许 / 始终允许 / 不允许), a link that would start a program of this
-// computer (打开 / 取消), and a popup the page opened by itself, which was stopped (打开 / 关闭). It has the asking
-// cards' one look. browser.py keeps what each tab asked and tells the first of the tab in front; nothing a site asks
-// is granted but by a press here. browse.js mounts it and hands it what it is told.
+// computer (打开 / 取消), and a popup the page opened by itself, which was stopped (打开 / 关闭). It has the look of
+// the run's sign-in cards (browse.css .browse-ask). browser.py keeps what each tab asked and tells the first of the
+// tab in front; nothing a site asks is granted but by a press here. browse.js mounts it and hands it what it is told.
 window.paBrowseStrip = ({ pane, area, stage, post, place }) => {
   const ICONS = {
     camera: '<path d="M3.5 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2z" /><path d="M15.5 10.5 20.5 7.5v9l-5-3" />',
@@ -27,7 +27,7 @@ window.paBrowseStrip = ({ pane, area, stage, post, place }) => {
     if (text) node.textContent = text;
     return node;
   }
-  const strip = el("div", "op-card browse-prompt browse-over");
+  const strip = el("div", "browse-ask browse-prompt browse-over");
   strip.setAttribute("role", "dialog");
   strip.setAttribute("aria-live", "polite");
   strip.hidden = true;
@@ -49,14 +49,14 @@ window.paBrowseStrip = ({ pane, area, stage, post, place }) => {
       title = paI18n.fill(said[prompt.kind], { site });
       meta = prompt.url.length > 120 ? `${prompt.url.slice(0, 120)}…` : prompt.url;
     }
-    const head = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
+    const head = el("div", "browse-ask-head");
+    const tile = el("span", "browse-ask-icon");
     tile.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[icon]}</svg>`;
-    const text = el("div", "op-card-words");
-    text.append(el("p", "op-card-title", title));
-    if (meta) text.append(el("p", "op-card-meta", meta));
+    const text = el("div", "browse-ask-words");
+    text.append(el("p", "browse-ask-title", title));
+    if (meta) text.append(el("p", "browse-ask-meta", meta));
     head.append(tile, text);
-    const row = el("div", "op-card-buttons");
+    const row = el("div", "browse-ask-buttons");
     for (const [act, look, action] of BUTTONS[prompt.kind]) {
       const button = el("button", `pa-btn ${look} pa-btn-sm`, said[act]);
       button.type = "button";

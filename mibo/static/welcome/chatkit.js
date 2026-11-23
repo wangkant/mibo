@@ -1,13 +1,10 @@
 "use strict";
-// What the chat's scripts draw with: elements, buttons, Lucide-style icons, the head of a card that asks, a link
-// opened the way every link in the app opens, a day's line, and the headers a press from the app's own page carries.
+// What the chat's scripts draw with: elements, buttons, Lucide-style icons, a link opened the way every link in the
+// app opens, a day's line, and the headers a press from the app's own page carries.
 window.paKit = (() => {
   const SVG = "http://www.w3.org/2000/svg";
   // Lucide-style strokes.
   const I = {
-    window: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/>',
-    terminal: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 10 3 2-3 2"/><path d="M13 15h4"/>',
-    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
     stop: '<rect x="5" y="5" width="14" height="14" rx="2.5"/>',
     reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
@@ -64,17 +61,6 @@ window.paKit = (() => {
     node.title = label;
     return node;
   }
-  // The head of a card that asks the person: an icon, what is asked, and one faint line under it.
-  function cardHead(paths, title, meta = "") {
-    const head = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
-    tile.append(svg(paths));
-    const words = el("div", "op-card-words");
-    words.append(el("p", "op-card-title", title));
-    if (meta) words.append(el("p", "op-card-meta", meta));
-    head.append(tile, words);
-    return head;
-  }
   // A link opened the way every link in the app opens.
   function anchor(url, className = "") {
     const node = el("a", className);
@@ -110,5 +96,5 @@ window.paKit = (() => {
     return near ? `${near} · ${day}` : day;
   }
 
-  return { I, el, button, svg, iconButton, cardHead, anchor, hostOf, fill, motion, pressHeaders, dayLabel };
+  return { I, el, button, svg, iconButton, anchor, hostOf, fill, motion, pressHeaders, dayLabel };
 })();

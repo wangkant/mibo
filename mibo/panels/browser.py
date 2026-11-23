@@ -34,6 +34,8 @@ from urllib.parse import quote_plus, urlsplit
 
 from fastapi import Request
 
+from ..asked import amount_of
+
 ERRORS: frozenset[str] = frozenset({"invalid_links", "browse_invalid", "browse_window", "browse_none", "browse_busy"})
 CHOICES = ("app", "system")
 # How long a look waits for a page just opened to load.
@@ -91,8 +93,8 @@ def act_of(card: dict, lang: str) -> str:
     to = " ".join(str(card.get("to") or "").split())[:40]
     button = " ".join(str(card.get("button") or "").split())[:30]
     said = (aimed if to else plain).format(to=to, button=button)
-    # What a payment costs, as the page shows it beside the control.
-    amount = " ".join(str(card.get("amount") or "").split())[:30]
+    # What a payment costs, as the page shows it beside the control, when it reads as an amount.
+    amount = amount_of(card)
     return (f"{said}（{amount}）" if lang == "zh" else f"{said} ({amount})") if amount else said
 
 
@@ -302,18 +304,19 @@ class Operating:
             shown = {k: card.get(k) for k in ("id", "kind", "site", "to", "text", "button", "skippable", "what")}
             self.card, self.answer = card, asyncio.get_running_loop().create_future()
 
-            async def settle(yes: bool) -> bool:
+            async def settle(yes: bool) -> bool | None:
                 if self.card is not card or self.answer.done():
-                    return False
+                    return None
                 files: list[str] = []
                 if yes and card.get("kind") == "upload" and not card.get("text"):
                     files = await asyncio.to_thread(self.window.pick_files, bool(card.get("many")))
                     yes = bool(files)
                 if self.card is not card or self.answer.done():
-                    return False
+                    return None
                 self.answer.set_result({"yes": yes, "never": False, **({"files": files} if files else {})})
-                return True
-            everyone.open[card["id"]] = (turn, risk, settle)
+                return yes
+            # Said in the chat as the character's message, in the app's words for the act (cardwait.Asking.put).
+            everyone.put(self.workspace, card["id"], turn[0], turn, risk, card, settle, self.lang)
             await asyncio.to_thread(pane.op_card, {**shown, "ringed": card.get("node") is not None},
                                     said["wait"].format(act=act))
             page = self._page(tab)
@@ -332,7 +335,7 @@ class Operating:
                     self.left = {**card, "said": act}
                 return answer
             finally:
-                everyone.open.pop(card["id"], None)
+                everyone.close(card["id"], "left" if answer and answer.get("waiting") else "unanswered")
                 self.card = self.answer = None
                 yes = bool(answer and answer.get("yes"))
                 if card.get("node") is not None and not yes:
@@ -352,6 +355,8 @@ class Operating:
             return False
         self.left = None
         self.kept[left["act"]] = {"yes": yes}
+        # Their message itself is the answer in the chat; the question is marked with it.
+        self.workspace.answer_said(left["id"], "yes" if yes else "no")
         if self.window.pane is not None:
             self.window.pane.op_kept(yes)
         return True

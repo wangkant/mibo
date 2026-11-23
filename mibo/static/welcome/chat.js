@@ -3,10 +3,10 @@
 // sentence about the thing, the thing's card under it. A plain chat is only talk. The shell
 // makes one view per chat. The column reads quietly: the character's words without bubbles,
 // its face, name and time once at the start of each run; the person's words in soft bubbles.
-// This file is the view, the composer, sending and the questions a reply waits on; the thread is drawn
-// by chatthread.js, a find by findcard.js, what rides on a message by attach.js.
+// This file is the view, the composer, sending and the answers to the questions a reply waits on; the thread
+// (the questions among it) is drawn by chatthread.js, a find by findcard.js, what rides on a message by attach.js.
 window.paChat = (() => {
-  const { I, el, button, svg, iconButton, motion } = window.paKit;
+  const { I, el, button, svg, iconButton, motion, pressHeaders } = window.paKit;
   const MAIN = "main";
   // Failures that the settings page can fix get a way there.
   const SETTINGS_FIXES = new Set(["key_required", "chat_failed", "model_no_balance", "model_window_small"]);
@@ -24,11 +24,10 @@ window.paChat = (() => {
   // A plain chat is named after the first message sent in it, cut to this many characters.
   const TITLE_CLIP = 40;
   const IDEA_ICONS = { main: [I.compass, I.calendar, I.talk], plain: [I.talk, I.calendar, I.help] };
-  // Where a step waits on the person's yes: a command (shell/panel.py), turning a switched-off ability on
-  // (turnon.py), a task in another program (desk/panel.py), one of their MCP servers (mcp_hub.py, toolcard.js),
-  // a setting (appmap.py), or the browser (web/gate.py).
-  const ASK_ROUTES = { operate: "browser/confirm", shell: "shell/card", turn_on: "turnon/card",
-    desk: "programs/card", mcp: "mcp/card", settings: "settings/card" };
+  // Steps that may wait on the person's answer, the reply's own limit drawn out meanwhile: the browser (web/gate.py),
+  // a command (shell/panel.py), turning a switched-off ability on (turnon.py), a task in another program
+  // (desk/panel.py), one of their MCP servers (mcp_hub.py) and a setting (appmap.py).
+  const ASKING_TOOLS = new Set(["operate", "shell", "turn_on", "desk", "mcp", "settings"]);
 
   function create(id, ctx, hooks) {
     const main = id === MAIN;
@@ -38,20 +37,21 @@ window.paChat = (() => {
     let seen = 0,
       tag = "",
       sending = false,
-      // The typing row of the reply being waited for.
+      // The typing row of the reply being waited for, none while a question waits on the person; their message
+      // the reply answers, as drawn.
       waiting = null,
+      mine = null,
       // Ends the wait for that reply (the stop button, or past TURN_MS), and the stop's own request.
       cut = null,
       stopping = null,
-      // The wait's own limit, drawn out while the character works in the browser; the card it waits on.
+      // The wait's own limit, drawn out while a step may wait on the person.
       turnLimit = null,
-      // The cards answered beside the page this chat has a line for.
-      noted = new Set(),
-      shellCard = null,
-      deskCard = null,
-      // The step waiting in the chat for the person's yes (cardwait.py): its id, which the next message answers;
-      // a message that was not a yes, sent as an ordinary message once the reply has ended.
-      awaitingYes = null,
+      // The question in the chat waiting on the person (cardwait.py): its ask, with its sentence as `text`. Their
+      // next message answers it (answer).
+      question = null,
+      // The person's answers drawn before the chat kept them, by the question's id.
+      answers = new Map(),
+      // Their words that were not a yes, to be answered as a message once the reply has ended: {text, node, seq}.
       queued = null,
       polling = false,
       pollTimer = null,
@@ -71,8 +71,8 @@ window.paChat = (() => {
     const settingsButton = (className = "pa-btn pa-btn-secondary pa-btn-sm") =>
       button(className, say("settings"), () => ctx.go("setup/model"));
     const visible = () => root.isConnected && !root.closest("[hidden]") && !document.hidden;
-    // A reply under way keeps asking out of sight too: a card it waits on stays (cardwait.py) and is there when
-    // they come back, and the wait for the reply goes on.
+    // A reply under way keeps asking out of sight too: a question it waits on stays (cardwait.py) and is there
+    // when they come back, and the wait for the reply goes on.
     const asking = () => root.isConnected && (sending || visible());
     const history = (after) =>
       ctx.api(`chat/history?chat=${encodeURIComponent(id)}${after === undefined ? "" : `&after=${after}`}`);
@@ -169,7 +169,7 @@ window.paChat = (() => {
       },
       placeholder(text) {
         held = text;
-        parts.input.placeholder = text || say(parts.empty.hidden ? "placeholder" : "placeholderEmpty");
+        paintPlaceholder(!parts.empty.hidden);
       },
     });
     parts.plus = plus.button;
@@ -208,7 +208,8 @@ window.paChat = (() => {
       grew: () => keepEnd(), root });
     const thread = window.paThread.create({ messages: parts.messages, id, say, words, displayName, face: ctx.face,
       picture: blob, attachedText: ctx.attachedText, go: ctx.go, links, findCard: finds.card,
-      choices: (list) => plus.sent(list), ask, grew: () => keepEnd() });
+      choices: (list) => plus.sent(list), ask, grew: () => keepEnd(),
+      answer: (ident, choice) => question?.id === ident && answer("", choice) });
 
     const carriesFiles = (event) => Boolean(state?.configured) && [...(event.dataTransfer?.types || [])].includes("Files");
     root.addEventListener("dragenter", (event) => {
@@ -257,10 +258,10 @@ window.paChat = (() => {
       }
     });
     // Enter sends from the box itself: a submit here is the button, which stops a reply on its way, or answers the
-    // step waiting for the person's yes when they typed something.
+    // question waiting on the person when they typed something.
     parts.form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (sending && !(awaitingYes && parts.input.value.trim())) stopReply("stopped");
+      if (sending && !(question && parts.input.value.trim())) stopReply("stopped");
       else submit();
     });
     // The page's own listeners, taken off again when the chat is deleted.
@@ -313,7 +314,7 @@ window.paChat = (() => {
           return chip;
         }),
       );
-      parts.input.placeholder = say(parts.empty.hidden ? "placeholder" : "placeholderEmpty");
+      paintPlaceholder(!parts.empty.hidden);
       parts.input.setAttribute("aria-label", say("send"));
       parts.send.setAttribute("aria-label", say(sending ? "stop" : "send"));
       parts.send.title = say(sending ? "stop" : "send");
@@ -353,7 +354,7 @@ window.paChat = (() => {
       if (parts.mark.parentNode !== marked) marked.prepend(parts.mark);
       parts.privateToggle.hidden = main;
       parts.privateToggle.setAttribute("aria-pressed", String(privateChat));
-      parts.input.placeholder = held || say(empty ? "placeholderEmpty" : "placeholder");
+      paintPlaceholder(empty);
       parts.banner.replaceChildren();
       parts.banner.hidden = !(configured && state.modelUnreachable);
       if (!parts.banner.hidden)
@@ -361,10 +362,14 @@ window.paChat = (() => {
           settingsButton("pa-btn pa-btn-link chat-banner-link"));
       syncSend();
     }
-    // While a reply is on its way the send button is the stop button, unless a step waits for the person's yes
-    // and they have typed their answer.
+    // The box's words at rest: while a question waits on the person, that their reply answers it.
+    function paintPlaceholder(empty) {
+      parts.input.placeholder = question ? say("confirmAsk") : held || say(empty ? "placeholderEmpty" : "placeholder");
+    }
+    // While a reply is on its way the send button is the stop button, unless a question waits on the person and
+    // they have typed their answer.
     function syncSend() {
-      const stops = sending && !(awaitingYes && parts.input.value.trim());
+      const stops = sending && !(question && parts.input.value.trim());
       if (parts.send.classList.contains("stopping") !== stops || !parts.send.firstChild) {
         parts.send.classList.toggle("stopping", stops);
         parts.send.replaceChildren(svg(stops ? I.stop : I.up));
@@ -393,9 +398,14 @@ window.paChat = (() => {
     // `loading`: drawn as part of a whole history, which reports to the shell once at its end.
     function showMessage(item, arrived = false, loading = false) {
       const node = thread.draw(item);
-      if (item.role === "user" && item.failed)
-        failed(node, item.failed, item.text, item.seq, item.quote, item.attachments || [], item.choices || []);
+      // An answer that was not a yes and got no reply (the app restarted, or the page closed before it was sent on) is
+      // answered where it stands when sent again.
+      const lapsed = item.failed || (loading && !sending && item.answers && item.pending && "interrupted");
+      if (item.role === "user" && lapsed)
+        failed(node, lapsed, item.text, item.answers ? null : item.seq, item.quote, item.attachments || [],
+          item.choices || [], item.answers ? { seq: item.seq, node } : {});
       node.dataset.seq = item.seq || "";
+      if (item.ask) asked({ ...item.ask, text: item.text }, true);
       if (arrived) node.classList.add("arrived");
       seen = Math.max(seen, item.seq || 0);
       parts.empty.hidden = true;
@@ -409,7 +419,8 @@ window.paChat = (() => {
       return node;
     }
     // Under a message that went unanswered: why, and a way to send it again.
-    function failed(mine, code, text, retrySeq = null, quote = null, files = [], choices = []) {
+    // `held`: an answer that was not a yes ({seq, node}), sent again where it stands.
+    function failed(mine, code, text, retrySeq = null, quote = null, files = [], choices = [], held = {}) {
       // Stopped by the person: said quietly, with only the way to send it again.
       const quiet = code === "stopped";
       mine.classList.add("unanswered");
@@ -425,8 +436,11 @@ window.paChat = (() => {
         button("pa-btn pa-btn-secondary pa-btn-sm", say("retry"), () => {
           if (sending) return;
           note.remove();
-          mine.remove();
-          send(text, retrySeq, quote, files, choices);
+          if (held.seq) {
+            mark.remove();
+            mine.classList.remove("unanswered", "stopped");
+          } else mine.remove();
+          send(text, retrySeq, quote, files, choices, held);
         }),
       );
       if (SETTINGS_FIXES.has(code)) actions.append(settingsButton("pa-btn pa-btn-ghost pa-btn-sm"));
@@ -434,9 +448,13 @@ window.paChat = (() => {
       mine.after(note);
       toBottom();
     }
-    // What came, shown at once and in order.
+    // What came, shown at once and in order; a question drawn before shows how it now stands.
     function reveal(items) {
-      for (const item of items) if (!(item.seq && item.seq <= seen)) showMessage(item, item.role !== "user");
+      for (const item of items) {
+        if (!(item.seq && item.seq <= seen)) {
+          if (!adopt(item)) showMessage(item, item.role !== "user");
+        } else if (item.ask) asked({ ...item.ask, text: item.text });
+      }
     }
     // The marks of a reply being waited for go.
     function stopReveal() {
@@ -448,12 +466,14 @@ window.paChat = (() => {
       for (const node of parts.messages.querySelectorAll(".find.is-playing")) window.paFindCard.stop(node);
       thread.reset();
       seen = 0;
+      question = null;
       tag = value.chat || "";
       if (privateChat !== Boolean(value.private)) {
         privateChat = Boolean(value.private);
         renderText();
       }
       for (const item of value.messages) showMessage(item, false, true);
+      syncAsk();
       thread.mark(value.summary);
       const said = value.messages.findLast((item) => item.role !== "user" && item.text);
       if (main && said) hooks.said?.(id, said.text);
@@ -496,8 +516,8 @@ window.paChat = (() => {
 
     // ---- Sending
     function submit() {
-      if (sending && awaitingYes && parts.input.value.trim()) {
-        answerAsk(parts.input.value);
+      if (question && parts.input.value.trim()) {
+        answer(parts.input.value);
         return;
       }
       if (sending) {
@@ -522,16 +542,17 @@ window.paChat = (() => {
       // Beside a page in the app's browser, the page it is about goes with it (browse.js).
       send(text, null, quote, files, [...plus.take(), ...(window.paBeside?.take() || [])]);
     }
-    async function send(text, retrySeq = null, quote = null, files = [], choices = []) {
+    // `held`: words drawn already, {node}; with `seq`, an answer that was not a yes, answered where it stands
+    // (workspace.chat `answering`).
+    async function send(text, retrySeq = null, quote = null, files = [], choices = [], held = {}) {
       sending = true;
       syncSend();
       // What the character was sending on its own comes back in order with the answer.
       stopReveal();
-      const mine = showMessage({ role: "user", text, quote, attachments: files, choices, at: new Date().toISOString() });
+      mine = held.node || showMessage({ role: "user", text, quote, attachments: files, choices, at: new Date().toISOString() });
       renderSetup();
-      const typing = thread.typingRow();
       // The looks for what it sends on its own say meanwhile what it is looking up.
-      waiting = typing;
+      waiting = thread.typingRow();
       cut = new AbortController();
       turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
       poll();
@@ -542,25 +563,26 @@ window.paChat = (() => {
         // A message sent again after a reload has only its stored attachments: the chat sends those again.
         const attachments = files.filter((item) => item.data).map(({ kind, file, data, url }) =>
           kind === "page" ? { kind, url, title: file } : { kind, name: file, data });
-        const value = await ctx.api("chat", { text, after: seen, retry: retrySeq, chat: id, reply_to: quote?.id || "", attachments, choices },
-          { signal: cut.signal });
+        const value = await ctx.api("chat", { text, after: seen, retry: retrySeq, chat: id, reply_to: quote?.id || "", attachments, choices,
+          ...(held.seq ? { answering: held.seq } : {}) }, { signal: cut.signal });
         for (const item of files) if (item.url) URL.revokeObjectURL(item.url);
-        // The chat as recorded: anything sent meanwhile, this message and the reply.
-        mine.remove();
-        thread.unline(typing);
+        // The chat as recorded: anything sent meanwhile, this message and the reply. Words the chat numbered
+        // already stay where they are.
+        if (!mine.dataset.seq) mine.remove();
+        if (waiting) thread.unline(waiting);
         if (value.forgotLines || value.chat !== tag) showHistory(value.forgotLines ? value : await history());
         else {
           reveal(value.messages);
           thread.mark(value.summary);
         }
       } catch (error) {
-        thread.unline(typing);
+        if (waiting) thread.unline(waiting);
         if (lost(error)) return;
         const why = cut.signal.aborted ? String(cut.signal.reason) : "";
         // The service marks the message stopped once its reply has ended; a page process that hangs is not waited for.
         if (why) await Promise.race([stopping, new Promise((done) => setTimeout(done, 5000))]);
         // Stopped: the words go back in the box, to edit and send again.
-        if (why === "stopped" && !parts.input.value) {
+        if (why === "stopped" && !parts.input.value && !held.seq) {
           parts.input.value = text;
           grow();
         }
@@ -571,104 +593,118 @@ window.paChat = (() => {
         } catch {
           // Not reachable: the notice below still offers to send it again.
         }
-        const last = kept?.messages.at(-1);
-        if (last && last.role === "user" && last.failed && last.text === text) showHistory(kept);
-        else failed(mine, why || (error instanceof TypeError ? "network" : error.message), text, retrySeq, quote, files, choices);
+        const last = kept?.messages.findLast((item) => item.role === "user");
+        if (last?.failed && last.text === text) showHistory(kept);
+        else {
+          if (kept) reveal(kept.messages);
+          failed(mine, why || (error instanceof TypeError ? "network" : error.message), text, retrySeq, quote, files,
+            choices, held);
+        }
         if (error.message === "chat_failed") refreshState();
       } finally {
         clearTimeout(turnLimit);
-        showCard(null);
-        showShellCard(null);
-        showDeskCard(null);
         window.paToolCard.show(null, null);
-        awaitingYes = null;
+        // A question of this reply no longer waits once the reply has ended.
+        if (question) asked({ ...question, state: "unanswered" });
         cut = stopping = null;
         hooks.doing("");
         sending = false;
-        waiting = null;
+        waiting = mine = null;
         syncSend();
         if (visible()) parts.input.focus();
         if (!main) hooks.changed();
         poll();
         bar.refresh();
-        // What they typed while a step waited, which was not a yes, is the message it is.
-        if (queued) {
-          const next = queued;
-          queued = null;
-          send(next);
-        }
+        sendQueued();
       }
     }
-    // The person's own words typed in the chat box, under the step waiting for their yes (cardwait.py): a plain yes
-    // runs it; anything else is a no for that step, and the message is sent as it is once the reply has ended. Only
-    // this window's page can pass it on (POST /api/confirm).
-    async function answerAsk(text) {
-      const ident = awaitingYes;
-      awaitingYes = null;
-      parts.input.value = "";
-      grow();
-      const told = el("p", "op-note", "");
-      (shellCard || deskCard || waiting).after(told);
-      keepEnd();
+    // What they said under a question that was not a yes, answered as the message it is once the reply has ended.
+    function sendQueued() {
+      if (!queued || sending) return;
+      const next = queued;
+      queued = null;
+      send(next.text, null, null, [], next.choices || [], next);
+    }
+
+    // ---- Answering the question a step waits on (cardwait.py): the person's own words typed in the box, or on a
+    // card a press of its buttons, drawn at once as their message. A plain yes runs the step and the reply goes on
+    // after it; anything else is a no for that step, and their words are then answered as the message they are. Only
+    // this window's page can pass it on (POST /api/confirm, the window's key), by the question's id.
+    async function answer(text, choice = null) {
+      const asking = question;
+      const words = choice ? asking[choice === "yes" ? "act" : "decline"] : text;
+      if (!choice) {
+        parts.input.value = "";
+        grow();
+      }
+      asked({ ...asking, state: "answering" });
+      const said = showMessage({ role: "user", text: words, at: new Date().toISOString() });
+      answers.set(asking.id, said);
+      let told = {};
       try {
-        const response = await fetch("/api/confirm", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json",
-            "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "",
-            "X-Mibo-Window": sessionStorage.getItem("mibo-frame") || "" },
-          body: JSON.stringify({ id: ident, text }),
-        });
-        const said = await response.json().catch(() => ({}));
-        if (said.ok && said.yes) told.textContent = say("confirmYes").replace("{text}", text.trim());
-        else {
-          told.textContent = say(said.ok ? "confirmNo" : "opGone");
-          queued = text;
-        }
+        const response = await fetch("/api/confirm", { method: "POST", credentials: "same-origin", headers: pressHeaders(),
+          body: JSON.stringify(choice ? { id: asking.id, choice } : { id: asking.id, text }) });
+        told = await response.json();
       } catch {
-        told.textContent = say("opGone");
-        queued = text;
+        // Not reachable: as a question that no longer waits.
       }
-      for (const node of [shellCard, deskCard]) node?.classList.add("answered");
-    }
-    // Something with an effect outside (web/gate.py) is shown in the column beside the page (browse.js) and waits
-    // for the person's yes typed in the chat (answerAsk): here the waiting row says so, and once it is answered one
-    // line keeps what was decided.
-    function showCard(card, answered = null) {
-      if (!waiting) return;
-      const label = waiting.querySelector(".doing");
-      if (card && label) label.textContent = say("opWaitingPage");
-      if (!answered || noted.has(answered.id)) return;
-      noted.add(answered.id);
-      waiting.before(el("p", "op-note", answered.said));
-      keepEnd();
-    }
-    // A question card (askcards.js) under the waiting row, whose words now say it waits for the person.
-    function hang(node) {
-      waiting.after(node);
-      const label = waiting.querySelector(".doing");
-      if (label) label.textContent = say("opWaiting");
-      keepEnd();
-      return node;
-    }
-    // A step before a command runs on this computer, or turning an ability or a setting on; answered by the
-    // person's yes typed in the chat box (answerAsk), never the model's words.
-    function showShellCard(card) {
-      if (shellCard && (!card || shellCard.dataset.id !== card.id)) {
-        if (!shellCard.classList.contains("answered")) shellCard.remove();
-        shellCard = null;
+      if (told.ok) {
+        if (told.seq) adopt({ answers: asking.id, seq: told.seq });
+        asked({ ...asking, state: told.yes ? "yes" : "no", at: new Date().toISOString() });
+        // The reply goes on after their words.
+        if (sending && !waiting && !question) {
+          waiting = thread.typingRow();
+          keepEnd();
+        }
+        // Typed words that were not a yes are a message of their own; a press of 不执行 is only the answer.
+        // Beside a page, the page it is about goes with it, as with any message.
+        if (!told.yes && !choice)
+          queued = { text: words, node: said, seq: told.seq, choices: [...plus.take(), ...(window.paBeside?.take() || [])] };
+      } else {
+        // The question no longer waits: typed words are the ordinary message they are; a press goes.
+        answers.delete(asking.id);
+        asked({ ...asking, state: "unanswered" });
+        if (choice) said.remove();
+        else queued = { text: words, node: said, choices: [...plus.take(), ...(window.paBeside?.take() || [])] };
       }
-      if (!card || shellCard || !waiting) return;
-      shellCard = hang(window.paAskCards.shell(card, ctx.lang, say));
+      sendQueued();
     }
-    // A step of a task in another program with an effect outside; answered the same way.
-    function showDeskCard(card) {
-      if (deskCard && (!card || deskCard.dataset.id !== card.id)) {
-        if (!deskCard.classList.contains("answered")) deskCard.remove();
-        deskCard = null;
+    // A question as it now stands, drawn so unless `drawn` just now: one waiting on the person is what their next
+    // message answers.
+    function asked(ask, drawn = false) {
+      if (!drawn) thread.settle(ask.text, ask);
+      if (ask.state === "waiting") question = ask;
+      else if (question?.id === ask.id) question = null;
+      syncAsk();
+    }
+    function syncAsk() {
+      paintPlaceholder(!parts.empty.hidden);
+      syncSend();
+    }
+    // Their answer drawn at once is the one the chat kept as number `seq`: drawn once.
+    function adopt(item) {
+      const node = item.answers && answers.get(item.answers);
+      if (!node) return false;
+      answers.delete(item.answers);
+      node.dataset.seq = item.seq;
+      seen = Math.max(seen, item.seq);
+      return true;
+    }
+    // Mid-reply, a question a step waits on and the person's answer join the chat as it keeps them: their request
+    // takes its kept place, the question follows it, and the typing row goes until the question is answered.
+    function during(items) {
+      const fresh = items.filter((item) => item.seq > seen);
+      if (!fresh.some((item) => (item.ask && item.ask.state === "waiting") || item.answers)) return;
+      if (waiting) thread.unline(waiting);
+      waiting = null;
+      for (const item of fresh) {
+        if (adopt(item)) continue;
+        const request = item.role === "user" && !item.answers && item.pending;
+        if (request && mine && !mine.dataset.seq) mine.remove();
+        const node = showMessage(item);
+        if (request) mine = node;
       }
-      if (!card || deskCard || !waiting) return;
-      deskCard = hang(window.paAskCards.desk(card, say, words().deskKinds));
+      if (!question) waiting = thread.typingRow();
     }
     // The stop button, Esc, or the wait running past TURN_MS: the service cancels the reply, the page stops waiting.
     function stopReply(why) {
@@ -688,27 +724,22 @@ window.paChat = (() => {
     }
 
     // ---- Looking for what the character sent on its own, and while a reply is on its way, what it is doing
-    // While it works: the step under way, and the question it waits on, if any. Working in the browser takes its
-    // time, and a step may wait on the person's yes.
+    // While it works: the step under way, and a question it waits on, which joins the chat. Working in the browser
+    // takes its time, and a question waits on the person for as long as cardwait.py lets it.
     async function pollStep() {
-      const step = (await history(seen)).doing;
+      const value = await history(seen);
+      if (!sending) return;
+      during(value.messages);
+      const step = value.doing;
       const line = window.paActivity.live(waiting, step);
-      const place = ASK_ROUTES[step?.tool];
-      if (place && sending) {
+      if (question || ASKING_TOOLS.has(step?.tool)) {
         clearTimeout(turnLimit);
         turnLimit = setTimeout(() => stopReply("timeout"), TURN_MS);
-        const asked = await ctx.api(place);
-        if (step.tool === "operate") showCard(asked.card, asked.answered);
-        else if (step.tool === "desk") showDeskCard(asked.card);
-        else if (step.tool === "mcp") window.paToolCard.show(waiting, asked.card, keepEnd);
-        else showShellCard(asked.card);
-        // A server's form is filled in on the page; every other step is answered in the chat box.
-        const id = asked.card && asked.card.typed !== false ? asked.card.id : null;
-        if (id !== awaitingYes && !(awaitingYes === null && id && noted.has(`asked:${id}`))) {
-          awaitingYes = id;
-          if (id) noted.add(`asked:${id}`);
-          syncSend();
-        }
+      }
+      // A form one of their MCP servers asks them to fill in is filled in under the typing row (toolcard.js).
+      if (step?.tool === "mcp") {
+        const card = (await ctx.api("mcp/card")).card;
+        window.paToolCard.show(waiting, card?.typed === false ? card : null, keepEnd);
       }
       // The sidebar's line under the character's name says it too (app.js).
       if (sending) hooks.doing(line);
@@ -735,7 +766,7 @@ window.paChat = (() => {
     async function poll() {
       clearTimeout(pollTimer);
       if (!asking() || !state?.configured) return;
-      if (sending && waiting) {
+      if (sending) {
         try {
           await pollStep();
         } catch {

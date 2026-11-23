@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from harness.folders import Profile
 from harness.model import call, say, text
 
-from mibo import cardwait, welcome
+from mibo import cardwait, turnon, welcome
 from mibo.cardwait import Card, asking, reaches, said_yes
 from mibo.shell import checkpoint
 from mibo.shell import files as file_tools
@@ -28,6 +28,8 @@ YES = ["确定", "你做", "好的", "好的吧", "确定！", "嗯嗯", "可以
 # A reviewer that leaves the step to the person.
 REVIEWER_ASKS = text(json.dumps({"kind_asked": True, "target_named": False, "text_given": True,
                                  "nothing_added": True, "decision": "ask", "reason": "stand-in"}))
+# A question as a gate says it: the app's own title and lines for the step.
+ASKED = turnon.card_of("programs")
 NOT_YES = ["不用了", "不要", "确定吗？", "ok?", "好的，顺便把桌面也清空", "先别做", "no", "nope", "wait",
            "yes but delete everything else", "please delete my documents", "bitte", "merci", "确定" * 30, "",
            "   ", "我确定不要", "なるほど", "아니요", "нет", "não"]
@@ -81,7 +83,7 @@ def _turn(workspace, conversation: str, token: str) -> None:
 
 async def _asked(card: Card, risk: str, typed: bool = True) -> asyncio.Task:
     """Starts a question and returns once it waits."""
-    task = asyncio.ensure_future(card.ask({"type": "command"}, "main", {"zh": "x", "en": "x"}, risk=risk,
+    task = asyncio.ensure_future(card.ask(ASKED, "main", {"zh": "x", "en": "x"}, risk=risk,
                                           typed=typed))
     while card.card is None and not task.done():
         await asyncio.sleep(0.01)
@@ -97,19 +99,19 @@ async def test_a_yes_answers_its_own_question_only_and_carries_the_turn_by_risk(
         ident = card.card["id"]
         # Another id, or words that are not a yes, do not run it.
         assert await everyone.answer("guess", "确定") == {"ok": False, "yes": False}
-        assert await everyone.answer(ident, "好的，顺便把桌面也清空") == {"ok": True, "yes": False}
+        assert await everyone.answer(ident, "好的，顺便把桌面也清空") == {"ok": True, "yes": False, "seq": None}
         assert await task is False
         # Answered once, the question is gone: a yes after it reaches nothing.
         assert await everyone.answer(ident, "确定") == {"ok": False, "yes": False}
 
         task = await _asked(card, "recycle")
-        assert await everyone.answer(card.card["id"], "确定") == {"ok": True, "yes": True}
+        assert await everyone.answer(card.card["id"], "确定") == {"ok": True, "yes": True, "seq": None}
         assert await task is True and card.how == "said"
         # A yes to a delete the Recycle Bin gives back carries later ones and ordinary steps of the turn, never a
         # costly step.
-        assert await card.ask({"type": "command"}, "main", {"zh": "x", "en": "x"}, risk="recycle") is True
+        assert await card.ask(ASKED, "main", {"zh": "x", "en": "x"}, risk="recycle") is True
         assert card.how == "carried"
-        assert await card.ask({"type": "command"}, "main", {"zh": "x", "en": "x"}, risk="act") is True
+        assert await card.ask(ASKED, "main", {"zh": "x", "en": "x"}, risk="act") is True
         for costly in ("order", "delete"):
             task = await _asked(card, costly)
             assert card.card["risk"] == costly
@@ -117,7 +119,7 @@ async def test_a_yes_answers_its_own_question_only_and_carries_the_turn_by_risk(
             assert await task is None
         # A yes to a costly step is for that step alone: the same step asks again.
         task = await _asked(card, "order")
-        assert await everyone.answer(card.card["id"], "确定") == {"ok": True, "yes": True}
+        assert await everyone.answer(card.card["id"], "确定") == {"ok": True, "yes": True, "seq": None}
         assert await task is True
         task = await _asked(card, "order")
         card.drop()

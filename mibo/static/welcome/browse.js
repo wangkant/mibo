@@ -11,8 +11,8 @@
 // The bar's ··· menu (zoom, find, print, copy link, the system browser, a private tab, 最小化, downloads) is
 // browsemenu.js.
 // While the character operates the page for the person (web/operate.py), the chat's box carries the run: each
-// step as it happens, a card when something needs their yes, and how it ended (browserun.js); a border round the
-// page says whose it is.
+// step as it happens, a sign-in it waits on, and how it ended (browserun.js), while a step that needs their yes is
+// asked in the chat itself; a border round the page says whose it is.
 (() => {
   const ICONS = {
     back: '<path d="M15 18l-6-6 6-6" />',

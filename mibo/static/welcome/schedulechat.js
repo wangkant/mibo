@@ -3,7 +3,7 @@
 // task's name, and when it came late, when it was due. Under a reply that made or changed tasks: one line each with
 // its rhythm and next time and a button that takes it back, or, for a task that may act or runs often, the card it
 // waits on (POST /api/schedule/offer). Under a run's result: what the run did not do because nobody was watching,
-// each with a button that asks for it now in the chat, where the usual cards apply.
+// each with a button that asks for it now in the chat, where the usual questions apply.
 window.paScheduleChat = (() => {
   const { el, svg, fill } = window.paKit;
   const CLOCK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
@@ -76,16 +76,12 @@ window.paScheduleChat = (() => {
     return line;
   }
 
-  // A task that may act or runs often: the card it waits on.
+  // A task that may act or runs often: the card it waits on, a standing permission and so worth a press (chat.css
+  // .ask-card): what it makes, its facts, and its two buttons.
   function offerCard(note, t) {
-    const node = el("div", "op-card task-offer");
-    const head = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
-    tile.append(clock());
-    const words = el("div", "op-card-words");
-    words.append(el("p", "op-card-title", fill(t.offerTitle, note)), el("p", "op-card-meta", t.kinds[note.kind] || ""));
-    head.append(tile, words);
-    const facts = el("dl", "op-card-facts");
+    const node = el("div", "ask-card task-offer");
+    node.append(el("p", "ask-card-text", fill(t.offerTitle, note)), el("p", "ask-card-meta", t.kinds[note.kind] || ""));
+    const facts = el("dl", "ask-card-facts");
     const fact = (name, value) => facts.append(el("dt", "", name), el("dd", "", value));
     fact(t.offerRhythm, [note.rhythm, note.next && fill(t.next, note)].filter(Boolean).join(" · "));
     if (note.perDay) fact(t.offerRuns, fill(t.offerRunsText, { n: note.perDay }));
@@ -97,12 +93,12 @@ window.paScheduleChat = (() => {
     } else {
       fact(t.offerActs, (note.acts || []).includes("browser") ? t.browser : t.readOnly);
     }
-    node.append(head, facts);
-    const buttons = el("div", "op-card-buttons");
+    node.append(facts);
+    const buttons = el("div", "ask-card-buttons");
     const told = (text) => {
       node.classList.add("answered");
       buttons.remove();
-      node.append(el("p", "op-card-told", text));
+      node.append(el("p", "ask-card-told", text));
     };
     const answer = async (yes) => {
       for (const b of buttons.querySelectorAll("button")) b.disabled = true;
@@ -113,7 +109,7 @@ window.paScheduleChat = (() => {
         told(t.gone);
       }
     };
-    for (const [cls, text, yes] of [["pa-btn-primary", t.yes, true], ["pa-btn-ghost", t.no, false]]) {
+    for (const [cls, text, yes] of [["pa-btn-primary", t.yes, true], ["pa-btn-secondary", t.no, false]]) {
       const b = el("button", `pa-btn ${cls} pa-btn-sm`, text);
       b.type = "button";
       b.addEventListener("click", () => answer(yes));

@@ -1,29 +1,21 @@
 "use strict";
-// The question in the chat before one of the person's MCP servers is used (mcp_hub.py): starting a local program
-// the first time, named by the program it runs with its exact command under a fold, or calling a tool that writes or
-// deletes, with its arguments in plain words and the raw JSON under a fold, or a page a server asks them to open.
-// Their yes typed in the chat box answers it (chat.js, POST /api/confirm), never text from a server. A form a server
-// asks them to fill in during a call is filled in here and sent with its button (POST /api/mcp/card), to the server
-// alone.
+// A form one of the person's MCP servers asks them to fill in during a call (mcp_hub.py, mcp_schema.ask_fields),
+// under the typing row while the reply waits on it: what the server asks, a labelled field each, and its two
+// buttons. What they fill in is sent with its button (POST /api/mcp/card), to the server alone. Every other
+// question a server's step waits on is said in the chat and answered there (chat.js, cardwait.py).
 (() => {
-  const { el, cardHead, fill, pressHeaders } = window.paKit;
-  const ICON = {
-    start: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="m7 10 3 2-3 2"/><path d="M13 15h4"/>',
-    tool: '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2l-5 5a1.5 1.5 0 0 0 2.1 2.1l5-5a4 4 0 0 0 5.2-5.2l-2.4 2.4-2.1-.4-.4-2.1z"/>',
-    ask: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
-    link: '<path d="M14 4h6v6"/><path d="M10 14 20 4"/><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"/>',
-  };
+  const { el, fill, pressHeaders } = window.paKit;
   let shown = null;
 
-  // A server's form (mcp_schema.ask_fields): one labelled input per field; returns the node and a reader of the
-  // values that marks a required field left empty and gives null then.
+  // One labelled input per field; returns the node and a reader of the values that marks a required field left
+  // empty and gives null then.
   function form(fields, t) {
-    const node = el("div", "op-card-form");
+    const node = el("div", "ask-form");
     const reads = [];
     for (const field of fields) {
-      const row = el("label", "op-card-field");
-      const name = el("span", "op-card-field-name", field.title);
-      if (field.required) name.append(el("span", "op-card-meta", ` · ${t.required}`));
+      const row = el("label", "ask-field");
+      const name = el("span", "ask-field-name", field.title);
+      if (field.required) name.append(el("span", "ask-field-meta", ` · ${t.required}`));
       row.append(name);
       let input;
       if (field.kind === "choice") {
@@ -37,13 +29,13 @@
         input.value = field.default ?? (field.required ? field.options[0]?.value : "");
         reads.push(() => [field, input, input.value]);
       } else if (field.kind === "choices") {
-        input = el("span", "op-card-field-choices");
+        input = el("span", "ask-field-choices");
         const boxes = field.options.map((option) => {
           const box = el("input", "pa-check");
           box.type = "checkbox";
           box.value = option.value;
           box.checked = (field.default || []).includes(option.value);
-          const one = el("label", "op-card-field-choice");
+          const one = el("label", "ask-field-choice");
           one.append(box, el("span", "", option.label));
           input.append(one);
           return box;
@@ -53,7 +45,7 @@
         input = el("input", "pa-check");
         input.type = "checkbox";
         input.checked = field.default === true;
-        row.classList.add("op-card-field-check");
+        row.classList.add("ask-field-check");
         reads.push(() => [field, input, input.checked]);
       } else {
         input = el("input", "pa-input");
@@ -70,7 +62,7 @@
           input.value.trim() === "" ? "" : numeric ? Number(input.value) : input.value.trim()]);
       }
       row.append(input);
-      if (field.description) row.append(el("span", "op-card-meta", field.description));
+      if (field.description) row.append(el("span", "ask-field-meta", field.description));
       node.append(row);
     }
     const values = () => {
@@ -88,7 +80,8 @@
     return [node, values];
   }
 
-  // `card` from GET /api/mcp/card shown under the waiting row; null takes an unanswered one away.
+  // `card` from GET /api/mcp/card (a form: typed false) shown under the waiting row; null takes an unanswered one
+  // away.
   function show(waiting, card, keepEnd = () => {}) {
     const t = paI18n.words("toolcard");
     if (shown && (!card || shown.dataset.id !== card.id)) {
@@ -96,89 +89,46 @@
       shown = null;
     }
     if (!card || shown || !waiting) return;
-    const start = card.type === "mcp_start";
-    const asked = card.type === "mcp_ask";
-    const link = asked && card.mode === "url";
-    let values = null;
-    const node = el("div", "op-card mcp-card");
+    const node = el("div", "ask-card mcp-form");
     node.dataset.id = card.id;
-    const facts = el("dl", "op-card-facts");
-    const fact = (name, value, cls = "") => facts.append(el("dt", "", name), el("dd", cls, value));
-    if (start) {
-      // The server and the program it runs in one line; the exact command, folder and values under the fold.
-      node.append(cardHead(ICON.start, fill(t.startTitle, card), `${t.startMeta} · ${card.program}`));
-      fact(t.command, card.command, "op-card-text");
-      fact(t.folder, card.cwd);
-      fact(t.env, card.env.length ? card.env.join(", ") : t.none);
-      const fold = el("details", "shell-card-command");
-      fold.append(el("summary", "", t.startDetails), facts);
-      node.append(el("p", "op-card-meta", t.startNote), fold);
-    } else if (asked) {
-      node.append(cardHead(link ? ICON.link : ICON.ask, fill(link ? t.linkTitle : t.askTitle, card), fill(t.askMeta, card)));
-      if (card.message) node.append(el("p", "op-card-quote", card.message));
-      if (link) {
-        fact(t.address, card.url, "op-card-text");
-        node.append(facts, el("p", "op-card-meta", t.linkNote));
-      } else {
-        const [fields, read] = form(card.fields, t);
-        values = read;
-        node.append(fields, el("p", "op-card-meta", fill(t.askNote, card)));
+    node.append(el("p", "ask-card-text", fill(t.askTitle, card)), el("p", "ask-card-meta", fill(t.askMeta, card)));
+    if (card.message) node.append(el("p", "ask-card-quote", card.message));
+    const [fields, values] = form(card.fields, t);
+    node.append(fields, el("p", "ask-card-meta", fill(t.askNote, card)));
+    const answer = async (value) => {
+      const filled = value === "once" ? values() : undefined;
+      if (filled === null) return;
+      for (const b of node.querySelectorAll("button, input")) b.disabled = true;
+      node.classList.add("answered");
+      const told = el("p", "ask-card-told", t[value === "once" ? "askOnce" : "askNo"]);
+      node.querySelector(".ask-card-told")?.remove();
+      node.append(told);
+      try {
+        const response = await fetch("/api/mcp/card", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: pressHeaders(),
+          body: JSON.stringify({ id: card.id, answer: value, values: filled }),
+        });
+        const said = await response.json().catch(() => ({}));
+        if (said.problem) {
+          // The server's form wants something else: it stays up to be corrected.
+          told.textContent = t.fix;
+          node.classList.remove("answered");
+          for (const b of node.querySelectorAll("button, input")) b.disabled = false;
+        } else if (!said.ok) told.textContent = t.gone;
+      } catch {
+        told.textContent = t.gone;
       }
-    } else {
-      node.append(cardHead(ICON.tool, fill(t.toolTitle, { tool: card.title || card.tool }), fill(t.toolMeta, card)
-        + (card.title && card.title !== card.tool ? ` · ${card.tool}` : "")));
-      // Why the automatic review did not pass it, in one line (mcp_hub.py).
-      if (card.review) node.append(el("p", "op-card-why", card.review));
-      if (card.changed) node.append(el("p", "op-card-never", t.changed));
-      // A call that pays, deletes or changes an account's security or access asks every time (mcp_floor.hard).
-      if (card.hard) node.append(el("p", "op-card-never", t.hard));
-      if (card.destructive) node.append(el("p", "op-card-never", t.destructive));
-      for (const [name, value] of card.args) fact(name, value, "op-card-text");
-      if (!card.args.length) node.append(el("p", "op-card-meta", t.noArgs));
-      else node.append(facts);
-      const fold = el("details", "shell-card-command");
-      fold.append(el("summary", "", t.raw), el("pre", "", card.raw));
-      node.append(fold);
+    };
+    const buttons = el("div", "ask-card-buttons");
+    for (const [cls, text, value] of [["pa-btn-primary", t.submit, "once"], ["pa-btn-secondary", t.decline, "no"]]) {
+      const b = el("button", `pa-btn ${cls} pa-btn-sm`, text);
+      b.type = "button";
+      b.addEventListener("click", () => answer(value));
+      buttons.append(b);
     }
-    if (asked && !link) {
-      const answer = async (value) => {
-        const filled = value === "once" ? values() : undefined;
-        if (filled === null) return;
-        for (const b of node.querySelectorAll("button, input")) b.disabled = true;
-        node.classList.add("answered");
-        const told = el("p", "op-card-told", t[value === "once" ? "askOnce" : "askNo"]);
-        node.querySelector(".op-card-told")?.remove();
-        node.append(told);
-        try {
-          const response = await fetch("/api/mcp/card", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: pressHeaders(),
-            body: JSON.stringify({ id: card.id, answer: value, values: filled }),
-          });
-          const said = await response.json().catch(() => ({}));
-          if (said.problem) {
-            // The server's form wants something else: it stays up to be corrected.
-            told.textContent = t.fix;
-            node.classList.remove("answered");
-            for (const b of node.querySelectorAll("button, input")) b.disabled = false;
-          } else if (!said.ok) told.textContent = t.gone;
-        } catch {
-          told.textContent = t.gone;
-        }
-      };
-      const buttons = el("div", "op-card-buttons");
-      for (const [cls, text, value] of [["pa-btn-primary", t.submit, "once"], ["pa-btn-ghost", t.decline, "no"]]) {
-        const b = el("button", `pa-btn ${cls} pa-btn-sm`, text);
-        b.type = "button";
-        b.addEventListener("click", () => answer(value));
-        buttons.append(b);
-      }
-      node.append(buttons);
-    } else {
-      // Answered by the person's yes typed in the chat box (chat.js).
-      node.append(el("p", "op-card-ask", paI18n.words("chat").confirmAsk));
-    }
+    node.append(buttons);
     waiting.after(node);
     shown = node;
     const label = waiting.querySelector(".doing");

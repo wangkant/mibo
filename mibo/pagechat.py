@@ -16,8 +16,10 @@ TITLE_FIRST, TITLE_MAX = 40, 60
 
 
 def stored_names(message: dict) -> set:
-    """The stored pictures and files a message shows: the character's picture, the person's attachments."""
-    return {message.get("picture"), *(a.get("name") for a in message.get("attachments") or ())} - {None}
+    """The stored pictures and files a message shows: the character's picture, a question's picture under its
+    fold, the person's attachments."""
+    return {message.get("picture"), ((message.get("ask") or {}).get("detail") or {}).get("picture"),
+            *(a.get("name") for a in message.get("attachments") or ())} - {None}
 
 
 def memories(rows) -> list[dict]:
@@ -51,6 +53,9 @@ class PageChat:
             # Sent while the page process ended: shown as not answered, to send again.
             if message.pop("pending", None):
                 message["failed"] = "interrupted"
+            # A question its process left waiting waits no more.
+            if (message.get("ask") or {}).get("state") in ("waiting", "left"):
+                message["ask"]["state"] = "unanswered"
 
     def tag(self) -> str:
         return hashlib.sha256(self.conversation.encode()).hexdigest()[:12]

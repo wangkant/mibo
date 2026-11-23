@@ -2,13 +2,12 @@
 new home with its stand-in model and practice site: a page of tools/opsite opened and a request typed beside it done
 in the page (panedock.py), the one compact bar at four window widths (panebar.py), tabs, a sign-in popup and the
 private tab (panetabs.py), and the sign-in wait card with its 前往登录 and the character never typing a password
-(signincheck.py), a card pressed with the real pointer where the chat lies over the page (panecard.py), and a
-profile above an endless feed read for its numbers in one call with nothing scrolled (panereading.py). Their
+(signincheck.py), and a profile above an endless feed read for its numbers in one call with nothing scrolled (panereading.py). Their
 pictures and results.json are kept under <out>/<script>.
 
-    python tools/sandbox/pane.py --out <folder> [--ports 59400] [--only panecard,panereading]
+    python tools/sandbox/pane.py --out <folder> [--ports 59400] [--only panetabs,panereading]
 
-The scripts that run take ports one after another from --ports on (fifteen for all six), so a run keeps to the
+The scripts that run take ports one after another from --ports on (thirteen for all five), so a run keeps to the
 range it is given; --only runs some of them. The app's own page takes PAGE_PORT from the environment.
 
 Windows only: the built-in browser is WebView2 inside the app window (README: "Program control and the built-in
@@ -24,7 +23,7 @@ from _suite import Suite, run_tool, scratch_home, scrub_env
 # feature, script, and how many ports it takes from the run's range: a site and a stand-in model for most, five for
 # the sign-in check (its page, service, site, provider and model).
 SCRIPTS = [("open and operate a page", "panedock.py", 2), ("compact bar", "panebar.py", 2), ("tabs", "panetabs.py", 2),
-           ("sign-in wait card", "signincheck.py", 5), ("a card pressed over the page", "panecard.py", 2),
+           ("sign-in wait card", "signincheck.py", 5),
            ("a page read in one call", "panereading.py", 2)]
 
 
@@ -64,11 +63,6 @@ def judge(suite: Suite, feature: str, script: str, r: dict) -> None:
                     and keys.get("after_ctrl_w") == keys.get("strip_before") and keys.get("a_reopened") is True, keys)
         suite.check(feature, "the run's tab is the one in front, paused when another is chosen", r.get("bound", {}).get("ok") is True,
                     r.get("bound"))
-    elif script == "panecard.py":
-        suite.check(feature, "a card pressed with the real pointer where the chat lies over the page is answered",
-                    r.get("answered") is True, {k: r.get(k) for k in ("card", "pressed_at", "cut_under_the_card")})
-        suite.check(feature, "that press never pauses the run", r.get("paused") == [], r.get("paused"))
-        suite.check(feature, "the site gets the message", r.get("site_got_it") is True)
     elif script == "panereading.py":
         suite.check(feature, "a profile's numbers above an endless feed are read in one reading call",
                     r.get("reading_calls") == 1 and r.get("numbers_in_first_read") is True,
@@ -92,8 +86,8 @@ def judge(suite: Suite, feature: str, script: str, r: dict) -> None:
 
 def main() -> int:
     def extra(parser) -> None:
-        parser.add_argument("--ports", type=int, default=59400, help="the first of the fifteen ports the run takes")
-        parser.add_argument("--only", default="", help="the scripts to run, by name (panecard,panereading)")
+        parser.add_argument("--ports", type=int, default=59400, help="the first of the thirteen ports the run takes")
+        parser.add_argument("--only", default="", help="the scripts to run, by name (panetabs,panereading)")
     suite = Suite("pane", __doc__.split("\n\n")[0], extra=extra)
     if sys.platform != "win32":
         for feature, *_ in SCRIPTS:

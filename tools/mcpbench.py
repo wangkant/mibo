@@ -259,7 +259,11 @@ def one(base, token, meter, data, policy, rid, say, rounds, check) -> dict:
             answer = "no" if card["type"] == "mcp_start" and card["server"] == "weather" else "once"
             cards.append({"id": card["id"], "type": card["type"], "server": card["server"],
                           "tool": card.get("tool", ""), "answer": answer, "review": card.get("review", "")})
-            api(base, token, "mcp/card", {"id": card["id"], "answer": answer})
+            # A question is answered by words typed in the chat (cardwait.py); only a server's form is pressed.
+            if card.get("typed", True):
+                api(base, token, "confirm", {"id": card["id"], "text": "确定" if answer == "once" else "不用了"})
+            else:
+                api(base, token, "mcp/card", {"id": card["id"], "answer": answer})
     time.sleep(1)
     reply = " ".join(m.get("text") or "" for m in sent.get("reply", {}).get("messages") or []
                      if m.get("role") == "assistant")

@@ -204,7 +204,7 @@ window.paActivity = (() => {
     const used = new Set();
     for (const step of trace) list.append(stepNode(step, item.sources || [], used, w, opts, said));
     node.append(head, list);
-    // A card nobody answered in time ended its step (cardwait.py): 继续 under the latest reply asks again.
+    // A question nobody answered in time ended its step (cardwait.py): 继续 under the latest reply asks again.
     if (!opts.goOn || !trace.some((step) => step.status === "unanswered")) return node;
     const row = el("div", "act-go-on");
     const go = el("button", "pa-btn pa-btn-secondary pa-btn-sm", w.goOn);
@@ -268,7 +268,7 @@ window.paActivity = (() => {
   }
 
   // An edit's unified difference (shell/files.py diff): each line as it is, indentation kept, added and removed
-  // lines marked; the @@ lines say where. Drawn on an edit's card and in the fold below.
+  // lines marked; the @@ lines say where. Drawn under an edit's question and in the fold below.
   function diff(text) {
     const box = el("pre", "act-diff");
     for (const line of String(text || "").split("\n")) {
@@ -278,7 +278,7 @@ window.paActivity = (() => {
     return box;
   }
 
-  // A press that changes files: from the app's own page with its window key, as a card's press is (chat.js).
+  // A press that changes files: from the app's own page with its window key, as an answer is (chat.js).
   const press = (path, body) =>
     fetch(`/api/${path}`, {
       method: "POST",
@@ -440,5 +440,46 @@ window.paActivity = (() => {
     return node;
   }
 
-  return { live, summary, sources, changes, diff, recalled, saved };
+  // ---- Beside a question a step waits on (cardwait.py, asked.py): the step's own facts as the gate read them, under
+  // one fold. Text from a page, a file, a window or a server is shown here as data, never in the question's sentence.
+  // `opts.picture(name)`: the picture of the window or page, drawn here on a card (chatthread.js). null when there
+  // is nothing to show.
+  function asked(ask, opts = {}) {
+    const d = ask.detail || {};
+    const w = paI18n.words("ask");
+    const box = el("details", "act-more act-ask");
+    box.append(el("summary", "act-more-head", w.more));
+    const add = (label, text, mono = false) => {
+      if (!text) return;
+      if (label) box.append(el("div", "act-more-label", label));
+      box.append(el(mono ? "pre" : "div", mono ? "act-more-pre" : "act-more-text", text));
+    };
+    // Why the automatic review left it to the person, and what an MCP tool's own marks say.
+    if (d.review) box.append(el("p", "act-ask-note", d.review));
+    for (const [key, said] of [["changed", w.mcpChanged], ["hard", w.mcpHard], ["destructive", w.mcpDestructive]])
+      if (d[key]) box.append(el("p", "act-ask-note", said));
+    if (d.lines?.length) {
+      const list = el("ul", "act-ask-lines");
+      for (const line of d.lines) list.append(el("li", "", line));
+      box.append(list);
+    }
+    if (d.diff) box.append(diff(d.diff));
+    add(w.facts.target, d.target);
+    add(d.files?.length && ask.kind !== "page" ? w.facts.newName : w.facts.text, d.text);
+    add(w.facts.files, (d.files || []).join("\n"));
+    if (d.button) add("", fill(w.ring, { button: d.button }));
+    for (const [name, value] of d.args || []) add(name, value, true);
+    add(w.facts.command, d.command, true);
+    add(w.facts.where, d.cwd);
+    add(w.facts.env, (d.env || []).join(", "));
+    add(w.facts.address, d.url);
+    add("", d.message);
+    add(w.facts.raw, d.raw, true);
+    if (d.picture && opts.picture) box.append(opts.picture(d.picture));
+    if (box.childElementCount === 1) return null;
+    box.addEventListener("toggle", () => opts.grew?.());
+    return box;
+  }
+
+  return { live, summary, sources, changes, diff, recalled, saved, asked };
 })();

@@ -460,8 +460,29 @@ button.act-chg-name:hover {
 .act-diff-hunk {
   color: var(--pa-faint);
 }
-.shell-card .act-diff {
-  margin: 0 0 var(--pa-s3);
+/* Beside a question (activity.js asked): why it was left to the person, and the step's own lines. */
+.act-ask-note {
+  margin: 6px 0 0;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.act-ask-lines {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: var(--pa-r-sm);
+  background: var(--pa-sunken);
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: 1.6;
+  list-style: none;
+}
+.act-ask-lines li {
+  overflow-wrap: anywhere;
+}
+.act-ask .pic {
+  margin-top: 6px;
 }
 
 /* ---- Under the reply: the memories it drew on (参考了 N 条记忆), each with edit and forget; and the quiet line

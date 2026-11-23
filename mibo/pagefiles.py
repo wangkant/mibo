@@ -23,7 +23,7 @@ PAGE_ASSETS = ("i18n.js", "app.js", "app.css", "chat.js", "chat.css", "finds.js"
                "linkcard.js", "linkcard.css", "modelbar.js", "modelbar.css", "providermarks.js", "sites.js", "sites.css",
                "toolcard.js", "petux.css", "petbox.js", "petline.js", "petedge.js", "petdial.js",
                "petclick.js", "petoff.js", "compact.js", "compact.css", "schedulechat.js", "markdown-it.umd.min.js",
-               "chatkit.js", "chattext.js", "findcard.js", "attach.js", "askcards.js", "chatthread.js")
+               "chatkit.js", "chattext.js", "findcard.js", "attach.js", "chatthread.js")
 # Settings' sections, each a script of its own under ASSETS/setup (setup.js is their shell), and the scripts they
 # draw on (the model chooser, the connectors' words, the zip of a chosen folder).
 SETUP_PARTS = ("character", "model", "connect", "language", "recs", "walks", "memory", "privacy", "device", "about",

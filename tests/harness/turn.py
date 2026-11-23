@@ -1,6 +1,7 @@
 """One whole turn through the page: the person's message posted to /api/chat, each question the turn raises
-answered as the page does, by what the person types in the chat box (/api/confirm), and what came of it read back:
-the reply, its steps, its sources, the questions, and what reached the model, round by round."""
+answered as the page does, by what the person types in the chat box or a card's button (/api/confirm), and what came
+of it read back: the chat's messages in order (the request, each question and answer, the reply), its steps, its
+sources, the questions, and what reached the model, round by round."""
 from __future__ import annotations
 
 import threading
@@ -12,20 +13,25 @@ CARD_ROUTES = {
     "desk": "/api/programs/card",
     "mcp": "/api/mcp/card",
     "turnon": "/api/turnon/card",
+    "settings": "/api/settings/card",
     "operate": "/api/browser/confirm",
 }
 POLL_S = 0.05
-# What the person types for a plain answer; any other answer is typed as it is.
+# What the person types for a plain answer, and the button of a card pressed for "act" and "decline"; any other
+# answer is typed as it is.
 TYPED = {"yes": "确定", "no": "不用了"}
+PRESSED = {"act": "yes", "decline": "no"}
 
 
-def _answer(app, kind: str, card: dict, answer: str) -> None:
-    """Answers one question as the page does: an MCP server's form by its own controls, every other question by the
-    person's message typed in the chat box."""
+def _answer(app, kind: str, card: dict, answer: str) -> dict:
+    """Answers one question as the page does: an MCP server's form by its own controls, a card's button by its
+    choice, every other answer by the person's message typed in the chat box. What /api/confirm said."""
     if card.get("typed") is False:
         app.post("/api/mcp/card", {"id": card["id"], "answer": "once" if answer == "yes" else "no"}, own_page=True)
-        return
-    app.post("/api/confirm", {"id": card["id"], "text": TYPED.get(answer, answer)}, own_page=True)
+        return {}
+    if answer in PRESSED:
+        return app.post("/api/confirm", {"id": card["id"], "choice": PRESSED[answer]}, own_page=True).json()
+    return app.post("/api/confirm", {"id": card["id"], "text": TYPED.get(answer, answer)}, own_page=True).json()
 
 
 @dataclass
@@ -35,6 +41,13 @@ class TurnResult:
     entries: list
     cards: list = field(default_factory=list)
     requests: list = field(default_factory=list)
+    # Every message the turn added to the chat, the person's among them, in order.
+    messages: list = field(default_factory=list)
+
+    @property
+    def questions(self) -> list:
+        """The questions the turn said in the chat, as the character's messages."""
+        return [entry for entry in self.entries if entry.get("ask")]
 
     @property
     def trace(self) -> list:
@@ -97,10 +110,12 @@ def run_turn(app, message: str, *script, cards="yes", conversation: str = "main"
             if card and all(card["id"] != c["card"]["id"] for c in raised):
                 answer = answers.pop(0) if len(answers) > 1 else answers[0]
                 raised.append({"kind": kind, "card": card, "answer": answer})
-                _answer(app, kind, card, answer)
+                raised[-1]["said"] = _answer(app, kind, card, answer)
     response = sent["response"]
     model.check()
     assert model.left() == 0, f"{model.left()} scripted reply round(s) were never asked for"
     body = response.json()
-    entries = [m for m in body.get("messages") or [] if m.get("role") != "user"]
-    return TurnResult(response.status_code, str(body.get("reply") or ""), entries, raised, model.requests[seen:])
+    messages = body.get("messages") or []
+    entries = [m for m in messages if m.get("role") != "user"]
+    return TurnResult(response.status_code, str(body.get("reply") or ""), entries, raised, model.requests[seen:],
+                      messages)

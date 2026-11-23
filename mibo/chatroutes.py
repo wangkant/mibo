@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
+from .cardwait import asking
 from .character import NotReady
 from .chatmedia import ATTACH_ROOM, PICTURE_TYPES
 from .memstore import MemoryFileDamaged
@@ -41,7 +42,8 @@ def _mount_chat(app: FastAPI, workspace: Workspace, body) -> None:
             return await workspace.chat(str(payload.get("text") or ""), _number(payload.get("after")),
                                         _number(payload.get("retry")), str(payload.get("chat") or MAIN_CHAT),
                                         str(payload.get("reply_to") or ""), payload.get("attachments"),
-                                        **({"choices": payload["choices"]} if payload.get("choices") else {}))
+                                        **({"choices": payload["choices"]} if payload.get("choices") else {}),
+                                        answering=_number(payload.get("answering")))
         except ValueError:
             raise
         except Exception as error:
@@ -51,13 +53,16 @@ def _mount_chat(app: FastAPI, workspace: Workspace, body) -> None:
 
     @app.get("/api/chat/doing")
     async def chat_doing(after: int | None = None):
-        # The line above the pet's head: whether a reply is on its way, the main chat's step, and its last
-        # message's number; with `after`, the last words the character said since (the bubble of a reply
-        # that came in after its compact chat was put away). Nothing shared.
+        # The line above the pet's head: whether a reply is on its way, the main chat's step, whether a
+        # question there waits for the person's answer, and its last message's number; with `after`, the
+        # last words the character said since (the bubble of a reply that came in after its compact chat
+        # was put away). Nothing shared.
         view = workspace.history(1 << 30 if after is None else after)
         said = [m.get("text") for m in view.get("messages") or [] if m.get("role") != "user" and m.get("text")]
-        return {"busy": workspace._chat_lock.locked(), "doing": view.get("doing"), "last": view["last"],
-                "said": said[-1] if after is not None and said else ""}
+        main = workspace._main.conversation
+        return {"busy": workspace._chat_lock.locked(), "doing": view.get("doing"),
+                "asked": any(w["turn"][0] == main for w in asking(workspace).open.values()),
+                "last": view["last"], "said": said[-1] if after is not None and said else ""}
 
     @app.post("/api/chat/stop")
     async def stop(request: Request):

@@ -67,6 +67,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 
+import chatanswer
+
 HERE = Path(__file__).resolve().parent
 FIX = HERE / "everyday"
 SITE_DIR = HERE / "opsite"
@@ -971,27 +973,24 @@ class Bench:
         return (win32.exe_of(pid) or "").lower()
 
     # -- cards and turns
-    def cards_up(self) -> list[dict]:
-        """The app's asking cards waiting for a press: those on screen, and the card in the pane's column (web/gate,
-        browse.js) while that column is not shown, which the chat names with 请在网页旁确认."""
-        return self._waiting(".op-card:not(.browse-prompt)", "!c.dataset.bench && (c.getClientRects().length || "
-                                                             "c.classList.contains('browse-card'))")
+    def questions_up(self) -> list[dict]:
+        """The app's question a step waits on, said in the chat (cardwait.py), the newest not yet answered: [] or
+        one."""
+        text = self.d.js(chatanswer.TAKE)
+        return [{"text": text}] if text else []
 
     def prompts_up(self) -> list[dict]:
         """What a site itself asks under the pane's bar (browsestrip.js: the camera, a popup, a program's link),
         shown and not yet answered; the strip is drawn anew for each prompt."""
-        return self._waiting(".browse-prompt", "!c.hidden")
-
-    def _waiting(self, selector: str, test: str) -> list[dict]:
-        found = self.d.js(f"(() => [...document.querySelectorAll({json.dumps(selector)})].filter(c => {test} && "
-                          "c.querySelector('.op-card-buttons button:not([disabled])')).map((c, i) => { "
+        found = self.d.js("(() => [...document.querySelectorAll('.browse-prompt')].filter(c => !c.hidden && "
+                          "c.querySelector('.browse-ask-buttons button:not([disabled])')).map((c, i) => { "
                           "c.dataset.benchId = 'b' + Date.now() + i; return {id: c.dataset.benchId, text: c.innerText}; }))()")
         return found if isinstance(found, list) else []
 
     def press(self, card: dict, yes: bool) -> str:
         label = self.d.js(
             "((id, yes) => { const c = document.querySelector(`[data-bench-id=\"${id}\"]`); if (!c) return '';"
-            " const bs = [...c.querySelectorAll('.op-card-buttons button:not([disabled])')];"
+            " const bs = [...c.querySelectorAll('.browse-ask-buttons button:not([disabled])')];"
             " const no = bs.find(b => /不允许|拒绝|取消|不同意|暂不|不用|跳过|不开启|^No|Deny|Cancel|Not now|Skip/i"
             ".test(b.innerText)) || bs.find(b => b.classList.contains('pa-btn-secondary')) || bs[bs.length - 1];"
             " const go = bs.find(b => b.classList.contains('pa-btn-primary') && b !== no) || bs.find(b => b !== no);"
@@ -1050,11 +1049,11 @@ class Bench:
                     self.outside.append(exe)
                     self.d.log(f"   a program outside the stand-ins started: {exe}")
                 self.seen_children.add(pid)
-            for card in self.cards_up():
+            for card in self.questions_up():
                 yes = self.answer(request, card["text"])
                 cards.append({"text": " / ".join(card["text"].split())[:300], "yes": yes,
-                              "pressed": self.press(card, yes)})
-                self.d.log(f"   card ({'yes' if yes else 'no'}): {cards[-1]['text'][:160]}")
+                              "pressed": self.d.js(chatanswer.answer(yes))})
+                self.d.log(f"   question ({'yes' if yes else 'no'}): {cards[-1]['text'][:160]}")
             # What a site asks for itself is never the request's: no, as a careful person answers it.
             for prompt in self.prompts_up():
                 self.d.log(f"   site prompt (no, {self.press(prompt, False)}): {' / '.join(prompt['text'].split())[:160]}")

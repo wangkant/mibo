@@ -4,7 +4,7 @@
 // head down to under the eyes, holding the edge (a painted figure in its peek pose, Mibo with its hands
 // over it). Tucked it is not to be disturbed: it walks nowhere and brings nothing (pet.js resting), and
 // its lines go to the chat alone. It leans out further while the pointer is near, and when something is
-// waiting for it (petLook: a find, a line said, a card waiting on the person), with a word on its face; a
+// waiting for it (petLook: a find, a line said, a question waiting on the person), with a word on its face; a
 // press brings it out, with what was waiting, and a drag takes it away from the edge.
 (() => {
   // How much further out it leans (CSS px), and how long the turn takes (petux.css).

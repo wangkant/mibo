@@ -8,12 +8,12 @@ opens a page of tools/opsite and writes down, in results.json:
   open     the window before and after (does it make room for a site laid out for 1280?), the site's own width
            and zoom, and whether the chat's box is in sight with the page;
   request  a request typed in the chat beside the page, done in the page: was the page in sight all the way,
-           the card, the site's own verdict, the reply and its steps in the chat;
+           the question, the site's own verdict, the reply and its steps in the chat;
   sidebar  a new chat chosen with the page in front (it shows beside the page), then Settings (the page waits
            behind its chip) and back;
   minimize the page put behind its chip and brought back: the window's size each way, the page as it was;
   narrow   the window made narrow: the chat laid over the page, the site not made narrower by it, and the same
-           request sent from there (the chat out of the page's way while it acts, back for the card);
+           request sent from there (the chat out of the page's way while it acts, back for the question);
   kept     a size given to the window with a site in front, used again the next time one opens;
   zoom     one browser step of zoom for the site, still there on its next page."""
 from __future__ import annotations
@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from chatanswer import TAKE, answer
 from package_smoke import FakeModel
 
 ASK = "给 Alice 发消息：明天见"
@@ -137,7 +138,7 @@ def look(d, name: str) -> dict:
 
 
 def request(d, site: str, name: str) -> dict:
-    """ASK typed in the chat beside the page and sent; its card answered with a yes. What was seen meanwhile."""
+    """ASK typed in the chat beside the page and sent; its question answered with a yes. What was seen meanwhile."""
     get(site + "/__reset", {})
     d.type_into("#chat-view .chat:not([hidden]) .chat-input", ASK)
     d.key("Enter", 13)
@@ -148,15 +149,14 @@ def request(d, site: str, name: str) -> dict:
         seen.append(bool(facts.get("shown")) and bool(page.get("pane")))
         if page.get("strip"):
             strips.append(page["strip"])
-        # While it acts with no card waiting: is the chat lying over the page?
+        # While it acts with no question waiting: is the chat lying over the page?
         if page.get("run") in ("正在操作", "Working on it") or page.get("strip"):
             over.append(bool(facts.get("cut")))
-        text = d.js("(() => { const c = document.querySelector('.browse-run-card .op-card'); return c && !c.dataset.seen ? c.innerText : ''; })()")
+        text = d.js(TAKE)
         if text:
             cards.append(" / ".join(str(text).split()))
             look(d, f"{name}-card")
-            d.click(".browse-run-card .op-card .pa-btn-primary")
-            d.js("(() => { const c = document.querySelector('.browse-run-card .op-card'); if (c) c.dataset.seen = '1'; })()")
+            d.js(answer(True))
         if not d.js("!!document.querySelector('.line.typing')"):
             break
         time.sleep(0.5)

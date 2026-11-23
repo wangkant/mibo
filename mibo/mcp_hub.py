@@ -550,7 +550,7 @@ class Hub:
             return how, None
         card = self._tool_card(runner, tool, arguments, changed, floor)
         if passed is not None:
-            # Why the reviewer did not pass it, in one line (toolcard.js draws it).
+            # Why the reviewer did not pass it, in one line (the fold beside its question shows it, activity.js).
             card["review"] = passed.line(str(self.workspace.config().get("AGENT_LANG") or "zh"))
         answer = await self.ask(card, conversation, risk_of(floor))
         if answer in (None, "no"):

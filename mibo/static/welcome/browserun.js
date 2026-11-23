@@ -1,8 +1,10 @@
 "use strict";
 // The run while the character operates the page for the person (web/operate.py), as browser.py last told it
 // ({task, held, end, why, note, steps, card}): in the chat's box while it is under way or waits on the person (its
-// state, a card waiting on their yes, the steps, how it ended and what they may press), and in the bar while the
-// chat is out of sight. browse.js mounts it, sets `op` as it is told and draws it with the rest of the pane.
+// state, a sign-in it waits on, the steps, how it ended and what they may press), and in the bar while the chat is
+// out of sight. A step that waits on the person's yes is asked in the chat itself (cardwait.py, chatthread.js);
+// here the run only says it waits. browse.js mounts it, sets `op` as it is told and draws it with the rest of the
+// pane.
 window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
   const ICONS = {
     stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />',
@@ -11,10 +13,8 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
     failed: '<path d="M7 7l10 10M17 7 7 17" />',
     stopped: '<path d="M7 12h10" />',
   };
-  // The asking cards' one look (chat.js cardHead): an icon, the question, one faint line.
+  // A sign-in's look (browse.css .browse-ask): an icon, what the site asks, one faint line, its buttons.
   const CARD_ICONS = {
-    out: '<path d="M4 12l16-8-6 16-2.5-6.5z" /><path d="M11.5 13.5 20 4" />',
-    like: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />',
     ask: '<circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16.2v.3" />',
     key: '<circle cx="8" cy="15" r="4" /><path d="M10.8 12.2 20 3M16 7l3 3M14 9l2 2" />',
   };
@@ -48,7 +48,7 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
   pillStop.innerHTML = svg("stop");
   pill.append(pillOpen, pillStop);
 
-  // In the chat's box: its state, a card waiting on the person, the steps, how it ended.
+  // In the chat's box: its state, a sign-in waiting on the person, the steps, how it ended.
   const panel = el("div", "browse-run");
   const cardBox = el("div", "browse-run-card");
   const runBox = el("div", "browse-run-box");
@@ -71,7 +71,7 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
   const running = () => Boolean(op && !op.end);
   // The run ended waiting on the person: what they type or press next goes on with it.
   const waits = () => Boolean(op) && THEIRS.includes(op.end);
-  // A run that needs the person: a card, a sign-in, or an end that leaves the page theirs.
+  // A run that needs the person: a question in the chat, a sign-in, or an end that leaves the page theirs.
   const needs = (run) => Boolean(run) && Boolean(run.card || run.wait || THEIRS.includes(run.end));
   function modeOf() {
     if (!op.end) {
@@ -115,52 +115,37 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
     return node;
   }
   function cardHead(icon, title, meta) {
-    const head = el("div", "op-card-head");
-    const tile = el("span", "op-card-icon");
+    const head = el("div", "browse-ask-head");
+    const tile = el("span", "browse-ask-icon");
     tile.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${CARD_ICONS[icon]}</svg>`;
-    const text = el("div", "op-card-words");
-    text.append(el("p", "op-card-title", title));
-    if (meta) text.append(el("p", "op-card-meta", meta));
+    const text = el("div", "browse-ask-words");
+    text.append(el("p", "browse-ask-title", title));
+    if (meta) text.append(el("p", "browse-ask-meta", meta));
     head.append(tile, text);
     return head;
   }
-  // Something with an effect outside (web/gate.py), waiting for the person's yes typed in the chat (chat.js,
-  // cardwait.py): its act as the question, then only what matters, each once; the control it presses is ringed on
-  // the page itself. Drawn once per question.
+  // A sign-in the run waits on: 自动登录 with its three answers, or the site's own sign-in or check. A step waiting
+  // on the person's yes draws nothing here: its question is in the chat. Drawn once each.
   function drawCard(card) {
     if ((card?.id || "") === shownCard) return;
     shownCard = card?.id || "";
     cardBox.replaceChildren();
-    if (!card) return;
-    if (card.kind === "auto_sign_in") return drawAutoCard(card);
-    if (card.kind === "wait") return drawWaitCard(card);
-    const words = col().card;
-    const node = el("div", "op-card browse-card");
-    const where = [card.to ? (card.kind === "send" ? words.to.replace("{to}", card.to) : card.to) : card.kind === "send" ? words.noTo : "", card.site]
-      .filter(Boolean).join(" · ");
-    const icon = card.skippable ? (card.kind === "like" ? "like" : "out") : "ask";
-    node.append(cardHead(icon, words.titles[card.kind] || words.titles.submit, where));
-    // The step's own line of what it does (surface.py's act), as the character wrote it.
-    if (card.what) node.append(el("p", "op-card-why", card.what));
-    if (card.text) node.append(el("blockquote", "browse-card-quote", card.text));
-    if (card.button && card.ringed) node.append(el("p", "browse-card-ring", words.ring.replace("{button}", card.button)));
-    else if (card.button) node.append(el("p", "browse-card-ring", card.button));
-    node.append(el("p", "op-card-ask", words.ask));
-    cardBox.append(node);
+    if (card?.kind === "auto_sign_in") drawAutoCard(card);
+    else if (card?.kind === "wait") drawWaitCard(card);
   }
-  // The 自动登录 card: the same look, with the three answers.
+  // The 自动登录 card, with the three answers.
   function drawAutoCard(card) {
     const words = col().signin;
-    const node = el("div", "op-card browse-card");
+    const node = el("div", "browse-ask browse-card");
     const head = cardHead("key", words.autoTitle.replace("{site}", card.site), words.autoMeta);
-    const row = el("div", "op-card-buttons");
+    const row = el("div", "browse-ask-buttons");
     const choices = [["once", "pa-btn-primary"], ["always", "pa-btn-secondary"], ["no", "pa-btn-ghost"]];
     for (const [said, look] of choices) {
       row.append(button(`pa-btn ${look} pa-btn-sm`, words[said], async () => {
         for (const other of row.querySelectorAll("button")) other.disabled = true;
         const response = await post("signins/card", { id: card.id, answer: said });
         const ok = response && (await response.json().catch(() => ({}))).ok;
-        if (!ok && shownCard === card.id) node.append(el("p", "op-card-told", words.gone));
+        if (!ok && shownCard === card.id) node.append(el("p", "browse-ask-told", words.gone));
       }));
     }
     node.append(head, row);
@@ -169,8 +154,8 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
   // The wait for the person's sign-in or check: what the site asks, in one sentence, the site's own sign-in (where
   // the page is not one already) and going on without the site. Its words come with it (panels/signins.py).
   function drawWaitCard(card) {
-    const node = el("div", "op-card browse-card");
-    const row = el("div", "op-card-buttons");
+    const node = el("div", "browse-ask browse-card");
+    const row = el("div", "browse-ask-buttons");
     const choices = [...(card.to ? [["go", "pa-btn-primary"]] : []), ["skip", card.to ? "pa-btn-secondary" : "pa-btn-primary"]];
     for (const [action, look] of choices) {
       row.append(button(`pa-btn ${look} pa-btn-sm`, card[action === "go" ? "go" : "pass"], () => {
@@ -188,7 +173,7 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
       const said = words.handover[kind === "sign_in_overlay" ? "sign_in" : kind] || words.handover.stuck;
       return said.replace("{field}", field || "");
     }
-    // Waiting on a card: the act it waits on, as its step says it.
+    // Waiting on the person's answer in the chat: the act it waits on, as its step says it.
     if (op.end === "waiting") return op.steps.findLast((step) => step.state === "waiting")?.text || words.modes.waiting;
     const said = words.ends[op.end] || words.ends.failed;
     // The character's own one sentence of how it went, where it wrote one for the person; at the step limit,
@@ -220,8 +205,8 @@ window.paBrowseRun = ({ pane, post, chatNow, beside, goOn }) => {
     } else {
       endLine.textContent = endWords();
       // 继续: the page is theirs for a moment and they say when they are done (not where the page cannot be
-      // worked, nor where it asked something or a card waits: their answer is typed in the chat's box or pressed
-      // on the card).
+      // worked, nor where it asked something or a question waits: their answer is typed in the chat's box, or
+      // pressed on its card).
       if (!["asked", "waiting"].includes(op.end) && op.why !== "drawn" && op.why !== "empty") {
         const text = ["paused", "cap"].includes(op.end) ? words.goOnPaused : words.goOn;
         buttons.push(button("pa-btn pa-btn-primary pa-btn-sm", text, () => goOn(text)));

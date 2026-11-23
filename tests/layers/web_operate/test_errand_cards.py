@@ -243,7 +243,8 @@ def test_a_question_whose_time_runs_out_stays_answerable_and_its_answer_is_kept(
     monkeypatch.setattr(operate, "CARD_S", 0.5)
     pane = Pane()
     run = Operating(SimpleNamespace(pane=pane, attended=lambda: True, show=lambda: None), tmp_path,
-                    SimpleNamespace(home=tmp_path / "home"))
+                    SimpleNamespace(home=tmp_path / "home", question_said=lambda conversation, entry: None,
+                                    answer_said=lambda ident, state, line="": None))
     card = {"id": "c1", "kind": "comment", "site": "127.0.0.1", "to": "阿杰", "text": REPLY, "button": "回复",
             "skippable": True, "act": ("card", "comment", "127.0.0.1", "回复", REPLY, "阿杰")}
     assert asyncio.run(run.ask(card, 1)) == {"waiting": act_of(card, "zh")}

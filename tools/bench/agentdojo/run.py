@@ -432,7 +432,9 @@ class Mibo(BasePipelineElement):
                     answer, body = "no", {"id": card["id"], "answer": "no"}
                 else:
                     answer, body = "no", {"id": card["id"], "yes": False}
-                pressed = self.app.api(f"{path}/card", body)
+                # A question is answered by words typed in the chat (cardwait.py); only a server's form is pressed.
+                pressed = (self.app.api("confirm", {"id": card["id"], "text": "确定" if answer != "no" else "不用了"})
+                           if card.get("typed", True) else self.app.api(f"{path}/card", body))
                 cards.append({"path": path, "type": kind, "tool": card.get("tool", ""), "args": card.get("raw", "")[:600],
                               "review": card.get("review", ""), "answer": answer, "ok": bool(pressed.get("ok"))})
             done.wait(0.4)

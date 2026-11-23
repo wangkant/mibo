@@ -3,15 +3,12 @@
 // ends (petActivity); meanwhile the main chat's step is asked for (GET /api/chat/doing) and, when it is a
 // search, a read, the browser, a program or a command, shown in the chat's own words (activity.js) with
 // its icon. A press on the line opens the compact chat, at its end where the reply is; its Stop ends the
-// turn as the chat's does. A step waiting on the person's press says "需要你确认" and opens the chat too.
-// Thinking alone shows nothing. The line gives way to anything beside the pet (the compact chat, a card,
-// the frame, the dial) and to a tucked pet.
+// turn as the chat's does. A question in the chat waiting on the person's answer (`asked`, cardwait.py) says
+// "需要你确认" and opens the chat too. Thinking alone shows nothing. The line gives way to anything beside the pet
+// (the compact chat, a card, the frame, the dial) and to a tucked pet.
 (() => {
   const STEP_MS = 1200;
   const W = paI18n.words("petline");
-  // Steps whose card waits on the person, and where that card is read.
-  const CARDS = { operate: "/api/browser/confirm", shell: "/api/shell/card", desk: "/api/programs/card", mcp: "/api/mcp/card",
-    settings: "/api/settings/card" };
   const QUIET = new Set(["write", "recall"]);
   const line = uxEl("div", "pet-line");
   const open = uxEl("button", "line-open");
@@ -64,14 +61,6 @@
     // Placed once it has eased in, as wide as its words.
     setTimeout(place, yes ? 230 : 0);
   }
-  async function waiting(tool) {
-    try {
-      const response = await api(CARDS[tool]);
-      return response.ok && Boolean((await response.json()).card);
-    } catch {
-      return false;
-    }
-  }
   async function step() {
     let value = null;
     try {
@@ -84,10 +73,9 @@
     // The turn is over, though window.py's word of it did not come.
     if (value && !value.busy) return end();
     const doing = value?.doing || null;
-    const asked = Boolean(doing && CARDS[doing.tool] && (await waiting(doing.tool)));
-    if (!on) return;
+    const asked = Boolean(value?.asked);
     const was = line.classList.contains("asked");
-    // Tucked at a side, it leans out the moment a card waits on the person (petedge.js).
+    // Tucked at a side, it leans out the moment a question waits on the person (petedge.js).
     if (asked && !was && "edge" in pet.dataset) petLook();
     line.classList.toggle("asked", asked);
     // Drawn again only when the step changed: a press that spans a redraw is lost, its node gone.

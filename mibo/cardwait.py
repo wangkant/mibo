@@ -1,14 +1,23 @@
 """A step that waits for its person's yes in the chat: the one loop behind the asks of commands and files
-(shell/panel.py), turning acting on (turnon.py), other programs (desk/panel.py), MCP servers (mcp_hub.py) and acts
-in the app's browser (panels/browser.py).
+(shell/panel.py), turning acting on (turnon.py), settings (appmap.py), other programs (desk/panel.py), MCP servers
+(mcp_hub.py) and acts in the app's browser (panels/browser.py).
 
-An approval is not a card to press. The app says in the chat what the step will do, in its own reading of the step
-(the words a card showed, never the model's text), and the turn waits. The person answers in the chat box in their
-own words: a plain yes (确定, 你做, 好, ok, go ahead and the like, in any of the app's languages: `said_yes`) runs
-the step; anything else is a no for that step, and the page then sends their message as the ordinary message it is.
-Only the app's own page can answer (/api/confirm, the window's key), and only with what the person typed in its chat
-box: page text, tool results, files, MCP output and the model's words never reach that route. A yes answers the one
-question it was typed under, by its id; a step whose content changes after it is asked again (shell/panel.py checks).
+The question and its answer are conversation. The app says in the chat what the step will do, in its own reading
+of the step (asked.py: what, where and how much, never the model's text), as the character's message of the reply
+under way (workspace.question_said), and the turn waits. The person answers in the chat box in their own words,
+which join the chat as their message (workspace.answer_said): a plain yes (确定, 你做, 好, ok, go ahead and the
+like, in any of the app's languages: `said_yes`) runs the step and the reply goes on after it; anything else is a
+no for that step, the reply ends without it, and their words are then answered as the ordinary message they are
+(workspace.chat `answering`). The model's later turns read the question and a yes in the chat's history (`exchange`,
+dm.py). Only the app's own page can answer (/api/confirm, the window's key), and only with what the person typed in
+its chat box or a press of a card's button: page text, tool results, files, MCP output and the model's words never
+reach that route. A yes answers the one question it was typed under, by its id, once; a step whose content changes
+after it is asked again (shell/panel.py checks).
+
+Two tiers, by the step's risk alone (`tier`): an ordinary question is a plain message, answered by typing; a very
+important step (`ALONE`) raises a card in the chat, its decisive facts in its sentence and two buttons, one naming
+the act (the app's words, from the step's facts) and one that declines; a press is the answer, and a typed plain
+yes answers it too. A click costs attention, so only these ask for one.
 
 The asking rule, decided here and in the gates, never by the model:
 - A costly step (`COSTLY`: what Mibo's own undo cannot give back: paying, a deletion nothing restores, the account
@@ -35,6 +44,8 @@ from pathlib import Path
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from . import i18n
 
 # How long a question waits before its step ends unanswered; inside the reply's own limit (workspace.REPLY_WITHIN_S).
 WAIT_S = 600.0
@@ -73,6 +84,11 @@ def reaches(answered: str, step: str) -> bool:
     """How far one yes reaches in the rest of its turn: a step of the risk that was answered, and every ordinary step;
     never a costly step or a widening, which are asked each time. The one place that boundary is drawn."""
     return step not in ALONE and step in (answered, "act")
+
+
+def tier(risk: str) -> str:
+    """How a step's question shows in the chat: "card" for a very important one (ALONE), else "plain"."""
+    return "card" if risk in ALONE else "plain"
 
 
 # What counts as a plain yes, by language: the whole message, split at punctuation, must be made of these (a
@@ -123,13 +139,47 @@ def said_yes(text: str) -> bool:
     return bool(parts) and all(one(p) for p in parts)
 
 
+# What each turn asked and what a yes said, by (conversation, the turn's token), until the turn's record takes it
+# (`exchange`).
+_TOLD: dict[tuple, list[dict]] = {}
+
+
+def exchange(conversation: str, token: str) -> list[dict]:
+    """The questions a turn asked in order, each {"question", "answer": the person's words for a yes, else None},
+    taken once (dm.py writes them into the chat's history)."""
+    return _TOLD.pop((conversation, token), [])
+
+
 class Asking:
     """The questions waiting in the chat in one app, by id (the place's answer for each), and the risks a yes was
     given to in each turn."""
 
     def __init__(self) -> None:
-        self.open: dict[str, tuple] = {}
+        self.open: dict[str, dict] = {}
         self.said: dict[tuple, set[str]] = {}
+
+    def put(self, workspace, ident: str, conversation: str, turn: tuple, risk: str, card: dict, settle,
+            lang: str) -> None:
+        """Question `ident` said in the chat: the character's message of the reply under way, in the app's words for
+        `card`, kept for the turn's record, and waiting for `settle`."""
+        from .asked import question
+        asked = question(card, risk, lang)
+        text = asked.pop("text")
+        workspace.question_said(conversation, {"role": "assistant", "text": text,
+                                               "ask": {"id": ident, **asked, "state": "waiting"}})
+        told = {"question": text, "answer": None}
+        _TOLD.setdefault(turn, []).append(told)
+        while len(_TOLD) > 16:
+            _TOLD.pop(next(iter(_TOLD)))
+        self.open[ident] = {"turn": turn, "risk": risk, "settle": settle, "workspace": workspace, "told": told,
+                            **{k: asked[k] for k in ("tier", "act", "decline") if k in asked}}
+
+    def close(self, ident: str, state: str = "unanswered") -> None:
+        """Question `ident` no longer waits: one nobody answered is marked `state` ("unanswered", or "left" for a
+        browser act a later message may still answer)."""
+        waiting = self.open.pop(ident, None)
+        if waiting is not None:
+            waiting["workspace"].answer_said(ident, state)
 
     def carried(self, turn: tuple, risk: str) -> bool:
         # A record with no turn token (written before the turn's first step) carries nothing.
@@ -142,18 +192,31 @@ class Asking:
         while len(self.said) > 16:
             self.said.pop(next(iter(self.said)))
 
-    async def answer(self, ident: str, text: str) -> dict:
-        """What the person typed under question `ident`: {"ok", "yes"}; ok false when it is no longer waiting."""
+    async def answer(self, ident: str, text: str | None = None, choice: str | None = None) -> dict:
+        """The person's answer to question `ident`: what they typed under it, or for a card the button they pressed
+        (`choice` "yes" or "no"), which no plain question takes. {"ok", "yes", "seq": the number of their message
+        in the chat}; ok false when it is no longer waiting. Their words for a press are the button's own."""
         waiting = self.open.get(ident)
-        if waiting is None:
+        if waiting is None or (choice is not None and waiting["tier"] != "card"):
             return {"ok": False, "yes": False}
-        turn, risk, settle = waiting
-        yes = said_yes(text)
-        if not await settle(yes):
+        # Taken before the place settles it (an upload's settle waits on the Open dialog): one answer a question.
+        del self.open[ident]
+        yes = said_yes(text) if choice is None else choice == "yes"
+        line = text if choice is None else waiting["act" if yes else "decline"]
+        # What the place took it as: an upload whose Open dialog is cancelled hands nothing over.
+        yes = await waiting["settle"](yes)
+        if yes is None:
+            # It stopped waiting meanwhile.
+            waiting["workspace"].answer_said(ident, "unanswered")
             return {"ok": False, "yes": False}
         if yes:
-            self.yes_given(turn, risk)
-        return {"ok": True, "yes": yes}
+            self.yes_given(waiting["turn"], waiting["risk"])
+        # A typed no is their next message of its own, which the history holds as such.
+        if yes or choice is not None:
+            waiting["told"]["answer"] = line
+        seq = waiting["workspace"].answer_said(ident, "yes" if yes else "no", line,
+                                               pending=choice is None and not yes)
+        return {"ok": True, "yes": yes, "seq": seq}
 
 
 _ASKING: dict[str, Asking] = {}
@@ -179,8 +242,9 @@ def turn_of(workspace) -> tuple:
 
 
 class Card:
-    """The one question a place has waiting in the chat at a time: the page reads `card` (the app's own words for
-    the step) and draws it under the waiting row; the person's typed yes on the app's own page answers it."""
+    """The one question a place has waiting in the chat at a time, said as the character's message (`Asking.put`);
+    `card` is the gate's own reading of the step, which the place's route gives; the person's typed yes on the app's
+    own page answers it."""
 
     def __init__(self, workspace, window=lambda: None) -> None:
         # `window`: the app window when there is one (app.state.window), for the notification.
@@ -200,8 +264,9 @@ class Card:
                   risk: str = "act", typed: bool = True):
         """Says `card` in the chat and waits: `yes` on the person's typed yes (or at once when a yes earlier in the
         turn reaches this risk; never for a costly one), `no` on any other message, None when the turn ended,
-        `ended()` says the task did, or WAIT_S passed. `what` names it for the notification, {"zh", "en"}. With `typed` false it is something
-        they fill in rather than confirm (an MCP server's form), answered by `press` alone."""
+        `ended()` says the task did, or WAIT_S passed. `what` names it for the notification, {"zh", "en"}. With
+        `typed` false it is something they fill in rather than confirm (an MCP server's form), answered by `press`
+        alone and not said as a message."""
         everyone, turn = asking(self.workspace), turn_of(self.workspace)
         if typed and everyone.carried(turn, risk):
             self.how = "carried"
@@ -210,13 +275,14 @@ class Card:
         ident = secrets.token_urlsafe(10)
         self.card, self.answer = {**card, "id": ident, "risk": risk, "typed": typed}, loop.create_future()
 
-        async def settle(said: bool) -> bool:
+        async def settle(said: bool) -> bool | None:
             if not self.up(ident):
-                return False
+                return None
             self.answer.set_result(yes if said else no)
-            return True
+            return said
         if typed:
-            everyone.open[ident] = (turn, risk, settle)
+            everyone.put(self.workspace, ident, conversation, turn, risk, card, settle,
+                         i18n.lang(self.workspace.config()))
         self._tell(loop, what)
         try:
             began = loop.time()
@@ -227,7 +293,7 @@ class Card:
                     return self.answer.result()
             return None
         finally:
-            everyone.open.pop(ident, None)
+            everyone.close(ident)
             self.card = self.answer = None
 
     def up(self, ident: str) -> bool:
@@ -260,14 +326,20 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/confirm")
     async def confirm(request: Request):
-        """What the person typed in the chat box while a step waits on their yes: from the app's own page on this
-        computer alone, never from the service. {"id", "text"} -> {"ok", "yes"}; a message that is not a plain
-        yes is a no for that step, and the page sends it on as an ordinary message."""
+        """The person's answer to a step waiting on their yes: from the app's own page on this computer alone, never
+        from the service. {"id", "text"}: what they typed in the chat box; or {"id", "choice": "yes" | "no"}: a
+        card's button. -> {"ok", "yes", "seq"}: their message joins the chat as number `seq`. A message that is not
+        a plain yes is a no for that step, and the page then sends it on with `answering` = seq, to be answered as
+        the ordinary message it is (workspace.chat)."""
         window = getattr(app.state, "window", None)
         if window is not None and not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
             return JSONResponse({"error": "local_only"}, status_code=403)
         payload = await body(request)
-        ident, text = payload.get("id"), payload.get("text")
-        if not isinstance(ident, str) or not isinstance(text, str):
+        ident, text, choice = payload.get("id"), payload.get("text"), payload.get("choice")
+        if not isinstance(ident, str) or (choice not in ("yes", "no") if "choice" in payload
+                                          else not isinstance(text, str)):
             return JSONResponse({"error": "generic"}, status_code=400)
-        return await asking(workspace).answer(ident, text)
+        # Held to the length of any message, as a no is then sent on to the model (workspace.chat).
+        if isinstance(text, str) and len(text) > 8000:
+            return JSONResponse({"error": "invalid_message"}, status_code=400)
+        return await asking(workspace).answer(ident, text if choice is None else None, choice)

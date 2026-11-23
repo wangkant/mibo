@@ -171,8 +171,8 @@
 }
 /* Each figure's own colour, and its lighter form for a dark window. */
 :root[data-figure="mibo"] {
-  --char: #2f7fb8;
-  --char-hi: #7cc8f2;
+  --char: #3f5f7f;
+  --char-hi: #a3bdd6;
 }
 :root[data-figure="deepseek"] {
   --char: #3c5aa6;
@@ -735,7 +735,7 @@ textarea.pa-input {
     var(--pa-char) calc(100% - var(--pa-wc)),
     transparent 100%
   );
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
 /* ---- The bar along the top of the page: a drag strip with a plain chat's

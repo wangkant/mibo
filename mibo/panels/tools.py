@@ -251,7 +251,8 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/mcp/card")
     async def mcp_card():
-        """The question waiting for the person, if any (chat.js and toolcard.js draw it)."""
+        """The question waiting for the person, if any: a server's form, which toolcard.js draws; any other is said
+        in the chat as the character's message (cardwait.py)."""
         return {"card": hub.cards.card}
 
     @app.post("/api/mcp/card")

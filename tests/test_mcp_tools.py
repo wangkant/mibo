@@ -251,8 +251,11 @@ class _Turn:
 
     def __init__(self, home: Path) -> None:
         # No model set: tool search stays on the tools' own words.
+        # The chat itself is not this test's: a question said or answered there goes nowhere.
         self.workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=dict,
-                                         _main=SimpleNamespace(conversation="main", history=[]), _chats={})
+                                         _main=SimpleNamespace(conversation="main", history=[]), _chats={},
+                                         question_said=lambda conversation, entry: None,
+                                         answer_said=lambda ident, state, line="": None)
         self.home = home
 
     async def __aenter__(self):

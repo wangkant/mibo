@@ -153,7 +153,7 @@
   color: var(--pa-faint);
   font-size: var(--pa-fs-xs);
 }
-.task-offer .op-card-facts dd {
+.task-offer .ask-card-facts dd {
   overflow-wrap: anywhere;
 }
 .task-proposals {

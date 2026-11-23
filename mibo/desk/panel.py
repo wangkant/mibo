@@ -640,5 +640,5 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/programs/card")
     async def desk_card():
-        """The step waiting in the chat for the person's yes, if any (chat.js draws it; /api/confirm answers it)."""
+        """The gate's reading of the step waiting for the person's yes, if any (said in the chat as the character's message (cardwait.py); /api/confirm answers it)."""
         return {"card": desk().cards.card}

@@ -410,8 +410,13 @@ class Shell:
         if (card or {}).get("diff"):
             # An edit's whole difference, with its indentation (activity.js draws it).
             asked["diff"] = card["diff"]
+        # How many items it deletes, or files it replaces: what a costly step's sentence and button name (asked.py).
+        replaced = verdict.overwrites + [p for a in verdict.reasons if a.kind == "overwrite" for p in a.paths]
+        if verdict.deletes or replaced:
+            asked.update(count=len(verdict.deletes) or len(set(replaced)),
+                         removes="delete" if verdict.deletes else "replace")
         if passed is not None:
-            # Why the reviewer did not pass it, in one line (chat.js draws it under the title).
+            # Why the reviewer did not pass it, in one line (under the question's fold, asked.py).
             for lang in ("zh", "en"):
                 asked[lang]["review"] = passed.line(lang)
         # A command that names a file in a skill's folder says which skill it comes from (skills/store.py).
@@ -713,5 +718,5 @@ def mount(app, workspace, body) -> None:
 
     @app.get("/api/shell/card")
     async def shell_card():
-        """The step waiting in the chat for the person's yes, if any (chat.js draws it; /api/confirm answers it)."""
+        """The gate's reading of the step waiting for the person's yes, if any (said in the chat as the character's message (cardwait.py); /api/confirm answers it)."""
         return {"card": shell().cards.card}

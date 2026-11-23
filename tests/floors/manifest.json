@@ -62,7 +62,11 @@
       "tests/floors/asked/test_the_asking_rule.py::test_typing_an_id_number_an_address_or_a_bank_account_hands_over_private_details",
       "tests/floors/asked/test_the_asking_rule.py::test_in_file_explorer_the_recycle_bin_is_not_costly_and_past_it_is",
       "tests/floors/asked/test_the_asking_rule.py::test_a_delete_the_recycle_bin_cannot_hold_is_costly",
-      "tests/floors/asked/test_the_asking_rule.py::test_a_command_is_costly_by_what_it_does_beyond_the_recycle_bin"
+      "tests/floors/asked/test_the_asking_rule.py::test_a_command_is_costly_by_what_it_does_beyond_the_recycle_bin",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_after_a_yes_the_chat_holds_request_question_answer_and_reply",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_after_a_no_its_words_are_answered_once_where_they_stand",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_card_is_answered_by_its_buttons_in_the_apps_words",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_question_left_waiting_by_an_ended_process_waits_no_more"
     ],
     "injection": [
       "tests/floors/asked/test_yes_in_the_chat.py::test_only_the_apps_own_page_answers",
@@ -94,7 +98,12 @@
       "tests/floors/injection/test_messages_and_standing_requests.py::test_a_standing_like_does_not_cover_a_press_that_sends_typed_words",
       "tests/floors/injection/test_messages_and_standing_requests.py::test_in_a_run_the_browser_asks_the_scope_in_place_of_the_reviewer",
       "tests/floors/injection/test_messages_and_standing_requests.py::test_a_standing_run_that_acted_is_not_tried_again_and_says_what_it_did",
-      "tests/floors/injection/test_messages_and_standing_requests.py::test_a_costly_act_a_mailbox_a_secret_or_a_link_never_given_still_stops_a_standing_run"
+      "tests/floors/injection/test_messages_and_standing_requests.py::test_a_costly_act_a_mailbox_a_secret_or_a_link_never_given_still_stops_a_standing_run",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_the_models_words_a_file_or_a_tool_make_no_question_and_no_answer",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_second_answer_to_an_answered_question_decides_nothing",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_button_answers_only_a_card",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_pages_amount_never_names_the_pay_button",
+      "tests/floors/asked/test_the_question_is_conversation.py::test_an_overlong_answer_is_refused_like_any_message"
     ],
     "grants": [
       "tests/floors/grants/test_what_is_granted.py::test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written",

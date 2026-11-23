@@ -1,12 +1,14 @@
 "use strict";
 // A chat's thread as it is drawn: a line for each new day, the character's words in runs with its face, name and
-// time once at the start of each, the person's words in soft bubbles with what they attached, the quiet remarks,
-// the line where older turns became a checkpoint, and the typing row while a reply is on its way. The chat
-// (chat.js) makes one of these per chat view and keeps what was sent and seen.
+// time once at the start of each, the questions a step waits on among them, the person's words in soft bubbles with
+// what they attached, the quiet remarks, the line where older turns became a checkpoint, and the typing row while a
+// reply is on its way. The chat (chat.js) makes one of these per chat view and keeps what was sent and seen.
 window.paThread = (() => {
-  const { el, button } = window.paKit;
+  const { el, button, fill } = window.paKit;
   // The character's messages further apart than this start a new run, with its name and time again.
   const RUN_GAP_MS = 10 * 60 * 1000;
+  // A card shows this many of its step's lines in sight; the rest are under its fold.
+  const CARD_LINES = 5;
 
   // An ISO time, or epoch seconds (remarks keep those) or milliseconds.
   const when = (at) => {
@@ -34,7 +36,7 @@ window.paThread = (() => {
   // `env`: messages (the thread's box), id (the chat's), say(key), words() (the chat's words), displayName(), face(),
   // picture(path) giving a blob address, attachedText(path), go(place), links (what the link cards and the steps
   // take from the chat), findCard(card), choices(list) for a message's choices, ask(text) to send a message from
-  // under a reply, grew() when something grew after it was drawn.
+  // under a reply, answer(id, choice) for a card's button, grew() when something grew after it was drawn.
   function create(env) {
     const { messages, say, links } = env;
     // Where the thread was last drawn to: the day, and the character's open run of messages; and when the
@@ -198,6 +200,43 @@ window.paThread = (() => {
       node.dataset.at = item.at || "";
       return node;
     }
+    // A very important step's question (cardwait.ALONE): its sentence with the decisive facts, its first lines in
+    // sight and the rest under a fold, and two buttons, the act in the app's words and the one that declines. Once
+    // answered it keeps what was decided and when, with no buttons.
+    function askCard(item) {
+      const ask = item.ask;
+      const w = paI18n.words("ask");
+      const node = el("div", "ask-card");
+      node.append(el("p", "ask-card-text", item.text));
+      const lines = ask.detail?.lines || [];
+      if (lines.length) {
+        const list = el("ul", "ask-card-lines");
+        for (const line of lines.slice(0, CARD_LINES)) list.append(el("li", "", line));
+        node.append(list);
+      }
+      const fold = window.paActivity.asked({ ...ask, detail: { ...ask.detail, lines: lines.slice(CARD_LINES) } },
+        { picture: (name) => pictureNode({ picture: name }), grew: env.grew });
+      if (fold) node.append(fold);
+      if (ask.state === "waiting" || ask.state === "answering") {
+        const row = el("div", "ask-card-buttons");
+        row.append(button("pa-btn pa-btn-primary pa-btn-sm", ask.act, () => env.answer(ask.id, "yes")),
+          button("pa-btn pa-btn-secondary pa-btn-sm", ask.decline, () => env.answer(ask.id, "no")));
+        for (const press of row.children) press.disabled = ask.state === "answering";
+        node.append(row);
+      } else if (ask.state !== "left") {
+        // A browser act left waiting may still be answered by the next message beside the page: no line yet.
+        node.classList.add("answered");
+        const time = when(ask.at);
+        node.append(el("p", "ask-card-told", fill(w[ask.state] || w.unanswered, { time: time ? timeOf(time) : "" })));
+      }
+      return node;
+    }
+    // A question as it now stands (state "answering" while the answer is on its way): its card drawn again.
+    function settle(text, ask) {
+      const card = messages.querySelector(`.line[data-ask="${CSS.escape(ask.id)}"] > .ask-card`);
+      if (card) card.replaceWith(askCard({ text, ask }));
+    }
+
     // One of the character's messages, a line in `body` (its run).
     function replyLine(item, body) {
       const node = el("div", "line");
@@ -206,14 +245,23 @@ window.paThread = (() => {
       const first = did && body.querySelector(":scope > .line:not(.typing)");
       if (first) first.before(did);
       else if (did) node.append(did);
+      // A question a step waits on is the app's own sentence, as plain text; a very important one is a card.
+      if (item.ask) {
+        node.dataset.ask = item.ask.id;
+        if (item.ask.tier === "card") node.append(askCard(item));
+        else {
+          node.append(el("p", "say", item.text));
+          if (item.ask.detail?.picture) node.append(pictureNode({ picture: item.ask.detail.picture }));
+          const fold = window.paActivity.asked(item.ask, { grew: env.grew });
+          if (fold) node.append(fold);
+        }
+        body.append(node);
+        return node;
+      }
       // A line that is only an address is said by its card.
       const words = window.paChatText.wordsOf(item.text);
       if (item.picture !== undefined) node.append(pictureNode(item));
       else if (!(item.card && saysTitle(item.text, item.card)) && words) node.append(window.paChatText.sayNode(words, links, say));
-      // Each card answered beside the page while it worked in it: one line, kept with the reply.
-      for (const step of item.trace || []) {
-        if (step.tool === "operate" && step.confirmed) for (const line of step.confirmed.split("\n")) node.append(el("p", "op-note", line));
-      }
       const cards = item.picture === undefined && linkCards(item.text, item.card?.url);
       if (cards) node.append(cards);
       const from = window.paActivity.sources(item.sources, links);
@@ -318,7 +366,7 @@ window.paThread = (() => {
       }
     }
 
-    return { reset, draw, unline, typingRow, quoteNode, mark };
+    return { reset, draw, unline, typingRow, quoteNode, mark, settle };
   }
 
   return { create };

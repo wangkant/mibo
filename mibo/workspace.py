@@ -73,10 +73,10 @@ def _trace(item: dict) -> list[dict]:
             # A command keeps what was run and how it ended, for the step log (shell/tool.py).
             | ({k: str(t.get(k, ""))[:600] for k in ("cmd", "out", "status", "code")}
                if t.get("tool") in ("shell", "desk", "mcp") else {})
-            # Work in the page keeps its steps and the cards the person answered (search.py); a plan
-            # of a computer task keeps its list of steps, each marked ✓ done, → under way or · to do; a
-            # search of past chats keeps the chats it found (pastchats.py).
-            | ({k: str(t.get(k, ""))[:600] for k in ("out", "status", "confirmed")}
+            # Work in the page keeps its steps (search.py); a plan of a computer task keeps its list of steps,
+            # each marked ✓ done, → under way or · to do; a search of past chats keeps the chats it found
+            # (pastchats.py).
+            | ({k: str(t.get(k, ""))[:600] for k in ("out", "status")}
                if t.get("tool") in ("operate", "plan", "chats") else {})
             # At most 32 steps of a long task (loop.py allows up to 50 rounds).
             for t in item.get("trace") or [] if isinstance(t, dict)][:32]
@@ -121,6 +121,8 @@ class Workspace(ChatFinds):
         self._chat_lock = asyncio.Lock()
         # (chat, message, ended) while a reply to it is on its way: what the stop button stops.
         self._replying: tuple | None = None
+        # The questions said in a chat and not yet decided, by id: (chat, the question's message) (cardwait.py).
+        self._asked: dict[str, tuple] = {}
         # The scheduled tasks, set when their panel is mounted (panels/schedule.py).
         self.schedule = None
         self._forgetting = False
@@ -474,19 +476,21 @@ class Workspace(ChatFinds):
 
     async def chat(self, text: str, after: int | None = None, retry: int | None = None,
                    chat: str = MAIN_CHAT, reply_to: str = "", attachments: list | None = None,
-                   choices: list | None = None) -> dict:
+                   choices: list | None = None, answering: int | None = None) -> dict:
         """Send `text` in one chat; the reply, and every message since `after` in
         order, including what the character sent on its own meanwhile. `retry`
         names the unanswered message this one sends again, which then goes, and
         whose attachments go again when none come with it. `reply_to` names a thing
         the character brought that this message answers. `attachments`: pictures and
         text files, as chat.js sends them (chatmedia.read_attachments). `choices`: what the
-        person chose under "+" for this message (turns.TURN_CHOICES), which the turn honours."""
+        person chose under "+" for this message (turns.TURN_CHOICES), which the turn honours.
+        `answering` names the person's message that was a no to a question (answer_said): its own
+        words, where they stand in the chat, are the message answered now, once; `text` is not read."""
         from .turns import TURN_CHOICES
         picked = [c for c in TURN_CHOICES if c in (choices if isinstance(choices, list) else [])]
         if not self.config().get("LLM_API_KEY"):
             raise ValueError("key_required")
-        if not text.strip() and not attachments and retry is None:
+        if not text.strip() and not attachments and retry is None and answering is None:
             raise ValueError("generic")
         if len(text) > 8000:
             raise ValueError("invalid_message")
@@ -496,6 +500,9 @@ class Workspace(ChatFinds):
         async with self._chat_lock:
             room = self._chat(chat)
             again, picked = self._take_retried(room, retry, picked)
+            answer = None if answering is None else self._take_answer(room, answering)
+            if answer is not None:
+                text = answer["text"]
             # Stored and recorded with no wait between, so no save in between finds them unshown.
             records = self.media.keep(taken) if taken else again
             if not text.strip() and not records:
@@ -503,7 +510,10 @@ class Workspace(ChatFinds):
             if room is not self._main and not room.title:
                 room.title = (" ".join(text.split())
                               or next((r["file"] for r in records if r["kind"] == "file"), ""))[:TITLE_FIRST]
-            said, quotes = self._record_asked(room, text, records, picked, reply_to)
+            if answer is None:
+                said, quotes = self._record_asked(room, text, records, picked, reply_to)
+            else:
+                said, quotes = answer, _quotes(room)
             items = await self._reply(room, said, quotes, text, records, picked)
             said.pop("pending", None)
             if any(item.get("type") == "cut" for item in items):
@@ -541,6 +551,58 @@ class Workspace(ChatFinds):
         failed = next((m for m in room.history if m.get("seq") == retry and m.get("failed")), {})
         room.history = [m for m in room.history if m is not failed]
         return failed.get("attachments") or [], picked or failed.get("choices") or []
+
+    @staticmethod
+    def _take_answer(room: PageChat, seq: int) -> dict:
+        """The person's no to a question (answer_said), not yet answered as a message: kept where they typed it and
+        marked pending again. Taken once: a message answered already is refused."""
+        said = next((m for m in room.history if m.get("seq") == seq and m.get("role") == "user" and m.get("answers")
+                     and (m.get("pending") or m.get("failed"))), None)
+        if said is None:
+            raise ValueError("generic")
+        said.pop("failed", None)
+        said["pending"] = True
+        return said
+
+    # -- a question of the reply under way, and its answer (cardwait.py)
+
+    def question_said(self, conversation: str, entry: dict) -> None:
+        """A question a step of the reply under way waits on joins that reply's chat as the character's message,
+        after the request and before the reply; a picture the fold shows is stored as the chat's pictures are. Only
+        into the chat of the reply under way, and only when its conversation is the asking step's."""
+        if self._replying is None or self._replying[0].conversation != conversation:
+            return
+        room = self._replying[0]
+        detail = entry["ask"]["detail"]
+        if detail.get("picture"):
+            detail["picture"] = self.media.keep_picture(detail["picture"])
+            if not detail["picture"]:
+                del detail["picture"]
+        room.append([entry])
+        self._asked[entry["ask"]["id"]] = (room, entry)
+        with contextlib.suppress(sqlite3.Error):
+            self._save_chat(room)
+
+    def answer_said(self, ident: str, state: str, line: str = "", pending: bool = False) -> int | None:
+        """How question `ident` was decided ("yes", "no", "unanswered", or "left": a browser act the next message
+        beside the page may still answer), kept on it with the time; the person's words, when there are any, after
+        it as their message, marked `pending` (a typed no) until they are answered as a message (chat
+        `answering`). The number of that message, or None. A question decided already is not decided again."""
+        held = self._asked.get(ident)
+        if held is None or held[1]["ask"]["state"] not in ("waiting", "left"):
+            return None
+        room, question = held
+        question["ask"].update(state=state, at=now_iso())
+        if state != "left":
+            del self._asked[ident]
+        seq = None
+        if line.strip():
+            (said,) = room.append([{"role": "user", "text": line, "answers": ident,
+                                    **({"pending": True} if pending else {})}])
+            seq = said["seq"]
+        with contextlib.suppress(sqlite3.Error):
+            self._save_chat(room)
+        return seq
 
     def _record_asked(self, room: PageChat, text: str, records: list[dict], picked: list,
                       reply_to: str) -> tuple[dict, list[dict]]:

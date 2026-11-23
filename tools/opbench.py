@@ -1,6 +1,6 @@
 """The operating benchmark: each task of tools/opsite/tasks.py sent through the chat, as a person would type it,
 in the real app window, with a real model. The character works the page open in the app's browser; the
-cards it raises are answered as the task says (yes, or no for the checkout); the site decides whether it was done,
+questions it asks are answered as the task says (yes, or no for the checkout: tools/chatanswer.py); the site decides whether it was done,
 and how each act ended is read from the chat's own record of the reply (GET /api/chat/history). With the chat
 beside the page and the page in its context the message is done in the page directly (tools/opcolumn.py makes
 sure of that); away from the page the reply model chooses.
@@ -13,7 +13,7 @@ each task, so every run starts as a stranger to the site. <file> gives LLM_API_K
 printed; the key reaches the app only through its environment (tools/scratchhome.py). Model calls go through a small pass-through on this
 computer that counts them; it keeps request bodies and answers in <out>/model.jsonl, never headers or the key.
 The table lands in <out>/table.md and <out>/results.json: per task and run, success, model calls, input tokens,
-seconds, cards shown and, when it failed, the kind of failure. The site, the counter and the window's stand-in
+seconds, questions asked and, when it failed, the kind of failure. The site, the counter and the window's stand-in
 model take the site port and the two after it. `--pictures` says the model takes pictures; without it
 the drawn page (T25) passes only when nothing is sent."""
 from __future__ import annotations
@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE / "opsite"))
 import tasks as bench  # noqa: E402
+from chatanswer import TAKE, answer  # noqa: E402
 from everyday import relay_get  # noqa: E402
 
 # How long one task may take, and the password the person types in R3 (a test value, never a real one).
@@ -167,9 +168,6 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
         answer = d.app.pane.cdp("Runtime.evaluate", {"expression": expression, "returnByValue": True})
         return (answer.get("result") or {}).get("value")
 
-    def card_text() -> str:
-        return d.js("(() => { const c = document.querySelector('.op-card:not(.answered)'); "
-                    "return c ? c.innerText : ''; })()") or ""
 
     def ask(text: str) -> None:
         # Into the box of the chat on screen, which stands beside the page where the window is wide enough for both.
@@ -181,18 +179,16 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
         began = time.time()
         time.sleep(2)
         while time.time() - began < TASK_S:
-            text = card_text()
-            # Every new card is answered, the same words again included (a card shown anew after a change).
-            if text and text != "<<page is busy>>" and d.js("(() => { const c = document.querySelector("
-                                                            "'.op-card:not(.answered)'); return !!c && !c.dataset.bench; })()"):
+            # Every new question is answered, the same words again included (asked anew after a change).
+            text = d.js(TAKE) or ""
+            if text:
                 cards.append(text)
                 d.shot(f"{task['id']}-card")
                 no = task.get("deny") and re.search(task["deny"], text)
-                # When the press was made: an effect the site got before it went out without the card.
+                # When the answer was given: an effect the site got before it went out without the yes.
                 presses.append((time.time(), not no))
-                d.click(".op-card:not(.answered) .pa-btn-%s" % ("secondary" if no else "primary"))
-                d.js("(() => { const c = document.querySelector('.op-card'); if (c) c.dataset.bench = '1'; })()")
-                d.log(f"   card ({'no' if no else 'yes'}): {' / '.join(text.split())[:200]}")
+                d.js(answer(not no))
+                d.log(f"   question ({'no' if no else 'yes'}): {' / '.join(text.split())[:200]}")
             if not d.js("!!document.querySelector('.line.typing')"):
                 return
             time.sleep(1)

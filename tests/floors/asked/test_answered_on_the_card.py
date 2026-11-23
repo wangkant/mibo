@@ -41,6 +41,20 @@ class Page:
         pass
 
 
+class Chat:
+    """The workspace's side of a question (workspace.question_said and answer_said): what the chat was given."""
+
+    def __init__(self, home):
+        self.home, self.said, self.answers = home, [], []
+
+    def question_said(self, conversation, entry):
+        self.said.append((conversation, entry))
+
+    def answer_said(self, ident, state, line="", pending=False):
+        self.answers.append((ident, state, line))
+        return len(self.answers) if line else None
+
+
 def operating(tmp_path) -> Operating:
     home = tmp_path / "home"
     (home / "runtime" / "desktop").mkdir(parents=True)
@@ -48,7 +62,7 @@ def operating(tmp_path) -> Operating:
         json.dumps({"conversation": "main", "turn": "t1"}), encoding="utf-8")
     window = SimpleNamespace(pane=Pane(), attended=lambda: True, show=lambda: None,
                              pick_files=lambda many: [str(tmp_path / "photo.jpg")])
-    run = Operating(window, tmp_path, SimpleNamespace(home=home))
+    run = Operating(window, tmp_path, Chat(home))
     run._page = lambda tab: Page()
     return run
 
@@ -70,10 +84,16 @@ async def answered(run: Operating, card: dict, *typed: tuple) -> dict | None:
 async def test_a_typed_yes_runs_the_act_and_only_under_its_own_id(tmp_path):
     run = operating(tmp_path)
     got = await answered(run, card_of("comment", "c1"), ("c0", "确定"), ("c1", "好，发吧"))
-    assert got["said"] == [{"ok": False, "yes": False}, {"ok": True, "yes": False}]
+    assert got["said"] == [{"ok": False, "yes": False}, {"ok": True, "yes": False, "seq": 1}]
     assert got["answer"]["yes"] is False
     got = await answered(run, card_of("comment", "c2"), ("c2", "确定"))
     assert got["answer"]["yes"] is True
+    # Each question is said in the chat in the app's words for the act, and each answer is the person's words.
+    chat = run.workspace
+    assert [(c, e["ask"]["id"], e["ask"]["tier"]) for c, e in chat.said] == [("main", "c1", "plain"),
+                                                                            ("main", "c2", "plain")]
+    assert "作品《周末》" in chat.said[0][1]["text"] and "好的" not in chat.said[0][1]["text"]
+    assert chat.answers == [("c1", "no", "好，发吧"), ("c2", "yes", "确定")]
 
 
 async def test_one_yes_carries_ordinary_acts_and_never_an_upload(tmp_path):
@@ -104,3 +124,5 @@ async def test_a_question_left_waiting_is_answered_by_the_next_words_beside_the_
     assert run.keep(False)
     assert run.left is None and run.kept == {card["act"]: {"yes": False}} and run.window.pane.kept == [False]
     assert not run.keep(True)
+    # The question stays in the chat, left for the next words; their message is the answer, marked on it.
+    assert run.workspace.answers == [("c1", "left", ""), ("c1", "no", "")]
