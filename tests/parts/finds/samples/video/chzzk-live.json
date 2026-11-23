@@ -1,0 +1,39 @@
+{
+ "content": {
+  "data": [
+   {
+    "liveTitle": "[2026 치지직컵] 팀 BNG 서폿 풀리그 2일차",
+    "liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/26464698/live/22379043/publish/69353130/thumbnail/image_{type}.jpg",
+    "openDate": "2026-11-23 22:46:21",
+    "liveCategoryValue": "리그 오브 레전드",
+    "adult": false,
+    "channel": {
+     "channelId": "75cbf189b3bb8f9f687d2aca0d0a382b",
+     "channelName": "Streamer1"
+    }
+   },
+   {
+    "liveTitle": "Adult stream",
+    "liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/26464698/live/22379043/publish/69353130/thumbnail/image_{type}.jpg",
+    "openDate": "2026-11-23 22:46:21",
+    "liveCategoryValue": "리그 오브 레전드",
+    "adult": true,
+    "channel": {
+     "channelId": "75cbf189b3bb8f9f687d2aca0d0a382b",
+     "channelName": "Streamer1"
+    }
+   },
+   {
+    "liveTitle": "[2026 치지직컵] 뱅가드팀 대회 2일차 딜레이 없음",
+    "liveImageUrl": "https://livecloud-thumb.akamaized.net/chzzk/livecloud/KR/stream/26464698/live/22379044/publish/69353131/thumbnail/image_{type}.jpg",
+    "openDate": "2026-11-23 20:21:15",
+    "liveCategoryValue": "리그 오브 레전드",
+    "adult": false,
+    "channel": {
+     "channelId": "7ce8032370ac5121dcabce7bad375ced",
+     "channelName": "Streamer2"
+    }
+   }
+  ]
+ }
+}

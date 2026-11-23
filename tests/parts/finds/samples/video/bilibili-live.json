@@ -1,0 +1,25 @@
+{
+ "code": 0,
+ "data": [
+  {
+   "roomid": 23929781,
+   "title": "我  吃  好  了",
+   "user_cover": "https://i0.hdslb.com/bfs/live/user_cover/6040f2a681f7b6042b162e7db65b2e744e1d0dc8.jpg",
+   "cover": "https://i0.hdslb.com/bfs/live/user_cover/6040f2a681f7b6042b162e7db65b2e744e1d0dc8.jpg",
+   "online": 385020,
+   "area_v2_parent_name": "单机游戏",
+   "area_v2_name": "新游推荐",
+   "uname": "Streamer1"
+  },
+  {
+   "roomid": 34348,
+   "title": "gta6！赚够100W再下播",
+   "user_cover": "https://i0.hdslb.com/bfs/live/new_room_cover/327849ee4a5dc8dc83f3c487f618731aa71060c3.jpg",
+   "cover": "https://i0.hdslb.com/bfs/live/new_room_cover/327849ee4a5dc8dc83f3c487f618731aa71060c3.jpg",
+   "online": 360111,
+   "area_v2_parent_name": "单机游戏",
+   "area_v2_name": "新游推荐",
+   "uname": "Streamer2"
+  }
+ ]
+}

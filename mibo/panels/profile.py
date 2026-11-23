@@ -7,7 +7,8 @@ text asks for a rewrite at once, so a "not this" becomes a rule. `POST
 /api/profile/answer` is the first run's free-text answer, rewritten at once.
 
 `GET /api/profile/taste` is Settings › 推荐's "your taste" in the page's
-language: the picked topics with their leans, what the reactions taught, every
+language: the picked topics with their leans, the chosen platforms and those
+offered (as GET /api/feed/interests gives them), what the reactions taught, every
 other lean (set from a card or a taught row), what was said in the chat (likes, wishes for now, "not this" rules, the form wish),
 the pace with each pace's day cap, and the quiet hours. `POST
 /api/profile/taste` takes one change of those ({"leans"}, {"likes"},
@@ -66,6 +67,7 @@ class Profile:
                  for key, to in known["leans"].items() if key not in keys.values()]
         return {"topics": [{"name": t, "key": key, "lean": known["leans"].get(key)} for t, key in keys.items()],
                 "offered": feed.suggested(lang),
+                "platforms": feed.load_platforms(runtime), "platformsOffered": feed.offered_platforms(runtime, lang),
                 **taught,
                 "leans": leans,
                 "likes": [x for x in known["likes"] if not x.get("until")],

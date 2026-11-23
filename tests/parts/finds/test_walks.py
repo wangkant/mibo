@@ -111,6 +111,20 @@ def test_players_are_built_only_for_listed_hosts():
         "https://player.bilibili.com/player.html?bvid=BV1xx411c7mD&autoplay=0"
     assert players.player_for("https://evil.example/video/BV1xx411c7mD") == ""
     assert players.player_for("https://notyoutube.com/watch?v=dQw4w9WgXcQ") == ""
+    claim = "7ef78b179d264e0d606c24894c56217d46e53318"
+    assert players.player_for("https://www.ted.com/talks/li_hongyi_why_government_is_slow") == \
+        "https://embed.ted.com/talks/li_hongyi_why_government_is_slow"
+    assert players.player_for(f"https://odysee.com/@chan:9/a-claim:{claim}") == f"https://odysee.com/$/embed/a-claim/{claim}"
+    # A list page, a short claim id, a look-alike host and a site's own page are no players.
+    for page in ("https://www.ted.com/talks", "https://odysee.com/@chan:9/a-claim:7ef7", "https://notted.com/talks/a_b",
+                 "https://odysee.com.evil.example/@chan:9/a-claim:" + claim, "https://evil.example/talks/a_b"):
+        assert players.player_for(page) == "", page
+    assert players.allowed("https://embed.ted.com/talks/a_b") and not players.allowed("https://embed.ted.com/")
+    assert players.allowed(f"https://odysee.com/$/embed/a-claim/{claim}") and not players.allowed("https://odysee.com/@chan:9/x")
+    assert not players.allowed(f"https://odysee.com.evil.example/$/embed/a-claim/{claim}")
+    # A platform's own site is framed only on its player's path, in the page's frame-src too.
+    assert {"embed.ted.com/talks/", "odysee.com/$/embed/"} <= set(players.frame_sources())
+    assert "odysee.com" not in players.frame_sources()
     assert pagefacts.allowed_player("https://player.vimeo.com/video/1") == "https://player.vimeo.com/video/1"
     assert pagefacts.allowed_player("http://player.vimeo.com/video/1") == ""
     assert pagefacts.allowed_player("https://cdn.example/player.html") == ""

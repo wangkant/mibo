@@ -121,9 +121,11 @@ def feeds_on(runtime: Path) -> dict:
 
 
 def keep_finds(runtime: Path, key: str, rows: list) -> int:
-    """A feed's rows as library finds of that site (source "feed <site>"); how many were new."""
+    """A feed's rows as library finds of that site (source "feed <site>"); how many were new. A row whose link has
+    a platform's player (a Douyin or TikTok video) is a video with that player, so it plays on its card."""
     from .library import Item, Library, item_id
     from .pagefacts import site_name
+    from .players import player_for
     from .web import sites
     library, new = Library(runtime), 0
     for row in rows[:FEED_ROWS]:
@@ -131,8 +133,10 @@ def keep_finds(runtime: Path, key: str, rows: list) -> int:
         if not row.get("title") or not browsed.web(link) or sites.key_of(link) != key or browsed.secret(link):
             continue
         if library.get(item_id(link)) is None:
-            library.add(Item(url=link, site=site_name(link), kind="post", title=str(row["title"])[:300],
-                             author=str(row.get("author") or "")[:200], source=f"feed {key}"))
+            player = player_for(link)
+            library.add(Item(url=link, site=site_name(link), kind="video" if player else "post", embed=player,
+                             title=str(row["title"])[:300], author=str(row.get("author") or "")[:200],
+                             source=f"feed {key}"))
             new += 1
     return new
 

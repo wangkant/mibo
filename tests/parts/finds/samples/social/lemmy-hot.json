@@ -1,0 +1,89 @@
+{
+ "posts": [
+  {
+   "post": {
+    "id": 54765362,
+    "name": "Alternative Facts",
+    "url": "https://sh.itjust.works/pictrs/image/a15dfb39-304a-40fa-b5ba-1b4f05d14a3b.webp",
+    "published": "2026-11-23T18:09:50.998859Z",
+    "nsfw": false,
+    "thumbnail_url": "https://lemmy.world/pictrs/image/75914fa2-2424-4500-aa31-58420b6214eb.webp",
+    "ap_id": "https://sh.itjust.works/post/70369690"
+   },
+   "creator": {
+    "id": 25636869,
+    "name": "skyway_Vee",
+    "actor_id": "https://sh.itjust.works/u/skyway_Vee"
+   },
+   "community": {
+    "id": 31408,
+    "name": "comicstrips",
+    "title": "Comic Strips",
+    "nsfw": false,
+    "actor_id": "https://lemmy.world/c/comicstrips"
+   },
+   "counts": {
+    "comments": 1,
+    "score": 60,
+    "published": "2026-11-23T18:09:50.998859Z"
+   }
+  },
+  {
+   "post": {
+    "id": 54764786,
+    "name": "The Truth",
+    "url": "https://sh.itjust.works/pictrs/image/d4d44b4f-1930-432b-b9ed-87dcf105300f.jpeg",
+    "published": "2026-11-23T17:55:37.730725Z",
+    "nsfw": false,
+    "thumbnail_url": "https://lemmy.world/pictrs/image/f382f33f-db49-4575-9fb1-d92f9cf6c6d5.jpeg",
+    "ap_id": "https://sh.itjust.works/post/70369212"
+   },
+   "creator": {
+    "id": 25636869,
+    "name": "skyway_Vee",
+    "actor_id": "https://sh.itjust.works/u/skyway_Vee"
+   },
+   "community": {
+    "id": 31408,
+    "name": "comicstrips",
+    "title": "Comic Strips",
+    "nsfw": false,
+    "actor_id": "https://lemmy.world/c/comicstrips"
+   },
+   "counts": {
+    "comments": 2,
+    "score": 61,
+    "published": "2026-11-23T17:55:37.730725Z"
+   }
+  },
+  {
+   "post": {
+    "id": 54764884,
+    "name": "Radicalized",
+    "url": "https://sh.itjust.works/pictrs/image/5fc199db-b89a-43a7-a9e3-c01d604ddc26.webp",
+    "published": "2026-11-23T18:01:46.763712Z",
+    "nsfw": false,
+    "thumbnail_url": "https://lemmy.world/pictrs/image/0e228b7e-9446-45c8-8184-b70dfbd4605b.webp",
+    "ap_id": "https://sh.itjust.works/post/70369365"
+   },
+   "creator": {
+    "id": 25636869,
+    "name": "skyway_Vee",
+    "actor_id": "https://sh.itjust.works/u/skyway_Vee"
+   },
+   "community": {
+    "id": 31408,
+    "name": "comicstrips",
+    "title": "Comic Strips",
+    "nsfw": false,
+    "actor_id": "https://lemmy.world/c/comicstrips"
+   },
+   "counts": {
+    "comments": 3,
+    "score": 34,
+    "published": "2026-11-23T18:01:46.763712Z"
+   }
+  }
+ ],
+ "next_page": "P343a554"
+}

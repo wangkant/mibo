@@ -22,12 +22,13 @@ import random
 import time
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import quote, urljoin
 
 import httpx
 
-from .. import db, langs, quiet, roam, situation
+from .. import db, langs, platforms, quiet, roam, situation
 from ..library import Library, item_id
 from ..pagefacts import PICTURE_FETCH_MAX, public_address, small_picture
 from ..panels import feed as feed_panel
@@ -37,7 +38,7 @@ from .base import Find, Source
 logger = logging.getLogger("agent.sources")
 
 # The modules that list sources.
-AREAS = ("tech", "china", "world", "culture", "regional")
+AREAS = ("tech", "china", "world", "culture", "regional", "video", "social")
 # Sources fetched at the same time in one round.
 AT_ONCE = 6
 # A round soon after the app starts, then this often.
@@ -75,12 +76,15 @@ def custom():
 
 
 def all_sources(own_entries: list[dict]) -> dict[str, Source]:
-    """Every source by key: the area modules' first, then one per saved own entry."""
+    """Every source by key: the area modules' first, each with its platform (`platforms.PREFIXES` for one that
+    names none), then one per saved own entry."""
     found: dict[str, Source] = {}
     for name in AREAS:
         module = _module(name)
         for source in getattr(module, "SOURCES", ()):
-            found.setdefault(source.key, source)
+            if source.key not in found:
+                found[source.key] = source if source.platform else replace(
+                    source, platform=platforms.of_source(source.key))
     own = custom() if own_entries else None
     if own is not None:
         try:
@@ -127,11 +131,12 @@ def change_choice(runtime: Path, change: Callable[[dict], None]) -> dict:
 def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: random.Random | None = None) -> list[dict]:
     """Every public source with its weight for this person, highest first (see `weights.weigh`):
     the languages they read (the character's own first, the others less), the defaults of the character's
-    language, the situation's supply term, and the taste model's sampled coefficient for each source while
-    the model is on."""
+    language, the platforms the person chose, the situation's supply term, and the taste model's sampled
+    coefficient for each source while the model is on."""
     from .. import taste
     runtime = Path(runtime)
     matcher = feed_panel.topic_matcher(feed_panel.load_topics(runtime))
+    chosen = set(feed_panel.load_platforms(runtime))
     public = [s for s in sources.values() if s.group != "own"]
     origin = None
     if taste.enabled(runtime):
@@ -143,7 +148,7 @@ def weighed(runtime: Path, lang: str, sources: dict[str, Source], rng: random.Ra
                          own=situation.expand({lang}), unreadable=situation.unreadable(runtime), defaults=defaults,
                          supply=situation.supplier(runtime), origin=origin,
                          retry_s=situation.retry_s(runtime),
-                         topical=pulls(runtime, public, time.time()))
+                         topical=pulls(runtime, public, time.time()), platforms=chosen)
 
 
 # How far back what a source brought tells what it is about, and the fresh unseen things on an interest

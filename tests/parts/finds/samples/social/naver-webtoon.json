@@ -1,0 +1,75 @@
+{
+ "titleListMap": {
+  "TUESDAY": [
+   {
+    "titleId": 821597,
+    "titleName": "괴력 난신",
+    "author": "매드버드 / 김태형 / 한중월야",
+    "thumbnailUrl": "https://image-comic.pstatic.net/webtoon/821597/thumbnail/thumbnail_IMAG21_e0a16b98-1418-4cdc-82b0-f25c258f7ede.jpg",
+    "up": true,
+    "rest": false,
+    "bm": false,
+    "adult": false,
+    "starScore": 9.95465,
+    "viewCount": 0,
+    "openToday": false,
+    "potenUp": false,
+    "bestChallengeLevelUp": false,
+    "finish": false,
+    "new": false
+   },
+   {
+    "titleId": 828715,
+    "titleName": "절대회귀",
+    "author": "JP / 박진환 / 장영훈",
+    "thumbnailUrl": "https://image-comic.pstatic.net/webtoon/828715/thumbnail/thumbnail_IMAG21_8957548a-2eb2-4ddf-a50e-dbc7fddc16a7.jpg",
+    "up": true,
+    "rest": false,
+    "bm": false,
+    "adult": false,
+    "starScore": 9.96664,
+    "viewCount": 0,
+    "openToday": false,
+    "potenUp": false,
+    "bestChallengeLevelUp": false,
+    "finish": false,
+    "new": false
+   },
+   {
+    "titleId": 841624,
+    "titleName": "오! 나의 교주님",
+    "author": "김꿀빨, 김완두",
+    "thumbnailUrl": "https://image-comic.pstatic.net/webtoon/841624/thumbnail/thumbnail_IMAG21_154d7538-16dc-4aef-acb4-60d31e2834c8.jpg",
+    "up": true,
+    "rest": false,
+    "bm": false,
+    "adult": true,
+    "starScore": 9.53118,
+    "viewCount": 0,
+    "openToday": false,
+    "potenUp": false,
+    "bestChallengeLevelUp": false,
+    "finish": false,
+    "new": false
+   },
+   {
+    "titleId": 832557,
+    "titleName": "회귀한 용병은 다 계획이 있다",
+    "author": "골드행 / 박진석",
+    "thumbnailUrl": "https://image-comic.pstatic.net/webtoon/832557/thumbnail/thumbnail_IMAG21_c5c54372-f0f3-4151-ac9a-729050c57bb6.jpg",
+    "up": false,
+    "rest": true,
+    "bm": false,
+    "adult": false,
+    "starScore": 9.95233,
+    "viewCount": 0,
+    "openToday": false,
+    "potenUp": false,
+    "bestChallengeLevelUp": false,
+    "finish": false,
+    "new": false
+   }
+  ]
+ },
+ "dayOfWeek": "TUESDAY"
+}

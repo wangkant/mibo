@@ -132,6 +132,7 @@ def test_a_backup_carries_every_find_and_a_restore_puts_back_only_those(tmp_path
                                          seen_at=int(time.time())))
         feed.remember(runtime, item, "seen", time.time())
         feed.keep_topics(runtime, [title])
+        feed.keep_platforms(runtime, [{"before": "bilibili.com", "after": "youtube.com"}[title]])
         browsed.record(runtime / "desktop", {"url": item.url, "title": title, "s": 5})
         weights.read(runtime, {title: True})
         catalog.change_choice(runtime, lambda c: c["own"].append({"key": title, "url": item.url}))
@@ -143,10 +144,22 @@ def test_a_backup_carries_every_find_and_a_restore_puts_back_only_those(tmp_path
 
     seed("before")
     kept = held()
-    assert all(kept[t] for t in ("library", "feed_events", "feed_topics", "shown", "browsed", "source_state",
-                                 "own_feeds", "situation", "hosts")), "every kind of find is there to carry"
+    assert all(kept[t] for t in ("library", "feed_events", "feed_topics", "feed_platforms", "shown", "browsed",
+                                 "source_state", "own_feeds", "situation", "hosts")), "every kind of find is there to carry"
     assert db.snapshot(runtime, archive)
     seed("after")
     assert held() != kept
     db.take_back(runtime, archive)
     assert held() == kept
+
+
+def test_a_backup_from_before_a_table_existed_restores_with_that_table_empty(tmp_path):
+    runtime, archive = tmp_path / "runtime", tmp_path / "archive.db"
+    feed.keep_topics(runtime, ["tides"])
+    assert db.snapshot(runtime, archive)
+    old = sqlite3.connect(archive)
+    old.execute("DROP TABLE feed_platforms")
+    old.close()
+    feed.keep_platforms(runtime, ["bilibili.com"])
+    db.take_back(runtime, archive)
+    assert feed.load_topics(runtime) == ["tides"] and feed.load_platforms(runtime) == []

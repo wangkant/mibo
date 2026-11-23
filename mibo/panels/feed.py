@@ -5,7 +5,8 @@ Every reaction from the pet's card, the chat or the 推荐记录 list is kept as
 the runtime database's `feed_events` table (db.py). Taste is read back from those events: the sites and
 kinds of the things the person opened and liked count for a thing, the ones
 they skipped count against it. The topics the person named on the first run
-are kept beside them (`feed_topics`) and count before there is any behaviour to go on.
+are kept beside them (`feed_topics`) and count before there is any behaviour to go on, and so do the platforms
+they chose (`feed_platforms`, keys of platforms.py).
 A thing a public source brought also counts what was learned of that source
 (`sources.weights`, fed from `remember`), and no source fills more than
 SOURCE_CAP of any PAGE_WINDOW things in a row.
@@ -28,7 +29,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
-from .. import browsed, db, life, profile, situation, subjects
+from .. import browsed, db, life, platforms, profile, situation, subjects
 from .. import taste as model
 from ..library import DISMISSED, KEPT, Item, Library
 from ..sources import weights
@@ -52,7 +53,8 @@ QUICK_S = 3
 # The first run's round of sample finds, at most FIRST_PER_SOURCE from one source.
 FIRST_MAX = 10
 FIRST_PER_SOURCE = 2
-# A sample find's summary is at least this wide, a Chinese character counting two.
+# A sample find's summary is at least this wide, a Chinese character counting two (one of a video platform needs
+# none: its title and cover say what it is).
 SUMMARY_MIN = 60
 # A title that is only a name and a version number ("llm-gemini 0.38"): a release, not a thing to read.
 RELEASE = re.compile(r"[\w.-]+ v?\d+(\.\d+)+[a-z]*\d*", re.I)
@@ -129,6 +131,11 @@ def _add(conn, event: list) -> None:
 
 def load_topics(runtime: Path) -> list[str]:
     return [topic for topic, in db.at(runtime).read("SELECT topic FROM feed_topics ORDER BY n")]
+
+
+def load_platforms(runtime: Path) -> list[str]:
+    """The platforms the person chose, as platforms.py keys; none is no preference."""
+    return [key for key, in db.at(runtime).read("SELECT key FROM feed_platforms ORDER BY n") if platforms.known(key)]
 
 
 def _marks(events: list, until: float | None = None) -> tuple[dict, float]:
@@ -252,6 +259,29 @@ def clean_topics(raw) -> list[str]:
     return topics[:TOPICS_MAX]
 
 
+def clean_platforms(raw) -> list[str]:
+    """The platforms a page sent: every one a key platforms.py knows, or the whole list is refused, since what is
+    kept steers what the app reads."""
+    if not isinstance(raw, list) or not all(isinstance(key, str) and platforms.known(key) for key in raw):
+        raise ValueError("feed_platforms")
+    return list(dict.fromkeys(raw))
+
+
+def offered_platforms(runtime: Path, lang: str) -> list[dict]:
+    """The platforms to choose from for a reader of `lang` (platforms.offered), then any chosen that is not among
+    them: {key, name, reach, connected}, connected when the person is signed in to it in the app's browser."""
+    shown = platforms.offered([lang, *sorted(situation.readable(runtime))], situation.value(runtime, "region"))
+    shown += [platforms.PLATFORMS[key] for key in load_platforms(runtime) if platforms.PLATFORMS[key] not in shown]
+    saved = signin.load(runtime / "desktop")
+    return [{"key": p.key, "name": p.name(lang), "reach": p.reach, "connected": _signed_in(saved, p.key)}
+            for p in shown]
+
+
+def _signed_in(saved: dict, key: str) -> bool:
+    entry = saved.get(key) or {}
+    return entry.get("state") == "in" and not entry.get("gone")
+
+
 def _word(word: str) -> str:
     # A Latin word is found whole, so "ai" is not found in "said"; Chinese has no spaces to look for.
     if word.isascii():
@@ -359,12 +389,13 @@ def errand(url: str) -> bool:
             or browsed.secret(url) or browsed.site_of(parts.hostname or "").split(".")[0] in ERRAND_SITES)
 
 
-def presentable(shaped: dict) -> bool:
-    """A sample find for the first run: a real title, a summary that says something and a picture."""
+def presentable(shaped: dict, video: bool = False) -> bool:
+    """A sample find for the first run: a real title, a summary that says something (not for one of a `video`
+    platform) and a picture."""
     title = shaped["title"].strip()
     width = sum(2 if ord(c) > 0x2E80 else 1 for c in shaped["text"])
-    return bool(title and title != shaped["site"] and not RELEASE.fullmatch(title) and width >= SUMMARY_MIN
-                and shaped["picture"])
+    return bool(title and title != shaped["site"] and not RELEASE.fullmatch(title)
+                and (video or width >= SUMMARY_MIN) and shaped["picture"])
 
 
 def ranked(library: Library, events: list, at: float, topics: list[str] = (), *, seed: int | None = None,
@@ -478,26 +509,46 @@ def shown(library: Library, events: list, kept: bool = False, limit: int = LIMIT
             "next": f"{-page[-1][0][0]}.{page[-1][2]}" if start + len(page) < len(order) else ""}
 
 
-def first_round(library: Library, events: list, now: float, topics: list[str]) -> list[dict]:
+def first_round(library: Library, events: list, now: float, topics: list[str], chosen: list[str] = ()) -> list[dict]:
     """The first run's sample finds: the ranking's best unseen that are `presentable`, FIRST_PER_SOURCE from
     one site and FIRST_MAX in all at most, those the character has read first, never two in a row from one
     source or on one topic where there is a choice, and text and video in turn where both are left. A site
     counts as one however many of its lists brought things (a video site has a list for each kind of video);
-    only when too few sites have something presentable yet does one give more."""
-    rows, more, per = [], [], Counter()
+    only when too few sites have something presentable yet does one give more. Each platform the person chose
+    (`chosen`) that has one keeps a place for its best before the rest fill."""
+    from ..sources import catalog
+    carried = {key: source.platform for key, source in catalog.all_sources([]).items()}
+    rows, more, per, reserved = [], [], Counter(), {}
+    wanted = set(chosen)
+
+    def waiting() -> bool:
+        return len(reserved) < FIRST_MAX and not wanted <= reserved.keys()
+
     for shaped, item in ranked(library, events, now, topics, seed=int(now * 1000)):
-        if shaped["seen"] or len(rows) >= 3 * FIRST_MAX:
+        full = len(rows) >= 3 * FIRST_MAX
+        if shaped["seen"] or (full and not waiting()):
             break
-        if not presentable(shaped):
+        platform = carried[item.source] if item.source in carried else platforms.of_url(item.url)
+        if not presentable(shaped, bool(platform) and platforms.PLATFORMS[platform].kind == "video"):
             continue
         site = shaped["site"] or item.source
-        if per[site] < FIRST_PER_SOURCE:
+        if platform in wanted and platform not in reserved and waiting() and per[site] < FIRST_PER_SOURCE:
+            per[site] += 1
+            reserved[platform] = (shaped, item)
+        elif full:
+            continue
+        elif per[site] < FIRST_PER_SOURCE:
             per[site] += 1
             rows.append((shaped, item))
         else:
             more.append((shaped, item))
     rows.sort(key=lambda row: not row[1].judged)
-    shown = Veins(topics).varied(rows, mix=True)[:FIRST_MAX]
+    kept = {item.id for _, item in reserved.values()}
+    shown, room = [], FIRST_MAX - len(kept)
+    for row in Veins(topics).varied([*reserved.values(), *rows], mix=True):
+        if row[1].id in kept or room > 0:
+            shown.append(row)
+            room -= row[1].id not in kept
     return [shaped for shaped, _ in shown + more[:FIRST_MAX - len(shown)]]
 
 
@@ -638,6 +689,14 @@ def keep_topics(runtime: Path, topics: list[str]) -> None:
     with db.at(runtime).write() as conn:
         conn.execute("DELETE FROM feed_topics")
         conn.executemany("INSERT INTO feed_topics (topic) VALUES (?)", [(topic,) for topic in topics])
+
+
+def keep_platforms(runtime: Path, keys: list[str]) -> None:
+    """The person's chosen platforms (clean_platforms' keys). Reading a signed-in platform's own feed stays the
+    switch in Settings > Connections, which asks first."""
+    with db.at(runtime).write() as conn:
+        conn.execute("DELETE FROM feed_platforms")
+        conn.executemany("INSERT INTO feed_platforms (key) VALUES (?)", [(key,) for key in keys])
 
 
 def forget_said(runtime: Path, match: re.Pattern) -> int:

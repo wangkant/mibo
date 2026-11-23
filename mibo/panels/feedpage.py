@@ -1,5 +1,5 @@
-"""The feed's routes: the 推荐记录 list, the pet's card, the first run's topics and sample finds, the person's
-reactions and their undo, and the situation table's view (feed.py holds the events and the ranking)."""
+"""The feed's routes: the 推荐记录 list, the pet's card, the first run's topics, platforms and sample finds, the
+person's reactions and their undo, and the situation table's view (feed.py holds the events and the ranking)."""
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +11,7 @@ from .. import activity, langs, life, profile, situation
 from .. import taste as model
 from . import feed
 
-ERRORS: frozenset[str] = frozenset({"feed_action", "feed_cursor", "feed_topics", "feed_no_source",
+ERRORS: frozenset[str] = frozenset({"feed_action", "feed_cursor", "feed_topics", "feed_platforms", "feed_no_source",
                                     "situation_invalid", "feed_format", "feed_snooze"})
 PLAY_MAX_S = 24 * 3600
 # How long the first run's round of sample finds waits for a sources round still out (onboard.js says so while
@@ -114,8 +114,9 @@ class Feed:
         return self.situation()
 
     def first(self) -> dict:
-        return {"items": feed.first_round(self.ws._library(), self._events(), life.clock(),
-                                          feed.load_topics(self.ws._runtime()))}
+        runtime = self.ws._runtime()
+        return {"items": feed.first_round(self.ws._library(), self._events(), life.clock(), feed.load_topics(runtime),
+                                          feed.load_platforms(runtime))}
 
     def _paced(self, ident: str, action: str, surface: str, end: str) -> None:
         """What the pacing hears: the card brought something, or how the last thing brought ended."""
@@ -128,11 +129,20 @@ class Feed:
             self.ws.pace.ended(ident, how, "chat")
 
     def interests(self, lang: str) -> dict:
+        """The topics and platforms chosen, and those offered in `lang` (platformsOffered: feed.offered_platforms)."""
+        runtime = self.ws._runtime()
         lang = langs.normalize(lang) or langs.normalize(self.ws.config().get("AGENT_LANG")) or "en"
-        return {"topics": feed.load_topics(self.ws._runtime()), "suggested": feed.suggested(lang)}
+        return {"topics": feed.load_topics(runtime), "suggested": feed.suggested(lang),
+                "platforms": feed.load_platforms(runtime), "platformsOffered": feed.offered_platforms(runtime, lang)}
 
     def choose(self, payload: dict) -> dict:
-        feed.keep_topics(self.ws._runtime(), feed.clean_topics(payload.get("topics")))
+        """The topics, and the platforms when the page sent them (none sent leaves those chosen before)."""
+        runtime = self.ws._runtime()
+        topics = feed.clean_topics(payload.get("topics"))
+        chosen = feed.clean_platforms(payload["platforms"]) if "platforms" in payload else None
+        feed.keep_topics(runtime, topics)
+        if chosen is not None:
+            feed.keep_platforms(runtime, chosen)
         return self.interests(payload.get("lang") or "")
 
     async def react(self, payload: dict) -> dict:

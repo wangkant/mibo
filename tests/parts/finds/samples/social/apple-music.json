@@ -1,0 +1,90 @@
+{
+ "feed": {
+  "title": "热门歌曲排行",
+  "id": "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/10/songs.json",
+  "author": {
+   "name": "Apple",
+   "url": "https://www.apple.com/"
+  },
+  "links": [
+   {
+    "self": "https://rss.marketingtools.apple.com/api/v2/cn/music/most-played/10/songs.json"
+   }
+  ],
+  "copyright": "Copyright © 2026 Apple Inc. All rights reserved.",
+  "country": "cn",
+  "icon": "https://www.apple.com/favicon.ico",
+  "updated": "Mon, 23 Nov 2026 18:46:23 +0000",
+  "results": [
+   {
+    "artistName": "孙燕姿",
+    "id": "255921025",
+    "name": "我不难过",
+    "releaseDate": "2003-01-10",
+    "kind": "songs",
+    "artistId": "83405200",
+    "artistUrl": "https://music.apple.com/cn/artist/%E5%AD%99%E7%87%95%E5%A7%BF/83405200",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/24/fc/1d/24fc1d3e-b37f-968f-3d21-880edc8f8d79/mzi.ybwydvjn.jpg/100x100bb.jpg",
+    "genres": [
+     {
+      "genreId": "34",
+      "name": "音乐",
+      "url": "https://itunes.apple.com/cn/genre/id34"
+     },
+     {
+      "genreId": "14",
+      "name": "国际流行",
+      "url": "https://itunes.apple.com/cn/genre/id14"
+     }
+    ],
+    "url": "https://music.apple.com/cn/album/%E6%88%91%E4%B8%8D%E9%9A%BE%E8%BF%87/255920420?i=255921025"
+   },
+   {
+    "artistName": "The Weeknd",
+    "id": "6829122414",
+    "name": "Hong Kong (feat. 王菲季候風)",
+    "releaseDate": "2026-10-31",
+    "kind": "songs",
+    "artistId": "479756766",
+    "artistUrl": "https://music.apple.com/cn/artist/the-weeknd/479756766",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/0b/b2/81/0bb281a4-14af-a403-4af4-c39aa3f0d872/ticket.kusbehtm.jpg/100x100bb.jpg",
+    "genres": [
+     {
+      "genreId": "15",
+      "name": "R&B/灵魂乐",
+      "url": "https://itunes.apple.com/cn/genre/id15"
+     },
+     {
+      "genreId": "34",
+      "name": "音乐",
+      "url": "https://itunes.apple.com/cn/genre/id34"
+     }
+    ],
+    "url": "https://music.apple.com/cn/album/hong-kong-feat-%E7%8E%8B%E8%8F%B2%E5%AD%A3%E5%80%99%E9%A2%A8/6829122413?i=6829122414"
+   },
+   {
+    "artistName": "周杰伦",
+    "id": "535824738",
+    "name": "晴天",
+    "releaseDate": "2003-07-31",
+    "kind": "songs",
+    "artistId": "300117743",
+    "artistUrl": "https://music.apple.com/cn/artist/%E5%91%A8%E6%9D%B0%E4%BC%A6/300117743",
+    "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/45/8a/e4/458ae484-dc8b-5683-ce04-8d2948346462/JAY.jpg/100x109bb.jpg",
+    "genres": [
+     {
+      "genreId": "34",
+      "name": "音乐",
+      "url": "https://itunes.apple.com/cn/genre/id34"
+     },
+     {
+      "genreId": "14",
+      "name": "国际流行",
+      "url": "https://itunes.apple.com/cn/genre/id14"
+     }
+    ],
+    "url": "https://music.apple.com/cn/album/%E6%99%B4%E5%A4%A9/535824731?i=535824738"
+   }
+  ]
+ }
+}

@@ -1,7 +1,8 @@
 """Which public sources a round reads, learned from what the person does with what they bring.
 
 Nobody ticks sources. Each has a weight: a prior from the languages the
-person reads, the sources on by default for them and the topics they named,
+person reads, the sources on by default for them, the topics they named and
+the platforms they chose,
 times exp(the situation's supply term + what was learned of the source),
 where what was learned is the taste model's sampled coefficient for it, or
 the reactions to what it brought (the runtime database's `source_state`
@@ -19,6 +20,7 @@ import math
 import random
 import re
 import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -41,6 +43,10 @@ DEFAULT_HALF = 40
 # many times its pull instead (the share of what it brought that is on an interest the library holds little of).
 TOPIC = 3.0
 PULL = 40.0
+# Added for the sources of a platform the person chose, shared among them: a platform with many lists is not
+# drawn more for it than one with a single list. About the language defaults' weight, so a chosen platform has
+# a place in most rounds.
+PLATFORM = 20.0
 # Points a source earns for each thing of it seen, opened, liked or skipped (a like taken back undoes one).
 POINTS = {"seen": -0.25, "open": 1.25, "like": 2.0, "unlike": -2.0, "skip": -2.0}
 # The learned factor is 2 ** (GAIN * points / (things reacted to + SMOOTH)), within 2 ** LOW and 2 ** HIGH:
@@ -153,14 +159,15 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
           unreadable: set[str] = frozenset(), defaults: set[str] | None = None, supply: Callable | None = None,
           origin: Callable[[str], float] | None = None, retry_s: float = RETRY_S,
           now: float | None = None, topical: dict[str, float] | None = None,
-          own: set[str] | None = None) -> list[dict]:
+          own: set[str] | None = None, platforms: set[str] = frozenset()) -> list[dict]:
     """Each source's gate, prior, learned exponent and weight, highest weight first.
 
     w = G * prior * exp(supply(s) + theta) * HIDE^hides * FAILED^min(fails, FAILS_MAX), with
-    prior = L * (1 + default * is_default + TOPIC * on_topic), or with `topical` (source key -> pull, 0-1)
-    L * (1 + default * is_default + PULL * pull). G is 0 for a blocked source not yet due a
-    retry; L is 1 for the person's own language (`own`, all they read when None), READ_TOO for another
-    language they read, 0 for one they said they cannot, OTHER_LANG otherwise;
+    prior = L * (1 + default * is_default + TOPIC * on_topic + chosen), or with `topical` (source key -> pull,
+    0-1) L * (1 + default * is_default + PULL * pull + chosen), chosen being PLATFORM over the number of sources
+    on the source's platform that the person reads when it is one of `platforms`, else 0. G is 0 for a blocked
+    source not yet due a retry; L is 1 for the person's own language (`own`, all they read when None), READ_TOO
+    for another language they read, 0 for one they said they cannot, OTHER_LANG otherwise;
     theta is `origin(key)` (the taste model's coefficient), or ln 2 times the reactions' exponent without it.
     A source with G or L at 0 gets weight 0 and is never drawn. is_default tests `defaults` (the reader's
     languages unexpanded, so a Simplified reader's defaults are not a Traditional reader's) or else `reader`."""
@@ -170,6 +177,12 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
     now = time.time() if now is None else now
     acted = sum(row["items"] for row in state.values())
     default = DEFAULT * 0.5 ** (acted / DEFAULT_HALF)
+    heard = own | readable
+
+    def chosen_by(source) -> bool:
+        return source.platform in platforms and (not source.lang or source.lang in heard)
+
+    lists = Counter(source.platform for source in sources if chosen_by(source))
     rows = []
     for source in sources:
         row = state.get(source.key) or _blank()
@@ -178,7 +191,8 @@ def weigh(sources: list, state: dict[str, dict], reader: str | set[str], matcher
                 else 0.0 if source.lang in unreadable else OTHER_LANG)
         topic = (PULL * topical.get(source.key, 0.0) if topical is not None
                  else TOPIC * bool(matcher and matcher.search(_text(source))))
-        prior = lang * (1 + default * (source.default in defaults or source.default == "all") + topic)
+        chosen = PLATFORM / lists[source.platform] if chosen_by(source) else 0.0
+        prior = lang * (1 + default * (source.default in defaults or source.default == "all") + topic + chosen)
         exponent = origin(source.key) if origin else math.log(2) * learned(row)
         situated = supply(source) if supply else 0.0
         weight = (gate * prior * math.exp(situated + exponent) * HIDE ** row["hides"]

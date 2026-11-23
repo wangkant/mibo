@@ -65,6 +65,25 @@ def test_a_reaction_is_kept_once_as_the_page_sent_it_and_a_malformed_one_not_at_
     assert shelf.events() == events
 
 
+def test_platforms_are_kept_only_as_known_keys_and_a_save_without_them_leaves_them(page):
+    served, _ = page
+    offered = served.get("/api/feed/interests?lang=zh").json()
+    assert offered["platforms"] == [] and {"bilibili.com", "douyin.com"} <= {p["key"] for p in offered["platformsOffered"]}
+    douyin = next(p for p in offered["platformsOffered"] if p["key"] == "douyin.com")
+    assert douyin == {"key": "douyin.com", "name": "抖音", "reach": "signin", "connected": False}
+    for wrong in (["bilibili.com", "evil.example"], "bilibili.com", [None]):
+        answer = served.post("/api/feed/interests", {"topics": ["food"], "platforms": wrong, "lang": "zh"})
+        assert answer.status_code == 400, wrong
+    assert served.get("/api/feed/interests").json()["platforms"] == []
+    chosen = served.post("/api/feed/interests", {"topics": ["food"], "platforms": ["douyin.com", "bilibili.com"],
+                                                 "lang": "zh"}).json()
+    assert chosen["platforms"] == ["douyin.com", "bilibili.com"]
+    assert served.post("/api/feed/interests", {"topics": ["music"], "lang": "zh"}).json()["platforms"] == chosen["platforms"]
+    taste = served.get("/api/profile/taste?lang=en").json()
+    assert taste["platforms"] == chosen["platforms"]
+    assert next(p for p in taste["platformsOffered"] if p["key"] == "douyin.com")["name"] == "Douyin"
+
+
 def test_a_no_to_a_topic_turns_it_down_until_the_person_takes_it_back(page):
     served, shelf = page
     item = next(item for item in shelf.ranked() if item.title.startswith("Braised"))

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS feed_events (
     kind TEXT NOT NULL, extra TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS feed_events_id ON feed_events (id);
 CREATE TABLE IF NOT EXISTS feed_topics (n INTEGER PRIMARY KEY, topic TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS feed_platforms (n INTEGER PRIMARY KEY, key TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS shown (
     n INTEGER PRIMARY KEY, at REAL NOT NULL, id TEXT NOT NULL, gated INTEGER NOT NULL, row TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS shown_id ON shown (id);
@@ -71,8 +72,8 @@ CREATE TABLE IF NOT EXISTS hosts (
     mode TEXT NOT NULL) WITHOUT ROWID;
 """
 # What a backup carries: everything but the chat record, which a forget must reach in full.
-BACKED_UP = ("page_chats", "page_messages", "embeddings", "library", "feed_events", "feed_topics", "shown", "browsed",
-             "source_state", "own_feeds", "source_reads", "situation", "hosts")
+BACKED_UP = ("page_chats", "page_messages", "embeddings", "library", "feed_events", "feed_topics", "feed_platforms",
+             "shown", "browsed", "source_state", "own_feeds", "source_reads", "situation", "hosts")
 
 
 class Db:
@@ -182,16 +183,18 @@ def snapshot(runtime: Path, target: Path) -> bool:
 
 def take_back(runtime: Path, archived: Path | None) -> None:
     """A restore: what a backup carries, from the database `archived` (None: an archive with none), in place of
-    the runtime's own; the chat record stays as it is."""
+    the runtime's own; the chat record stays as it is. A table an older backup does not have is left empty."""
     db = at(runtime)
     with db._lock:
+        held: set[str] = set()
         if archived is not None:
             db._conn.execute("ATTACH DATABASE ? AS archived", (str(archived),))
+            held = {name for name, in db._conn.execute("SELECT name FROM archived.sqlite_master WHERE type = 'table'")}
         try:
             with db.write() as conn:
                 for table in BACKED_UP:
                     conn.execute(f"DELETE FROM {table}")
-                    if archived is not None:
+                    if table in held:
                         conn.execute(f"INSERT INTO {table} SELECT * FROM archived.{table}")
         finally:
             if archived is not None:

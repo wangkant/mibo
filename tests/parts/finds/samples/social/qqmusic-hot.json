@@ -1,0 +1,35 @@
+{
+ "code": 0,
+ "toplist": {
+  "code": 0,
+  "data": {
+   "data": {
+    "topId": 26,
+    "title": "热歌榜",
+    "song": [
+     {
+      "rank": 1,
+      "songId": 742033250,
+      "albumMid": "003CuoS534m1aY",
+      "title": "慌啥子嘛 (赵本山版)",
+      "singerName": "赵本山"
+     },
+     {
+      "rank": 2,
+      "songId": 234272638,
+      "albumMid": "003Afeki1RlQ0U",
+      "title": "time machine (feat. aren park)",
+      "singerName": "mj apanay/aren park"
+     },
+     {
+      "rank": 3,
+      "songId": 4829554,
+      "albumMid": "002JzRQD2zjvxG",
+      "title": "天龙八部之宿敌",
+      "singerName": "许嵩"
+     }
+    ]
+   }
+  }
+ }
+}

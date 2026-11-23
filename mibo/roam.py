@@ -39,7 +39,7 @@ from .pagefacts import (
     small_picture,
     wall_of,
 )
-from .panels.feed import site_taste
+from .panels.feed import load_platforms, site_taste
 from .storage import atomic_write_text
 from .textproc import (
     _UNTRUSTED_INPUT_RULES,
@@ -62,8 +62,10 @@ logger = logging.getLogger("mibo.roam")
 
 # What stops a walk; walks switched off in Settings › 外出 are WALKS_OFF.
 OUT, ASLEEP, LIMIT, WALKS_OFF, NO_MODEL = "out", "asleep", "limit", "walks_off", "no_model"
-# What a host the person favours adds to its place in a walk's order (Settings › 外出).
+# What a host the person favours adds to its place in a walk's order (Settings › 外出), and one of a platform they
+# chose (推荐偏好).
 FAVOUR = 2.0
+CHOSEN = 1.5
 
 # The shortest and the longest the walk loop sleeps between looks.
 TICK_S = 30.0
@@ -417,9 +419,10 @@ class Roam:
     def _hosts(self, intent: str) -> list[dict]:
         """The cards a walk may read `intent` from (web/sites.py), in a language the person reads, best first:
         where the person is, then what they do with each site's finds (the taste model's sampled coefficient,
-        or the feed's points while the model is off), and a little chance."""
+        or the feed's points while the model is off), the platforms they chose, and a little chance."""
         from . import taste
         runtime = self.library.root.parent
+        chosen = set(load_platforms(runtime))
         langs = situation.readable(runtime) | situation.expand({self._ui_lang()})
         found = [dict(c, label=c["name"] or site_name(c["home"]))
                  for c in sites.walk_hosts(runtime, intent, keys=self.hosts) if not c["lang"] or c["lang"] in langs]
@@ -429,7 +432,8 @@ class Roam:
         else:
             learned = site_taste(runtime)
         found.sort(key=lambda c: -(situation.walk_prior(runtime, c["label"], c["region"])
-                                   + learned.get(c["label"], 0.0) + FAVOUR * c["favour"] + random.random()))
+                                   + learned.get(c["label"], 0.0) + FAVOUR * c["favour"]
+                                   + CHOSEN * (c["key"] in chosen) + random.random()))
         return found
 
     def _ui_lang(self) -> str:

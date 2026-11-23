@@ -1,0 +1,54 @@
+{
+ "result": {
+  "items": [
+   {
+    "name": "Funny-Cats-Go-Shopping",
+    "claim_id": "daf81ca162eee5b1d390812a6f15eda92746d010",
+    "value": {
+     "title": "Funny Cats Go Shopping 😂 | Cat Comedy",
+     "description": "Two funny cats go shopping, but an unexpected accident turns their supermarket trip into a hilarious moment! 😹 Subscribe to KB My Funny Cats for more funny cat videos and unexpected surprises.\n\n#FunnyCats #CatComedy #FunnyCatVideos #Cats #CuteCats",
+     "thumbnail": {
+      "url": "https://thumbs.odycdn.com/423b05c1f69a3dc23aacc2db1b9fb532.webp"
+     },
+     "video": {
+      "duration": 13,
+      "height": 1920,
+      "width": 1080
+     }
+    },
+    "signing_channel": {
+     "name": "@KBMyFunnyCats",
+     "canonical_url": "lbry://@KBMyFunnyCats#8"
+    }
+   },
+   {
+    "name": "Funny-Cats-Go-Shopping",
+    "claim_id": "daf81ca162eee5b1d390812a6f15eda92746d010",
+    "value": {
+     "title": "A claim with no channel"
+    },
+    "signing_channel": null
+   },
+   {
+    "name": "bengals2027superbowlchamps",
+    "claim_id": "7ef78b179d264e0d606c24894c56217d46e53318",
+    "value": {
+     "title": "GT7- #1 US, Top 10 Worldwide New Race A Karts At Kyoto",
+     "description": "WHO DEY",
+     "thumbnail": {
+      "url": "https://thumbs.odycdn.com/5079dde39ce18555e0f9960bf9d9fcd8.webp"
+     },
+     "video": {
+      "duration": 102,
+      "height": 720,
+      "width": 1280
+     }
+    },
+    "signing_channel": {
+     "name": "@BarrettMopar",
+     "canonical_url": "lbry://@BarrettMopar#9"
+    }
+   }
+  ]
+ }
+}

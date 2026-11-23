@@ -37,6 +37,8 @@ PLAYERS = (
     ("www.snapchat.com", r"/spotlight/[\w-]+/embed/?"),
     ("assets.pinterest.com", r"/ext/embed\.html"),
     ("embed.pixiv.net", r"/oembed_iframe\.php"),
+    ("embed.ted.com", r"/talks/[\w-]+"),
+    ("odysee.com", r"/\$/embed/[^/]+/[0-9a-f]{40}"),
 )
 _YT_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _BV = re.compile(r"/video/(BV[0-9A-Za-z]{10})")
@@ -57,6 +59,9 @@ _FROM_PAGE = (
     ("reddit.com", r"/r/(\w+)/comments/(\w+)(?:/[^/]*)?/?", r"https://embed.reddit.com/r/\1/comments/\2/?embed=true"),
     ("snapchat.com", r"/spotlight/([\w-]+)/?", r"https://www.snapchat.com/spotlight/\1/embed"),
     ("pinterest.com", r"/pin/(\d+)/?", r"https://assets.pinterest.com/ext/embed.html?id=\1"),
+    ("ted.com", r"/talks/([\w-]+)/?", r"https://embed.ted.com/talks/\1"),
+    # Odysee's page address ends in the claim's name and its whole id, which is what its player takes.
+    ("odysee.com", r"/@[^/]+/([^/:]+):([0-9a-f]{40})/?", r"https://odysee.com/$/embed/\1/\2"),
 )
 _FACEBOOK_VIDEO = re.compile(r"/([\w.-]+/videos/(?:[\w-]+/)?\d+|reel/\d+|watch)/?")
 
@@ -70,7 +75,7 @@ def frame_sources() -> tuple[str, ...]:
     the host is also a site of its own."""
     out = []
     for host, path in PLAYERS:
-        fixed = re.split(r"[\\(\[{.*+?|]", path, maxsplit=1)[0]
+        fixed = re.split(r"[\\(\[{.*+?|]", path.replace(r"\$", "$"), maxsplit=1)[0]
         prefix = fixed[:fixed.rfind("/") + 1] or "/"
         out.append(host + (prefix if prefix != "/" else ""))
     return tuple(out)

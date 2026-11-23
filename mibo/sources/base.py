@@ -64,6 +64,8 @@ class Source:
     lang: str = "en"
     # The country or area whose platform or local press it is ("CN", "JP", "US"...); "" when global.
     region: str = ""
+    # The platform it reads, by its key in platforms.py ("bilibili.com"); "" for a site that is not one.
+    platform: str = ""
 
 
 def written_in(lang: str, sources: list[Source], keys: set[str] | None = None) -> list[Source]:
