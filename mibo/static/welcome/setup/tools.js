@@ -286,7 +286,7 @@
       }
       // Its tools in two groups (Claude's connectors): those marked read-only run without asking, each may be set
       // to never; those that write or delete are set at once to auto review or never, and each also to always,
-      // except a tool marked destructive or one that pays, deletes or changes an account (mcp_tools.hard), which
+      // except a tool marked destructive or one that pays, deletes or changes an account (mcp_floor.hard), which
       // asks every time.
       if (row.tools.length) {
         const fold = kit.fold(kit.fill(t.tools, { n: row.tools.length }));

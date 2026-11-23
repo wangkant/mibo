@@ -23,12 +23,12 @@ The reply model reaches the tools through the character service, which asks
 here (/api/mcp/offer, /find, /call: panels/tools.py). A local server that was
 never allowed starts inside the call that needs it, on its card. A call that
 pays or orders, changes a payment, deletes, or changes an account's security
-or access (mcp_tools.hard, from the tool's name, parameters, description and
+or access (mcp_floor.hard, from the tool's name, parameters, description and
 the arguments, whatever its hints say) is asked in the chat in every mode, with
 no reviewer and no always-allow, and a yes to another kind of step earlier in
 the turn does not reach it (cardwait.reaches); a tool marked destructive asks
 too. A tool its provider marks read-only whose name reads by its own words
-(mcp_tools.group_of) runs with no reviewer and no question; any other goes to
+(mcp_floor.group_of) runs with no reviewer and no question; any other goes to
 the reviewer on the person's own words, and is asked in the chat when it does
 not pass, unless the person set it to always (that exact description).
 Arguments holding a password, a code, a key or a card number are never sent.
@@ -42,6 +42,7 @@ the page, sent to the server and never to the model.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -51,10 +52,12 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from . import mcp_schema, runtimes, secretstore
 from . import mcp_tools as mt
-from . import runtimes, secretstore
 from .cardwait import Card, risk_of
 from .mcp_client import Connection, KeptTokens, McpError, describe, find_program, oauth_client, program_env, revoke
+from .mcp_floor import asks_each_time, cut, group_of, hard
+from .textproc import scrub_third_party_text
 
 logger = logging.getLogger("agent.tools")
 
@@ -145,7 +148,8 @@ class Hub:
         self.filled: dict = {}
         self.busy = asyncio.Lock()
         self._stamp = None
-        self._running = False
+        # Stops of servers the configuration dropped, held until they finish so the loop does not lose them.
+        self._stopping: set[asyncio.Task] = set()
         #: Downloads of Node.js or uv the person started (runtimes.py), and why the last one of each failed.
         self.fetching: dict[str, asyncio.Task] = {}
         self.fetch_failed: dict[str, str] = {}
@@ -154,7 +158,6 @@ class Hub:
 
     async def run(self) -> None:
         """The page's whole life: start what may start, follow mcp.json, stop every server at the end."""
-        self._running = True
         try:
             while True:
                 self.reconcile()
@@ -182,7 +185,9 @@ class Hub:
             runner = self.runners[name]
             if name not in servers or servers[name] != runner.spec:
                 del self.runners[name]
-                asyncio.ensure_future(self._stop(runner))
+                stopping = asyncio.ensure_future(self._stop(runner))
+                self._stopping.add(stopping)
+                stopping.add_done_callback(self._stopping.discard)
         for name, spec in servers.items():
             if name not in self.runners:
                 runner = self.runners[name] = Runner(name, spec)
@@ -219,78 +224,12 @@ class Hub:
         delay = BACKOFF_S[0]
         while True:
             runner.wake.clear()
-            if runner.spec.get("disabled"):
-                self._set(runner, "off")
+            spec = await self._startable(runner)
+            if spec is None:
                 await runner.wake.wait()
                 continue
-            # A missing program is said before the person is asked to allow it.
-            if runner.local and not self._found(runner):
-                self._set(runner, "failed", "not_found", runner.spec["command"])
-                await runner.wake.wait()
-                continue
-            if not self.may_start(runner):
-                self._set(runner, "declined" if runner.declined else "waiting")
-                await runner.wake.wait()
-                continue
-            spec, missing = mt.expand(runner.spec, self._held(runner.spec))
-            if missing:
-                self._set(runner, "failed", "missing_value", ", ".join(missing))
-                await runner.wake.wait()
-                continue
-            if runner.local:
-                from .shell.run import elevated
-                if elevated():
-                    self._set(runner, "failed", "elevated")
-                    await runner.wake.wait()
-                    continue
-                # A mirror for npx's or uvx's downloads where the vendor's registry does not answer; the server's own
-                # env wins.
-                reach_env = await runtimes.reach_env(self.home, spec["command"])
-                spec = {**spec, "env": {**reach_env, **runtimes.env(self.home, spec.get("env"))}}
-            # A sign-in the person started, or tokens kept from one: the SDK's OAuth client goes along.
-            attempt, auth = runner.attempt, None
-            if not runner.local and (attempt or KeptTokens(self.home, runner.name).signed_in()):
-                store = KeptTokens(self.home, runner.name, attempt.callback if attempt else "")
-                auth = oauth_client(spec["url"], store, attempt and attempt.opened, attempt and attempt.returned)
-            self._set(runner, "signing_in" if attempt else "starting")
             began = time.monotonic()
-            try:
-                runner.conn = Connection(spec, folder=mt.server_folder(self.home, runner.name), auth=auth,
-                                         elicit=lambda request, runner=runner: self._elicit(runner, request))
-                await runner.conn.open(SIGNIN_S if attempt else START_TIMEOUT_S)
-                if attempt:
-                    store.keep_revocation(auth)
-                    self._finish(runner, "")
-                runner.about = _about(runner.conn.instructions)
-                await self._list(runner)
-                self._set(runner, "connected")
-                logger.info("[Tools] %s is connected with %d tools", runner.name, len(runner.tools))
-                while not runner.conn.closed.is_set():
-                    changed = asyncio.ensure_future(runner.conn.changed.wait())
-                    closed = asyncio.ensure_future(runner.conn.closed.wait())
-                    await asyncio.wait({changed, closed}, return_when=asyncio.FIRST_COMPLETED)
-                    changed.cancel()
-                    closed.cancel()
-                    if not runner.conn.closed.is_set():
-                        # A flood of "changed" is read once every few seconds at most.
-                        await asyncio.sleep(RELIST_S)
-                        await self._list(runner)
-                code, detail = "exited", runner.conn.stderr_tail() if runner.local else ""
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
-                code, detail = describe(e)
-                if code == "timeout" and attempt:
-                    code, detail = "oauth", "timeout"
-                if code == "oauth":
-                    # Why a sign-in the person started did not finish; otherwise, whether a grant ran out.
-                    detail = (detail if detail in SIGNIN_ENDS else "failed") if attempt else "expired" if auth else ""
-            if runner.attempt is not None:
-                self._finish(runner, detail or code)
-            if runner.conn is not None:
-                await runner.conn.close()
-                runner.conn = None
-            runner.tools = []
+            code, detail = await self._session(runner, spec)
             if runner.stopped:
                 return
             if time.monotonic() - began >= HEALTHY_S:
@@ -304,12 +243,87 @@ class Hub:
             self._set(runner, "failed", code, detail)
             runner.retry_at = time.time() + delay
             logger.warning("[Tools] %s stopped (%s); trying again in %.0f s", runner.name, code, delay)
-            try:
+            with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(runner.wake.wait(), delay)
-            except asyncio.TimeoutError:
-                pass
             runner.retry_at = 0.0
             delay = min(delay * 2, BACKOFF_S[1])
+
+    async def _startable(self, runner: Runner) -> dict | None:
+        """The spec to start the server with, its values filled and its program's environment set; None, with the
+        state saying why, while it may not start yet."""
+        if runner.spec.get("disabled"):
+            self._set(runner, "off")
+            return None
+        # A missing program is said before the person is asked to allow it.
+        if runner.local and not self._found(runner):
+            self._set(runner, "failed", "not_found", runner.spec["command"])
+            return None
+        if not self.may_start(runner):
+            self._set(runner, "declined" if runner.declined else "waiting")
+            return None
+        spec, missing = mt.expand(runner.spec, self._held(runner.spec))
+        if missing:
+            self._set(runner, "failed", "missing_value", ", ".join(missing))
+            return None
+        if runner.local:
+            from .shell.run import elevated
+            if elevated():
+                self._set(runner, "failed", "elevated")
+                return None
+            # A mirror for npx's or uvx's downloads where the vendor's registry does not answer; the server's own
+            # env wins.
+            reach_env = await runtimes.reach_env(self.home, spec["command"])
+            spec = {**spec, "env": {**reach_env, **runtimes.env(self.home, spec.get("env"))}}
+        return spec
+
+    async def _session(self, runner: Runner, spec: dict) -> tuple[str, str]:
+        """One run of the server, from its start until it stops: (why it stopped, the detail)."""
+        # A sign-in the person started, or tokens kept from one: the SDK's OAuth client goes along.
+        attempt, auth = runner.attempt, None
+        if not runner.local and (attempt or KeptTokens(self.home, runner.name).signed_in()):
+            store = KeptTokens(self.home, runner.name, attempt.callback if attempt else "")
+            auth = oauth_client(spec["url"], store, attempt and attempt.opened, attempt and attempt.returned)
+        self._set(runner, "signing_in" if attempt else "starting")
+        try:
+            runner.conn = Connection(spec, folder=mt.server_folder(self.home, runner.name), auth=auth,
+                                     elicit=lambda request, runner=runner: self._elicit(runner, request))
+            await runner.conn.open(SIGNIN_S if attempt else START_TIMEOUT_S)
+            if attempt:
+                store.keep_revocation(auth)
+                self._finish(runner, "")
+            runner.about = _about(runner.conn.instructions)
+            await self._list(runner)
+            self._set(runner, "connected")
+            logger.info("[Tools] %s is connected with %d tools", runner.name, len(runner.tools))
+            await self._follow(runner)
+            code, detail = "exited", runner.conn.stderr_tail() if runner.local else ""
+        except Exception as e:
+            code, detail = describe(e)
+            if code == "timeout" and attempt:
+                code, detail = "oauth", "timeout"
+            if code == "oauth":
+                # Why a sign-in the person started did not finish; otherwise, whether a grant ran out.
+                detail = (detail if detail in SIGNIN_ENDS else "failed") if attempt else "expired" if auth else ""
+        if runner.attempt is not None:
+            self._finish(runner, detail or code)
+        if runner.conn is not None:
+            await runner.conn.close()
+            runner.conn = None
+        runner.tools = []
+        return code, detail
+
+    async def _follow(self, runner: Runner) -> None:
+        """Reads the tool list again each time the server says it changed, until the connection closes."""
+        while not runner.conn.closed.is_set():
+            changed = asyncio.ensure_future(runner.conn.changed.wait())
+            closed = asyncio.ensure_future(runner.conn.closed.wait())
+            await asyncio.wait({changed, closed}, return_when=asyncio.FIRST_COMPLETED)
+            changed.cancel()
+            closed.cancel()
+            if not runner.conn.closed.is_set():
+                # A flood of "changed" is read once every few seconds at most.
+                await asyncio.sleep(RELIST_S)
+                await self._list(runner)
 
     async def _list(self, runner: Runner) -> None:
         raw = await runner.conn.list_tools(LIST_TIMEOUT_S, mt.MAX_TOOLS + 1)
@@ -429,12 +443,12 @@ class Hub:
             return {"status": "not_connected", "state": self.runners[server].state, "error": self.runners[server].error,
                     "tools": []}
         rows = []
-        words = mt.words_of(query)
+        words = mcp_schema.words_of(query)
         for runner in pool:
             for tool in runner.tools:
                 if self.grants.mode(runner.name, tool)[0] == mt.NEVER:
                     continue
-                rank = mt.score(words, tool, runner.name) if words else 1.0
+                rank = mcp_schema.score(words, tool, runner.name) if words else 1.0
                 if rank > 0:
                     rows.append((rank, runner.name, tool))
         rows.sort(key=lambda row: -row[0])
@@ -451,9 +465,8 @@ class Hub:
     async def _ready(self, runner: Runner, conversation: str) -> dict | None:
         """The server connected, asking the person first to start a local program never allowed; what
         stands in the way otherwise. A no holds for that call only: the next call asks again."""
-        if runner.state in ("waiting", "declined") and runner.local:
-            if not await self._ask_start(runner, conversation):
-                return {"status": "start_declined" if runner.declined else "unanswered"}
+        if runner.state in ("waiting", "declined") and runner.local and not await self._ask_start(runner, conversation):
+            return {"status": "start_declined" if runner.declined else "unanswered"}
         for _ in range(int(START_TIMEOUT_S * 2)):
             if runner.state not in ("starting", "waiting", "declined") or not self.turn_on(conversation):
                 break
@@ -495,64 +508,78 @@ class Hub:
                 return {"status": "unknown_tool", "tools": [t["name"] for t in runner.tools][:30]}
             if not isinstance(arguments, dict):
                 arguments = {}
-            problem = mt.check_arguments(tool["inputSchema"], arguments)
+            problem = mcp_schema.check_arguments(tool["inputSchema"], arguments)
             if problem:
-                return {"status": "bad_arguments", "problem": problem,
-                        "parameters": mt.offer_schema(tool["inputSchema"]) or {"type": "object", "properties": {}}}
-            mode, changed = self.grants.mode(server, tool)
-            if mode == mt.NEVER:
-                self._log(server, tool_name, arguments, "never")
-                return {"status": "never"}
-            from .review import carries_secret
-            if carries_secret(json.dumps(arguments, ensure_ascii=False)):
-                # A password, code, key or card number is never typed by the character, whatever the tool.
-                self._log(server, tool_name, arguments, "secret")
-                return {"status": "secret"}
-            # Paying, deleting, an account's security or access: decided here before any reviewer, by what the
-            # call does; it asks every time, in every mode.
-            floor = mt.hard(tool, arguments)
-            how, passed = mode, None
-            if floor or mt.cut(arguments):
-                how = mt.AUTO
-            elif mode == mt.AUTO and mt.group_of(tool) == "read":
-                # Marked read-only by its provider, and a read by its name's own words: it runs.
-                how = "read_only"
-            elif mode == mt.AUTO and tool["hints"].get("destructiveHint") is not True:
-                # The reviewer first, on the person's own words of this turn; a tool marked destructive skips it.
-                passed = await self._review(server, tool, arguments)
-                if passed.decision == "refuse":
-                    self._log(server, tool_name, arguments, "refused", "review", passed.reason)
-                    return {"status": "refused", "reason": passed.reason}
-                how = "review" if passed.decision == "go" else how
-            if how == mt.AUTO:
-                card = self._tool_card(runner, tool, arguments, changed, floor)
-                if passed is not None:
-                    # Why the reviewer did not pass it, in one line (toolcard.js draws it).
-                    card["review"] = passed.line(str(self.workspace.config().get("AGENT_LANG") or "zh"))
-                answer = await self.ask(card, conversation, risk_of(floor))
-                if answer in (None, "no"):
-                    status = "declined" if answer == "no" else "unanswered"
-                    self._log(server, tool_name, arguments, status, "review" if passed is not None else "",
-                              passed.reason if passed is not None else "")
-                    return {"status": status}
-                how = self.cards.how
-                # The tool must still be the one the question showed.
-                now = next((t for t in runner.tools if t["name"] == tool_name), None)
-                if now is None or now["fp"] != tool["fp"] or runner.state != "connected":
-                    self._log(server, tool_name, arguments, "changed")
-                    return {"status": "changed"}
-            runner.calling = {"conversation": conversation, "name": tool_name, "tool": tool["title"] or tool_name}
-            try:
-                result = await runner.conn.call_tool(tool_name, arguments, CALL_TIMEOUT_S)
-            except McpError as e:
-                self._log(server, tool_name, arguments, "failed", how, e.code)
-                return {"status": "failed", "error": e.code}
-            finally:
-                runner.calling = None
-            self._log(server, tool_name, arguments, "error" if result.is_error else "done", how, result.text)
-            return {"status": "done", "how": how, "is_error": result.is_error, "left_out": result.left_out,
-                    "pictures": result.pictures, "text": result.text[: mt.RESULT_CHARS * 2],
-                    "title": tool["title"] or tool["name"]}
+                return {"status": "bad_arguments", "problem": problem, "parameters": _parameters(tool)}
+            how, stopped = await self._permit(runner, tool, arguments, conversation)
+            if stopped:
+                return stopped
+            return await self._run(runner, tool, arguments, how, conversation)
+
+    async def _permit(self, runner: Runner, tool: dict, arguments: dict, conversation: str) -> tuple[str, dict | None]:
+        """Whether the call may run: (how it went ahead, None), or ("", the outcome) when it does not run. The
+        person's never, a secret in the arguments, the floor, the read group, the reviewer and the question in the
+        chat, in that order."""
+        server, tool_name = runner.name, tool["name"]
+        mode, changed = self.grants.mode(server, tool)
+        if mode == mt.NEVER:
+            self._log(server, tool_name, arguments, "never")
+            return "", {"status": "never"}
+        from .review import carries_secret
+        if carries_secret(json.dumps(arguments, ensure_ascii=False)):
+            # A password, code, key or card number is never typed by the character, whatever the tool.
+            self._log(server, tool_name, arguments, "secret")
+            return "", {"status": "secret"}
+        # Paying, deleting, an account's security or access: decided here before any reviewer, by what the
+        # call does; it asks every time, in every mode.
+        floor = hard(tool, arguments)
+        how, passed = mode, None
+        if floor or cut(arguments):
+            how = mt.AUTO
+        elif mode == mt.AUTO and group_of(tool) == "read":
+            # Marked read-only by its provider, and a read by its name's own words: it runs.
+            how = "read_only"
+        elif mode == mt.AUTO and tool["hints"].get("destructiveHint") is not True:
+            # The reviewer first, on the person's own words of this turn; a tool marked destructive skips it.
+            passed = await self._review(server, tool, arguments)
+            if passed.decision == "refuse":
+                self._log(server, tool_name, arguments, "refused", "review", passed.reason)
+                return "", {"status": "refused", "reason": passed.reason}
+            how = "review" if passed.decision == "go" else how
+        if how != mt.AUTO:
+            return how, None
+        card = self._tool_card(runner, tool, arguments, changed, floor)
+        if passed is not None:
+            # Why the reviewer did not pass it, in one line (toolcard.js draws it).
+            card["review"] = passed.line(str(self.workspace.config().get("AGENT_LANG") or "zh"))
+        answer = await self.ask(card, conversation, risk_of(floor))
+        if answer in (None, "no"):
+            status = "declined" if answer == "no" else "unanswered"
+            self._log(server, tool_name, arguments, status, "review" if passed is not None else "",
+                      passed.reason if passed is not None else "")
+            return "", {"status": status}
+        # The tool must still be the one the question showed.
+        now = next((t for t in runner.tools if t["name"] == tool_name), None)
+        if now is None or now["fp"] != tool["fp"] or runner.state != "connected":
+            self._log(server, tool_name, arguments, "changed")
+            return "", {"status": "changed"}
+        return self.cards.how, None
+
+    async def _run(self, runner: Runner, tool: dict, arguments: dict, how: str, conversation: str) -> dict:
+        """The call itself, logged with how it went ahead."""
+        server, tool_name = runner.name, tool["name"]
+        runner.calling = {"conversation": conversation, "name": tool_name, "tool": tool["title"] or tool_name}
+        try:
+            result = await runner.conn.call_tool(tool_name, arguments, CALL_TIMEOUT_S)
+        except McpError as e:
+            self._log(server, tool_name, arguments, "failed", how, e.code)
+            return {"status": "failed", "error": e.code}
+        finally:
+            runner.calling = None
+        self._log(server, tool_name, arguments, "error" if result.is_error else "done", how, result.text)
+        return {"status": "done", "how": how, "is_error": result.is_error, "left_out": result.left_out,
+                "pictures": result.pictures, "text": result.text[: mcp_schema.RESULT_CHARS * 2],
+                "title": tool["title"] or tool["name"]}
 
     async def _review(self, server: str, tool: dict, arguments: dict):
         """The reviewer's verdict on one call: the person's own messages of the turn under way, the tool's name and
@@ -590,7 +617,7 @@ class Hub:
         if not self.cards.up(ident) or card["type"] != "mcp_ask" or card["mode"] != "form":
             return "gone"
         if answer == "once":
-            self.filled, problem = mt.ask_content(card["fields"], self.card_schema, values)
+            self.filled, problem = mcp_schema.ask_content(card["fields"], self.card_schema, values)
             if problem:
                 return problem
         self.cards.press(ident, answer)
@@ -627,19 +654,20 @@ class Hub:
         raw = json.dumps(arguments, ensure_ascii=False, indent=2)
         destructive = tool["hints"].get("destructiveHint") is True
         return {"type": "mcp_tool", "server": runner.name, "tool": tool["name"], "title": tool["title"],
-                "args": mt.plain_arguments(arguments), "raw": raw if len(raw) <= 4000 else raw[:4000] + "\n…",
+                "args": mcp_schema.plain_arguments(arguments),
+                "raw": raw if len(raw) <= 4000 else raw[:4000] + "\n…",
                 "destructive": destructive and not floor, "hard": floor, "changed": changed}
 
     async def _elicit(self, runner: Runner, request: dict) -> dict:
         """A server asks the person for something during a call of their turn: a form shown on the page for them to
-        fill, or a page for them to open in their browser, asked in the chat. What they fill in goes to the server alone, never to the
-        model. Outside such a call, or when nobody answers, it is cancelled; a form the page cannot draw, or an
-        address that is not a web page, is declined."""
+        fill, or a page for them to open in their browser, asked in the chat. What they fill in goes to the server
+        alone, never to the model. Outside such a call, or when nobody answers, it is cancelled; a form the page
+        cannot draw, or an address that is not a web page, is declined."""
         calling = runner.calling
         if calling is None:
             return {"action": "cancel"}
         card = {"type": "mcp_ask", "server": runner.name, "tool": calling["tool"],
-                "message": mt.scrub_third_party_text(str(request.get("message") or ""))[:600],
+                "message": scrub_third_party_text(str(request.get("message") or ""))[:600],
                 "mode": "url" if request.get("mode") == "url" else "form"}
         if card["mode"] == "url":
             url = str(request.get("url") or "")
@@ -648,7 +676,7 @@ class Hub:
             card.update(url=url[:2000], host=urlsplit(url).hostname or "")
         else:
             schema = request.get("requestedSchema")
-            card["fields"] = mt.ask_fields(schema)
+            card["fields"] = mcp_schema.ask_fields(schema)
             if card["fields"] is None:
                 return {"action": "decline"}
             self.card_schema = schema
@@ -680,8 +708,8 @@ class Hub:
                 mode, changed = self.grants.mode(name, tool)
                 tools.append({"name": tool["name"], "title": tool["title"],
                               "description": tool["description"][:200], "mode": mode, "changed": changed,
-                              "destructive": mt.asks_each_time(tool), "hard": tool.get("hard", ""),
-                              "group": mt.group_of(tool)})
+                              "destructive": asks_each_time(tool), "hard": tool.get("hard", ""),
+                              "group": group_of(tool)})
             # The runtime Mibo can fetch for a program that is missing: "node", "uv" or "".
             need = runtimes.needed(spec.get("command", "")) if runner.error == "not_found" else ""
             if need and not runtimes.offer(need):
@@ -689,7 +717,7 @@ class Hub:
             servers.append({
                 "name": name, "kind": "program" if runner.local else "address",
                 "command": mt.command_line(spec) if runner.local else "",
-                "url": _masked(spec.get("url", "")), "sse": spec.get("type") == "sse",
+                "url": mt.masked(spec.get("url", "")), "sse": spec.get("type") == "sse",
                 "values": values, "disabled": bool(spec.get("disabled")),
                 "state": runner.state, "error": runner.error, "detail": runner.detail,
                 "retry_in": max(0, round(runner.retry_at - time.time())) if runner.retry_at else 0,
@@ -727,14 +755,10 @@ def _sample(tools: list[dict]) -> str:
 
 def _shown(tool: dict) -> dict:
     return {"tool": tool["name"], "title": tool["title"],
-            "description": tool["description"][:mt.OFFER_DESCRIPTION_CHARS],
-            "parameters": mt.offer_schema(tool["inputSchema"]) or {"type": "object", "properties": {}},
-            "readonly": mt.group_of(tool) == "read"}
+            "description": tool["description"][:mcp_schema.OFFER_DESCRIPTION_CHARS],
+            "parameters": _parameters(tool), "readonly": group_of(tool) == "read"}
 
 
-def _masked(url: str) -> str:
-    """An address as Settings shows it: values in its query hidden, since some servers put keys there."""
-    head, _, query = url.partition("?")
-    if not query:
-        return url
-    return head + "?" + "&".join(part.split("=", 1)[0] + "=…" for part in query.split("&"))
+def _parameters(tool: dict) -> dict:
+    """The tool's parameters as the model is offered them; none when its schema cannot be offered."""
+    return mcp_schema.offer_schema(tool["inputSchema"]) or {"type": "object", "properties": {}}

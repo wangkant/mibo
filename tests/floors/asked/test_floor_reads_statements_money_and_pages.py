@@ -1,4 +1,4 @@
-"""The floor's second look (mibo/mcp_tools.py, mibo/review.py, mibo/web/gate.py). A statement that deletes is a
+"""The floor's second look (mibo/mcp_floor.py, mibo/review.py, mibo/web/gate.py). A statement that deletes is a
 floor in a field that holds statements or questions alike (a database's `query`), while the words of a search are
 not; money is a payment only with whom it goes to; a call too large to read whole is asked about; a token that
 pages through a list or names a coin is not a secret, a credential is; and the words only a tool's name says (sell,
@@ -10,8 +10,8 @@ import json
 
 import pytest
 
+from mibo import mcp_floor, review
 from mibo import mcp_tools as mt
-from mibo import review
 from mibo.web import gate
 
 
@@ -30,7 +30,7 @@ def tool(name: str, description: str = "", fields: tuple = (), read_only: bool |
     ("search", "expression", "TRUNCATE TABLE t"),
 ])
 def test_a_statement_that_deletes_is_a_floor_in_a_query_field_of_a_tool_hinted_read_only(name, field, value):
-    assert mt.hard(tool(name, "Execute a SELECT query", (field,), True), {field: value}) == "delete"
+    assert mcp_floor.hard(tool(name, "Execute a SELECT query", (field,), True), {field: value}) == "delete"
 
 
 @pytest.mark.parametrize("asked", [
@@ -38,7 +38,7 @@ def test_a_statement_that_deletes_is_a_floor_in_a_query_field_of_a_tool_hinted_r
     "rm -rf node_modules safe?", "drop table sql syntax explained"])
 def test_the_words_of_a_search_are_not_a_statement(asked):
     searching = tool("web_search", "Search the web", ("query",), True)
-    assert mt.hard(searching, {"query": asked}) == "" and mt.group_of(searching) == "read"
+    assert mcp_floor.hard(searching, {"query": asked}) == "" and mcp_floor.group_of(searching) == "read"
 
 
 @pytest.mark.parametrize("name, arguments", [
@@ -48,19 +48,19 @@ def test_the_words_of_a_search_are_not_a_statement(asked):
     ("search_products", {"query": "mouse", "price": 20}),
 ])
 def test_a_price_a_currency_or_a_destination_in_a_search_pays_nobody(name, arguments):
-    assert mt.hard(tool(name, "", tuple(arguments), True), arguments) == ""
+    assert mcp_floor.hard(tool(name, "", tuple(arguments), True), arguments) == ""
 
 
 @pytest.mark.parametrize("name, arguments", [
     ("do_it", {"recipient": "DE89", "amount": 10}), ("move", {"to": "acct-2", "amount": 10})])
 def test_an_amount_with_whom_it_goes_to_is_a_payment_whatever_the_tool_is_called(name, arguments):
-    assert mt.hard(tool(name, "", tuple(arguments)), arguments) == "order"
+    assert mcp_floor.hard(tool(name, "", tuple(arguments)), arguments) == "order"
 
 
 def test_arguments_too_large_to_read_whole_are_asked_about():
     padded = {**{f"k{n}": n for n in range(70)}, "action": "delete"}
-    assert mt.cut(padded) and mt.cut({"rows": [{"a": n} for n in range(40)]})
-    assert not mt.cut({"ids": list(range(200)), "filter": {"a": 1}})
+    assert mcp_floor.cut(padded) and mcp_floor.cut({"rows": [{"a": n} for n in range(40)]})
+    assert not mcp_floor.cut({"ids": list(range(200)), "filter": {"a": 1}})
 
 
 @pytest.mark.parametrize("plain", [
@@ -105,4 +105,4 @@ def test_a_page_control_that_pays_deletes_or_changes_an_account_is_a_floor(name,
     ("link_bank_account", "order"), ("disable_two_factor", "account"), ("terminate_instances", "delete"),
     ("place_bid", "order"), ("tip_creator", "order"), ("upgrade_plan", "order"), ("enable_mfa", "account")])
 def test_a_tool_named_with_those_words_is_a_floor(name, kind):
-    assert mt.hard(tool(name)) == kind
+    assert mcp_floor.hard(tool(name)) == kind

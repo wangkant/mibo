@@ -15,7 +15,7 @@ form is sent), the account itself (ACCOUNT_WORDS, a submit in a form that holds
 a password, a switch that saves a setting), a binding submission (BIND_WORDS).
 These kinds ask whatever the mode or the reviewer, and no earlier yes reaches
 them (cardwait.reaches). The word sets are the whole app's: a program's
-controls (desk/gate.py) and MCP tools (mcp_tools.hard) are sorted by them too.
+controls (desk/gate.py) and MCP tools (mcp_floor.hard) are sorted by them too.
 
 The judgment, which the reviewer makes: any other press, Enter or form that
 sends something out of the page is one kind, "outward" (review.judged). What
@@ -83,7 +83,7 @@ def _words(english: list[str], chinese: list[str]) -> re.Pattern:
 
 
 # One vocabulary for every floor of the app: a control's name on a page (classify) or in another program
-# (desk/gate.py), and an MCP tool's name, description and arguments (mcp_tools.hard). Per kind: phrases in English
+# (desk/gate.py), and an MCP tool's name, description and arguments (mcp_floor.hard). Per kind: phrases in English
 # and other Latin-script languages, matched on word boundaries; phrases in other scripts, matched anywhere.
 # nanobrowser classify.ts, ported; 提交订单 and 确认订单, the other languages and the words after "top up" are ours.
 # Adding to a cart, comparing prices and a daily check-in spend nothing, and are not here.

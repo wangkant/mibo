@@ -114,9 +114,9 @@ def _package(raw: dict, labels: dict) -> dict | None:
             hint = _text(arg.get("valueHint") or flag.lstrip("-") or f"value{n}", 64)
             inputs.append(_input(f"arg:{n}", hint, arg, labels))
             args += [flag, {"input": f"arg:{n}"}] if flag else [{"input": f"arg:{n}"}]
-    for env in (raw.get("environmentVariables") if isinstance(raw.get("environmentVariables"), list) else [])[:32]:
-        if isinstance(env, dict) and mt.ENV_NAME_RE.fullmatch(str(env.get("name") or "")):
-            inputs.append(_input(f"env:{env['name']}", env["name"], env, labels))
+    envs = (raw.get("environmentVariables") if isinstance(raw.get("environmentVariables"), list) else [])[:32]
+    inputs += [_input(f"env:{env['name']}", env["name"], env, labels) for env in envs
+               if isinstance(env, dict) and mt.ENV_NAME_RE.fullmatch(str(env.get("name") or ""))]
     pinned = f"{ident}@{version}" if kind == "npm" else f"{ident}=={version}"
     shown = [COMMANDS[kind], *(["-y"] if kind == "npm" else []), pinned,
              *(a if isinstance(a, str) else f"<{next(i['name'] for i in inputs if i['id'] == a['input'])}>" for a in args)]
@@ -540,16 +540,11 @@ def other_apps(home: Path) -> list[dict]:
                          {k: v for k, v in spec.items() if k not in ("env", "headers")}), "")
             found.append({"key": f"{app}|{path}|{n}", "app": app, "path": str(path), "original": str(original)[:80],
                           "name": name, "kind": "program" if raw.get("command") else "address",
-                          "where": mt.command_line(spec) if spec.get("command") else _masked(spec.get("url", "")),
+                          "where": mt.command_line(spec) if spec.get("command") else mt.masked(spec.get("url", "")),
                           "values": sorted({*(spec.get("env") or {}), *(spec.get("headers") or {})}),
                           "have": same, "taken": not same and name.lower() in {c.lower() for c in config},
                           "off": raw.get("disabled") is True, "problem": problem})
     return found
-
-
-def _masked(url: str) -> str:
-    head, _, query = url.partition("?")
-    return head + ("?" + "&".join(p.split("=", 1)[0] + "=…" for p in query.split("&")) if query else "")
 
 
 def import_from(home: Path, keys: list[str], keep) -> list[str]:
@@ -562,7 +557,7 @@ def import_from(home: Path, keys: list[str], keep) -> list[str]:
     config = dict(mt.load_config(home)["mcpServers"])
     servers = {}
     for row in chosen:
-        app, path, n = row["key"].split("|")
+        _, path, n = row["key"].split("|")
         raw = list(_servers_in(Path(path)).values())[int(n)]
         name = _free_name(row["name"], {**config, **servers})
         spec, _ = _as_ours(name, raw)

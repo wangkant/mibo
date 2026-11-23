@@ -33,7 +33,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .cardwait import COSTLY
+from .cardwait import COSTLY, doing
 
 MODES = ("off", "read", "auto")
 DEFAULT = "auto"
@@ -108,12 +108,9 @@ def asked(workspace) -> list[dict]:
     from the model: [{"text", "at"}], the latest last; none while no turn of theirs is under way."""
     if not workspace._chat_lock.locked():
         return []
-    try:
-        doing = json.loads((Path(workspace.home) / "runtime" / "desktop" / "chat-doing.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
+    conversation = doing(workspace).get("conversation")
     room = next((chat for chat in [workspace._main, *workspace._chats.values()]
-                 if chat.conversation == doing.get("conversation")), None)
+                 if chat.conversation == conversation), None)
     out = []
     for message in room.history if room is not None else []:
         if message.get("role") != "user" or not str(message.get("text") or "").strip():

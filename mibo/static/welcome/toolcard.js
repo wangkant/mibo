@@ -15,7 +15,7 @@
   };
   let shown = null;
 
-  // A server's form (mcp_tools.ask_fields): one labelled input per field; returns the node and a reader of the
+  // A server's form (mcp_schema.ask_fields): one labelled input per field; returns the node and a reader of the
   // values that marks a required field left empty and gives null then.
   function form(fields, t) {
     const node = el("div", "op-card-form");
@@ -130,7 +130,7 @@
       // Why the automatic review did not pass it, in one line (mcp_hub.py).
       if (card.review) node.append(el("p", "op-card-why", card.review));
       if (card.changed) node.append(el("p", "op-card-never", t.changed));
-      // A call that pays, deletes or changes an account's security or access asks every time (mcp_tools.hard).
+      // A call that pays, deletes or changes an account's security or access asks every time (mcp_floor.hard).
       if (card.hard) node.append(el("p", "op-card-never", t.hard));
       if (card.destructive) node.append(el("p", "op-card-never", t.destructive));
       for (const [name, value] of card.args) fact(name, value, "op-card-text");

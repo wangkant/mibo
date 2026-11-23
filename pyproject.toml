@@ -81,7 +81,7 @@ dependencies = [
     # A PDF's text, page by page, for read_file (shell/files.py).
     "pypdf>=6,<7",
     # The person's MCP servers, through the official SDK (mcp_client.py); jsonschema checks a call's
-    # arguments against the tool's schema before the card (mcp_tools.py).
+    # arguments against the tool's schema before the card (mcp_schema.py).
     "mcp>=2.3,<3",
     "jsonschema>=4.20,<5",
     # Keeps the model keys and MCP servers' values and sign-in tokens in the system's credential store

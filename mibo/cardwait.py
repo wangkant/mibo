@@ -42,7 +42,7 @@ TICK_S = 0.5
 
 NOTICE = {"zh": "等待在聊天中确认：{what}", "en": "Waiting for your yes in the chat: {what}"}
 
-# The gates' kinds that are costly, wherever they are decided (web/gate.py, desk/gate.py, mcp_tools.hard, the shell's
+# The gates' kinds that are costly, wherever they are decided (web/gate.py, desk/gate.py, mcp_floor.hard, the shell's
 # panel): money paid or spent ("order"), a deletion nothing restores ("delete"), the account itself ("account"), access
 # or private details handed over ("grant"), a binding submission ("bind"), a program's or the system's settings
 # ("setting"), and this computer past what the turn's checkpoint and the Recycle Bin give back ("system": an install,

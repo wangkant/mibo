@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import os
 import re
-import unicodedata
 from dataclasses import dataclass, field
+
+from .review import _compact, _fold, _site
 
 OUTSIDE, LOCAL = "outside", "local"
 # What each tool's result is: outside material (the web, a third party) or local material (this computer, the
@@ -54,16 +55,8 @@ SENDS = {"browser": frozenset({"send", "comment", "like", "post", "submit", "out
 TO_SOMEONE = frozenset({"send", "upload"})
 
 
-def _fold(text: str) -> str:
-    return unicodedata.normalize("NFKC", str(text or "")).casefold()
-
-
 def _squeeze(text: str) -> str:
     return " ".join(_fold(text).split())
-
-
-def _compact(text: str) -> str:
-    return re.sub(r"[\W_]+", "", text)
 
 
 @dataclass
@@ -118,7 +111,6 @@ def turn_read(workspace) -> dict:
 def _site_names(site: str) -> list[str]:
     """The names a person calls a site by: its address, its own name, and the names the app knows for it (B站 for
     bilibili.com, 微博 for weibo.com)."""
-    from .review import _site
     from .web import signin, sites
     label = _site(site)
     names = [site, label]

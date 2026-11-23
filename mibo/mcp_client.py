@@ -267,7 +267,6 @@ class Connection:
         self.last_status = 0
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
-        self._errlog = None
 
     @property
     def stderr_path(self) -> Path:
@@ -281,8 +280,16 @@ class Connection:
         lines = [line.rstrip() for line in text.splitlines() if line.strip()]
         return "\n".join(lines)[-STDERR_TAIL:]
 
+    @contextlib.asynccontextmanager
+    async def _stdio(self, params):
+        """The program's pipes, its stderr kept in the server's folder until it has exited."""
+        from mcp.client.stdio import stdio_client
+        with open(self.stderr_path, "w", encoding="utf-8", errors="replace") as errlog:
+            async with stdio_client(params, errlog=errlog) as streams:
+                yield streams
+
     def _transport(self, stack: contextlib.AsyncExitStack):
-        from mcp.client.stdio import StdioServerParameters, stdio_client
+        from mcp.client.stdio import StdioServerParameters
         from mcp.client.streamable_http import streamable_http_client
         from mcp.shared._httpx_utils import create_mcp_http_client
 
@@ -293,14 +300,12 @@ class Connection:
             if not program:
                 raise McpError("not_found", self.spec["command"])
             self.folder.mkdir(parents=True, exist_ok=True)
-            self._errlog = open(self.stderr_path, "w", encoding="utf-8", errors="replace")
-            stack.callback(self._errlog.close)
             args = list(self.spec.get("args") or [])
             if os.name == "nt" and Path(program).suffix.lower() in (".cmd", ".bat"):
                 program, args, env = batch_launch(program, args, env)
             params = StdioServerParameters(command=program, args=args, env=env, cwd=cwd,
                                            encoding_error_handler="replace")
-            return stdio_client(params, errlog=self._errlog)
+            return self._stdio(params)
 
         headers = dict(self.spec.get("headers") or {})
         if self.spec.get("type") == "sse":
@@ -458,7 +463,7 @@ class Connection:
         if task is not None and not task.done():
             try:
                 await asyncio.wait_for(asyncio.shield(task), 8)
-            except (asyncio.TimeoutError, Exception):
+            except Exception:
                 task.cancel()
         self.closed.set()
 

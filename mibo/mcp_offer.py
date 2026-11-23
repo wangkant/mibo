@@ -20,7 +20,7 @@ import logging
 import re
 import time
 
-from . import mcp_tools as mt
+from . import mcp_schema
 from .cardwait import WAIT_S
 
 logger = logging.getLogger("agent.tools")
@@ -171,7 +171,7 @@ def functions(deferred: list[dict], names: list[str]) -> list[dict]:
     if names:
         listed.append("The MCP servers they added to the app (programs and services of theirs: files, notes, "
                       "calendars and the like), by the names they gave: "
-                      + mt.fence("their_mcp_servers", ", ".join(names))
+                      + mcp_schema.fence("their_mcp_servers", ", ".join(names))
                       + "\nfind_tools also says how each server stands now.")
     return [
         {"type": "function", "function": {
@@ -233,9 +233,9 @@ def matching(query: str, deferred: list[dict]) -> list[dict]:
                                               query.lower())]
     if named:
         return named
-    words = mt.words_of(query)
-    ranked = sorted(((mt.score(words, {"name": t["function"]["name"],
-                                       "description": str(t["function"].get("description") or "")}, ""), n, t)
+    words = mcp_schema.words_of(query)
+    ranked = sorted(((mcp_schema.score(words, {"name": t["function"]["name"],
+                                               "description": str(t["function"].get("description") or "")}, ""), n, t)
                      for n, t in enumerate(deferred)), key=lambda row: (-row[0], row[1]))
     return [t for rank, _, t in ranked if rank > 0][:FOUND]
 
@@ -300,7 +300,7 @@ async def _find(args: dict, lookups) -> str:
     logger.info("[Agent] MCP find %r in %s -> %s, %d tools", query[:60], server or "all", status,
                 len(found.get("tools") or []))
     # How each server stands now: kept out of the description, so the tools block does not change with it.
-    now = "\nTheir servers now:\n" + mt.fence("their_mcp_servers", _server_lines(current()))
+    now = "\nTheir servers now:\n" + mcp_schema.fence("their_mcp_servers", _server_lines(current()))
     if status != "ok":
         return (head + json.dumps(rows, ensure_ascii=False) + "\n" if rows else "") + \
             _said(found, server, "find_tools") + now
@@ -319,7 +319,7 @@ async def _find(args: dict, lookups) -> str:
               **({"read_only": True} if t.get("readonly") else {})} for t in tools]
     about = "\n".join(f"- {qualified(t['server'], t['tool'])}: {t['description'][:200]}" for t in tools)
     return (head + json.dumps(rows, ensure_ascii=False)
-            + ("\nWhat their makers say their tools do: " + mt.fence("third_party_tool_descriptions", about)
+            + ("\nWhat their makers say their tools do: " + mcp_schema.fence("third_party_tool_descriptions", about)
                if tools else "") + later + now)
 
 
@@ -354,7 +354,7 @@ async def _call(agent, server: str, tool: str, arguments: dict, lookups) -> str:
             lookups.pictures += pictures
         elif pictures:
             # A model that takes no pictures is told one was there.
-            left_out, pictures = left_out + ["image"], []
-        return mt.result_for_model(server, tool, outcome.get("text") or "", bool(outcome.get("is_error")),
-                                   left_out, len(pictures))
+            left_out, pictures = [*left_out, "image"], []
+        return mcp_schema.result_for_model(server, tool, outcome.get("text") or "", bool(outcome.get("is_error")),
+                                           left_out, len(pictures))
     return _said(outcome, server, tool)

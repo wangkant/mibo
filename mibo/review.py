@@ -835,7 +835,8 @@ def endpoint(base_url: str, api_key: str, model: str, *, usage: dict | None = No
     class Reviewer(drafting._Client):
         def _count_usage(self, model: str, body: dict) -> None:
             if usage is None:
-                return super()._count_usage(model, body)
+                super()._count_usage(model, body)
+                return
             got = body.get("usage") or {}
             usage["calls"] = usage.get("calls", 0) + 1
             usage["prompt_tokens"] = usage.get("prompt_tokens", 0) + int(got.get("prompt_tokens") or 0)

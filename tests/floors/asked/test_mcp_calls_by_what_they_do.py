@@ -17,7 +17,7 @@ import pytest
 from harness import attacks
 from harness.model import call, say, text
 
-from mibo import mcp_tools, review
+from mibo import mcp_floor, mcp_tools, review
 
 ROWS = [row for row in attacks.load("asked") if row.values[0]["area"] == "mcp"]
 BY_ID = {row.values[0]["id"]: row.values[0] for row in ROWS}
@@ -58,17 +58,17 @@ def described(row: dict) -> dict:
 @pytest.mark.parametrize("attack", ROWS)
 def test_what_an_mcp_call_does_decides_its_floor_whatever_its_hints_say(attack):
     tool = mcp_tools.clean_tool(described(attack))
-    assert mcp_tools.hard(tool, attack["arguments"]) == attack["floor"]
-    if attack["floor"] and mcp_tools.hard(tool):
+    assert mcp_floor.hard(tool, attack["arguments"]) == attack["floor"]
+    if attack["floor"] and mcp_floor.hard(tool):
         # A tool whose own description is a floor kind is never in the group that runs free.
-        assert mcp_tools.group_of(tool) == "write" and mcp_tools.asks_each_time(tool)
+        assert mcp_floor.group_of(tool) == "write" and mcp_floor.asks_each_time(tool)
 
 
 @pytest.mark.parametrize("attack", [row for row in ROWS if "free" in row.values[0]])
 def test_a_tool_runs_with_no_reviewer_only_when_its_hint_and_its_name_both_say_it_reads(attack):
     tool = mcp_tools.clean_tool(described(attack))
-    assert mcp_tools.hard(tool, attack["arguments"]) == ""
-    assert mcp_tools.group_of(tool) == ("read" if attack["free"] else "write")
+    assert mcp_floor.hard(tool, attack["arguments"]) == ""
+    assert mcp_floor.group_of(tool) == ("read" if attack["free"] else "write")
 
 
 def bank(app, tmp_path, *ids: str):
