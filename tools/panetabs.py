@@ -56,9 +56,8 @@ def views(d) -> list:
 
     def read() -> None:
         form = d.app._window.native
-        for control in form.Controls:
-            if isinstance(control, WebView2) and not control.Equals(form.browser.webview):
-                found.append((control, control.CoreWebView2))
+        found.extend((control, control.CoreWebView2) for control in form.Controls
+                     if isinstance(control, WebView2) and not control.Equals(form.browser.webview))
     d._ui(read)
     return found
 
@@ -83,7 +82,7 @@ def pages(d) -> list[dict]:
             rows.append({"url": "", "shown": False})
             continue
         box: dict = {}
-        d._ui(lambda core=core, view=view: box.update(url=str(core.Source), title=str(core.DocumentTitle),
+        d._ui(lambda core=core, view=view, box=box: box.update(url=str(core.Source), title=str(core.DocumentTitle),
                                                       shown=bool(view.Visible)))
         facts = ask(d, core, "({mark: window.__mark || 0, field: document.getElementById('q')?.value || ''})") or {}
         rows.append({**box, **facts})

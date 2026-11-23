@@ -88,7 +88,7 @@ async def drive(hands, plan: list) -> dict:
             break
         refused = surface.file_floor(actions, SimpleNamespace(said=hands.said(), results=[]))
         if refused:
-            return {"status": "refused", "steps": lines + [refused], "noticed": noticed}
+            return {"status": "refused", "steps": [*lines, refused], "noticed": noticed}
         got = await hands.steps(actions)
         lines += got["lines"]
         noticed += [got["noticed"]] if got["noticed"] else []

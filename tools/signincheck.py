@@ -24,6 +24,7 @@ import time
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import ClassVar
 from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -183,7 +184,7 @@ class Site(BaseHTTPRequestHandler):
 class Model(BaseHTTPRequestHandler):
     """The stand-in model: every request kept; the run loop's calls answered by the scene's script, the page judge
     by the hints it was given, the rest with a short line."""
-    seen: list[str] = []
+    seen: ClassVar[list[str]] = []
     script = None
 
     def log_message(self, *args) -> None:
@@ -209,7 +210,7 @@ class Model(BaseHTTPRequestHandler):
         if "say what it asks of the person" in text:
             asks = "account" if re.search(r"password field|code's reading|sign-in address|way to sign in", text) else "readable"
             return self._answer(json.dumps({"asks": asks, "say": ""}))
-        self._answer("OK")
+        return self._answer("OK")
 
 
 def as_step(action: dict) -> dict:

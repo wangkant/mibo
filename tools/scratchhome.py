@@ -19,6 +19,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 from keyring.backend import KeyringBackend
 
@@ -30,7 +31,7 @@ DEFAULTS = {"UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false"}
 class Keys(KeyringBackend):
     """The app's credential store for a run: a key from the environment, one the app saves held in memory."""
     priority = 1
-    held: dict = {}
+    held: ClassVar[dict] = {}
 
     def get_password(self, service, username):
         return self.held.get((service, username), os.environ.get(username))

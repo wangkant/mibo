@@ -50,7 +50,7 @@ PAGE = """(() => { const area = document.querySelector('.browse-area'), pane = d
     chip: (document.querySelector('.browse-context')?.textContent || '').trim(),
     back_chip: (() => { const c = document.querySelector('.browse-return'); return c && !c.hidden ? c.textContent.trim() : ''; })(),
     run: (document.querySelector('.browse-run .browse-run-mode')?.textContent || '').trim(),
-    strip: (() => { const s = document.querySelector('.browse-run-pill'); return s && !s.hidden ? s.textContent.trim() : ''; })() }); })()""" % NOW
+    strip: (() => { const s = document.querySelector('.browse-run-pill'); return s && !s.hidden ? s.textContent.trim() : ''; })() }); })()""".replace("%s", NOW)
 STEP: dict = {"n": 0}
 
 
@@ -165,7 +165,7 @@ def request(d, site: str, name: str) -> dict:
     after = look(d, f"{name}-replied")
     last = d.js("(() => { const chat = %s; const said = [...chat.querySelectorAll('.say')].at(-1); const act = [...chat.querySelectorAll('.act')].at(-1);"
                 " return JSON.stringify({ reply: said ? said.innerText.trim() : '', steps: act ? act.innerText.trim() : '',"
-                " mine: [...chat.querySelectorAll('.me')].at(-1)?.innerText.trim() || '' }); })()" % NOW)
+                " mine: [...chat.querySelectorAll('.me')].at(-1)?.innerText.trim() || '' }); })()".replace("%s", NOW))
     row = {"page_in_sight_all_the_way": bool(seen) and all(seen), "looks": len(seen), "cards": cards,
            "line_under_the_page": sorted(set(strips))[:4], "chat_over_the_page_while_it_acted": any(over),
            "site_got_it": verdict.get("ok"), "site_says": str(verdict.get("why"))[:160],

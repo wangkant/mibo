@@ -121,7 +121,7 @@ def walk(d, site: str, results: dict) -> None:
         time.sleep(1.2)
         if "beside" in (d.js("document.body.className") or "").split():
             d.click(".browse-beside")
-        d.js("window.paBrowse({operating: %s})" % json.dumps(run, ensure_ascii=False))
+        d.js(f"window.paBrowse({{operating: {json.dumps(run, ensure_ascii=False)}}})")
         time.sleep(1.2)
         results[f"{wide}-tabs-run"] = measure(d, f"{wide}-tabs-run")
         d.js("window.paBrowse({operating: null})")

@@ -107,7 +107,7 @@ async def replay(run, frame_type, profile) -> list[dict]:
         window = Window(frame_type, profile.profile("anthropic/claude-haiku-5.5"))
         script = iter(answers)
 
-        async def ask_model(system: str, messages: list[dict]) -> str:
+        async def ask_model(system: str, messages: list[dict], script=script) -> str:
             return json.dumps(next(script, {"actions": [{"do": "done", "success": False, "result": "end"}]}))
         out = await run.run(ask_model, window, "按任务操作")
         done = out["status"] == "done"

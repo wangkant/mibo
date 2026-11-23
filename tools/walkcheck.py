@@ -83,7 +83,7 @@ async def walks(home: Path, count: int, topics: list[str], out: Path | None) -> 
             words = []
             plan = walker._plan
 
-            def planned():
+            def planned(plan=plan, words=words):
                 got = plan()
                 words.append(got.topic or "(none)")
                 return got

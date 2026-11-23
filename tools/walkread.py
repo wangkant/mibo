@@ -202,7 +202,7 @@ async def run(out: Path, only: set, dump: bool, extras: bool) -> None:
                     took = time.monotonic() - began
                 shape = sites.card(list_runtime, key)["shape"]
                 rows = reading.found_rows(page, sites.key_of,
-                                          shape_ok=(lambda u: sites.matches(u, shape)) if shape else None)
+                                          shape_ok=(lambda u, shape=shape: sites.matches(u, shape)) if shape else None)
                 ages = [_age(r.time, stamp) for r in rows]
                 row = {"url": url, "s": round(took, 1), "how": (sites.card(list_runtime, key)["hot"] or [{}])[0].get("how"),
                        "rows": len(rows), "dated": sum(a is not None for a in ages),

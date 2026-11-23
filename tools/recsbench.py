@@ -294,10 +294,9 @@ def table(rows: list, out: Path, spent: float) -> None:
         f"| model calls in all | {sum(r['model_calls'] for r in rows)} over {len(rows)} turns |",
         f"| spent | ${spent:.4f} |", "",
         "| turn | said | card | calls | events |", "|---|---|---|---|---|"]
-    for r in rows:
-        lines.append(f"| {r['n']} | {r['say'][:30]} | {(r['card'] or {}).get('title') or ''} "
-                     f"{('(' + r['on_subject'] + ')') if r.get('on_subject') else ''} | {', '.join(r['calls'])} | "
-                     f"{', '.join(a for _, a, _ in r['events'])} |")
+    lines.extend(f"| {r['n']} | {r['say'][:30]} | {(r['card'] or {}).get('title') or ''} "
+                 f"{('(' + r['on_subject'] + ')') if r.get('on_subject') else ''} | {', '.join(r['calls'])} | "
+                 f"{', '.join(a for _, a, _ in r['events'])} |" for r in rows)
     (out / "table.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

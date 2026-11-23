@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler
+from typing import ClassVar
 
 REPLY = "hey there"
 # Settings a developer's shell may carry that would override the test home's settings.
@@ -22,7 +23,7 @@ _SCRUBBED_PREFIXES = ("LLM_", "AGENT_", "PERSONA_", "ADMIN_", "EMBEDDING_", "VIS
 
 class FakeModel(BaseHTTPRequestHandler):
     """An OpenAI-compatible server that answers every call with REPLY, so nothing leaves this machine."""
-    calls: list[str] = []
+    calls: ClassVar[list[str]] = []
 
     def log_message(self, *args) -> None:
         pass

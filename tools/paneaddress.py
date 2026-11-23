@@ -83,11 +83,11 @@ def bar(home: Path, out: Path) -> dict:
             page = browser.new_page(viewport={"width": wide, "height": 820}, screen={"width": wide, "height": 900})
             page.goto(f"{base.rstrip('/')}/#{fragment}&frame=measure")
             page.wait_for_selector(".chat-main .chat-input", timeout=60000)
-            page.evaluate("paBrowse(%s)" % json.dumps(STATE))
+            page.evaluate(f"paBrowse({json.dumps(STATE)})")
             time.sleep(0.6)
             row = page.evaluate(BAR)
             page.screenshot(path=str(out / f"bar-{wide:04d}.png"), clip={"x": 0, "y": 0, "width": wide, "height": 110})
-            page.evaluate("paBrowse(%s)" % json.dumps(PLAIN))
+            page.evaluate(f"paBrowse({json.dumps(PLAIN)})")
             time.sleep(0.3)
             row["plain"] = page.evaluate(BAR)
             results["widths"][wide] = row
@@ -98,7 +98,7 @@ def bar(home: Path, out: Path) -> dict:
                 page.screenshot(path=str(out / f"bar-{wide:04d}-dark.png"), clip={"x": 0, "y": 0, "width": wide, "height": 110})
                 page.emulate_media(color_scheme="light")
             if wide == 1440:
-                page.evaluate("paBrowse(%s)" % json.dumps(STATE))
+                page.evaluate(f"paBrowse({json.dumps(STATE)})")
                 # What typing offers: the first rows, as a person reads them.
                 for text in ("蓝箱 第二季", "bilibili", "候鸟", "news", "127.0.0.1"):
                     page.click(".browse-address")

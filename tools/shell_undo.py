@@ -17,6 +17,7 @@ in headless Edge), whether every file is back byte for byte. A picture of the pa
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -142,59 +143,58 @@ def main() -> int:
     (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
     first = fixture(work)
     threading.Thread(target=stand_in, args=(model_port, work), daemon=True).start()
-    app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
-                            f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
-                           env=env,
-                           cwd=Path(__file__).resolve().parents[1],
-                           stdout=open(home.parent / "app.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
-    report: dict = {"start": first}
-    try:
-        for _ in range(240):
-            if (home / "runtime" / "desktop" / "welcome.json").exists():
-                break
-            time.sleep(0.5)
-        page = Page(home)
-        for _ in range(120):
-            try:
-                page("state")
-                break
-            except OSError:
-                time.sleep(0.5)
-        page("look/toured", {})
-        page("shell", {"on": True})
-        page("shell", {"add": str(work)})
-        # The main chat, which the page opens on.
-        chat = "main"
-        from mibo.shell.checkpoint import in_bin
-        names = {}
-        for text in turns(work):
-            done = turn(page, chat, f"{text} 整理一下")  # copy: voice
-            names[text] = done["turn"]
-            report[text] = {k: v for k, v in done.items() if k != "turn"}
-            report[text]["after"] = state(work)
-        report["in_recycle_bin"] = {name: in_bin(str(work / name)) is not None for name in ("临时", "c.txt")}
-        for text, name in names.items():
-            view = page(f"shell/changes?turn={name}")
-            report[text]["fold"] = [(i["op"], Path(i.get("dest") or i["path"]).name) for i in view["items"]]
-            diff = next((i["diff"] for i in view["items"] if i["path"].endswith("a.py") and i.get("diff")), "")
-            if diff:
-                report["a.py diff"] = diff.split("\n")
-        for text in ("UNDO-2", "UNDO-1"):
-            undone = page("shell/undo", {"turn": names[text]})
-            report[f"undo {text}"] = {"done": undone["done"], "left": undone["left"], "files": state(work)}
-        report["page"] = page_undo(home, shots)
-        report["end"] = state(work)
-        report["all back"] = report["end"] == first
-        print(json.dumps(report, ensure_ascii=False, indent=1))
+    with open(home.parent / "app.log", "w", encoding="utf-8") as log:
+        app = subprocess.Popen([sys.executable, "-c", "import sys; from mibo import welcome; "
+                                f"sys.exit(welcome.main(['--no-browser','--port','{page_port}']))"],
+                               env=env,
+                               cwd=Path(__file__).resolve().parents[1],
+                               stdout=log, stderr=subprocess.STDOUT)
+        report: dict = {"start": first}
         try:
-            page("exit", {})
-        except OSError:
-            pass
-        app.wait(30)
-    finally:
-        if app.poll() is None:
-            app.kill()
-    return 0 if report.get("all back") else 1
+            for _ in range(240):
+                if (home / "runtime" / "desktop" / "welcome.json").exists():
+                    break
+                time.sleep(0.5)
+            page = Page(home)
+            for _ in range(120):
+                try:
+                    page("state")
+                    break
+                except OSError:
+                    time.sleep(0.5)
+            page("look/toured", {})
+            page("shell", {"on": True})
+            page("shell", {"add": str(work)})
+            # The main chat, which the page opens on.
+            chat = "main"
+            from mibo.shell.checkpoint import in_bin
+            names = {}
+            for text in turns(work):
+                done = turn(page, chat, f"{text} 整理一下")  # copy: voice
+                names[text] = done["turn"]
+                report[text] = {k: v for k, v in done.items() if k != "turn"}
+                report[text]["after"] = state(work)
+            report["in_recycle_bin"] = {name: in_bin(str(work / name)) is not None for name in ("临时", "c.txt")}
+            for text, name in names.items():
+                view = page(f"shell/changes?turn={name}")
+                report[text]["fold"] = [(i["op"], Path(i.get("dest") or i["path"]).name) for i in view["items"]]
+                diff = next((i["diff"] for i in view["items"] if i["path"].endswith("a.py") and i.get("diff")), "")
+                if diff:
+                    report["a.py diff"] = diff.split("\n")
+            for text in ("UNDO-2", "UNDO-1"):
+                undone = page("shell/undo", {"turn": names[text]})
+                report[f"undo {text}"] = {"done": undone["done"], "left": undone["left"], "files": state(work)}
+            report["page"] = page_undo(home, shots)
+            report["end"] = state(work)
+            report["all back"] = report["end"] == first
+            print(json.dumps(report, ensure_ascii=False, indent=1))
+            with contextlib.suppress(OSError):
+                page("exit", {})
+            app.wait(30)
+        finally:
+            if app.poll() is None:
+                app.kill()
+        return 0 if report.get("all back") else 1
 
 
 def page_undo(home: Path, shots: Path) -> dict:

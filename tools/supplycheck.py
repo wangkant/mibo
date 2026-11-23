@@ -83,7 +83,7 @@ async def rounds(runtime: Path, lang: str, topics: list[str]) -> dict:
     for n in (1, 2):
         before = {i.id for i in library.items()}
         started = time.time()
-        kept, picked = await catalog.run_round(runtime, lang)
+        _, picked = await catalog.run_round(runtime, lang)
         new = [i for i in library.items() if i.id not in before]
         all_new += new
         known = catalog.all_sources([])

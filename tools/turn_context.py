@@ -77,7 +77,7 @@ def main() -> None:
     turns = [dict(t) for t in agent.dm_history[user]]
     if a.heavy:
         _heavy(agent, turns)
-    history = turns + [{"role": "user", "content": a.say, "name": "you", "t": time.time(), "seq": 99999}]
+    history = [*turns, {"role": "user", "content": a.say, "name": "you", "t": time.time(), "seq": 99999}]
     url = agent._endpoint_for(MODEL)[0]
     ratio = context.ratio(agent, url, MODEL)
     rows = []

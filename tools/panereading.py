@@ -99,7 +99,7 @@ def walk(d, site: str, results: dict) -> None:
     time.sleep(1.5)
     d.shot("replied")
     last = d.js("(() => { const chat = %s; const said = [...chat.querySelectorAll('.say')].at(-1); const act = [...chat.querySelectorAll('.act')].at(-1);"
-                " return JSON.stringify({ reply: said ? said.innerText.trim() : '', steps: act ? act.innerText.trim() : '' }); })()" % NOW)
+                " return JSON.stringify({ reply: said ? said.innerText.trim() : '', steps: act ? act.innerText.trim() : '' }); })()".replace("%s", NOW))
     first = SEEN["reads"][0] if SEEN["reads"] else ""
     results.update({"reading_calls": len(SEEN["reads"]), "numbers_in_first_read": bool(NUMBERS.search(first)),
                     "scrolled_px": page_value(d, "window.__miboFar"), "seconds": round(time.time() - began, 1),

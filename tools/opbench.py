@@ -173,7 +173,7 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
 
     def ask(text: str) -> None:
         # Into the box of the chat on screen, which stands beside the page where the window is wide enough for both.
-        d.js("window.paAsk(%s)" % json.dumps(text))
+        d.js(f"window.paAsk({json.dumps(text)})")
         time.sleep(1.2)
         d.click(".chat-send")
 
@@ -227,7 +227,7 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
                 focus = pane("document.activeElement && document.activeElement.id")
                 d.log(f"   handed over with the focus on {focus!r}")
                 if focus == task["password"]:
-                    pane("document.getElementById(%s).value = %s" % (json.dumps(task["password"]), json.dumps(PASSWORD)))
+                    pane(f"document.getElementById({json.dumps(task['password'])}).value = {json.dumps(PASSWORD)}")
                     ask("继续")
                     wait(task, cards, presses)
             seconds = round(time.time() - began)
@@ -251,8 +251,8 @@ def _walk(d, home: Path, site: str, wanted: list[dict], runs: int, counter: Coun
             d.log(f"   reply: {reply[-200:]!r}")
             (out / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
             if task.get("password"):
-                pane("document.getElementById(%s) && (document.getElementById(%s).value = '')"
-                     % (json.dumps(task["password"]), json.dumps(task["password"])))
+                field = json.dumps(task["password"])
+                pane(f"document.getElementById({field}) && (document.getElementById({field}).value = '')")
 
 
 def _judge(task: dict, row: dict, verdict: dict, reply: str, cards: list[str], pictures: bool) -> tuple[bool, str]:
@@ -305,7 +305,8 @@ def _table(results: list[dict], out: Path) -> None:
              "|---|---|---|---|---|---|---|---|"]
     cost = sum(r.get("cost") or 0 for r in results)
     for task, rows in by_task.items():
-        avg = lambda key: round(sum(r[key] for r in rows) / len(rows))  # noqa: E731
+        def avg(key: str, rows: list[dict] = rows) -> int:
+            return round(sum(r[key] for r in rows) / len(rows))
         fails = ", ".join(r["failure"] for r in rows if not r["ok"])
         lines.append(f"| {task} | {rows[0]['kind']} | {sum(r['ok'] for r in rows)}/{len(rows)} | {avg('calls')} | "
                      f"{avg('in_tokens')} | {avg('seconds')} | {avg('cards')} | {fails} |")

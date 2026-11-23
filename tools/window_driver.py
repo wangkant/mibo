@@ -130,11 +130,11 @@ class Driver:
 
     def shown(self, selector: str) -> bool:
         return bool(self.js("(s => { const e = document.querySelector(s); return !!e && !e.closest('[hidden]') "
-                            "&& e.getClientRects().length > 0; })(%s)" % json.dumps(selector)))
+                            "&& e.getClientRects().length > 0; })(" + json.dumps(selector) + ")"))
 
     def text(self, selector: str) -> str:
-        return self.js("(s => { const e = document.querySelector(s); return e ? e.textContent.trim().replace(/\\s+/g, ' ') : ''; })(%s)"
-                       % json.dumps(selector)) or ""
+        return self.js("(s => { const e = document.querySelector(s); return e ? e.textContent.trim().replace(/\\s+/g, ' ') : ''; })("
+                       + json.dumps(selector) + ")") or ""
 
     def until(self, expression: str, seconds: float = 30):
         """Wait until a JavaScript expression is truthy; its last value."""
@@ -178,9 +178,9 @@ class Driver:
 
     # -- acting -------------------------------------------------------------
     def centre(self, selector: str):
-        box = self.js("(() => { const e = document.querySelector(%s); if (!e) return null; e.scrollIntoView({block: 'center'});"
-                      " const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2, r.width]; })()"
-                      % json.dumps(selector))
+        box = self.js("(() => { const e = document.querySelector(" + json.dumps(selector) + "); if (!e) return null; "
+                      "e.scrollIntoView({block: 'center'});"
+                      " const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2, r.width]; })()")
         return (box[0], box[1]) if isinstance(box, list) and box[2] else None
 
     def hover(self, selector: str) -> bool:
@@ -207,7 +207,7 @@ class Driver:
     def type_into(self, selector: str, text: str) -> None:
         """Replace what an input holds by typing."""
         self.click(selector)
-        self.js("(e => e.select && e.select())(document.querySelector(%s))" % json.dumps(selector))
+        self.js(f"(e => e.select && e.select())(document.querySelector({json.dumps(selector)}))")
         self.cdp("Input.insertText", text=text)
         time.sleep(0.2)
 
@@ -219,8 +219,8 @@ class Driver:
 
     def choose(self, selector: str, value: str) -> None:
         """Pick an option of a <select>: its native list cannot be clicked from here."""
-        self.js("(() => { const p = document.querySelector(%s); p.value = %s; p.dispatchEvent(new Event('change', {bubbles: true})); })()"
-                % (json.dumps(selector), json.dumps(value)))
+        self.js(f"(() => {{ const p = document.querySelector({json.dumps(selector)}); p.value = {json.dumps(value)}; "
+                "p.dispatchEvent(new Event('change', {bubbles: true})); })()")
         time.sleep(0.4)
 
     def configure(self) -> bool:
@@ -232,7 +232,7 @@ class Driver:
         while time.time() < deadline and "onboard-view" in self.views():
             self.click("#onboard-view .onboard-skip")
             time.sleep(0.6)
-        ready = self.until("(%s).includes('chat-view')" % VIEWS, 60)
+        ready = self.until(f"({VIEWS}).includes('chat-view')", 60)
         time.sleep(2.5)
         return bool(ready)
 
