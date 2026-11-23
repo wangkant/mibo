@@ -31,6 +31,18 @@
     refresh: "M19.5 11A7.6 7.6 0 0 0 5.6 7.4M5 4v3.8h3.8M4.5 13a7.6 7.6 0 0 0 13.9 3.6M19 20v-3.8h-3.8",
     spark: "M12 3.5l1.9 5.6 5.6 1.9-5.6 1.9L12 18.5l-1.9-5.6-5.6-1.9 5.6-1.9z",
     pencil: "M14.5 5.5l4 4M4.5 19.5l1-4.5L15.8 4.7a1.4 1.4 0 0 1 2 0l1.5 1.5a1.4 1.4 0 0 1 0 2L9 18.5z",
+    down: "M6 9l6 6 6-6",
+    back: "M15 6l-6 6 6 6",
+    search: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3L20 20",
+    // The markets' marks: a skill, a connector, a star for how liked one is.
+    skill: "M5.5 4.5h9l4 4v11a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1zM14.5 4.5v4h4M8.5 12.5h7M8.5 16h5",
+    plug: "M9 3.5v4M15 3.5v4M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0zM12 16v4.5",
+    star: "M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7z",
+    // A model service: a server somewhere, and what a model was measured to do.
+    server: "M5 4.5h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zM5 13.5h14a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zM7.5 7.5h.01M7.5 16.5h.01",
+    tools: "M14.7 6.3a4 4 0 0 0-5.4 5.4l-4.8 4.8a1.4 1.4 0 0 0 2 2l4.8-4.8a4 4 0 0 0 5.4-5.4l-2.4 2.4-2-.4-.4-2z",
+    pictures: "M5 5h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 16l4.5-4.5L13 16M13.5 13.5l2-2L20 16M15.5 8.5h.01",
+    thinking: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2V16h5v-.2c.1-.8.5-1.5 1.1-2A6 6 0 0 0 12 3z",
     // The sidebar's marks, one per section.
     character: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20a7.5 7.5 0 0 1 15 0",
     model: "M8 3.5v3M16 3.5v3M8 17.5v3M16 17.5v3M3.5 8h3M3.5 16h3M17.5 8h3M17.5 16h3M7.5 6.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z",
@@ -82,15 +94,15 @@
     return text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
   }
   // A section's words in the page's language (its namespace in the catalog), its errors over the shared ones.
-  // setup/tools.js still brings its own zh and en table.
+  // The connectors' tab still brings its own zh and en table (setup/toolswords.js).
   function words(ns) {
     const own = typeof ns === "string" ? paI18n.words(ns) : ns[paI18n.lang] || ns.en;
     return { ...own, errors: { ...t.errors, ...own.errors } };
   }
-  // A failed fetch has no code of its own: the app itself is gone.
+  // A failure's code, as the app's answer names it; a failed fetch has no code of its own: the app itself is gone.
+  const errorCode = (error) => (error instanceof TypeError ? "offline" : error?.message || String(error));
   function say(error, words = t) {
-    const code = error instanceof TypeError ? "offline" : error?.message || error;
-    return words.errors[code] || words.errors.generic;
+    return words.errors[errorCode(error)] || words.errors.generic;
   }
   function button(cls, text, onClick) {
     const node = el("button", `setup-button ${cls}`);
@@ -111,7 +123,8 @@
     if (text !== undefined) relabel(node, text);
   }
   let fieldCount = 0;
-  // A label above the control, help under it, and the error under that, tied by aria.
+  // A label above the control, help under it, and the error under that, tied by aria. The control may be a box
+  // around its input (a key with its reveal button): the label and aria go to the input itself.
   function field(label, control, help = "") {
     const id = `setup-field-${++fieldCount}`;
     const wrap = el("div", "setup-field");
@@ -119,7 +132,9 @@
     const name = el("label", "setup-label", label);
     name.htmlFor = id;
     head.append(name);
-    control.id = id;
+    const controls = "input, textarea, select";
+    const target = control.matches(controls) ? control : control.querySelector(controls);
+    target.id = id;
     const helpLine = el("p", "setup-help", help);
     helpLine.id = `${id}-help`;
     helpLine.hidden = !help;
@@ -130,7 +145,6 @@
     wrap.append(head, control, helpLine, error);
     const described = () =>
       [!helpLine.hidden && helpLine.id, !error.hidden && error.id].filter(Boolean).join(" ");
-    const target = control.matches("input, textarea, select") ? control : control.querySelector("input, textarea, select");
     target.setAttribute("aria-describedby", described());
     return {
       wrap,
@@ -265,11 +279,59 @@
     if (onClick) node.addEventListener("click", onClick);
     return node;
   }
+  // A link that opens in the browser; `out` marks it so.
+  function link(text, href, out = false) {
+    const a = el("a", "setup-link");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    if (out) a.append(el("span", "", text), icon("out", "setup-icon setup-icon-sm"));
+    else a.textContent = text;
+    return a;
+  }
+  // A whole element that opens something, by a click or by Enter or Space while it has the focus.
+  function pressable(node, label, run) {
+    node.tabIndex = 0;
+    node.setAttribute("role", "button");
+    node.setAttribute("aria-label", label);
+    node.addEventListener("click", run);
+    node.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && event.target === node) {
+        event.preventDefault();
+        run();
+      }
+    });
+    return node;
+  }
+  // One fact of a market entry's detail: its name, then its values, each a line of text or a node.
+  function fact(dl, name, ...values) {
+    const dd = el("dd");
+    for (const value of values) if (value) dd.append(typeof value === "string" ? el("p", "", value) : value);
+    dl.append(el("dt", "", name), dd);
+  }
+  // A market publisher's own picture from their GitHub account, fetched once by the app for both markets; the
+  // market's plain mark until then, and for an entry with no owner.
+  const pictures = new Map();
+  function publisherMark(owner, mark, size) {
+    const box = el("span", `skm-mark skm-mark-${size}`);
+    box.append(icon(mark, "skm-mark-icon"));
+    if (!owner) return box;
+    if (!pictures.has(owner))
+      pictures.set(owner, ctx.picture(`/api/skills/market/mark/${encodeURIComponent(owner)}`).catch(() => ""));
+    pictures.get(owner).then((url) => {
+      if (!url) return;
+      const img = el("img");
+      img.alt = "";
+      img.src = url;
+      box.replaceChildren(img);
+    });
+    return box;
+  }
 
   // What the sections are handed: the helpers, and the app's state as the shell last read it.
   const kit = {
-    el, icon, fill, words, say, button, relabel, busy, field, input, section, card, item, switchRow, optionRow,
-    choices, errorLine, failed, fold, iconButton,
+    el, icon, fill, words, errorCode, say, button, relabel, busy, field, input, section, card, item, switchRow,
+    optionRow, choices, errorLine, failed, fold, iconButton, link, pressable, fact, publisherMark,
     get ctx() {
       return ctx;
     },
@@ -420,5 +482,6 @@
     return { node, show };
   });
 
-  window.paSetup = { mount, show, part };
+  // `kit` also serves the model chooser the first run shares (setup/modelpick.js), outside Settings.
+  window.paSetup = { mount, show, part, kit };
 })();

@@ -10,7 +10,7 @@ sentence on which kind of model would do it (words.NO_PICTURES).
 
 Page text, pictures of windows and file text go to the model service the person
 chose, as every word of the chat does. They are told so once, in the chooser of
-a model service (setup/model.js), and once more only when the service's host
+a model service (setup/modelpick.js), and once more only when the service's host
 changes (`told`, `tell`); nothing asks per action. Pictures go with no question
 unless the person turned the switch off in Settings (each task's first picture
 is asked about then), and a sensitive window asks every time (desk/panel.py).

@@ -96,11 +96,8 @@
       remove.disabled = posting;
       apiRow.row.hidden = keyRow.hidden = Boolean(chosen);
       apis.set(api, posting);
-      const get = el("a", "setup-link", paI18n.t("setup_walks.searchGet", { name: SEARCH_APIS[api].name }));
-      get.href = SEARCH_APIS[api].keys;
-      get.target = "_blank";
-      get.rel = "noopener noreferrer";
-      keyField.help([get]);
+      const get = paI18n.t("setup_walks.searchGet", { name: SEARCH_APIS[api].name });
+      keyField.help([kit.link(get, SEARCH_APIS[api].keys)]);
       key.disabled = posting;
     }
 
@@ -216,10 +213,8 @@
     }
     function link(page, note) {
       const line = el("p", "setup-walks-row");
-      const a = el("a", "setup-link setup-walks-page", page.title || page.url);
-      a.href = page.url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
+      const a = kit.link(page.title || page.url, page.url);
+      a.classList.add("setup-walks-page");
       line.append(a, el("span", "setup-walks-note", [page.site, note].filter(Boolean).join(t.sep)));
       return line;
     }

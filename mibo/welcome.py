@@ -235,7 +235,7 @@ def _mount_setup(app: FastAPI, workspace: Workspace) -> None:
     @app.post("/api/config")
     async def config(request: Request):
         saved = await asyncio.to_thread(workspace.save, await _body(request))
-        # The chooser said where page text, window pictures and file text go before this save (setup/model.js).
+        # The chooser said where page text, window pictures and file text go before this save (setup/modelpick.js).
         await asyncio.to_thread(when.tell, workspace.home / "runtime" / "desktop", when.host_of(workspace.config()))
         return saved
 

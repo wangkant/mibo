@@ -102,7 +102,7 @@ def test_allowing_the_start_takes_the_apps_own_page(client, workspace):
 def test_every_section_string_is_in_english_and_chinese_and_every_code_is_named():
     from mibo.panels import tools
 
-    source = (welcome.ASSETS / "setup" / "tools.js").read_text(encoding="utf-8")
+    source = (welcome.ASSETS / "setup" / "toolswords.js").read_text(encoding="utf-8")
     zh, en = source.split("\n    en: {\n")
     en = en.split("\n    },\n")[0]
     keys_zh = set(re.findall(r"^      (\w+): ", zh, re.M))

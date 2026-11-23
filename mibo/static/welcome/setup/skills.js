@@ -8,72 +8,9 @@
 // do is decided by the app (mibo/skills): it is guidance only, and every action still asks on its card.
 (() => {
   const MAX_UPLOAD = 64 * 1024 * 1024;
-  const SVG = "http://www.w3.org/2000/svg";
-  const MARKS = {
-    search: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3L20 20",
-    back: "M15 6l-6 6 6 6",
-    star: "M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7z",
-    skill: "M5.5 4.5h9l4 4v11a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1zM14.5 4.5v4h4M8.5 12.5h7M8.5 16h5",
-    check: "M5 12.5l4.2 4.2L19 7",
-  };
-
-  // A zip of the chosen folder's files, stored without compression, for /api/skills/upload.
-  const CRC = (() => {
-    const table = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      table[n] = c >>> 0;
-    }
-    return (bytes) => {
-      let c = 0xffffffff;
-      for (let i = 0; i < bytes.length; i++) c = table[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-      return (c ^ 0xffffffff) >>> 0;
-    };
-  })();
-  async function zipOf(files) {
-    const parts = [];
-    const central = [];
-    let offset = 0;
-    const encoder = new TextEncoder();
-    for (const file of files) {
-      const name = encoder.encode(file.webkitRelativePath || file.name);
-      const data = new Uint8Array(await file.arrayBuffer());
-      const crc = CRC(data);
-      const head = new DataView(new ArrayBuffer(30));
-      head.setUint32(0, 0x04034b50, true);
-      head.setUint16(4, 20, true);
-      head.setUint16(6, 0x0800, true);
-      head.setUint32(14, crc, true);
-      head.setUint32(18, data.length, true);
-      head.setUint32(22, data.length, true);
-      head.setUint16(26, name.length, true);
-      parts.push(head, name, data);
-      const entry = new DataView(new ArrayBuffer(46));
-      entry.setUint32(0, 0x02014b50, true);
-      entry.setUint16(4, 20, true);
-      entry.setUint16(6, 20, true);
-      entry.setUint16(8, 0x0800, true);
-      entry.setUint32(16, crc, true);
-      entry.setUint32(20, data.length, true);
-      entry.setUint32(24, data.length, true);
-      entry.setUint16(28, name.length, true);
-      entry.setUint32(42, offset, true);
-      central.push(entry, name);
-      offset += 30 + name.length + data.length;
-    }
-    const size = central.reduce((sum, part) => sum + part.byteLength, 0);
-    const end = new DataView(new ArrayBuffer(22));
-    end.setUint32(0, 0x06054b50, true);
-    end.setUint16(8, files.length, true);
-    end.setUint16(10, files.length, true);
-    end.setUint32(12, size, true);
-    end.setUint32(16, offset, true);
-    return new Blob([...parts, ...central, end], { type: "application/zip" });
-  }
 
   window.paSetup.part("skills", (kit) => {
-    const { el } = kit;
+    const { el, icon, link, fact } = kit;
     const t = kit.words("setup_skills");
     const ctx = kit.ctx;
     const zh = kit.lang === "zh";
@@ -84,23 +21,6 @@
     const query = { text: "", category: "", sub: "", sort: "popular" };
     let detailId = "";
 
-    function mark(name, cls) {
-      const svg = document.createElementNS(SVG, "svg");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("aria-hidden", "true");
-      svg.setAttribute("class", cls);
-      const path = document.createElementNS(SVG, "path");
-      path.setAttribute("d", MARKS[name]);
-      svg.append(path);
-      return svg;
-    }
-    function link(text, href) {
-      const a = el("a", "setup-link", text);
-      a.href = href;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      return a;
-    }
     const short = (sha) => String(sha || "").slice(0, 7);
     function count(n) {
       if (zh) return n >= 10000 ? `${(n / 10000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "")} 万` : String(n);
@@ -397,7 +317,7 @@
         return;
       }
       const label = (files[0].webkitRelativePath || files[0].name).split("/")[0];
-      adding(pickFolder, async () => upload(await zipOf(files), "folder", label));
+      adding(pickFolder, async () => upload(await window.paZip(files), "folder", label));
     });
     zipPicker.addEventListener("change", () => {
       const file = zipPicker.files[0];
@@ -422,7 +342,7 @@
     search.type = "search";
     search.placeholder = t.search;
     search.setAttribute("aria-label", t.search);
-    searchWrap.append(mark("search", "skm-search-icon"), search);
+    searchWrap.append(icon("search", "skm-search-icon"), search);
     const sort = el("select", "setup-input setup-select setup-input-sm skm-sort");
     sort.setAttribute("aria-label", t.sort);
     for (const [value, text] of [["popular", t.sortPopular], ["recent", t.sortRecent]]) {
@@ -615,23 +535,8 @@
       return row;
     }
 
-    // Publishers' own pictures from their GitHub accounts, fetched once by the app; a plain mark until then.
-    const pictures = new Map();
-    function publisherMark(one, size) {
-      const box = el("span", `skm-mark skm-mark-${size}`);
-      box.append(mark("skill", "skm-mark-icon"));
-      const owner = one.source.host === "github.com" ? one.source.repo.split("/")[0] : "";
-      if (!owner) return box;
-      if (!pictures.has(owner)) pictures.set(owner, ctx.picture(`/api/skills/market/mark/${encodeURIComponent(owner)}`).catch(() => ""));
-      pictures.get(owner).then((url) => {
-        if (!url) return;
-        const img = el("img");
-        img.alt = "";
-        img.src = url;
-        box.replaceChildren(img);
-      });
-      return box;
-    }
+    const publisherMark = (one, size) =>
+      kit.publisherMark(one.source.host === "github.com" ? one.source.repo.split("/")[0] : "", "skill", size);
 
     function actionFor(one, small) {
       const size = small ? "setup-button-sm" : "";
@@ -644,7 +549,7 @@
       }
       if (one.installed) {
         const done = el("span", "skm-installed");
-        done.append(mark("check", "skm-installed-icon"), el("span", "", t.installed));
+        done.append(icon("check", "skm-installed-icon"), el("span", "", t.installed));
         return done;
       }
       if (stateOf(one) === "view") return null;
@@ -671,10 +576,7 @@
         return grid.replaceChildren(empty);
       }
       grid.replaceChildren(...rows.map((one) => {
-        const card = el("article", "skm-card");
-        card.tabIndex = 0;
-        card.setAttribute("role", "button");
-        card.setAttribute("aria-label", title(one));
+        const card = kit.pressable(el("article", "skm-card"), title(one), () => openDetail(one.id));
         const top = el("div", "skm-card-top");
         const names = el("div", "skm-card-names");
         names.append(el("h4", "skm-card-title", title(one)), el("p", "skm-card-by", one.publisher));
@@ -683,20 +585,13 @@
         const left = badges(one);
         if (popularity(one) >= 0) {
           const pop = el("span", "skm-pop");
-          pop.append(mark("star", "skm-pop-icon"), el("span", "", count(popularity(one))));
+          pop.append(icon("star", "skm-pop-icon"), el("span", "", count(popularity(one))));
           left.prepend(pop);
         }
         foot.append(left);
         const action = actionFor(one, true);
         if (action) foot.append(action);
         card.append(top, el("p", "skm-card-about", about(one)), foot);
-        card.addEventListener("click", () => openDetail(one.id));
-        card.addEventListener("keydown", (event) => {
-          if ((event.key === "Enter" || event.key === " ") && event.target === card) {
-            event.preventDefault();
-            openDetail(one.id);
-          }
-        });
         return card;
       }));
     }
@@ -728,12 +623,6 @@
     function closeDetail() {
       detailId = "";
       renderGrid();
-    }
-
-    function fact(dl, name, ...values) {
-      const dd = el("dd");
-      for (const value of values) if (value) dd.append(typeof value === "string" ? el("p", "", value) : value);
-      dl.append(el("dt", "", name), dd);
     }
 
     // A skill that needs an MCP server offers the connector the connector market lists for it (setup/tools.js).
@@ -773,7 +662,7 @@
       detailError = kit.errorLine();
       const back = el("button", "skm-back");
       back.type = "button";
-      back.append(mark("back", "skm-back-icon"), el("span", "", t.back));
+      back.append(icon("back", "skm-back-icon"), el("span", "", t.back));
       back.addEventListener("click", closeDetail);
 
       const top = el("div", "skm-detail-top");

@@ -323,7 +323,7 @@
       pane.append(box);
       return pane;
     }
-    // The same chooser as Settings › Model (setup/model.js), so the two never drift.
+    // The same chooser as Settings › Model (setup/modelpick.js), so the two never drift.
     const lang = paI18n.lang;
     if (modelPick?.lang !== lang) {
       modelPick = {

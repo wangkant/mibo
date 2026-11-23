@@ -7,397 +7,15 @@
 // official MCP Registry searched by name beyond it, and a detail view whose form fills the entry in. A local
 // program starts only once the person allows its exact command; every tool asks on a card in the chat first.
 // Market entries are data from the network: every string goes on the page as text, never as markup.
+// Its words are setup/toolswords.js.
 (() => {
-  const WORDS = {
-    zh: {
-      hint: "连接器（MCP 服务器）为角色提供更多工具，例如查询地图、读取文档或管理任务。调用工具前默认需要你在对话中的卡片上确认；工具返回的内容仅作为资料，不会视为你的指令。",
-      views: "连接器视图",
-      installedTab: "已安装",
-      marketTab: "市场",
-      count: (n) => `共 ${n} 个连接器`,
-      addTitle: "粘贴配置",
-      addText: "适用于市场中没有的服务器：粘贴 mcpServers 配置（JSON）、服务器地址或启动命令，或选择配置文件。",
-      pastePlaceholder: '{"mcpServers": {"time": {"command": "uvx", "args": ["mcp-server-time"]}}}\nhttps://mcp.example.com/mcp\nuvx mcp-server-time',
-      add: "添加",
-      pickFile: "选择文件",
-      adding: "正在添加",
-      added: "已添加。",
-      addedNames: (names) => `已添加：${names.join("、")}`,
-      secretNote: "环境变量和请求头中的值保存在系统凭据存储中，不写入文件；保存后不再显示，也不会发送给模型。",
-      listTitle: "已添加的连接器",
-      none: "尚未添加连接器。可在“市场”中选择，或从其他应用导入。",
-      bad: "mcp.json 中以下条目无法读取，已跳过：{names}",
-      elevated: "Mibo 正以管理员权限运行，为安全起见不会启动本机程序。请以普通权限重新打开 Mibo。",
-      enable: (name) => `启用 ${name}`,
-      remove: (name) => `移除 ${name}`,
-      removeAsk: "移除连接器“{name}”？",
-      removeText: "将停止该连接器，并删除其配置、已保存的值和工具权限设置。",
-      removeOk: "移除",
-      version: "版本 {v}",
-      unpinned: "未固定版本",
-      updateReady: "有新版本 {v}",
-      update: "更新",
-      updating: "正在更新",
-      updateAll: (n) => `全部更新（${n}）`,
-      updated: "已更新。新版本首次启动前需要再次确认。",
-      pill: { connected: "已连接", starting: "正在启动", waiting: "等待确认", declined: "未允许", off: "已关闭", failed: "未连接",
-        signin: "需要登录", signing_in: "正在登录" },
-      state: {
-        connected: "已连接，提供 {n} 个工具。",
-        starting: "正在启动…",
-        waiting: "尚未启动。首次启动本机程序需要你确认以下命令。",
-        declined: "未允许启动此程序。",
-        off: "已关闭，角色不会使用此连接器的工具。",
-        signin: "此服务需要登录。点击“登录”后，将在浏览器中打开服务方的授权页面。",
-        signing_in: "请在浏览器中完成授权。",
-      },
-      signinEnd: {
-        expired: "登录已失效，请重新登录。",
-        denied: "未在服务方页面上批准访问。",
-        cancelled: "已取消登录。",
-        timeout: "登录超过十分钟，已失效。",
-        registration: "该服务器不允许应用自行注册，无法通过此方式登录。如服务方提供访问令牌，请在请求头中以 Authorization 填写。",
-        failed: "服务方未完成授权。",
-      },
-      signin: "登录",
-      signinOpen: "浏览器未打开时，请点击此处打开授权页面",
-      signinCancel: "取消",
-      signout: "退出登录",
-      notRevoked: "已在本机退出登录，但服务方未确认撤销授权。如有需要，请在服务方的账户设置中撤销。",
-      cut: "此服务器的工具超过 {n} 个上限，超出部分未加载。",
-      errors_state: {
-        not_found: "无法找到程序“{what}”。请安装该程序，或检查命令是否正确。",
-        exited: "程序已退出。",
-        refused: "无法连接该地址。请检查地址和网络。",
-        timeout: "服务器未在规定时间内响应。",
-        http: "服务器返回了错误。请检查地址和请求头。",
-        protocol: "该程序未按 MCP 协议响应。请检查命令是否指向 MCP 服务器。",
-        closed: "连接已断开。",
-        missing_value: "缺少以下值：{what}。请在下方填写。",
-        elevated: "Mibo 正以管理员权限运行，不会启动本机程序。请以普通权限重新打开 Mibo。",
-        other: "连接未成功。",
-      },
-      runtimeNeed: "此命令需要 {title}，本机尚未安装。可将 {title} {version}（约 {size} MB，来源：{source}）下载至 Mibo 的文件夹，仅供 Mibo 启动的服务器使用，不影响本机其他程序。",
-      runtimeGet: "下载 {title}",
-      runtimeGetting: "正在下载 {title}（约 {size} MB）…",
-      runtimeErrors: { runtime_fetch_failed: "下载未完成，请检查网络连接后重试。", runtime_hash_mismatch: "下载的文件与官方发布的校验值不符，已丢弃，请稍后重试。",
-        runtime_write_failed: "无法写入 Mibo 的文件夹，请检查磁盘空间后重试。" },
-      retryIn: "将在 {s} 秒后自动重试。",
-      retry: "重试",
-      output: "服务器输出",
-      once: "允许",
-      always: "始终允许",
-      no: "不允许",
-      allowAgain: "允许启动",
-      alwaysStart: "已允许始终启动此命令。",
-      folder: "工作文件夹：{path}",
-      values: "已保存的值",
-      addressKey: "地址中的密钥",
-      valueSet: "已保存",
-      valueMissing: "未填写",
-      valueSave: "保存",
-      valuePlaceholder: "输入新值",
-      tools: "工具（{n}）",
-      mode: { auto: "自动审查", always: "始终允许", never: "禁止" },
-      modeLabel: (name) => `${name} 的权限`,
-      modeRead: "直接运行",
-      destructiveHint: "提供方标注为可能删除或覆盖数据",
-      hardHint: "涉及付款、删除或账户安全与权限，每次均需确认",
-      changed: "已更改，需要重新确认",
-      groupRead: (n) => `只读工具（${n}）`,
-      groupReadText: "提供方标注为只读、且未标注会删除数据的工具，无需确认即可运行。此标注由提供方填写，Mibo 无法核实；如需阻止，可将单个工具设为禁止。",
-      groupWrite: (n) => `写入与删除工具（${n}）`,
-      groupWriteText: "其余工具，可能新建、修改或删除数据。提供方标注为可能删除数据的工具每次都需要确认。",
-      logFold: (n) => (n ? `调用记录（${n}）` : "调用记录"),
-      logNone: "暂无记录。",
-      logClear: "清空记录",
-      logClearAsk: "清空调用记录？",
-      logClearText: "记录将被删除，无法恢复。",
-      outcome: { done: "已完成", error: "工具返回错误", failed: "失败", declined: "已拒绝", unanswered: "未确认",
-        never: "已禁止", changed: "工具已更改，未调用", start_once: "允许启动（本次）", start_always: "允许启动（始终）",
-        start_no: "拒绝启动", refused: "审查已拦截" },
-      how: { always: "始终允许", once: "本次允许", chat: "本次对话内允许", this_chat: "本次对话内已允许", review: "审查通过" },
-      importOpen: "从其他应用导入",
-      importTitle: "其他应用中的连接器",
-      importHelp: "以下连接器来自本机 Claude、Cursor、VS Code 和 Cherry Studio 的配置。导入时复制一份到 Mibo，原配置保持不变；其中的值保存在系统凭据存储中。",
-      importLooking: "正在查找",
-      importNone: "未在 Claude、Cursor、VS Code 或 Cherry Studio 的配置中发现连接器。",
-      importGo: (n) => (n ? `导入所选（${n}）` : "导入所选"),
-      importing: "正在导入",
-      importClose: "关闭",
-      importHave: "已添加",
-      importTaken: "已有同名连接器，导入后将另行命名",
-      importOff: "在原应用中已停用，导入后保持停用",
-      importValues: (n) => `含 ${n} 个保存的值`,
-      importProblems: { unreadable: "无法读取该配置文件", variables: "使用了原应用特有的变量，无法导入",
-        tools_bad_snippet: "配置无法识别", tools_bad_url: "地址无效", tools_bad_name: "名称无效" },
-      search: "搜索连接器名称或用途",
-      allCategories: "全部",
-      shippedLine: (n) => `精选 ${n} 个连接器`,
-      noMatch: "精选连接器中没有与“{q}”相符的条目。",
-      noMatchCategory: "该分类中暂无连接器。",
-      clear: "清除搜索",
-      registryTitle: "官方 MCP 目录",
-      registryNote: "以下条目来自官方 MCP 目录，按名称匹配，未经 Mibo 筛选。安装前请确认发布者。",
-      registryLoading: "正在搜索官方 MCP 目录",
-      registryNone: "官方 MCP 目录中没有名称含“{q}”的条目。",
-      badgeRemote: "远程",
-      badgeLocal: "本机程序",
-      badgeSignin: "需要登录",
-      badgeKey: "需要密钥",
-      badgeSync: "同步",
-      install: "安装",
-      installing: "正在安装",
-      installed: "已安装",
-      installedDone: "已添加“{name}”，状态显示在下方。",
-      back: "全部连接器",
-      way: "安装方式",
-      ways: { remote: "远程服务", npm: "本机运行（Node.js）", pypi: "本机运行（Python）" },
-      runs: "运行内容",
-      needs: "需要",
-      needsSignin: "安装后在浏览器中登录服务方账户",
-      needsNode: "Node.js；本机未安装时，可在安装后直接下载",
-      needsUv: "uv（用于运行 Python 程序）；本机未安装时，可在安装后直接下载",
-      needsKey: "填写下方的密钥",
-      needsNothing: "无需其他准备",
-      publisher: "发布者",
-      source: "来源",
-      licence: "许可",
-      localNote: "这是会在本机运行的程序。首次启动前，Mibo 会请你确认确切的命令。",
-      remoteNote: "这是由服务方运行的远程服务，工具的参数和结果经由服务方传递。",
-      form: "需要填写的信息",
-      required: "必填",
-      optional: "选填",
-      getKey: "获取密钥",
-      secretSaved: "密钥保存在系统凭据存储中，不会显示，也不会发送给模型。",
-      syncTitle: "同步魔搭托管服务",
-      syncText: "填写魔搭 ModelScope 的访问令牌后，Mibo 会添加你在魔搭 MCP 广场上开通的全部托管服务。再次同步可加入之后开通的服务。",
-      syncToken: "访问令牌",
-      syncSaved: "访问令牌已保存，可留空直接同步。",
-      syncGo: "同步",
-      syncing: "正在同步",
-      synced: (n) => `已同步 ${n} 个托管服务。`,
-      syncNone: "魔搭中尚未开通托管服务。请先在魔搭 MCP 广场开通，再回到此处同步。",
-      errors: {
-        tools_bad_snippet: "无法识别该配置。请粘贴包含 command 或 url 的 JSON、以 https:// 开头的地址，或启动命令。",
-        tools_bad_name: "名称只能包含字母、数字、点、连字符和下划线，最多 40 个字符。",
-        tools_bad_url: "地址必须以 http:// 或 https:// 开头，且不能包含用户名或密码。",
-        tools_name_taken: "已有同名的连接器。",
-        tools_too_many: "连接器数量已达上限。",
-        tools_unknown_server: "该连接器已不存在。",
-        tools_unknown_tool: "该工具已不存在。",
-        tools_write_failed: "无法写入配置文件。",
-        tools_file_damaged: "主文件夹中的 mcp.json 无法读取。请修正或删除该文件。",
-        tools_required: "请填写所有必填项。",
-        market_gone: "目录中已没有该连接器。",
-        market_search_failed: "无法搜索官方 MCP 目录，请检查网络后重试。",
-        market_sync_failed: "无法同步。请检查访问令牌和网络后重试。",
-        file_too_large: "文件过大。",
-      },
-    },
-    en: {
-      hint: "Connectors (MCP servers) give the character more tools, such as looking up maps, reading documents or managing tasks. Each call asks on a card in the chat first, by default; what a tool returns is only material, never taken as your instruction.",
-      views: "Connector views",
-      installedTab: "Installed",
-      marketTab: "Market",
-      count: (n) => `${n} ${n === 1 ? "connector" : "connectors"}`,
-      addTitle: "Paste a configuration",
-      addText: "For a server the market does not have: paste its mcpServers configuration (JSON), its address or the command that starts it, or choose its file.",
-      pastePlaceholder: '{"mcpServers": {"time": {"command": "uvx", "args": ["mcp-server-time"]}}}\nhttps://mcp.example.com/mcp\nuvx mcp-server-time',
-      add: "Add",
-      pickFile: "Choose a file",
-      adding: "Adding",
-      added: "Added.",
-      addedNames: (names) => `Added: ${names.join(", ")}`,
-      secretNote: "Environment values and header values are kept in the system's credential store, not in a file; they are never shown again and never sent to the model.",
-      listTitle: "Your connectors",
-      none: "No connectors yet. Choose one in the Market, or import them from other apps.",
-      bad: "These entries in mcp.json could not be read and were skipped: {names}",
-      elevated: "Mibo is running as administrator, so it starts no program on this computer. Open Mibo again without administrator rights.",
-      enable: (name) => `Use ${name}`,
-      remove: (name) => `Remove ${name}`,
-      removeAsk: "Remove the connector “{name}”?",
-      removeText: "It stops, and its configuration, saved values and tool settings are deleted.",
-      removeOk: "Remove",
-      version: "Version {v}",
-      unpinned: "Version not pinned",
-      updateReady: "Version {v} available",
-      update: "Update",
-      updating: "Updating",
-      updateAll: (n) => `Update all (${n})`,
-      updated: "Updated. The new version asks before it first starts.",
-      pill: { connected: "Connected", starting: "Starting", waiting: "Needs your OK", declined: "Not allowed", off: "Off", failed: "Not connected",
-        signin: "Sign-in needed", signing_in: "Signing in" },
-      state: {
-        connected: "Connected with {n} tools.",
-        starting: "Starting…",
-        waiting: "Not started yet. A program on this computer starts the first time only once you allow this command.",
-        declined: "You did not allow this program to start.",
-        off: "Off: the character does not use its tools.",
-        signin: "This service needs a sign-in. Sign in opens the service's own approval page in your browser.",
-        signing_in: "Finish the approval in your browser.",
-      },
-      signinEnd: {
-        expired: "The sign-in has run out. Sign in again.",
-        denied: "Access was not approved on the server's page.",
-        cancelled: "The sign-in was cancelled.",
-        timeout: "The sign-in took longer than ten minutes and has expired.",
-        registration: "This server does not let apps register themselves, so this sign-in cannot work. If it gives you an access token, enter it as an Authorization header.",
-        failed: "The server did not complete the sign-in.",
-      },
-      signin: "Sign in",
-      signinOpen: "If the browser did not open, open the approval page here",
-      signinCancel: "Cancel",
-      signout: "Sign out",
-      notRevoked: "Signed out on this computer, but the server did not confirm that it ended the access. If needed, end it in your account settings there.",
-      cut: "This server lists more than the limit of {n} tools; the rest were not loaded.",
-      errors_state: {
-        not_found: "The program “{what}” was not found. Install it, or check the command.",
-        exited: "The program stopped.",
-        refused: "The address could not be reached. Check it and the network.",
-        timeout: "The server did not answer in time.",
-        http: "The server answered with an error. Check the address and headers.",
-        protocol: "The program did not answer as an MCP server. Check that the command starts one.",
-        closed: "The connection closed.",
-        missing_value: "These values are missing: {what}. Fill them in below.",
-        elevated: "Mibo is running as administrator, so it starts no program here. Open Mibo again without administrator rights.",
-        other: "It did not connect.",
-      },
-      runtimeNeed: "This command needs {title}, which this computer does not have. Mibo can download {title} {version} (about {size} MB, from {source}) into its own folder, used only by the servers Mibo starts; other programs are not affected.",
-      runtimeGet: "Download {title}",
-      runtimeGetting: "Downloading {title} (about {size} MB)…",
-      runtimeErrors: { runtime_fetch_failed: "The download did not finish. Check the network connection and try again.",
-        runtime_hash_mismatch: "The download did not match the checksum its maker published and was discarded. Try again later.",
-        runtime_write_failed: "Mibo's folder could not be written to. Check the free disk space and try again." },
-      retryIn: "Trying again in {s} s.",
-      retry: "Retry",
-      output: "Server output",
-      once: "Allow",
-      always: "Always allow",
-      no: "Don't allow",
-      allowAgain: "Allow it to start",
-      alwaysStart: "This command is always allowed to start.",
-      folder: "Working folder: {path}",
-      values: "Saved values",
-      addressKey: "Key in the address",
-      valueSet: "Saved",
-      valueMissing: "Not filled in",
-      valueSave: "Save",
-      valuePlaceholder: "New value",
-      tools: "Tools ({n})",
-      mode: { auto: "Auto review", always: "Always allow", never: "Never" },
-      modeLabel: (name) => `Permission for ${name}`,
-      modeRead: "Runs without asking",
-      destructiveHint: "Its maker marks it as able to delete or overwrite data",
-      hardHint: "It pays, deletes or changes an account's security or access, so it asks every time",
-      changed: "Changed: asks again",
-      groupRead: (n) => `Read-only tools (${n})`,
-      groupReadText: "Tools their maker marks read-only, and not as deleting data, run without asking. The maker writes that mark; Mibo cannot check it. To stop one, set it to Never.",
-      groupWrite: (n) => `Tools that write or delete (${n})`,
-      groupWriteText: "The other tools, which may make, change or delete data. Tools their maker marks as deleting data ask every time.",
-      logFold: (n) => (n ? `Call record (${n})` : "Call record"),
-      logNone: "Nothing recorded yet.",
-      logClear: "Clear the record",
-      logClearAsk: "Clear the call record?",
-      logClearText: "The record is deleted and cannot be brought back.",
-      outcome: { done: "Done", error: "The tool reported an error", failed: "Failed", declined: "Declined", unanswered: "Not answered",
-        never: "Blocked", changed: "The tool changed; not called", start_once: "Start allowed (this time)",
-        start_always: "Start allowed (always)", start_no: "Start declined", refused: "Turned down by review" },
-      how: { always: "always allowed", once: "allowed this time", chat: "allowed for this conversation",
-        this_chat: "already allowed for this conversation", review: "passed by review" },
-      importOpen: "Import from other apps",
-      importTitle: "Connectors in other apps",
-      importHelp: "These connectors are in the configurations of Claude, Cursor, VS Code and Cherry Studio on this computer. Importing copies them into Mibo and leaves the originals as they are; their values go to the system's credential store.",
-      importLooking: "Looking",
-      importNone: "No connectors were found in the configurations of Claude, Cursor, VS Code or Cherry Studio.",
-      importGo: (n) => (n ? `Import selected (${n})` : "Import selected"),
-      importing: "Importing",
-      importClose: "Close",
-      importHave: "Already added",
-      importTaken: "A connector of this name is here; it gets another name",
-      importOff: "Off in that app; it stays off",
-      importValues: (n) => `${n} saved ${n === 1 ? "value" : "values"}`,
-      importProblems: { unreadable: "The file could not be read", variables: "It uses that app's own variables and cannot be imported",
-        tools_bad_snippet: "The configuration cannot be read", tools_bad_url: "The address is not valid", tools_bad_name: "The name is not valid" },
-      search: "Search names or uses",
-      allCategories: "All",
-      shippedLine: (n) => `${n} chosen connectors`,
-      noMatch: "No chosen connector matches “{q}”.",
-      noMatchCategory: "No connectors in this category yet.",
-      clear: "Clear the search",
-      registryTitle: "Official MCP Registry",
-      registryNote: "These come from the official MCP Registry, matched by name, and Mibo has not chosen them. Check the publisher before installing.",
-      registryLoading: "Searching the official MCP Registry",
-      registryNone: "No entry in the official MCP Registry has “{q}” in its name.",
-      badgeRemote: "Remote",
-      badgeLocal: "Runs here",
-      badgeSignin: "Sign-in",
-      badgeKey: "Needs a key",
-      badgeSync: "Sync",
-      install: "Install",
-      installing: "Installing",
-      installed: "Installed",
-      installedDone: "Added “{name}”; its state is shown below.",
-      back: "All connectors",
-      way: "How it runs",
-      ways: { remote: "Remote service", npm: "On this computer (Node.js)", pypi: "On this computer (Python)" },
-      runs: "What it runs",
-      needs: "Needs",
-      needsSignin: "A sign-in to your account there, in the browser, once it is installed",
-      needsNode: "Node.js; if this computer does not have it, it can be downloaded once installed",
-      needsUv: "uv (runs Python programs); if this computer does not have it, it can be downloaded once installed",
-      needsKey: "The key below",
-      needsNothing: "Nothing else",
-      publisher: "Publisher",
-      source: "Source",
-      licence: "Licence",
-      localNote: "This is a program that runs on this computer. Before it first starts, Mibo asks you to allow its exact command.",
-      remoteNote: "This is a service its provider runs; tool arguments and results pass through the provider.",
-      form: "What it needs from you",
-      required: "Required",
-      optional: "Optional",
-      getKey: "Get a key",
-      secretSaved: "Keys are kept in the system's credential store; they are never shown again and never sent to the model.",
-      syncTitle: "Sync ModelScope's hosted services",
-      syncText: "With your ModelScope access token, Mibo adds every hosted service you turned on in ModelScope's MCP square. Sync again to add ones turned on later.",
-      syncToken: "Access token",
-      syncSaved: "The access token is saved; leave this empty to sync with it.",
-      syncGo: "Sync",
-      syncing: "Syncing",
-      synced: (n) => `${n} hosted ${n === 1 ? "service" : "services"} synced.`,
-      syncNone: "No hosted service is turned on at ModelScope yet. Turn one on in its MCP square, then sync here.",
-      errors: {
-        tools_bad_snippet: "That configuration cannot be read. Paste JSON with a command or a url, an https:// address, or the command that starts it.",
-        tools_bad_name: "A name is 1 to 40 letters, digits, dots, dashes or underscores.",
-        tools_bad_url: "The address must start with http:// or https:// and hold no user name or password.",
-        tools_name_taken: "A connector with that name is already there.",
-        tools_too_many: "No more connectors can be added.",
-        tools_unknown_server: "That connector is no longer there.",
-        tools_unknown_tool: "That tool is no longer there.",
-        tools_write_failed: "The configuration file could not be written.",
-        tools_file_damaged: "mcp.json in the home folder cannot be read. Correct it or remove it.",
-        tools_required: "Fill in every required field.",
-        market_gone: "The catalog no longer lists it.",
-        market_search_failed: "The official MCP Registry could not be searched. Check the network and try again.",
-        market_sync_failed: "It could not sync. Check the access token and the network, then try again.",
-        file_too_large: "The file is too large.",
-      },
-    },
-  };
   const MAX_FILE = 200_000;
-  const SVG = "http://www.w3.org/2000/svg";
-  const MARKS = {
-    search: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3L20 20",
-    back: "M15 6l-6 6 6 6",
-    plug: "M9 3.5v4M15 3.5v4M6.5 7.5h11v3a5.5 5.5 0 0 1-11 0zM12 16v4.5",
-    check: "M5 12.5l4.2 4.2L19 7",
-  };
   // A saved secret's reference in an address, as the page shows it.
   const HIDDEN = /\$\{MIBO_MCP_[A-Z0-9_]+\}/g;
 
   window.paSetup.part("tools", (kit) => {
-    const { el } = kit;
-    const t = kit.words(WORDS);
+    const { el, icon, link, fact } = kit;
+    const t = kit.words(window.paToolsWords);
     const ctx = kit.ctx;
     const zh = kit.lang === "zh";
     const node = kit.section("tools", t.hint);
@@ -408,23 +26,6 @@
     const query = { text: "", category: "" };
     let detailOf = null;
 
-    function mark(name, cls) {
-      const svg = document.createElementNS(SVG, "svg");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("aria-hidden", "true");
-      svg.setAttribute("class", cls);
-      const path = document.createElementNS(SVG, "path");
-      path.setAttribute("d", MARKS[name]);
-      svg.append(path);
-      return svg;
-    }
-    function link(text, href) {
-      const a = el("a", "setup-link", text);
-      a.href = href;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      return a;
-    }
     const both = (pair) => (zh ? pair.zh || pair.en : pair.en || pair.zh) || "";
 
     // ---- The two views
@@ -848,7 +449,7 @@
     search.type = "search";
     search.placeholder = t.search;
     search.setAttribute("aria-label", t.search);
-    searchWrap.append(mark("search", "skm-search-icon"), search);
+    searchWrap.append(icon("search", "skm-search-icon"), search);
     const chips = el("div", "skm-chips");
     chips.setAttribute("role", "toolbar");
     const status = el("p", "skm-status");
@@ -927,34 +528,16 @@
       return row;
     }
 
-    // Publishers' own pictures from their GitHub accounts, fetched once by the app; a plain mark until then.
-    const pictures = new Map();
-    function publisherMark(one, size) {
-      const box = el("span", `skm-mark skm-mark-${size}`);
-      box.append(mark("plug", "skm-mark-icon"));
-      if (!one.owner) return box;
-      if (!pictures.has(one.owner)) pictures.set(one.owner, ctx.picture(`/api/skills/market/mark/${encodeURIComponent(one.owner)}`).catch(() => ""));
-      pictures.get(one.owner).then((url) => {
-        if (!url) return;
-        const img = el("img");
-        img.alt = "";
-        img.src = url;
-        box.replaceChildren(img);
-      });
-      return box;
-    }
+    const publisherMark = (one, size) => kit.publisherMark(one.owner, "plug", size);
 
     function installedMark() {
       const done = el("span", "skm-installed");
-      done.append(mark("check", "skm-installed-icon"), el("span", "", t.installed));
+      done.append(icon("check", "skm-installed-icon"), el("span", "", t.installed));
       return done;
     }
 
     function cardOf(one) {
-      const card = el("article", "skm-card");
-      card.tabIndex = 0;
-      card.setAttribute("role", "button");
-      card.setAttribute("aria-label", both(one.title));
+      const card = kit.pressable(el("article", "skm-card"), both(one.title), () => openDetail(one));
       const top = el("div", "skm-card-top");
       const names = el("div", "skm-card-names");
       names.append(el("h4", "skm-card-title", both(one.title)), el("p", "skm-card-by", one.publisher));
@@ -963,13 +546,6 @@
       foot.append(badges(one));
       if (one.installed) foot.append(installedMark());
       card.append(top, el("p", "skm-card-about", both(one.about)), foot);
-      card.addEventListener("click", () => openDetail(one));
-      card.addEventListener("keydown", (event) => {
-        if ((event.key === "Enter" || event.key === " ") && event.target === card) {
-          event.preventDefault();
-          openDetail(one);
-        }
-      });
       return card;
     }
 
@@ -1026,12 +602,6 @@
       renderGrid();
     }
 
-    function fact(dl, name, ...values) {
-      const dd = el("dd");
-      for (const value of values) if (value) dd.append(typeof value === "string" ? el("p", "", value) : value);
-      dl.append(el("dt", "", name), dd);
-    }
-
     let wayAt = 0;
     function renderDetail(one) {
       controls.hidden = grid.hidden = registry.hidden = true;
@@ -1040,7 +610,7 @@
       if (wayAt >= one.ways.length) wayAt = 0;
       const back = el("button", "skm-back");
       back.type = "button";
-      back.append(mark("back", "skm-back-icon"), el("span", "", t.back));
+      back.append(icon("back", "skm-back-icon"), el("span", "", t.back));
       back.addEventListener("click", closeDetail);
 
       const top = el("div", "skm-detail-top");

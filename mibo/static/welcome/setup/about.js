@@ -10,13 +10,8 @@
     const box = kit.card();
     box.classList.add("setup-options");
     const version = kit.optionRow(t.version, "", el("span", "setup-option-value"));
-    const link = el("a", "setup-link");
-    link.href = NOTICE;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.append(el("span", "", t.licenceLink), kit.icon("out", "setup-icon setup-icon-sm"));
     const licences = kit.optionRow(t.licences, t.licenceText);
-    licences.words.append(link);
+    licences.words.append(kit.link(t.licenceLink, NOTICE, true));
     box.append(kit.item("version", version.row), kit.item("licences", licences.row));
     node.append(box);
 
