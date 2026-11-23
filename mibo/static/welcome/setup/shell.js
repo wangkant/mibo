@@ -34,7 +34,7 @@
     // ---- The folders.
     const folders = kit.item("folders", kit.card(t.foldersTitle));
     const foldersText = el("p", "setup-help", t.foldersText);
-    const list = el("div", "setup-shell-folders");
+    const list = el("div", "setup-shell-list");
     const input = kit.input();
     input.placeholder = t.addPlaceholder;
     const add = kit.button("setup-button-secondary setup-button-sm", t.add, () => addFolder(input.value));
@@ -50,7 +50,7 @@
 
     // ---- The programs always allowed in a folder, from the card's 对此程序在此文件夹始终允许 ({forget} takes one back).
     const rules = kit.item("rules", kit.card(t.rulesTitle));
-    const rulesList = el("div", "setup-shell-folders");
+    const rulesList = el("div", "setup-shell-list");
     rules.append(el("p", "setup-help", t.rulesText), rulesList);
 
     // ---- Never run, and the record.
@@ -66,6 +66,19 @@
     });
     node.append(main, folders, rules, never.node, record.node);
 
+    // A row of a list: a name with its line under it (cut short, the whole in the tooltip), what is set for it, and the way to take it out.
+    function row(name, line, tip, control, label, removal) {
+      const item = el("div", "setup-shell-row");
+      const words = el("div", "setup-option-words");
+      words.append(el("p", "setup-option-name", name), el("p", "setup-option-text", line));
+      words.title = tip;
+      const end = el("div", "setup-shell-row-end");
+      if (control) end.append(control);
+      end.append(kit.iconButton("setup-word-off", "cross", label, () => change(removal)));
+      item.append(words, end);
+      return item;
+    }
+
     function render() {
       sw.box.checked = view.on;
       sw.box.disabled = false;
@@ -75,24 +88,21 @@
       folders.hidden = never.node.hidden = record.node.hidden = false;
       rules.hidden = !view.rules.length;
       rulesList.replaceChildren(...view.rules.map((rule) => {
-        const chip = el("span", "setup-word");
-        chip.title = rule.program;
         const where = zh ? rule.zh : rule.en;
-        chip.append(el("span", "", `${rule.shown}  ·  ${where}`));
-        chip.append(kit.iconButton("setup-word-off", "cross", paI18n.t("setup_shell.ruleRemove", { name: rule.shown, folder: where }),
-          () => change({ forget: { program: rule.program, folder: rule.folder } })));
-        return chip;
+        return row(rule.shown, where, rule.program, null,
+          paI18n.t("setup_shell.ruleRemove", { name: rule.shown, folder: where }), { forget: { program: rule.program, folder: rule.folder } });
       }));
       if (!view.folders.length) list.replaceChildren(el("p", "setup-help", t.foldersNone));
       else {
-        list.replaceChildren(...view.folders.map((row) => {
-          const chip = el("span", "setup-word");
-          chip.title = row.path;
-          const name = zh ? row.zh : row.en;
-          chip.append(el("span", "", `${name}${row.read_only ? `  ·  ${t.readOnly}` : ""}  ·  ${row.path}`));
-          if (row.read_only) chip.append(kit.button("setup-button-secondary setup-button-sm", t.sortToo, () => change({ add: row.path })));
-          chip.append(kit.iconButton("setup-word-off", "cross", paI18n.t("setup_shell.remove", { name }), () => change({ remove: row.path })));
-          return chip;
+        list.replaceChildren(...view.folders.map((folder) => {
+          const name = zh ? folder.zh : folder.en;
+          // What it may do there: look only, or sort too ({add} grants with write, {read_only} sets it back).
+          const access = el("select", "setup-input setup-select setup-input-sm");
+          access.setAttribute("aria-label", name);
+          access.append(new Option(t.readOnly, "read"), new Option(t.sortToo, "sort"));
+          access.value = folder.read_only ? "read" : "sort";
+          access.addEventListener("change", () => change(access.value === "read" ? { add: folder.path, read_only: true } : { add: folder.path }));
+          return row(name, folder.path, folder.path, access, paI18n.t("setup_shell.remove", { name }), { remove: folder.path });
         }));
       }
       never.body.replaceChildren(el("p", "setup-help", t.neverText),
@@ -128,7 +138,7 @@
       sw.box.disabled = true;
       try {
         view = await ctx.api(path, what ?? {});
-        if (what?.add) input.value = "";
+        if (what?.add === input.value.trim()) input.value = "";
         render();
       } catch (error) {
         kit.failed(line, error, t);

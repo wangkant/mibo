@@ -2033,15 +2033,42 @@
 }
 
 /* Settings › Files and commands (setup/shell.js). */
-.setup-shell-folders,
 .setup-shell-add {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--pa-s2);
   align-items: center;
 }
 .setup-shell-add .setup-input {
-  flex: 1;
+  flex: 1 1 12em;
   min-width: 0;
+}
+/* A folder or a program per row: the name over its line, then the setting and the cross, the end dropping under the words when the pane is narrow. */
+.setup-shell-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pa-s2) var(--pa-s3);
+  padding: var(--pa-s2) 0;
+}
+.setup-shell-row + .setup-shell-row {
+  border-top: 1px solid var(--pa-line);
+}
+.setup-shell-row .setup-option-words {
+  flex: 1 1 12em;
+}
+.setup-shell-row .setup-option-name,
+.setup-shell-row .setup-option-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+.setup-shell-row-end {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  margin-left: auto;
 }
 .setup-shell-never {
   margin: 4px 0 0;
