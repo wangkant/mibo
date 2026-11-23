@@ -60,6 +60,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 
 ### Fixes
 
+- Mibo's icon stays in the notification area for as long as the app runs, with the window open or the pet out too. It used to appear only once the window was put away.
 - A command's `PATH` starts from Windows' real folder. On a computer where Windows is not in `C:\Windows` it named a folder that does not exist.
 - In first-run setup, a model service that is not in the list is reported as an invalid service, not as a general failure.
 - In Settings, clicking the label of a key field focuses the field.

@@ -606,8 +606,6 @@ class PetWindow:
             self._pet.evaluate_js("petQuiet(true)")
             time.sleep(DUCK_S)
             self._on_pet(self._put_away)
-            if self._tray is not None:
-                self._on_ui(lambda: setattr(self._tray, "Visible", True))
 
     def _wake_pet(self) -> None:
         """Back where it was, on the ground or over the app window: its window
@@ -617,8 +615,6 @@ class PetWindow:
                 return
             self._on_pet(self._bring_back)
             self._pet.evaluate_js("petQuiet(false)")
-            if self._tray is not None and not self._pet_off:
-                self._on_ui(lambda: setattr(self._tray, "Visible", False))
 
     def _put_away(self) -> None:
         """On the pet's thread, which is the app window's too: _attach, _land,

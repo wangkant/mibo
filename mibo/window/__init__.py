@@ -186,10 +186,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
             if self.hidden:
                 self._page_seen(True)
             self._window.show()
-            if self.hidden:
-                self.hidden = False
-                if self._tray is not None:
-                    self._on_ui(lambda: setattr(self._tray, "Visible", False))
+            self.hidden = False
         except Exception:
             return False
         return True
@@ -201,16 +198,15 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         words = {"still": "", **self.words()}
 
         def away() -> None:
-            self._tray.Visible = True
-            if not self._told and words["still"]:
-                self._told = True
-                self._tray.ShowBalloonTip(5000, TITLE, words["still"], self._tray_info)
+            self._told = True
+            self._tray.ShowBalloonTip(5000, TITLE, words["still"], self._tray_info)
 
         try:
             self._page_seen(False)
             self._window.hide()
             self.hidden = True
-            self._on_ui(away)
+            if not self._told and words["still"]:
+                self._on_ui(away)
         except Exception:
             return False
         return True
@@ -257,8 +253,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
 
     def notify(self, text: str) -> None:
         """A scheduled task's message (panels/schedule.py) or a card waiting on the person (cardwait.py), as a
-        system notification when the app window is not in front. The icon it comes from shows for as long as the
-        notification."""
+        system notification when the app window is not in front."""
         if not self.opened or self._tray is None or self._leaving:
             return
         from System.Windows.Forms import Form
@@ -266,15 +261,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         def tell() -> None:
             if not self.hidden and Form.ActiveForm is not None and Form.ActiveForm == self._window.native:
                 return
-            shown = self._tray.Visible
-            self._tray.Visible = True
             self._tray.ShowBalloonTip(8000, TITLE, " ".join(text.split())[:200], self._tray_info)
-            if not shown:
-                threading.Timer(10, lambda: self._on_ui(back)).start()
-
-        def back() -> None:
-            if not self.hidden:
-                self._tray.Visible = False
 
         self._on_ui(tell)
 
@@ -461,14 +448,14 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         winforms.on_thread(self._window.native, action)
 
     def _make_tray(self) -> None:
-        """The icon a hidden window is reached through. Its handlers stay
-        referenced here, or .NET would lose them."""
+        """The app's icon in the notification area, there for as long as the app runs, with the window open,
+        the pet out or neither: it opens the window, shows the pet and quits. Its handlers stay referenced here,
+        or .NET would lose them."""
         from System.Drawing import Icon
         from System.Windows.Forms import ContextMenuStrip, NotifyIcon, ToolStripMenuItem, ToolTipIcon
 
         words = {"open": "Open Mibo", "pet": "Show the pet", "quit": "Quit", **self.words()}
         self._tray_info = ToolTipIcon.Info
-        # With the pet the icon shows only while it is hushed, and can bring it back.
         entries = ((words["open"], self._open_click), *(((words["pet"], self._pet_click),) if self.pet else ()),
                    (words["quit"], self._quit_click))
 
@@ -485,7 +472,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
             tray.DoubleClick += self._open_click
             # A press on a notification opens the window it is about.
             tray.BalloonTipClicked += self._open_click
-            tray.Visible = False
+            tray.Visible = True
             self._tray = tray
 
         self._on_ui(make)

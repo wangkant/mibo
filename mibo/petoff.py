@@ -56,7 +56,5 @@ def apply(owner, on: bool) -> None:
             owner._before_off = (form.Left, form.Top)
         form.SetBounds(left, top, form.Width, form.Height)
         owner._ground = (form.Left, form.Bottom)
-        if owner._tray is not None:
-            owner._tray.Visible = not on or owner._hushed or owner.hidden
 
     owner._on_pet(move)
