@@ -49,6 +49,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 
 - The character knows the app's settings: it can list them, open Settings at an item and change one. A change that widens nothing is made at once; keys are never shown.
 - The notice that page text, window pictures and file text go to the model service you chose is shown once, when a service is first saved, and again only when the service changes.
+- The interface has a new palette: primary actions are ink, as the send button is, and links, switches, focus and "new" tags share one quiet blue that no longer changes with the character. The character's own colour marks only the character: its face, its card in the picker and the line along the window's top.
 
 ### Models
 

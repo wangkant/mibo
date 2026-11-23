@@ -88,7 +88,7 @@ body.card-right .pet {
 .dots,
 .zz {
   display: none;
-  fill: #5b7f9e;
+  fill: var(--pet-dots);
 }
 .zz text {
   font: 700 15px system-ui, sans-serif;
@@ -289,15 +289,15 @@ body.card-right .pet {
 }
 .dnd-badge circle {
   fill: #ffffff;
-  stroke: #9fd3ef;
+  stroke: color-mix(in srgb, var(--pet-accent) 45%, #fff);
 }
 .dnd-badge path {
   fill: none;
-  stroke: #2f8fc4;
+  stroke: var(--pet-accent);
   stroke-width: 1.6;
 }
 .dnd-badge rect {
-  fill: #2f8fc4;
+  fill: var(--pet-accent);
 }
 
 /* ---- out on a walk: the sign where it stood */
@@ -305,7 +305,7 @@ body.card-right .pet {
   display: none;
 }
 .away-sign rect {
-  fill: #c6c6cb;
+  fill: var(--pet-sign);
 }
 .away-sign .steps {
   fill: #ffffff;
@@ -367,8 +367,8 @@ body.card-right .pet {
   stroke: none;
 }
 .quick .quick-quiet.on {
-  color: #2f8fc4;
-  border-color: #9fd3ef;
+  color: var(--pet-accent);
+  border-color: color-mix(in srgb, var(--pet-accent) 45%, #fff);
 }
 .quick-chat {
   left: 54px;

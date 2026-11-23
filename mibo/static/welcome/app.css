@@ -1,6 +1,10 @@
 /* The app's design system. Every page (chats, settings, onboarding) draws
    with these tokens and the shared controls below, so the app reads as one:
-   a neutral white canvas, type that carries it, one accent taken from the character. */
+   a neutral white canvas, type that carries it, primary actions in ink, and one
+   accent of the interface's own (links, focus, a switch that is on, a selected
+   mark, a "new" tag) that stays the same whichever character is chosen. The
+   character's colour marks the character alone: its face, the picker's choice,
+   the window's top hairline and the pet. */
 :root {
   /* Neutrals: white and plain greys, no yellow in them. */
   --pa-n0: #ffffff;
@@ -17,25 +21,36 @@
   --pa-n800: #323236;
   --pa-n900: #1a1a1c;
 
-  /* The character's colour; app.js names the figure on <html>. */
+  /* The character's colour; app.js names the figure on <html>. Only what is
+     the character's own takes it (--pa-char, --pa-char-soft). */
   --char: #ad4e2b;
   --char-hi: #f0a07a;
-  --pa-a50: color-mix(in srgb, var(--char) 6%, #fff);
-  --pa-a100: color-mix(in srgb, var(--char) 13%, #fff);
-  --pa-a200: color-mix(in srgb, var(--char) 28%, #fff);
-  --pa-a300: color-mix(in srgb, var(--char) 48%, #fff);
-  --pa-a500: color-mix(in srgb, var(--char) 84%, #fff);
-  --pa-a600: var(--char);
-  --pa-a700: color-mix(in srgb, var(--char) 84%, #000);
-  --pa-a800: color-mix(in srgb, var(--char) 70%, #000);
+  --pa-char: var(--char);
+  --pa-char-soft: color-mix(in srgb, var(--char) 12%, var(--pa-surface));
 
-  --pa-red600: #b42318;
-  --pa-red50: #fdf1ef;
-  --pa-red200: #f4cbc5;
-  --pa-amber700: #8a5300;
-  --pa-amber50: #fdf6e8;
-  --pa-amber200: #f0dcae;
-  --pa-green600: #2f7d4f;
+  /* The interface's accent: a deep, slightly grey blue (OKLCH hue 256), its
+     own ramp per theme. 600 is text and marks on white (5.5:1), 500 the focus
+     halo's edge (3.6:1), 700 text on 50 and 100. */
+  --pa-a50: #f2f7fe;
+  --pa-a100: #e6effd;
+  --pa-a200: #cde0f9;
+  --pa-a300: #a9c7ef;
+  --pa-a500: #5d88c2;
+  --pa-a600: #3e6aa4;
+  --pa-a700: #30578b;
+  --pa-a800: #234572;
+
+  /* Danger, warning and success at the accent's lightness, none louder than it. */
+  --pa-red600: #b6322d;
+  --pa-red50: #fef3f1;
+  --pa-red200: #facfc9;
+  --pa-amber700: #905c16;
+  --pa-amber50: #fff6e7;
+  --pa-amber200: #f5daae;
+  --pa-green600: #357d4d;
+  /* Windows' own close button. */
+  --pa-close: #c42b1c;
+  --pa-close-press: #a92a1d;
 
   /* What the pages use. */
   --pa-chrome: var(--pa-n50);
@@ -48,21 +63,31 @@
   --pa-ink: var(--pa-n900);
   --pa-text: var(--pa-n800);
   --pa-muted: var(--pa-n600);
-  --pa-faint: var(--pa-n500);
+  /* Quiet text (times, counts) still at 4.5:1 on the canvas and the sidebar. */
+  --pa-faint: #6f6f76;
   --pa-placeholder: var(--pa-n500);
   --pa-hover: rgba(20, 20, 24, 0.04);
   --pa-press: rgba(20, 20, 24, 0.07);
+  /* A primary action is ink, as the send button is. */
+  --pa-primary: var(--pa-n900);
+  --pa-primary-hover: var(--pa-n800);
+  --pa-on-primary: var(--pa-n0);
   --pa-accent: var(--pa-a600);
   --pa-accent-hover: var(--pa-a700);
   --pa-accent-ink: var(--pa-a700);
   --pa-accent-soft: var(--pa-a50);
   --pa-accent-tint: var(--pa-a100);
-  --pa-accent-ring: color-mix(in srgb, var(--char) 8%, transparent);
+  --pa-accent-ring: color-mix(in srgb, var(--pa-a500) 12%, transparent);
+  /* A mark on a solid accent, red or green: white in light, dark in dark. */
   --pa-on-accent: #ffffff;
+  /* What stays white in both themes: a switch's knob, a mark on a picture or a swatch;
+     and the ink on such a white. */
+  --pa-white: #ffffff;
+  --pa-on-white: #1a1a1c;
   --pa-error: var(--pa-red600);
   --pa-error-soft: var(--pa-red50);
-  --pa-love: #d9475b;
-  --pa-live: #4f9a6b;
+  --pa-love: #ce435b;
+  --pa-live: #48a165;
   --pa-bubble: var(--pa-n100);
   --pa-bubble-ink: var(--pa-n900);
   --pa-send: var(--pa-n900);
@@ -108,13 +133,14 @@
   --pa-r-2xl: 24px;
   --pa-r-pill: 999px;
 
-  --pa-shadow-1: 0 1px 2px rgba(31, 24, 12, 0.04), 0 2px 8px -2px rgba(31, 24, 12, 0.05);
-  --pa-shadow-2: 0 1px 2px rgba(31, 24, 12, 0.05), 0 8px 24px -8px rgba(31, 24, 12, 0.14);
-  --pa-shadow-raise: 0 1px 2px rgba(31, 24, 12, 0.06);
-  --pa-shadow-pop: 0 1px 2px rgba(31, 24, 12, 0.06), 0 12px 32px -8px rgba(31, 24, 12, 0.2);
-  --pa-shadow-composer: 0 1px 2px rgba(31, 24, 12, 0.04), 0 10px 32px -12px rgba(31, 24, 12, 0.16);
-  --pa-shadow-composer-focus: 0 1px 2px rgba(31, 24, 12, 0.05), 0 14px 36px -12px rgba(31, 24, 12, 0.24);
-  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char) 18%, transparent);
+  /* Shadows in plain grey, no brown in them. */
+  --pa-shadow-1: 0 1px 2px rgba(20, 20, 24, 0.04), 0 2px 8px -2px rgba(20, 20, 24, 0.05);
+  --pa-shadow-2: 0 1px 2px rgba(20, 20, 24, 0.05), 0 8px 24px -8px rgba(20, 20, 24, 0.14);
+  --pa-shadow-raise: 0 1px 2px rgba(20, 20, 24, 0.06);
+  --pa-shadow-pop: 0 1px 2px rgba(20, 20, 24, 0.06), 0 12px 32px -8px rgba(20, 20, 24, 0.2);
+  --pa-shadow-composer: 0 1px 2px rgba(20, 20, 24, 0.04), 0 10px 32px -12px rgba(20, 20, 24, 0.16);
+  --pa-shadow-composer-focus: 0 1px 2px rgba(20, 20, 24, 0.05), 0 14px 36px -12px rgba(20, 20, 24, 0.24);
+  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--pa-a500) 22%, transparent);
   --pa-focus: 2px solid var(--pa-accent);
 
   --pa-t-fast: 140ms;
@@ -177,29 +203,32 @@
     --pa-n700: #c0c0c6;
     --pa-n800: #d9d9dd;
     --pa-n900: #f1f1f3;
-    --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #202022);
-    --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #202022);
-    --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #202022);
-    --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #202022);
-    --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #202022);
-    --pa-a600: var(--char-hi);
-    --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
-    --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
-    --pa-red600: #f07a6c;
-    --pa-red50: #3a2423;
-    --pa-red200: #6b3631;
-    --pa-amber700: #e6b45c;
-    --pa-amber50: #352b1b;
-    --pa-amber200: #5e4a25;
-    --pa-green600: #6fc48f;
+    --pa-char: var(--char-hi);
+    --pa-char-soft: color-mix(in srgb, var(--char-hi) 12%, var(--pa-n0));
+    --pa-a50: #202833;
+    --pa-a100: #233041;
+    --pa-a200: #2d415b;
+    --pa-a300: #3f5c84;
+    --pa-a500: #618bc3;
+    --pa-a600: #79a4dd;
+    --pa-a700: #94baed;
+    --pa-a800: #b1d0fa;
+    --pa-red600: #ed8176;
+    --pa-red50: #3a2321;
+    --pa-red200: #653530;
+    --pa-amber700: #e7b369;
+    --pa-amber50: #332819;
+    --pa-amber200: #5b4320;
+    --pa-green600: #72c78b;
+    --pa-faint: #8e8e94;
     --pa-side-hover: #252527;
     --pa-sunken: #2f2f31;
     --pa-hover: rgba(255, 255, 255, 0.05);
     --pa-press: rgba(255, 255, 255, 0.08);
-    --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
+    --pa-accent-ring: color-mix(in srgb, var(--pa-a500) 16%, transparent);
     --pa-on-accent: #14161c;
-    --pa-love: #f07386;
-    --pa-live: #5fb27e;
+    --pa-love: #f37988;
+    --pa-live: #58b575;
     --pa-bubble: #333335;
     --pa-bubble-ink: #e5e5e8;
     --pa-send: #f1f1f3;
@@ -214,7 +243,7 @@
     --pa-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
     --pa-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
     --pa-shadow-composer-focus: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -12px rgba(0, 0, 0, 0.75);
-    --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char-hi) 22%, transparent);
+    --pa-ring: 0 0 0 3px color-mix(in srgb, var(--pa-a500) 28%, transparent);
     color-scheme: dark;
   }
 }
@@ -232,29 +261,32 @@
   --pa-n700: #c0c0c6;
   --pa-n800: #d9d9dd;
   --pa-n900: #f1f1f3;
-  --pa-a50: color-mix(in srgb, var(--char-hi) 10%, #202022);
-  --pa-a100: color-mix(in srgb, var(--char-hi) 18%, #202022);
-  --pa-a200: color-mix(in srgb, var(--char-hi) 30%, #202022);
-  --pa-a300: color-mix(in srgb, var(--char-hi) 50%, #202022);
-  --pa-a500: color-mix(in srgb, var(--char-hi) 82%, #202022);
-  --pa-a600: var(--char-hi);
-  --pa-a700: color-mix(in srgb, var(--char-hi) 82%, #fff);
-  --pa-a800: color-mix(in srgb, var(--char-hi) 66%, #fff);
-  --pa-red600: #f07a6c;
-  --pa-red50: #3a2423;
-  --pa-red200: #6b3631;
-  --pa-amber700: #e6b45c;
-  --pa-amber50: #352b1b;
-  --pa-amber200: #5e4a25;
-  --pa-green600: #6fc48f;
+  --pa-char: var(--char-hi);
+  --pa-char-soft: color-mix(in srgb, var(--char-hi) 12%, var(--pa-n0));
+  --pa-a50: #202833;
+  --pa-a100: #233041;
+  --pa-a200: #2d415b;
+  --pa-a300: #3f5c84;
+  --pa-a500: #618bc3;
+  --pa-a600: #79a4dd;
+  --pa-a700: #94baed;
+  --pa-a800: #b1d0fa;
+  --pa-red600: #ed8176;
+  --pa-red50: #3a2321;
+  --pa-red200: #653530;
+  --pa-amber700: #e7b369;
+  --pa-amber50: #332819;
+  --pa-amber200: #5b4320;
+  --pa-green600: #72c78b;
+  --pa-faint: #8e8e94;
   --pa-side-hover: #252527;
   --pa-sunken: #2f2f31;
   --pa-hover: rgba(255, 255, 255, 0.05);
   --pa-press: rgba(255, 255, 255, 0.08);
-  --pa-accent-ring: color-mix(in srgb, var(--char-hi) 14%, transparent);
+  --pa-accent-ring: color-mix(in srgb, var(--pa-a500) 16%, transparent);
   --pa-on-accent: #14161c;
-  --pa-love: #f07386;
-  --pa-live: #5fb27e;
+  --pa-love: #f37988;
+  --pa-live: #58b575;
   --pa-bubble: #333335;
   --pa-bubble-ink: #e5e5e8;
   --pa-send: #f1f1f3;
@@ -269,7 +301,7 @@
   --pa-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
   --pa-shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
   --pa-shadow-composer-focus: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -12px rgba(0, 0, 0, 0.75);
-  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--char-hi) 22%, transparent);
+  --pa-ring: 0 0 0 3px color-mix(in srgb, var(--pa-a500) 28%, transparent);
   color-scheme: dark;
 }
 
@@ -368,12 +400,12 @@ svg.i {
   stroke-linejoin: round;
 }
 .pa-btn-primary {
-  background: var(--pa-accent);
-  color: var(--pa-on-accent);
+  background: var(--pa-primary);
+  color: var(--pa-on-primary);
   box-shadow: var(--pa-shadow-raise);
 }
 .pa-btn-primary:hover:not(:disabled) {
-  background: var(--pa-accent-hover);
+  background: var(--pa-primary-hover);
 }
 .pa-btn-primary:disabled {
   background: var(--pa-n150);
@@ -444,7 +476,7 @@ svg.i {
   background: var(--pa-surface);
   color: var(--pa-ink);
   font-size: var(--pa-fs-md);
-  box-shadow: inset 0 1px 1px rgba(31, 24, 12, 0.02);
+  box-shadow: inset 0 1px 1px rgba(20, 20, 24, 0.02);
   transition:
     border-color var(--pa-t-fast),
     box-shadow var(--pa-t-fast);
@@ -481,7 +513,7 @@ textarea.pa-input {
 .pa-select {
   padding-right: 34px;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%238d877e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%2386868d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 12px;
@@ -542,7 +574,7 @@ textarea.pa-input {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--pa-white);
   box-shadow: 0 1px 2px rgba(20, 20, 24, 0.2);
   transition: transform var(--pa-t) var(--pa-ease);
 }
@@ -586,7 +618,7 @@ textarea.pa-input {
   height: 32px;
   overflow: hidden;
   border-radius: 50%;
-  background: var(--pa-a100);
+  background: var(--pa-char-soft);
 }
 .pa-face::after {
   content: "";
@@ -698,9 +730,9 @@ textarea.pa-input {
     90deg,
     transparent 0,
     transparent 30%,
-    color-mix(in srgb, var(--pa-accent) 40%, transparent) calc(100% - var(--pa-wc) - var(--pa-pet-zone) - 160px),
-    var(--pa-accent) calc(100% - var(--pa-wc) - var(--pa-pet-zone)),
-    var(--pa-accent) calc(100% - var(--pa-wc)),
+    color-mix(in srgb, var(--pa-char) 40%, transparent) calc(100% - var(--pa-wc) - var(--pa-pet-zone) - 160px),
+    var(--pa-char) calc(100% - var(--pa-wc) - var(--pa-pet-zone)),
+    var(--pa-char) calc(100% - var(--pa-wc)),
     transparent 100%
   );
   opacity: 0.85;
@@ -851,12 +883,12 @@ body.frameless .side-top button {
   outline-offset: -2px;
 }
 #window-close:hover {
-  background: #c42b1c;
-  color: #fff;
+  background: var(--pa-close);
+  color: var(--pa-white);
 }
 #window-close:active {
-  background: #a92a1d;
-  color: #fff;
+  background: var(--pa-close-press);
+  color: var(--pa-white);
 }
 .window-controls .when-maximized,
 body.maximized .window-controls .when-normal {
@@ -1321,10 +1353,10 @@ body.starting .side {
 .confirm-ok {
   border-color: transparent;
   background: var(--pa-error);
-  color: #fff;
+  color: var(--pa-on-accent);
 }
 .confirm-ok:hover {
-  background: color-mix(in srgb, var(--pa-error) 86%, #000);
+  background: color-mix(in srgb, var(--pa-error) 86%, var(--pa-ink));
 }
 
 /* The page: under the bar, the canvas, with a hairline against the sidebar. */

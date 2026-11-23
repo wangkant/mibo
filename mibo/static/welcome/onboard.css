@@ -185,7 +185,7 @@
   margin: 0 0 30px;
   padding: 14px 18px;
   border-radius: 18px 18px 18px 6px;
-  background: var(--pa-accent-soft);
+  background: var(--pa-char-soft);
   color: var(--pa-ink);
   font-size: 15.5px;
   line-height: 1.55;
@@ -197,7 +197,7 @@
   bottom: 0;
   width: 14px;
   height: 14px;
-  background: var(--pa-accent-soft);
+  background: var(--pa-char-soft);
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 .onboard-bubble-in {
@@ -655,16 +655,16 @@
   padding: 0 22px;
   border: 0;
   border-radius: var(--pa-r-md);
-  background: var(--pa-accent);
-  color: var(--pa-on-accent);
+  background: var(--pa-primary);
+  color: var(--pa-on-primary);
   font-weight: 650;
-  box-shadow: 0 4px 14px #75321b33;
+  box-shadow: var(--pa-shadow-raise);
   transition:
     background 0.15s,
     transform 0.1s;
 }
 .onboard-next:hover {
-  background: var(--pa-accent-hover);
+  background: var(--pa-primary-hover);
 }
 .onboard-next:active {
   transform: translateY(1px);

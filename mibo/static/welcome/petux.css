@@ -4,6 +4,9 @@
    with reduced motion it only appears and goes. */
 .pet {
   --pet-accent: #2f8fc4;
+  /* The figure's own marks: its thinking dots and the sign it leaves on a walk. */
+  --pet-dots: #5b7f9e;
+  --pet-sign: #c6c6cb;
   --ux-bg: #ffffff;
   --ux-line: #d8d8dc;
   --ux-ink: #1a1a1c;

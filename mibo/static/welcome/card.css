@@ -11,6 +11,8 @@
   --card-faint: #a1a1a8;
   --card-wash: rgba(20, 20, 24, 0.06);
   --card-sunken: #f0f0f2;
+  --card-love: #ce435b;
+  --card-play-hover: #1a1a1c;
   position: absolute;
   left: 0;
   bottom: 80px;
@@ -32,6 +34,7 @@
     --card-faint: #86868d;
     --card-wash: rgba(255, 255, 255, 0.08);
     --card-sunken: #313134;
+    --card-love: #f37988;
   }
 }
 body.card-right .card {
@@ -180,7 +183,7 @@ body.card-right .card-tail {
 }
 .card-like.on,
 .card-like.on:hover {
-  color: #d9475b;
+  color: var(--card-love);
 }
 .card-like.on svg {
   fill: currentColor;
@@ -285,7 +288,7 @@ body.card-right .card-tail {
   border-color: transparent transparent transparent #ffffff;
 }
 .card-play:hover {
-  background: #1a1a1c;
+  background: var(--card-play-hover);
 }
 .card-shield {
   position: absolute;

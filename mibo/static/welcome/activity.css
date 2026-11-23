@@ -207,7 +207,7 @@
 .act-fav.has-img,
 .lk-fav.has-img {
   padding: 1px;
-  background: #ffffff;
+  background: var(--pa-white);
 }
 .act-fav img,
 .lk-fav img {
