@@ -18,8 +18,10 @@ from pathlib import Path
 
 from . import browsed, context, embeddings, ranking
 from .library import BROWSED, CHAT, DISMISSED, KEPT, TEXT_MAX, Item, Library, item_id
+from .pagefacts import site_name
 from .paths import runtime_dir
-from .roam import fence_pages, player_for, site_name
+from .players import player_for
+from .roam import fence_pages
 from .storage import atomic_write_text
 from .textproc import _clean_prompt_source, _env_tz_offset, _focus_tokens
 

@@ -4,9 +4,9 @@ page's chrome, the time each read takes, a dead link's reach, the visitor's name
     python tools/walkread.py --out <dir> [--only 1,5,9] [--dump] [--skip-extras]
     python tools/walkread.py --judge <dir of a --dump run>
 
-It starts the walk's own headless, signed-out visitor (roam.Visitor) on a profile under <dir> and reads
+It starts the walk's own headless, signed-out visitor (visitor.Visitor) on a profile under <dir> and reads
 each page of PAGES as a walk does (web/read.py as a background visit on a fresh runtime, so robots.txt is
-fetched as on a first walk). The kept text is what an Item gets (roam.facts_from: its text, or its
+fetched as on a first walk). The kept text is what an Item gets (pagefacts.facts_from: its text, or its
 description for a video). A page is "article" when its `lede` words (the article's, the opening post's or
 the video description's first words) are in the kept text's first 400 characters, its `body` words (from
 the middle) are in it, and none of its `chrome` words (references, related links, footers, comments,
@@ -144,12 +144,13 @@ def rejudge(run: Path) -> None:
 
 
 async def run(out: Path, only: set, dump: bool, extras: bool) -> None:
-    from mibo import roam
+    from mibo import pagefacts
+    from mibo.visitor import Visitor
     from mibo.web import read as reading
     from mibo.web import sites
     stamp = int(time.time())
     runtime = out / f"runtime-{stamp}"
-    visitor = roam.Visitor(out / "profile")
+    visitor = Visitor(out / "profile")
     results: dict = {"pages": [], "dead": [], "robots": [], "lists": [], "agent": ""}
     if dump:
         (out / "dump").mkdir(parents=True, exist_ok=True)
@@ -163,8 +164,8 @@ async def run(out: Path, only: set, dump: bool, extras: bool) -> None:
                 took = time.monotonic() - began
                 visible = str(await tab.evaluate("() => document.body ? document.body.innerText : ''") or "") \
                     if dump else ""
-            facts = roam.facts_from(page.data, page.url)
-            wall = page.wall if page.wall not in ("", "sign_in_overlay", "empty") else roam.wall_of(page.data, page.url, facts)
+            facts = pagefacts.facts_from(page.data, page.url)
+            wall = page.wall if page.wall not in ("", "sign_in_overlay", "empty") else pagefacts.wall_of(page.data, page.url, facts)
             kept = facts["description"] if facts["kind"] == "video" else facts["text"]
             verdict = f"wall {wall}" if wall else judge(kept, lede, body, chrome)
             row = {"n": n, "group": group, "url": url, "s": round(took, 1), "verdict": verdict, "kind": facts["kind"],

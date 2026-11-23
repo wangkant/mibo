@@ -2,7 +2,7 @@
 
 The search assistants fetch a page first and fall back to a rendered read; Jina Reader and Firecrawl render
 with a headless browser. Here the plain fetch comes first (about a second for an article), and the same
-address is read again, in the same reply, in the signed-out visitor browser (roam.Visitor: the installed
+address is read again, in the same reply, in the signed-out visitor browser (visitor.Visitor: the installed
 Edge or Chrome, headless, its own profile) when the fetch was refused, came back a script's shell, or lacked
 the list the question is for. The rendered read takes the text from the live DOM with reader.js, scrolls a
 screen for a lazy list and ends by RENDER_S (web/read.py); a check, a sign-in or an error stops it as it stops
@@ -10,7 +10,7 @@ any read, and nothing is clicked or sent.
 
 A fetched page is read as Scrapy and trafilatura read one: its bytes decoded in the charset its header names,
 else its own meta, else the one they show (w3lib's html_to_unicode, the order browsers follow); its head's meta
-pairs and JSON-LD given to roam.facts_from, as reader.js's are on a rendered page; and its main text taken by
+pairs and JSON-LD given to pagefacts.facts_from, as reader.js's are on a rendered page; and its main text taken by
 trafilatura, handed the decoded page and nothing else, so the app's guarded fetch stays the only thing that
 reaches the network. The text comes in the lines pagetext reads off a live page: `## ` headings, `- ` items,
 tables row by row under a `| --- |` row.
@@ -55,7 +55,7 @@ _warming: set[asyncio.Task] = set()
 
 
 class _Head(HTMLParser):
-    """The meta pairs, JSON-LD, title, canonical address and icons of a page, as roam.facts_from reads them."""
+    """The meta pairs, JSON-LD, title, canonical address and icons of a page, as pagefacts.facts_from reads them."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -118,9 +118,9 @@ def decoded(content: bytes, content_type: str = "") -> str:
 
 
 def head(html: str, url: str) -> tuple[dict, list[str]]:
-    """roam.facts_from's fields from a fetched page's head (title, site, description, picture, player, kind),
+    """pagefacts.facts_from's fields from a fetched page's head (title, site, description, picture, player, kind),
     and the icons it names."""
-    from ..roam import facts_from
+    from ..pagefacts import facts_from
     found = _Head()
     found.feed(html[:HEAD_MAX])
     facts = facts_from({"meta": found.meta, "ld": found.ld, "canonical": found.canonical,
@@ -210,7 +210,7 @@ def _rows(rows: list) -> str:
 async def rendered(roam: Any, url: str, wants_list: bool) -> tuple[str, str, str] | None:
     """(title, text, final address) of `url` read in the visitor browser by RENDER_S; None for a wall, a
     private address or nothing read. A list asked for that shows few rows is scrolled a screen."""
-    from ..roam import facts_from
+    from ..pagefacts import facts_from
     if not await roam.public(url):
         return None
     until = asyncio.get_running_loop().time() + RENDER_S - 2

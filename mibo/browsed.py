@@ -170,7 +170,7 @@ def keep_item(runtime: Path, row: dict, facts: dict) -> str:
     url = str(row.get("url") or "")
     if not web(url) or secret(url) or float(row.get("s") or 0) < ITEM_S:
         return ""
-    from .roam import site_name
+    from .pagefacts import site_name
     library = Library(runtime)
     ident = item_id(url)
     if library.get(ident) is None:

@@ -1,5 +1,5 @@
 """The official players a card may embed: one list that what a card may carry
-(roam.allowed_player, life's cards) and what the page lets load (its CSP
+(pagefacts.allowed_player, life's cards) and what the page lets load (its CSP
 frame-src, life.PLAYER_HOSTS) both read.
 
 Each is a platform's own embed, tried in a frame on another page by the

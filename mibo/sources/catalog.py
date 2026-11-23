@@ -29,9 +29,9 @@ import httpx
 
 from .. import db, langs, quiet, roam, situation
 from ..library import Library, item_id
+from ..pagefacts import PICTURE_FETCH_MAX, public_address, small_picture
 from ..panels import feed as feed_panel
-from ..roam import PICTURE_FETCH_MAX, public_address, small_picture
-from . import base, weights
+from . import base, judge, weights
 from .base import Find, Source
 
 logger = logging.getLogger("agent.sources")
@@ -425,7 +425,7 @@ class Rounds:
 
     async def _judge(self) -> None:
         try:
-            await roam.judge(self.runtime(), self.home())
+            await judge.judge(self.runtime(), self.home())
         except Exception:
             # The person's model may be down or slow; what was kept waits for the next round's judgement.
             logger.exception("sources: the character's judgement failed")

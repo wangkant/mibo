@@ -113,7 +113,7 @@ class Tab:
 
 
 class PlaywrightTab(Tab):
-    """A tab over one Playwright page: the visitor's headless, signed-out browser (roam.Visitor),
+    """A tab over one Playwright page: the visitor's headless, signed-out browser (visitor.Visitor),
     whose own guards check every request the page makes."""
 
     def __init__(self, page: Any):

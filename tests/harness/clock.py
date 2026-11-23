@@ -6,9 +6,10 @@ from __future__ import annotations
 import time
 
 from mibo import life, recent, roam, spend, updates, usage
+from mibo.sources import judge
 
 # The modules that read `time.time()` for behaviour: each gets a `time` whose time() is the clock's.
-READ_TIME = (updates, recent, usage, roam, spend)
+READ_TIME = (updates, recent, usage, roam, judge, spend)
 
 
 class _Time:

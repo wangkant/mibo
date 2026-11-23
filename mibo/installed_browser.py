@@ -1,6 +1,6 @@
 """The browser already installed on this computer (Edge, Chrome or Chromium),
 started as an ordinary process with a profile of its own and driven over a pipe
-to it (never a debugging port). roam.Visitor reads the open web through it,
+to it (never a debugging port). visitor.Visitor reads the open web through it,
 never signed in. Nothing is done to look less like a program: no changed
 fingerprint, no solved verification.
 """

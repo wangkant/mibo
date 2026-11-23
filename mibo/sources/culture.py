@@ -126,9 +126,9 @@ async def _bangumi_season(http: httpx.AsyncClient) -> list[Find]:
     return found
 
 
-_ANILIST_QUERY = """{Page(perPage: %d) {media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
+_ANILIST_QUERY = ("{Page(perPage: " + str(PER_SOURCE) + """) {media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
   siteUrl title {english romaji} description(asHtml: false) coverImage {extraLarge}
-  startDate {year month day} genres studios(isMain: true) {nodes {name}}}}}""" % PER_SOURCE
+  startDate {year month day} genres studios(isMain: true) {nodes {name}}}}}""")
 
 
 async def _anilist(http: httpx.AsyncClient) -> list[Find]:
@@ -191,16 +191,14 @@ async def _art_institute(http: httpx.AsyncClient) -> list[Find]:
     data = await get_json(http, "https://api.artic.edu/api/v1/artworks/search",
                           **{"query[term][is_boosted]": "true", "limit": PER_SOURCE, "page": page,
                              "fields": "id,title,image_id,artist_title,date_display,medium_display,short_description"})
-    found = []
-    for work in data["data"]:
-        found.append(find(f"https://www.artic.edu/artworks/{work['id']}", work["title"],
-                          site="Art Institute of Chicago", kind="page",
-                          text=work.get("short_description") or " · ".join(
-                              filter(None, [work.get("date_display"), work.get("medium_display")])),
-                          author=work.get("artist_title") or "",
-                          picture=f"https://www.artic.edu/iiif/2/{work['image_id']}/full/843,/0/default.jpg"
-                          if work.get("image_id") else ""))
-    return found
+    return [find(f"https://www.artic.edu/artworks/{work['id']}", work["title"],
+                 site="Art Institute of Chicago", kind="page",
+                 text=work.get("short_description") or " · ".join(
+                     filter(None, [work.get("date_display"), work.get("medium_display")])),
+                 author=work.get("artist_title") or "",
+                 picture=f"https://www.artic.edu/iiif/2/{work['image_id']}/full/843,/0/default.jpg"
+                 if work.get("image_id") else "")
+            for work in data["data"]]
 
 
 # ---------------------------------------------------------------- feeds that need a touch

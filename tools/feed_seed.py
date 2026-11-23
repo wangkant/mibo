@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw  # noqa: E402 - after the path is set
 from mibo import settingsfile  # noqa: E402
 from mibo.home import looks_like_home  # noqa: E402
 from mibo.library import Item, Library, item_id  # noqa: E402
-from mibo.roam import player_for  # noqa: E402
+from mibo.players import player_for  # noqa: E402
 
 HOUR = 3600
 

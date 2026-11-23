@@ -110,7 +110,7 @@ def seed(home: Path) -> None:
     from mibo import db, life, welcome
     from mibo.library import CHAT, Item, Library
     from mibo.panels import feed
-    from mibo.roam import player_for
+    from mibo.players import player_for
     runtime = home / "runtime"
     library = Library(runtime)
     now = time.time()

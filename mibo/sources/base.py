@@ -21,7 +21,8 @@ import feedparser
 import httpx
 
 from ..library import Item
-from ..roam import player_for, site_name
+from ..pagefacts import site_name
+from ..players import player_for
 
 # Seconds one source has to answer; a slow one is skipped until the next round.
 TIMEOUT_S = 15

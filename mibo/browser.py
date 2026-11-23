@@ -257,7 +257,7 @@ def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int 
     """What a read page gives: title, declared facts and readable text, as roam.py reads them, for a list its rows
     (title, link, author, time, counts), and the page's own links to its messages or notifications ("inbox",
     reader.js). The text is the `most` characters from `start`."""
-    from .roam import facts_from
+    from .pagefacts import facts_from
     data = data if isinstance(data, dict) else {}
     facts = facts_from(data, url)
     inbox = [{"href": str(link["href"])[:2000], "text": str(link.get("text") or "")[:40]}
@@ -1908,7 +1908,7 @@ def feeds_on(runtime: Path) -> dict:
 def keep_finds(runtime: Path, key: str, rows: list) -> int:
     """A feed's rows as library finds of that site (source "feed <site>"); how many were new."""
     from .library import Item, Library, item_id
-    from .roam import site_name
+    from .pagefacts import site_name
     from .web import sites
     library, new = Library(runtime), 0
     for row in rows[:FEED_ROWS]:

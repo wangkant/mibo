@@ -18,7 +18,8 @@ import feedparser
 import httpx
 
 from ..ingestion import _PinnedAsyncHTTPTransport, _resolve_public_target
-from ..roam import public_address, site_name, youtube_id
+from ..pagefacts import public_address, site_name
+from ..players import youtube_id
 from .base import PER_SOURCE, Find, Source, feed_document, feed_finds, plain
 
 # A pasted address can be a large download; a page or feed is far smaller.

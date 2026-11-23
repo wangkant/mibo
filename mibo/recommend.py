@@ -36,7 +36,7 @@ from collections import Counter
 
 from . import drafting, i18n, life, profile, quiet, subjects
 from .library import DISMISSED, Item, Library
-from .roam import _manner, fence_pages, knowing
+from .roam import fence_pages, knowing, manner
 from .textproc import _UNTRUSTED_INPUT_RULES, _fence_user_data, salvage_json_object, strip_json_fences
 
 logger = logging.getLogger("mibo.recommend")
@@ -175,7 +175,7 @@ def prompt(runtime, name: str, persona: str, lang: str, topics: list[str], rows:
     # How they asked to be treated goes after the format: their words are theirs, braces and all.
     system = (_SYSTEM.format(name=name, persona=persona[:1500], limit=limit(lang),
                              language=drafting.LANGUAGE_NAMES.get(lang, "English"))
-              + _manner(runtime) + _UNTRUSTED_INPUT_RULES)
+              + manner(runtime) + _UNTRUSTED_INPUT_RULES)
     # In another order each time: a model leans to the first of a list (Hou et al. 2024).
     mixed = random.Random(int(now)).sample(rows, len(rows))
     things = "\n\n".join(
@@ -384,9 +384,9 @@ def _took(before: dict, ident: str, term: str) -> dict | None:
         snap = h["f"] or {}
         if other == ident or not (h["like"] or h["open"] or h["play"] > 0):
             continue
-        if rest in snap.get("subj", ()) if family == "subj" else snap.get("origin") == rest:
-            if found is None or (h["acted"] or h["at"]) > (found[1]["acted"] or found[1]["at"]):
-                found = other, h
+        shares = rest in snap.get("subj", ()) if family == "subj" else snap.get("origin") == rest
+        if shares and (found is None or (h["acted"] or h["at"]) > (found[1]["acted"] or found[1]["at"])):
+            found = other, h
     if found is None:
         return None
     return {"from": found[0], "how": "like" if found[1]["like"] else "play" if found[1]["play"] > 0 else "open"}
@@ -423,13 +423,8 @@ def term_of(top: list, guess: bool) -> str:
     """The ranking's reason term from the top terms the shown table kept for a showing, for one shown before the
     reason was kept with its event: the largest the person's reactions or picks could have lifted
     (taste.Ranker.reason, without the draw that is not kept)."""
-    from .taste import REASON_MIN
-    named = ("origin:",) if guess else ("origin:", "topic:", "like:", "subj:")
-    best, key = REASON_MIN, ""
-    for name, value in top:
-        if name.startswith(named) and value > best:
-            best, key = value, name
-    return key
+    from .taste import best_term
+    return best_term(top, guess)
 
 
 # ------------------------------------------------------------ from the chat
@@ -553,7 +548,8 @@ def matching(runtime, wish: str, avoid: list[dict], kind: str, length: str, now:
         elif about == "topic":
             keep.append(lambda s, i, vein=vein: not vein[1] & veins.of(s, i)[1])
         elif about == "kind":
-            keep.append(lambda s, i, video=feed.is_video(item, shaped): feed.is_video(i, s) != video)
+            video = feed.is_video(item, shaped)
+            keep.append(lambda s, i, video=video: feed.is_video(i, s) != video)
         elif about == "length":
             was = taste._length(item, shaped)
             keep.append(lambda s, i, was=was: taste._length(i, s) != was)
@@ -732,15 +728,16 @@ class Chooser:
         if not seen["rows"]:
             self._asked.clear()
             self._empty_at = time.monotonic()
-            return None
+            return
         shaped, item, line = await self._pick(seen, seen["rows"])
         await self._cover(seen, shaped, item)
-        choice ={"at": life.clock(), "shaped": await asyncio.to_thread(self._dress, seen, shaped, item, line),
+        choice = {"at": life.clock(), "shaped": await asyncio.to_thread(self._dress, seen, shaped, item, line),
                   "item": item}
         if turn != self._turn or not await asyncio.to_thread(self._unshown, choice):
             # Made before the person said what they want less or more of, or of a thing that went out
             # meanwhile (asked for with `now`): made again, from what is left.
-            return await self._choose()
+            await self._choose()
+            return
         self.choice = choice
         asked, self._asked = self._asked, set()
         if "chat" in asked:

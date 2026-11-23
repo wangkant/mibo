@@ -9,6 +9,7 @@ code) are not here, nor are those whose robots.txt turns programs away
 """
 from __future__ import annotations
 
+import contextlib
 import html
 import re
 from datetime import datetime, timedelta, timezone
@@ -222,10 +223,8 @@ async def _jiqizhixin(http: httpx.AsyncClient) -> list[Find]:
     found = []
     for post in data["articles"]:
         when = post.get("publishedAt", "")
-        try:
+        with contextlib.suppress(ValueError):
             when = datetime.strptime(when, "%Y/%m/%d %H:%M").replace(tzinfo=_CST).isoformat()
-        except ValueError:
-            pass
         found.append(find(f"https://www.jiqizhixin.com/articles/{post['slug']}", post["title"], site="机器之心",
                           text=post.get("content", ""), author=post.get("author", ""), published=when,
                           picture=post.get("coverImageUrl", "")))

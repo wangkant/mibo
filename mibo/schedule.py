@@ -13,6 +13,7 @@ comes twice in autumn happens once, at the first.
 
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import re
@@ -189,7 +190,7 @@ def problem(rule: dict, now: float, tz: tzinfo) -> str:
     times = _sample(rule, now, tz)
     if not times:
         return "none"
-    if any(b - a < FLOOR_MIN * 60 - 1 for a, b in zip(times, times[1:])):
+    if any(b - a < FLOOR_MIN * 60 - 1 for a, b in itertools.pairwise(times)):
         return "too_often"
     return ""
 
@@ -342,20 +343,31 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
     hm = _time_of(text)
     clock = f"{hm[0] % 24:02d}:{hm[1]:02d}" if hm else "09:00"
     today = _wall(now, tz)
-
     if re.search(r"每年|\bevery\s+year\b|\beach\s+year\b|\byearly\b|\bannually\b", low):
-        due = timewords.resolve_future(re.sub(r"每年|every\s+year|each\s+year|yearly|annually", "", text, flags=re.I),
-                                       now, tz)
-        if _leap_day(text, today):
-            # 29 February each year: the 28th in a year without one.
-            return {"repeat": "rrule", "time": clock, "rrule": "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29,-1;BYSETPOS=1",
-                    "since": today.date().isoformat()}
-        if due and due.kind == "exact":
-            day = date.fromisoformat(due.due)
-            return {"repeat": "rrule", "time": clock, "rrule": f"FREQ=YEARLY;BYMONTH={day.month};BYMONTHDAY={day.day}",
-                    "since": today.date().isoformat()}
-        return None
-    # Every n weeks ("每两周的周一", "every other Monday"), counted from today's week.
+        return _yearly(text, now, tz, today, clock)
+    for step in (_every_weeks, _every_while, _weekly, _monthly, _daily, _after):
+        rule = step(text, low, now, today, clock)
+        if rule:
+            return rule
+    return _once(text, low, now, tz, today, hm)
+
+
+def _yearly(text: str, now: float, tz: tzinfo, today: datetime, clock: str) -> dict | None:
+    due = timewords.resolve_future(re.sub(r"每年|every\s+year|each\s+year|yearly|annually", "", text, flags=re.I),
+                                   now, tz)
+    if _leap_day(text, today):
+        # 29 February each year: the 28th in a year without one.
+        return {"repeat": "rrule", "time": clock, "rrule": "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29,-1;BYSETPOS=1",
+                "since": today.date().isoformat()}
+    if due and due.kind == "exact":
+        day = date.fromisoformat(due.due)
+        return {"repeat": "rrule", "time": clock, "rrule": f"FREQ=YEARLY;BYMONTH={day.month};BYMONTHDAY={day.day}",
+                "since": today.date().isoformat()}
+    return None
+
+
+def _every_weeks(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
+    """Every n weeks ("每两周的周一", "every other Monday"), counted from today's week."""
     hit = re.search(rf"每(?:隔)?\s*({_N})\s*(?:个)?\s*(?:周|星期|礼拜)((?:\s*的?\s*(?:周|星期|礼拜)?[一二三四五六日天1-7])*)",
                     text)
     every = re.search(rf"\bevery\s+(other|\d+)\s*(?:weeks?\s*(?:on\s+)?)?((?:{_EN_DAY}\s*(?:,|and|&)?\s*)*)", low)
@@ -365,14 +377,18 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
     elif every and (every.group(2) or "week" in every.group(0)):
         n = 2 if every.group(1) == "other" else int(every.group(1))
         days = sorted({_EN_DAYS.index(d[:3]) for d in re.findall(_EN_DAY, every.group(2))})
-    if n > 1:
-        days = days or [today.weekday()]
-        names = ",".join(("MO", "TU", "WE", "TH", "FR", "SA", "SU")[d] for d in days)
-        # Counted from the first of those days from today on, so "every other Monday" starts this coming one.
-        first = next(today.date() + timedelta(days=k) for k in range(7) if (today.weekday() + k) % 7 in days)
-        return {"repeat": "rrule", "time": clock, "rrule": f"FREQ=WEEKLY;INTERVAL={n};BYDAY={names}",
-                "since": first.isoformat()}
+    if n <= 1:
+        return None
+    days = days or [today.weekday()]
+    names = ",".join(("MO", "TU", "WE", "TH", "FR", "SA", "SU")[d] for d in days)
+    # Counted from the first of those days from today on, so "every other Monday" starts this coming one.
+    first = next(today.date() + timedelta(days=k) for k in range(7) if (today.weekday() + k) % 7 in days)
+    return {"repeat": "rrule", "time": clock, "rrule": f"FREQ=WEEKLY;INTERVAL={n};BYDAY={names}",
+            "since": first.isoformat()}
 
+
+def _every_while(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
+    """Every so many minutes, hours or days."""
     hit = re.search(rf"每(?:隔)?\s*({_N}|半)\s*(?:个)?\s*(分钟|分|小时|钟头|个钟)", text)
     if hit:
         n = 0.5 if hit.group(1) == "半" else _num(hit.group(1))
@@ -391,7 +407,10 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
     if hit:
         return {"repeat": "rrule", "time": clock, "rrule": f"FREQ=DAILY;INTERVAL={_num(hit.group(1))}",
                 "since": today.date().isoformat()}
+    return None
 
+
+def _weekly(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
     if re.search(r"工作日|周一(?:到|至|-|~)周五|星期一(?:到|至)星期五|\bweekdays?\b|monday\s+(?:to|through|-)\s+friday",
                  low):
         return {"repeat": "weekdays", "time": clock}
@@ -402,14 +421,17 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
         days = _zh_days(hit.group(1))
         # No day named ("每周", "每个星期二和第四周…"): a guess, which a rule from the model replaces.
         return {"repeat": "weekly", "days": days or [today.weekday()], "time": clock, "guess": not days}
-    # "every Monday" and "on Mondays" repeat; "on Monday" is once, read below.
+    # "every Monday" and "on Mondays" repeat; "on Monday" is once, read by `_once`.
     hit = re.search(rf"\b(?:every\s+|on\s+(?=\w+days\b))({_EN_DAY}(?:\s*(?:,|and|&)\s*{_EN_DAY})*)", low)
     if hit:
         days = sorted({_EN_DAYS.index(d[:3]) for d in re.findall(_EN_DAY, hit.group(1))})
         return {"repeat": "weekly", "days": days, "time": clock}
     if re.search(r"\bweekly\b|\bevery\s+week\b", low):
         return {"repeat": "weekly", "days": [today.weekday()], "time": clock, "guess": True}
+    return None
 
+
+def _monthly(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
     hit = re.search(rf"每(?:个)?月\s*(?:的)?\s*({_N})\s*[号日]", text) or re.search(
         r"\b(?:every|each)\s+month\s+on\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\b", low) or re.search(
         r"\bon\s+the\s+(\d{1,2})(?:st|nd|rd|th)?\s+of\s+(?:every|each)\s+month", low)
@@ -421,11 +443,18 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
         return {"repeat": "monthly", "day": 1, "time": clock}
     if re.search(r"每(?:个)?月|\bmonthly\b|\bevery\s+month\b", low):
         return {"repeat": "monthly", "day": today.day, "time": clock, "guess": True}
+    return None
 
+
+def _daily(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
     if re.search(r"每天|每日|天天|每晚|每早|每个?(?:早上|晚上|早晨|上午|下午|中午)|"
                  r"\bdaily\b|\bevery\s*day\b|\beach\s+day\b|\bevery\s+(?:morning|evening|night|afternoon)\b", low):
         return {"repeat": "daily", "time": clock}
+    return None
 
+
+def _after(text: str, low: str, now: float, today: datetime, clock: str) -> dict | None:
+    """Once, so many minutes or hours from now."""
     hit = re.search(rf"(?:({_N})\s*个\s*(?=半))?({_N}|半)\s*(?:个)?\s*(分钟|小时|钟头)\s*(?:后|以后|之后)", text)
     if hit:
         # "一个半小时后" is an hour and a half.
@@ -435,7 +464,11 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
     if hit:
         n = 0.5 if hit.group(1).startswith("half") else 1 if hit.group(1) in ("a", "an") else int(hit.group(1))
         return {"repeat": "once", "at": now + n * (60 if hit.group(2).startswith("m") else 3600)}
+    return None
 
+
+def _once(text: str, low: str, now: float, tz: tzinfo, today: datetime, hm: tuple[int, int] | None) -> dict | None:
+    """Once, on the day the words name or the next time of day they name."""
     day: date | None = None
     if re.search(r"今天|今晚|今早|\btoday\b|\btonight\b", low):
         day = today.date()
@@ -462,7 +495,6 @@ def parse_when(text: str, now: float, tz: tzinfo) -> dict | None:
             day += timedelta(days=1)
     at = _epoch(datetime.combine(day, datetime.min.time()).replace(hour=h, minute=m), tz)
     return {"repeat": "once", "at": at, **({"bare": True} if bare else {})}
-
 
 # ---- saying it back --------------------------------------------------------------
 

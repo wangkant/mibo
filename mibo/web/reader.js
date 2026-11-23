@@ -9,7 +9,7 @@
 //   rows   [{link, title, picture?, author?, avatar?, time?, duration?, counts?: {label: value}, text?}]
 //   main   {title, author, published, picture, video, duration, counts, site, type, lang, description, text}
 //   facts  JSON-LD types, top-level microdata, canonical / oEmbed / RSS links
-//   meta, ld, title, canonical, oembed, text: the page's own description of itself, as roam.facts_from reads it
+//   meta, ld, title, canonical, oembed, text: the page's own description of itself, as pagefacts.facts_from reads it
 //   discovery  where the site's search and hot lists are: OpenSearch links, a WebSite SearchAction template,
 //          searchable forms, feed links and links named like a hot list
 // Endless scroll and virtual lists: call again after each scroll and merge rows by link.

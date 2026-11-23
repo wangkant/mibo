@@ -318,7 +318,8 @@ class WebSearch:
 
     async def _web_tool(self, name: str, args: dict, lookups) -> str:
         """One call of a web tool; what it found, fenced as external material."""
-        from .roam import fence_pages, site_name
+        from .pagefacts import site_name
+        from .roam import fence_pages
         if name == "web_search":
             query = " ".join(str(args.get("query") or "").split())[:200]
             if not query:
@@ -364,7 +365,8 @@ class WebSearch:
         """The app's own browser: a page read signed in, the pages read lately, or a site's sign-in. Page words come
         back fenced as external material."""
         from . import browsed
-        from .roam import fence_pages, site_name
+        from .pagefacts import site_name
+        from .roam import fence_pages
         from .web import signin
         home = today.runtime_of(self).parent
         if name == "read_with_their_session":

@@ -12,7 +12,7 @@ import pytest
 from roam_standin import Recorder, Site
 
 from mibo import installed_browser as web
-from mibo import profile, today
+from mibo import pagefacts, players, profile, today
 from mibo import roam as roam_mod
 from mibo.library import PICTURE_MAX_BYTES, Library
 from mibo.settings import AgentSettings
@@ -68,10 +68,10 @@ def persona_clock(monkeypatch):
 
 def make(tmp_path: Path, agent: FakeAgent | None = None, *, site: Site | None = None, clock=None) -> roam_mod.Roam:
     agent = agent or FakeAgent()
-    public = (lambda url: _local_public(url)) if site else roam_mod.public_address
+    public = (lambda url: _local_public(url)) if site else pagefacts.public_address
     walker = roam_mod.Roam(agent, home=tmp_path / "home", runtime=tmp_path / "runtime",
                            executable=web.find_browser() or Path(__file__), clock=clock or Clock(NOON),
-                           public=public, host_check=_local_host if site else roam_mod.host_ok,
+                           public=public, host_check=_local_host if site else pagefacts.host_ok,
                            hosts={"127.0.0.1": {"home": f"{site.url}/", "hot": [f"{site.url}/hot"],
                                                 "search": f"{site.url}/find?q={{q}}"}} if site else None)
     walker.pause = (0.0, 0.0)
@@ -80,13 +80,13 @@ def make(tmp_path: Path, agent: FakeAgent | None = None, *, site: Site | None = 
 
 def _local_host(host: str) -> bool:
     # The stand-in's own address counts as public here; every other rule stays.
-    return host == "127.0.0.1" or roam_mod.host_ok(host)
+    return host == "127.0.0.1" or pagefacts.host_ok(host)
 
 
 async def _local_public(url: str) -> bool:
     from urllib.parse import urlsplit
     host = urlsplit(url).hostname or ""
-    return host == "127.0.0.1" or (roam_mod.host_ok(host) and await roam_mod.public_address(url))
+    return host == "127.0.0.1" or (pagefacts.host_ok(host) and await pagefacts.public_address(url))
 
 
 def run(coro):
@@ -103,18 +103,18 @@ async def _closing(walker: roam_mod.Roam, coro):
 # ---------------------------------------------------------------- facts without a browser
 
 def test_players_are_built_only_for_listed_hosts():
-    assert roam_mod.player_for("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=3") == \
+    assert players.player_for("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=3") == \
         "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
-    assert roam_mod.player_for("https://youtu.be/dQw4w9WgXcQ") == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
-    assert roam_mod.player_for("https://m.youtube.com/shorts/dQw4w9WgXcQ").endswith("/embed/dQw4w9WgXcQ")
-    assert roam_mod.player_for("https://www.bilibili.com/video/BV1xx411c7mD/?p=1") == \
+    assert players.player_for("https://youtu.be/dQw4w9WgXcQ") == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+    assert players.player_for("https://m.youtube.com/shorts/dQw4w9WgXcQ").endswith("/embed/dQw4w9WgXcQ")
+    assert players.player_for("https://www.bilibili.com/video/BV1xx411c7mD/?p=1") == \
         "https://player.bilibili.com/player.html?bvid=BV1xx411c7mD&autoplay=0"
-    assert roam_mod.player_for("https://evil.example/video/BV1xx411c7mD") == ""
-    assert roam_mod.player_for("https://notyoutube.com/watch?v=dQw4w9WgXcQ") == ""
-    assert roam_mod.allowed_player("https://player.vimeo.com/video/1") == "https://player.vimeo.com/video/1"
-    assert roam_mod.allowed_player("http://player.vimeo.com/video/1") == ""
-    assert roam_mod.allowed_player("https://cdn.example/player.html") == ""
-    assert roam_mod.allowed_player("https://www.youtube.com/embed/dQw4w9WgXcQ").startswith(
+    assert players.player_for("https://evil.example/video/BV1xx411c7mD") == ""
+    assert players.player_for("https://notyoutube.com/watch?v=dQw4w9WgXcQ") == ""
+    assert pagefacts.allowed_player("https://player.vimeo.com/video/1") == "https://player.vimeo.com/video/1"
+    assert pagefacts.allowed_player("http://player.vimeo.com/video/1") == ""
+    assert pagefacts.allowed_player("https://cdn.example/player.html") == ""
+    assert pagefacts.allowed_player("https://www.youtube.com/embed/dQw4w9WgXcQ").startswith(
         "https://www.youtube-nocookie.com/")
 
 
@@ -122,16 +122,16 @@ def test_facts_are_checked_and_typed():
     data = {"meta": [["og:title", "  A  title "], ["og:image", "/c.jpg"], ["og:video:duration", "90"], ["bad"]],
             "ld": ["not json", json.dumps({"@type": "Article", "author": "https://x/author", "isAccessibleForFree": True})],
             "title": 5, "text": "line one\n\n\n\nline two"}
-    facts = roam_mod.facts_from(data, "https://news.example/a")
+    facts = pagefacts.facts_from(data, "https://news.example/a")
     assert facts["title"] == "A title"
     assert facts["picture"] == "https://news.example/c.jpg"
     assert facts["length"] == 90 and facts["kind"] == "article"
     assert facts["author"] == "" and facts["site"] == "news.example"
     assert facts["text"] == "line one\n\nline two" and not facts["paywall"]
-    assert roam_mod._seconds("PT1H2M3S") == 3723 and roam_mod._seconds("P") is None
-    assert roam_mod.facts_from(None, "https://a.example/")["title"] == ""
+    assert pagefacts._seconds("PT1H2M3S") == 3723 and pagefacts._seconds("P") is None
+    assert pagefacts.facts_from(None, "https://a.example/")["title"] == ""
     # A platform's video page plays in its official player; its text is the page around the video.
-    bili = roam_mod.facts_from({"meta": [["og:title", "T"], ["description", "Real words."],
+    bili = pagefacts.facts_from({"meta": [["og:title", "T"], ["description", "Real words."],
                                          ["og:site_name", "哔哩哔哩"]], "text": "page chrome"},
                                "https://www.bilibili.com/video/BV1xx411c7mD/")
     assert (bili["title"], bili["description"], bili["site"], bili["text"]) == ("T", "Real words.", "Bilibili", "")
@@ -141,8 +141,8 @@ def test_facts_are_checked_and_typed():
 def test_internal_addresses_are_refused_by_rule():
     for host in ("localhost", "127.0.0.1", "10.1.2.3", "192.168.0.1", "169.254.169.254", "::1", "[::1]",
                  "100.64.0.1", "x.localhost", "0.0.0.0"):
-        assert not roam_mod.host_ok(host), host
-    assert roam_mod.host_ok("example.com") and roam_mod.host_ok("93.184.216.34")
+        assert not pagefacts.host_ok(host), host
+    assert pagefacts.host_ok("example.com") and pagefacts.host_ok("93.184.216.34")
 
 
 def test_the_model_answer_is_parsed_row_by_row():
@@ -163,14 +163,14 @@ def test_the_model_answer_is_parsed_row_by_row():
 
 def test_a_small_cover_is_made_and_a_huge_one_skipped():
     from roam_standin import picture
-    made = roam_mod.small_picture(picture(1600, 900))
+    made = pagefacts.small_picture(picture(1600, 900))
     import io
 
     from PIL import Image
     with Image.open(io.BytesIO(made)) as shown:
         assert shown.size == (480, 270)
     assert 0 < len(made) <= PICTURE_MAX_BYTES
-    assert roam_mod.small_picture(b"not a picture") == b""
+    assert pagefacts.small_picture(b"not a picture") == b""
 
 
 # ---------------------------------------------------------------- when it may go out

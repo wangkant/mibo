@@ -80,7 +80,7 @@ class Links:
                                         headers=HEADERS, allowed_content_types=types)
 
     async def _picture(self, url: str) -> str:
-        from ..roam import small_picture
+        from ..pagefacts import small_picture
         got = await self._fetch(url, PICTURE_BYTES, ("image/",)) if url else None
         small = await asyncio.to_thread(small_picture, got.content) if got else b""
         return self._keep_file(small, "jpg") if small else ""
@@ -94,7 +94,8 @@ class Links:
         return ""
 
     async def _read(self, url: str) -> dict:
-        from ..roam import player_for, site_name
+        from ..pagefacts import site_name
+        from ..players import player_for
         from ..web import fetch
         host = (urlsplit(url).hostname or "").lower()
         out = {"url": url, "site": site_name(url), "host": host.removeprefix("www."), "title": "",

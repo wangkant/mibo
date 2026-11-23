@@ -18,7 +18,7 @@ that the pick, the pet's remarks, the judge and the pacing read. A like said
 for now ("这周想多看点 F1") is a wish that runs out after WISH_S. `forget`
 takes any of it out again, and a change asks for a rewrite within the hour.
 Settings › 推荐 also keeps here a lean per feature of the taste model
-("leans"), the pace and the quiet hours pacing.py reads, and `reset`. The model calls here, in `roam.judge` and in
+("leans"), the pace and the quiet hours pacing.py reads, and `reset`. The model calls here, in `sources.judge` and in
 `recommend` are counted in `<runtime>/character_calls.json` for the settings page.
 """
 from __future__ import annotations

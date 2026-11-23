@@ -265,7 +265,7 @@ class ChatLookups:
             logger.debug("[Agent] chat status not written: %s", e)
 
     def source(self, title: str, url: str, *, read: bool) -> None:
-        from .roam import site_name
+        from .pagefacts import site_name
         if url.startswith(("http://", "https://")):
             (self._read if read else self._found).append(
                 {"title": title[:200], "url": url, "site": site_name(url)})
