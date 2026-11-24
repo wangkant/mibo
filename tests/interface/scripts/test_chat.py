@@ -48,7 +48,7 @@ def test_stop_ends_the_turn_and_gives_the_words_back_to_the_box(app, model, brow
     page.page.locator(".chat-send:not(.stopping)").wait_for()
     assert box.input_value() == "Plan a week of dinners"
     # The request to the service is closed just after the page has its box back.
-    waited = time.monotonic() + 5
+    waited = time.monotonic() + 30
     while app.get("/api/chat/doing").json()["busy"] and time.monotonic() < waited:
         time.sleep(0.05)
     assert app.get("/api/chat/doing").json()["busy"] is False

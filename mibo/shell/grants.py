@@ -286,8 +286,9 @@ class Places:
         # A file's other names, wherever this one is: a second name never makes a secret readable.
         if any(self.secret(other, parts_of(other)) or under(other, self.home) for other in link_names(path)):
             return "secrets"
+        # The temporary folder is inside AppData and is no program's data: a place in it is judged by what follows it.
         if self.temp and under(path, self.temp):
-            return ""
+            parts = parts[len(parts_of(self.temp)):]
         if not write and names and not self.secret(path, parts, SECRET_DIRS[:-1]):
             if any(holds(parts, run) >= 0 for run in FINDABLE):
                 return ""

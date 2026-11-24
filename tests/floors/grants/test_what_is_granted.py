@@ -37,7 +37,9 @@ def places(app, tmp_path, monkeypatch):
     return made
 
 
-@pytest.mark.parametrize("where", ["never_granted", "elsewhere", "read_only"])
+@pytest.mark.parametrize("where", [pytest.param("never_granted", marks=pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows' own drive outside the profile is a place of Windows")),
+    "elsewhere", "read_only"])
 def test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written(app, turn, places, where):
     target = places[where] / "plan.txt"
     done = turn(ASKED, call("write_file", path=str(target), content="buy milk"), say("I left it."), cards="no")

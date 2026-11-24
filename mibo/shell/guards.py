@@ -65,6 +65,9 @@ FILE_ALL, KEY_ALL = 0x1F01FF, 0xF003F
 FILE_WRITES = 0x2 | 0x4 | 0x10 | 0x40 | 0x100 | 0x10000 | 0x40000 | 0x80000
 KEY_WRITES = 0x2 | 0x4 | 0x20 | 0x10000 | 0x40000 | 0x80000
 DELETE = 0x10000
+# A folder kept where it is: not deleted or renamed by its own list, and nothing in it by the folder's right over
+# what it holds (FILE_DELETE_CHILD), which Windows honours whatever the held thing's own list refuses.
+STAYS = DELETE | 0x40
 FILE_READ_EXECUTE = 0x1200A9
 OURS = (COMMANDS_SID, GUARD_SID, OFFLINE_SID)
 
@@ -135,6 +138,16 @@ def _keys_root() -> str:
     return f"HKCU\\{given}" if given else "HKCU"
 
 
+def _up_to(path: str, top: str) -> list[str]:
+    """`path` and the folders above it up to `top`; with `path` kept somewhere else, it and its parent."""
+    if not (path.lower() + os.sep).startswith(top.lower() + os.sep):
+        top = os.path.dirname(path)
+    found = [path]
+    while len(found[-1]) > len(top):
+        found.append(os.path.dirname(found[-1]))
+    return found
+
+
 def places(home: Path) -> list[Place]:
     """Every guard of this computer and this app, the home's first."""
     from .grants import KNOWN, known_folder
@@ -167,16 +180,12 @@ def places(home: Path) -> list[Place]:
     found += [Place(os.path.join(roaming, rel), "keys", OFFLINE_SID, FILE_ALL) for rel in KEYS_ROAMING]
     startup = os.path.join(roaming, STARTUP)
     found.append(Place(startup, "later", GUARD_SID, FILE_WRITES, make=True))
-    # The folders above it, down from the roaming AppData, and Documents: renamed, they would take the guarded
-    # folder away from the place Windows looks for it.
-    above, up = [], os.path.dirname(startup)
-    while len(up) >= len(roaming):
-        above.append(up)
-        up = os.path.dirname(up)
-    found += [Place(p, "later", GUARD_SID, DELETE, inherit=False) for p in above]
     found += [Place(os.path.join(documents, d), "later", GUARD_SID, FILE_WRITES, make=True)
               for d in ("WindowsPowerShell", "PowerShell")]
-    found.append(Place(documents, "later", GUARD_SID, DELETE, inherit=False))
+    # The folders above them, up to the profile: renamed, one would take a guarded folder away from the place
+    # Windows looks for it, and a new one could be made there.
+    above = dict.fromkeys(_up_to(os.path.dirname(startup), profile) + _up_to(documents, profile))
+    found += [Place(p, "later", GUARD_SID, STAYS, inherit=False) for p in above]
     found += [Place(os.path.join(profile, name), "later", GUARD_SID, FILE_WRITES, inherit=False) for name in RC_FILES]
     root = _keys_root()
     found += [Place(f"{root}\\{key}", "later", GUARD_SID, KEY_WRITES, kind="key", make=True) for key in LATER_KEYS]
@@ -539,6 +548,11 @@ class Keeper:
         if place.kind == "file" and _reparse(place.path):
             data["places"][place.path] = {"why": place.why, "kind": place.kind, "skipped": "link"}
             return
+        if row and row.get("mask") not in (None, place.mask):
+            # Placed by a version that refused something else there: that entry is taken out and this one written.
+            _unguard(place.path, place.kind, row["sid"], row["mask"], row.get("inherit", True),
+                     skip=_skills(place.path, row))
+            row = None
         done = bool(row and row.get("done") and not row.get("failed"))
         if done and carries(place.path, place.kind, place.sid):
             # Only a small one is walked again, for files moved in since with the list they had: a browser's

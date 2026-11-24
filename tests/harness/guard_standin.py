@@ -35,6 +35,9 @@ def lay_out(root: Path, files: int = 60, modern: bool = True) -> dict:
     (root / "home" / "skills").mkdir()
     if modern:
         subprocess.run(["icacls", str(root), "/reset", "/T", "/C", "/Q"], check=True, capture_output=True)
+    # Full control of everything in it, as a person has of their own profile wherever the scratch folder is: the
+    # right over what a folder holds that the guards must also refuse.
+    subprocess.run(["icacls", str(root), "/grant", "*S-1-5-11:(OI)(CI)F", "/Q"], check=True, capture_output=True)
     protected, own = chrome / "protected.txt", chrome / "own.txt"
     protected.write_text(SECRET, encoding="utf-8")
     own.write_text(SECRET, encoding="utf-8")

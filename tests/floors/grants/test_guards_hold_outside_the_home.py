@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from harness.guard_standin import CHROME, KEY, RUN, SECRET, STARTUP, descriptors, keys, lay_out
 
+from mibo.shell import acts as reads
 from mibo.shell import confine, guards
 from mibo.shell import read as reading
 from mibo.shell import run as running
@@ -159,7 +160,10 @@ def test_the_persons_own_programs_use_the_guarded_places_as_before(placed, tmp_p
     assert userenv.CreateAppContainerProfile(name, name, name, None, 0, ctypes.byref(sid)) == 0
     try:
         container = confine._sid_text(sid)
-        for path in (cookie.parent.parent.parent, key.parent):
+        plain = tmp_path / "plain"
+        plain.mkdir()
+        (plain / "a.txt").write_text("a", encoding="ascii")
+        for path in (cookie.parent.parent.parent, key.parent, plain):
             subprocess.run(["icacls", str(path), "/grant", f"*{container}:(OI)(CI)(RX)", "/Q"], check=True,
                            capture_output=True)
 
@@ -174,6 +178,9 @@ def test_the_persons_own_programs_use_the_guarded_places_as_before(placed, tmp_p
         k32.InitializeProcThreadAttributeList(attributes, 1, 0, ctypes.byref(size))
         caps = SECURITY_CAPABILITIES(sid, None, 0, 0)
         k32.UpdateProcThreadAttribute(attributes, 0, 0x20009, ctypes.byref(caps), ctypes.sizeof(caps), None, None)
+        # On a computer where an AppContainer reads nothing even from a folder with no guard, this tells nothing.
+        if _start_with(None, f'"{cmd}" /c type "{plain / "a.txt"}" > nul', attributes) != 0:
+            pytest.skip("an AppContainer started here reads no file, guarded or not")
         assert _start_with(None, f'"{cmd}" /c type "{cookie}" > nul && type "{key}" > nul', attributes) == 0
         # Without its entry it reads nothing: the AppContainer itself, not this check, is what held it before.
         k32.DeleteProcThreadAttributeList(attributes)
@@ -257,9 +264,11 @@ def test_a_refusal_is_said_in_one_line_that_names_the_limit(placed, tmp_path):
     # ssh words it with the path bare.
     bare = f"Can't open user config file {placed['profile'] / '.ssh' / 'config'}: Permission denied"
     assert "network sign-ins" in guards.refused_line(bare, "change", False, placed["home"])
-    # ssh, a cloud tool: what the reading cannot bound runs with the network and its sign-ins.
+    # ssh, a cloud tool: what the reading cannot bound runs with the network and its sign-ins (a cloud tool that
+    # is installed here is a program the person allows, which has both).
     for command in ("ssh example.invalid uptime", "aws s3 ls", "git push"):
-        assert guards.online(reading.read(command, str(tmp_path)).acts), command
+        acts = reading.read(command, str(tmp_path)).acts
+        assert guards.online(acts) or reads.tier(acts) == "program", command
     assert not guards.online(reading.read("Get-Content a.txt", str(tmp_path)).acts)
     assert guards.refused_line("Cannot find path 'x' because it does not exist.", "read", False, placed["home"]) == ""
 
@@ -284,9 +293,11 @@ def test_the_model_is_told_which_limit_stopped_a_command(app, turn, tmp_path, mo
 
 def test_what_wmi_starts_for_a_command_outside_its_job_is_ended(placed, tmp_path):
     late = tmp_path / "late.txt"
-    done = _run("Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
-                f"@{{CommandLine = 'cmd.exe /c ping -n 6 127.0.0.1 >NUL & echo late> \"{late}\"'}} | Out-Null; "
-                "Start-Sleep 2", placed, "change", False)
+    # Started with no window: one that WMI starts is shown on the person's screen, and stays when it is ended.
+    done = _run("$hidden = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow = [uint16]0}; "
+                "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
+                f"@{{CommandLine = 'cmd.exe /c ping -n 6 127.0.0.1 >NUL & echo late> \"{late}\"'; "
+                "ProcessStartupInformation = $hidden} | Out-Null; Start-Sleep 2", placed, "change", False)
     assert done["code"] == 0
     time.sleep(8)
     assert not late.exists()
@@ -302,6 +313,25 @@ def test_every_place_windows_closes_is_one_the_reading_refuses_too(tmp_path, mon
     home.mkdir()
     places = Places(home)
     for place in guards.places(home):
-        if place.kind != "file" or place.mask == guards.DELETE:
+        if place.kind != "file" or place.mask == guards.STAYS:
             continue
         assert places.blocked(norm(place.path), write=place.why in ("later", "app")), (place.why, place.path)
+
+
+def test_a_place_guarded_by_an_earlier_version_gets_this_versions_entry(tmp_path, monkeypatch):
+    root = tmp_path / "standin"
+    root.mkdir()
+    laid = lay_out(root)
+    documents = str(root / "documents")
+    with keys(monkeypatch, root):
+        # As a version that only kept the folder itself from being renamed left it.
+        monkeypatch.setattr(guards, "STAYS", guards.DELETE)
+        guards.Keeper(laid["home"]).keep()
+        assert "(D;;SD;;;" in guards.sddl(documents)
+        monkeypatch.setattr(guards, "STAYS", guards.DELETE | 0x40)
+        keeper = guards.Keeper(laid["home"])
+        data = keeper.keep()
+        assert "(D;;DTSD;;;" in guards.sddl(documents) and guards.sddl(documents).count(confine.GUARD_SID) == 1
+        assert data["places"][documents]["mask"] == guards.STAYS
+        keeper.remove(everything=True)
+        assert confine.GUARD_SID not in guards.sddl(documents)

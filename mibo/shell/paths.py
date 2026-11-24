@@ -92,7 +92,7 @@ def _base(path: str) -> tuple[str, bool]:
     parts = re.split(r"[\\/]", path)
     for n, part in enumerate(parts):
         if _wild(part):
-            base = "\\".join(parts[:n]) or path[:3]
+            base = os.sep.join(parts[:n]) or path[:3]
             return (base + "\\" if re.match(r"^[a-zA-Z]:$", base) else base), True
     return path, False
 
@@ -124,7 +124,7 @@ def _wild(path: str) -> bool:
 def _matches(pattern: str, most: int = LIST_MOST) -> list[str]:
     """The places a wildcard path matches now, as PowerShell's wildcards would (dot names included)."""
     parts = re.split(r"[\\/]", pattern)
-    found = [parts[0] + "\\"]
+    found = [parts[0] + os.sep]
     for part in parts[1:]:
         if not part:
             continue

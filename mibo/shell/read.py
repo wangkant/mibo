@@ -219,7 +219,9 @@ def _pattern_protected(glob: str, write: bool, deep: bool, content: bool, places
     literal = _base(glob)[0]
     for root in (places.home, places.package, places.python, places.appdata,
                  os.path.join(places.windows, "system32", "config")):
-        if root == places.appdata and any(under(norm(literal), p) for p in [*places.findable, places.temp] if p):
+        # Start's program places and the temporary folder, where they are inside AppData, are not AppData's own.
+        if root == places.appdata and any(under(norm(literal), p) and under(p, root)
+                                          for p in [*places.findable, places.temp] if p):
             continue
         if _pattern_reaches(glob, root, deep):
             return root

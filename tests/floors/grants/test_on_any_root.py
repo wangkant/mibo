@@ -106,3 +106,24 @@ def test_in_the_program_places_only_names_sizes_and_dates_are_free(computer):
     assert judged(grants, f'Get-Item "{vault}"', cwd)[0] == "refuse"
     assert tool(grants, "list", str(profile / "AppData" / "Roaming"), cwd) == "refuse"
     assert judged(grants, f'Get-ChildItem "{profile}\\AppData\\Roaming" -Recurse', cwd)[0] == "refuse"
+
+
+def test_in_the_temporary_folder_a_secret_and_a_file_that_runs_by_itself_are_judged_as_anywhere(computer, monkeypatch):
+    """(2026-11-24: every place under %TEMP% was let through, so a profile unpacked there was read and a Git hook
+    written there by rule.)"""
+    root, profile, backup, _programs, _grants = computer
+    for name in ("TEMP", "TMP"):
+        monkeypatch.setenv(name, str(root))
+    grants = Grants(profile / "mibo" / "runtime" / "desktop", profile / "mibo")
+    cwd = str(profile / "Documents")
+    for rel in BACKUP:
+        assert tool(grants, "read", str(backup / rel), cwd) == "refuse", rel
+        assert judged(grants, f"Get-Content '{backup / rel}'", cwd)[0] == "refuse", rel
+    (root / "unpacked").mkdir()
+    (root / "unpacked" / "id_rsa").write_text("x", encoding="utf-8")
+    assert tool(grants, "read", str(root / "unpacked" / "id_rsa"), cwd) == "refuse"
+    hook = root / "repo" / ".git" / "hooks" / "pre-commit"
+    assert judged(grants, f"Set-Content '{hook}' x", cwd) == ("ask", "system")
+    # A plain file there is no secret.
+    (root / "unpacked" / "notes.txt").write_text("x", encoding="utf-8")
+    assert tool(grants, "read", str(root / "unpacked" / "notes.txt"), cwd) != "refuse"
