@@ -29,6 +29,10 @@ SHARE_QUOTED = 5
 # Seconds a reply may take before the page stops waiting: a turn may work in the browser, waiting on
 # the person's press.
 REPLY_WITHIN_S = 900
+# Seconds a stop waits for the reply it is for to begin: the page presses stop only while a message of its own is
+# on the way, and on a slow computer the press can arrive before that message has been taken in. Shorter than the
+# page waits for the stop's answer (chat.js), so the next message cannot be the one stopped.
+STOP_AWAITS_S = 4
 # The steps a reply in progress names above the chat (loop.ChatLookups.doing), and those that may wait minutes on
 # the person's press: a step in the browser, a command or a program.
 DOING_TOOLS = ("recall", "search", "read", "pick", "write", "look", "pages", "operate", "shell", "desk", "mcp")
@@ -417,7 +421,11 @@ class Workspace(ChatFinds):
         """The stop button, or the page done waiting (`why` "timeout"): the reply
         under way in `chat` is cancelled, and the message it was answering is
         kept, marked, to send again. Answers once the reply has ended, so the
-        page then reads the message as kept."""
+        page then reads the message as kept. A press that arrives before its message's reply has begun waits
+        for it (STOP_AWAITS_S)."""
+        waited = time.monotonic() + STOP_AWAITS_S
+        while self._replying is None and time.monotonic() < waited:
+            await asyncio.sleep(0.05)
         if self._replying is None or self._replying[0] is not self._chat(chat):
             return {"stopped": False}
         room, said, ended = self._replying

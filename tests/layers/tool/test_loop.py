@@ -286,6 +286,21 @@ def test_a_stop_pressed_before_the_reply_can_be_stopped_is_asked_again(app, monk
     assert app.get("/api/chat/doing").json()["busy"] is False
 
 
+def test_a_stop_that_arrives_before_its_message_waits_for_the_reply_and_stops_it(app):
+    # On a slow computer the page's stop can be handled before the message it was pressed for has been taken in.
+    stopped: dict = {}
+    press = threading.Thread(target=lambda: stopped.update(app.post("/api/chat/stop", {"why": "stopped"}).json()),
+                             daemon=True)
+    press.start()
+    time.sleep(0.5)
+    worker = threading.Thread(target=lambda: run_turn(app, "Plan the weekend", hang()), daemon=True)
+    worker.start()
+    press.join(30)
+    worker.join(30)
+    assert stopped == {"stopped": True} and not worker.is_alive()
+    assert app.get("/api/chat/doing").json()["busy"] is False
+
+
 @pytest.mark.parametrize("arguments,error", [
     ('{"url": "x"', "Error: invalid arguments: not valid JSON"),
     ("[1]", "Error: invalid arguments: expected an object"),
