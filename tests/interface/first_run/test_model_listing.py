@@ -108,6 +108,8 @@ def test_a_slow_or_huge_listing_is_given_up(workspace, service, monkeypatch) -> 
     service.delay = 1.0
     assert _listed(workspace)["models"] is None
     model_panel._cache.clear()
+    # The time limit was for the slow answer alone: a large one takes a slow machine longer than that to read.
+    monkeypatch.setattr(model_panel, "TIMEOUT_S", 30)
     service.delay = 0
     service.listing = {"data": [{"id": f"vendor/model-{i}", "description": "x" * 400} for i in range(3000)]}
     monkeypatch.setattr(model_panel, "MAX_BYTES", 100_000)
