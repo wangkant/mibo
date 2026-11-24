@@ -1,8 +1,9 @@
-"""A turn calling the person's MCP servers through use_tool (mcp_offer, mcp_hub, mcp_tools): a tool its maker marks
-read-only runs with no reviewer and no card; any other goes to the reviewer and, unless passed, to the card; a no
-to starting a program holds for that call only; whatever was not done reaches the model as an error; a call that
-names no server goes to the one that has the tool; and the tools block stays the same while a server starts. The
-servers are a stand-in program here; the model is scripted."""
+"""A turn calling the person's MCP servers (mcp_offer, mcp_hub, mcp_tools), through use_tool or by a connected
+server's tool's own name: a tool its maker marks read-only runs with no reviewer and no card; any other goes to the
+reviewer and, unless passed, to the card; a no to starting a program holds for that call only; whatever was not done
+reaches the model as an error; a call that names no server goes to the one that has the tool; and a server started
+in a turn has its tools in the list from the next turn on. The servers are a stand-in program here; the model is
+scripted."""
 from __future__ import annotations
 
 import json
@@ -159,15 +160,36 @@ def test_a_call_naming_no_server_goes_to_the_one_server_that_has_the_tool(app, t
     assert calls_of(log) == ["list_notes"] and calls_of(other) == []
 
 
-def test_the_tools_block_stays_the_same_while_a_server_starts(app, turn, tmp_path):
-    add_server(app, tmp_path)
-    # Stopped at the first turn, started on its card there, connected at the second.
+def _offered(body: dict) -> list[str]:
+    return [t["function"]["name"] for t in body.get("tools") or []]
+
+
+def test_a_server_started_in_a_turn_has_its_tools_in_the_list_from_the_next_turn_on(app, turn, tmp_path):
+    log = add_server(app, tmp_path)
+    # Stopped at the first turn and started on its card there: that turn's tools block does not change.
     first = turn("What can notes do?", call("find_tools", server="notes"), say("It lists notes."),  # copy: voice
                  cards="yes")
     assert [c["card"]["type"] for c in first.cards] == ["mcp_start"]
+    assert len({json.dumps(body.get("tools"), sort_keys=True) for body in first.asked()}) == 1
+    assert not [name for name in _offered(first.asked()[0]) if name.startswith("mcp__")]
     connected(app, "notes")
-    use = call("use_tool", server="notes", tool="list_notes", arguments={})
-    second = turn("What notes do I have?", use, say("Shopping and ideas."), cards="no")  # copy: voice
-    bodies = first.asked() + second.asked()
-    assert len(bodies) == 4
-    assert len({json.dumps(body.get("tools"), sort_keys=True) for body in bodies}) == 1
+    # Connected at the second: its tools are in the list under their own names, and a call by that name runs.
+    second = turn("What notes do I have?", call("mcp__notes__list_notes"), say("Shopping and ideas."),  # copy: voice
+                  cards="no")
+    for body in second.asked():
+        assert [name for name in _offered(body) if name.startswith("mcp__")] == [
+            "mcp__notes__list_notes", "mcp__notes__add_note", "mcp__notes__sync_notes"]
+    assert second.cards == [] and second.asked("reviewer") == []
+    assert not second.result_of(second.calls()[0]["id"]).startswith("Error:")
+    assert calls_of(log) == ["list_notes"]
+
+
+def test_a_call_by_a_tools_own_name_is_reviewed_and_asked_as_through_use_tool(app, turn, tmp_path):
+    log = add_server(app, tmp_path, always=True)
+    connected(app, "notes")
+    add = call("mcp__notes__add_note", title="milk")
+    app.model.script(verdict("ask"), purpose="reviewer")
+    asked = turn("Add a note: milk", add, say("I left it."), cards="no")  # copy: voice
+    assert [(c["card"]["type"], c["answer"]) for c in asked.cards] == [("mcp_tool", "no")]
+    assert len(asked.asked("reviewer")) == 1 and calls_of(log) == []
+    assert asked.result_of(asked.calls()[0]["id"]).startswith("Error:")

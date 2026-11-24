@@ -1,5 +1,6 @@
 """MCPMark's Filesystem standard suite (30 tasks, MCP condition) through Mibo itself: for each task a fresh home of
-the app, a fresh copy of the task's folder, the official filesystem MCP server added as a person adds a connector,
+the app, a fresh copy of the task's folder, the official filesystem MCP server added as a person adds a connector
+and allowed to start on its row in Settings (a connector they already use: it is connected when the turn begins),
 one chat turn carrying the task's prompt through the app's reply loop, then the task's own verify.py on what is left
 on disk.
 
@@ -57,7 +58,7 @@ sys.path.insert(0, str(REPO / "tools"))
 import scratchhome  # noqa: E402
 from everyday import Meter  # noqa: E402
 
-from tests.harness.turn import CARD_ROUTES, _press  # noqa: E402
+from tests.harness.turn import CARD_ROUTES, TYPED  # noqa: E402
 
 CATEGORIES = ("desktop", "desktop_template", "file_context", "file_property", "folder_structure", "legal_document",
               "papers", "student_database", "threestudio", "votenet")
@@ -272,6 +273,19 @@ def answer(kind: str, card: dict, folder: Path) -> str:
     return "yes" if named and (paths or inside(card.get("cwd") or "", folder)) else "no"
 
 
+def press(app: App, card: dict, said: str) -> None:
+    """One question answered as the page answers it (tests/harness/turn._answer): an MCP server's form by its own
+    control, every other one by the person's words typed in the chat box. A question that has gone meanwhile (its
+    turn moved on) is not an error."""
+    try:
+        if card.get("typed") is False:
+            app.api("/api/mcp/card", {"id": card["id"], "answer": "once" if said == "yes" else "no"})
+        else:
+            app.api("/api/confirm", {"id": card["id"], "text": TYPED.get(said, said)})
+    except httpx.HTTPError:
+        pass
+
+
 def turn(app: App, prompt: str, folder: Path) -> dict:
     """One chat turn, each card answered as `answer` says while it runs; the reply's JSON and the cards."""
     sent: dict = {}
@@ -294,7 +308,7 @@ def turn(app: App, prompt: str, folder: Path) -> dict:
                 cards.append({"kind": kind, "id": card["id"], "type": card.get("type", ""),
                               "what": card.get("tool") or card.get("command") or card.get("folder")
                               or card.get("title") or "", "cwd": card.get("cwd", ""), "answer": said})
-                app.api(route, _press(kind, card["id"], said))
+                press(app, card, said)
     return {"reply": sent.get("reply") or {}, "cards": cards}
 
 
@@ -316,6 +330,12 @@ def one(task: dict, data: Path, work: Path, shared: Path, model_url: str, model:
         snippet = json.dumps({"mcpServers": {"filesystem": {"command": "npx", "args": ["-y", SERVER, str(folder)]}}})
         added = app.api("/api/mcp", {"add": snippet})
         assert any(s["name"] == "filesystem" for s in added.get("servers", [])), added
+        # Allowed to start on its row in Settings, and connected before the turn.
+        app.api("/api/mcp", {"start": "filesystem", "answer": "always"})
+        until = time.monotonic() + 240
+        while next(s["state"] for s in app.client.get("/api/mcp").json()["servers"]) != "connected":
+            assert time.monotonic() < until, "the filesystem server did not connect"
+            time.sleep(0.5)
         result = turn(app, task["prompt"], folder)
         log = app.api("/api/mcp/log?n=200").get("rows", [])
     finally:

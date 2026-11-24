@@ -36,7 +36,7 @@ class Module:
 
     def owns(self, name: str) -> bool:
         if self.definitions is _loader:
-            return mcp_offer.owns(name)
+            return mcp_offer.owns(name) or bool(mcp_offer.direct(name)[0])
         if self.definitions is _schedule_tools:
             return schedule_tool.owns(name)
         return any(t["function"]["name"] == name for t in self.definitions())
@@ -129,6 +129,8 @@ class Offer:
     schemas: dict
     # The app tools reached through find_tools and use_tool.
     deferred: list
+    # The MCP servers whose tools are among `tools` under their own names.
+    servers: frozenset = frozenset()
 
 
 def definitions() -> list:
@@ -142,8 +144,10 @@ def definitions() -> list:
 def offered(budget: context.Budget) -> Offer:
     """The turn's tools for a window of budget.window tokens: the app modules in catalog order up front while the
     definitions so far stay within SHARE of the window, and from the first that does not fit, the rest and the
-    always deferred behind find_tools and use_tool with the MCP servers' tools. A scheduled run keeps its few tools
-    up front and offers no server's."""
+    always deferred behind find_tools and use_tool. A connected MCP server's tools follow under their own names,
+    a server at a time while the servers' definitions together stay within SHARE of the window too (Claude Code
+    defers MCP tools past a tenth of the window; mcp_offer.definitions); the tools of any other server are reached
+    through find_tools. A scheduled run keeps its few tools up front and offers no server's."""
     tools = definitions()
     run = schedule_tool.run_of() is not None
     room, used, up, deferred, full = SHARE * budget.window, 0.0, [], [], False
@@ -156,8 +160,16 @@ def offered(budget: context.Budget) -> Offer:
             full = full or not module.deferred
             deferred += mine
     loader = [] if run else mcp_offer.functions(deferred, mcp_offer.servers())
-    return Offer(up + loader, {t["function"]["name"]: t["function"].get("parameters") or {} for t in tools + loader},
-                 deferred)
+    theirs, listed, spent = [], set(), 0.0
+    for row in [] if run else mcp_offer.current().get("servers") or []:
+        mine = mcp_offer.definitions(row)
+        size = context.text_tokens(json.dumps(mine, ensure_ascii=False)) if mine else 0.0
+        if mine and spent + size <= room:
+            theirs, spent = theirs + mine, spent + size
+            listed.add(row["name"])
+    sent = tools + loader + theirs
+    return Offer(up + loader + theirs, {t["function"]["name"]: t["function"].get("parameters") or {} for t in sent},
+                 deferred, frozenset(listed))
 
 
 def module_of(name: str) -> Module | None:

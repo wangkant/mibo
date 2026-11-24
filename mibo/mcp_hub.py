@@ -425,12 +425,15 @@ class Hub:
 
     def offer(self) -> dict:
         """What the reply model is told of the servers: `names`, every server not switched off (fixed while the
-        configuration is), and `servers`, how each connected or waiting one stands now (find_tools' result)."""
+        configuration is), and `servers`, how each connected or waiting one stands now (find_tools' result), a
+        connected one with its tools as the model is offered them (`shown`, less those set to never)."""
         lines = []
         for runner in self.runners.values():
             if runner.state == "connected" and runner.tools:
                 lines.append({"name": runner.name, "about": runner.about or _sample(runner.tools),
-                              "tools": len(runner.tools), "tool_names": [t["name"] for t in runner.tools]})
+                              "tools": len(runner.tools), "tool_names": [t["name"] for t in runner.tools],
+                              "shown": [_shown(t) for t in runner.tools
+                                        if self.grants.mode(runner.name, t)[0] != mt.NEVER]})
             elif runner.state in ("waiting", "declined", "starting") and not runner.spec.get("disabled"):
                 lines.append({"name": runner.name, "about": "", "tools": 0, "state": runner.state})
         return {"names": [r.name for r in self.runners.values() if not r.spec.get("disabled")], "servers": lines}
