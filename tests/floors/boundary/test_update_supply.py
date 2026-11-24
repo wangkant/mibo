@@ -258,6 +258,14 @@ def test_without_a_key_in_the_app_a_release_is_held_to_its_checksum_alone(releas
     assert updates._state(page.home)["pending"]["signed"] is False
 
 
+def test_a_build_that_carries_the_key_takes_no_release_without_its_signature(releases, page, monkeypatch):
+    monkeypatch.setattr(updates, "SIGNING_KEY", base64.b64encode(_sign(b"k" * 32, b"")[0]).decode())
+    releases.publish(NEW)
+    releases.found(page.home, NEW)
+    page.post("/api/runtime/update", json={}, headers=OWN)
+    assert _ended(page)["error"] == "update_unsigned" and releases.launched == []
+
+
 def test_the_disk_image_is_checked_the_same_way_and_opened_for_the_person_to_drag(releases, page, monkeypatch):
     monkeypatch.setattr(updates, "way", lambda: "macos")
     name = releases.publish(NEW, "macos")

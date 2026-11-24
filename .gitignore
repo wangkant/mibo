@@ -71,3 +71,6 @@ teacher_stats.json
 
 # The Electron shell's own packages, installed by npm ci in mibo/electron
 mibo/electron/node_modules/
+
+# A private key never belongs in the repository.
+*.pem

@@ -52,6 +52,9 @@ def lower(copy: Path) -> None:
     _swap(updates, "    from . import ingestion\n    parts = urlsplit(url)\n",
           f'    if url.startswith("{STANDIN}/"):\n        return "127.0.0.1", "127.0.0.1", {PORT}\n'
           "    from . import ingestion\n    parts = urlsplit(url)\n")
+    # The stand-in cannot sign as the project does, so this copy holds its release to the checksum.
+    text = updates.read_text(encoding="utf-8")
+    updates.write_text(re.sub(r'^SIGNING_KEY = ".*"$', 'SIGNING_KEY = ""', text, count=1, flags=re.M), encoding="utf-8")
     print(f"lowered {version} -> 0.0.0, releases from {STANDIN}")
 
 

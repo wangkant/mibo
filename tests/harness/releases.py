@@ -26,6 +26,8 @@ INSTALLER = b"MZ stand-in installer " + bytes(range(256)) * 64
 class Releases:
     def __init__(self, monkeypatch, site, web) -> None:
         self.site = site
+        # A build from before the project had a key, held to its checksum: a test of signatures sets its own key.
+        monkeypatch.setattr(updates, "SIGNING_KEY", "")
         self.hops: list[tuple[str, str]] = []
         self.launched: list = []
         for host, address in ADDRESSES.items():

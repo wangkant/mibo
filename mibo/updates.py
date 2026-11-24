@@ -26,8 +26,7 @@ it is held shut against writers from its last check until it has started.
 What the checksum proves: SHA256SUMS.txt comes from the same origin over TLS, so it catches a damaged,
 truncated or swapped download, not someone who controls the repository's releases. Against that, a release may
 carry SHA256SUMS.txt.sig, an Ed25519 signature made in the release workflow with a key whose public half is
-SIGNING_KEY: a signed release must verify before anything runs, and once a signed release has been installed
-the home remembers it and an unsigned one is refused.
+SIGNING_KEY: a build that carries the key installs only a release whose signature verifies, before anything runs.
 """
 from __future__ import annotations
 
@@ -66,8 +65,8 @@ TIMEOUT_S = 15.0
 SUMS = "SHA256SUMS.txt"
 SIGNATURE = SUMS + ".sig"
 # The Ed25519 public key (base64 of its 32 bytes) whose private half signs SHA256SUMS.txt in the release
-# workflow; empty until the project has one, and then every build carries it.
-SIGNING_KEY = ""
+# workflow; every build carries it.
+SIGNING_KEY = "xTkW93YMokIm6FR3kqHgF2sPspkT/CdeK+2RiKV0uMw="
 LISTING_MAX = 1_000_000
 SUMS_MAX = 65_536
 FILE_MAX = 1_000_000_000
@@ -435,11 +434,13 @@ def _sums_line(text: str, name: str) -> str:
 
 
 def _signed(home: Path, sums: bytes, signature: bytes | None) -> bool:
-    """Whether the release's signature verified; refused when it does not, or when it is missing although a
-    signed release was installed in this home before."""
-    key = base64.b64decode(SIGNING_KEY) if SIGNING_KEY else b""
-    if signature is not None and key:
-        if not ed25519.verify(key, sums, signature):
+    """Whether the release's signature verified. A build that carries the key takes only a release that key
+    signed; one from before the project had a key holds a release to its checksum, unless a signed release was
+    installed in this home before."""
+    if SIGNING_KEY:
+        if signature is None:
+            raise Refused("update_unsigned")
+        if not ed25519.verify(base64.b64decode(SIGNING_KEY), sums, signature):
             raise Refused("update_badsig")
         return True
     if _state(home).get("signed"):
