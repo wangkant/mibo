@@ -305,6 +305,39 @@ body.card-right .card-tail {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* The text card, for a find with no picture: the title leads, and its summary has the picture's room. */
+.card-plain .card-title {
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-line-clamp: 4;
+}
+.card-words.card-gist {
+  margin-top: 6px;
+  -webkit-line-clamp: 5;
+  line-height: 1.55;
+}
+.card-playpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-top: 10px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--card-line);
+  border-radius: 14px;
+  background: var(--card-bg);
+  color: var(--card-ink);
+  font-size: 12px;
+}
+.card-playpill:hover {
+  background: var(--card-wash);
+}
+.card-playmark {
+  margin-left: 2px;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+}
 .card-words {
   margin: 6px 0 0;
   color: var(--card-text);

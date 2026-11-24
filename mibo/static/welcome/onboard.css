@@ -1181,6 +1181,17 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
+/* The text card: the title leads and its summary has the picture's room. */
+.onboard-find-plain .onboard-find-title {
+  font-size: 18px;
+  line-height: 1.4;
+}
+.onboard-find-plain .onboard-find-text {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-line-clamp: 6;
+}
 .onboard-find > :last-child {
   margin-bottom: 16px;
 }

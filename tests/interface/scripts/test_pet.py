@@ -89,6 +89,22 @@ def test_a_find_the_pet_brings_shows_on_its_card_and_a_like_reaches_the_server(a
     assert page.errors == [] and page.refused == []
 
 
+def test_a_find_with_no_picture_shows_on_the_pet_card_as_the_text_card(awake, model, browser):
+    awake.post("/api/feed/snooze", {"on": True})
+    model.script(*[text("")] * 6)
+    runtime = awake.home / "runtime"
+    situation.set_value(runtime, "readable", ["en"])
+    Library(runtime).add(Item(url="https://shore.example/article/2", site="shore.example", kind="article",
+                              title="Tide pools without a picture", description="What lives in a pool between two tides.",
+                              seen_at=int(NOON - 3600)))
+    page = _dial(browser, awake)
+    page.page.locator(".quick-find").click()
+    card = page.page.locator("#card .card-plain")
+    card.get_by_text("What lives in a pool").wait_for()
+    assert page.page.locator("#card .card-media").count() == 0
+    assert page.errors == [] and page.refused == []
+
+
 # The page's own clock for the walk, stepped by the test: performance.now and requestAnimationFrame answer to
 # `__tick(ms)`, and the window is where the page last placed it.
 CLOCK = """

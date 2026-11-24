@@ -1,6 +1,6 @@
 "use strict";
-// A thing the character brought, as a chat draws it: a 16:10 cover beside a body laid to its height, a fixed foot
-// with reply, like, open and 不感兴趣; a video plays in place. What the person does with it is told to the feed
+// A thing the character brought, as a chat draws it: a 16:10 cover beside a body laid to its height (a find with no
+// picture is the text card: the title and its summary take the room), a fixed foot with reply, like, open and 不感兴趣; a video plays in place. What the person does with it is told to the feed
 // (POST /api/feed/react), and how long a video ran when it is folded away, scrolled out of view or the page is put
 // away. The chat (chat.js) makes one of these per chat view; 推荐记录 (finds.js) draws the main chat's.
 window.paFindCard = (() => {
@@ -126,55 +126,10 @@ window.paFindCard = (() => {
       if (card.skipped) return folded(node, card);
       const site = String(card.site || "").replace(/^www\./, "") || hostOf(card.url);
       const video = card.kind === "video" && card.embed;
-      const cover = video ? el("div", "cover") : original(card, "cover");
-      if (!video) {
-        cover.tabIndex = -1;
-        cover.setAttribute("aria-hidden", "true");
-      }
-      const quiet = () => {
-        cover.classList.remove("pa-shimmer");
-        cover.classList.add("blank");
-        cover.append(svg(siteIcon(card), "i cover-mark"));
-      };
-      if (card.picture) {
-        const img = el("img");
-        img.alt = "";
-        img.decoding = "async";
-        cover.classList.add("pa-shimmer");
-        img.addEventListener("load", () => cover.classList.remove("pa-shimmer"), { once: true });
-        // A picture that does not arrive or does not decode leaves the quiet cover, not a broken frame.
-        img.addEventListener(
-          "error",
-          () => {
-            img.remove();
-            quiet();
-          },
-          { once: true },
-        );
-        // A first miss is tried once more: the page may have been busy.
-        const fetchIt = (left) =>
-          env
-            .picture(card.picture)
-            .then((url) => {
-              img.src = url;
-            })
-            .catch(() => {
-              if (left) setTimeout(() => fetchIt(left - 1), 2500);
-              else {
-                img.remove();
-                quiet();
-              }
-            });
-        fetchIt(1);
-        cover.append(img);
-      } else quiet();
-      if (video) {
-        const play = button("play", "", () => playIn(node, card));
-        play.setAttribute("aria-label", `${say("play")}: ${card.title || site}`);
-        play.append(svg(PLAY, "play-mark"));
-        cover.append(play);
-        if (card.length) cover.append(el("span", "dur", clock(card.length)));
-      }
+      // A find with no picture is the text card, not the picture card with a hole in it (findform.js).
+      const plain = window.paFindForm.of(card) === "text";
+      if (plain) node.classList.add("find-plain");
+      else node.append(coverOf(card, node, video, site));
 
       const body = el("div", "find-body");
       const top = el("div", "find-top");
@@ -182,6 +137,8 @@ window.paFindCard = (() => {
       icon.append(svg(siteIcon(card)));
       top.append(icon, el("span", "src", site));
       if (card.author && card.author !== site) top.append(el("span", "dot", "·"), el("span", "by", card.author));
+      // The text card has no cover to hang the foot's age on: it sits in the meta line with the site.
+      if (plain && card.at) top.append(el("span", "dot", "·"), stamp(card));
       if (card.why) top.append(whyChip(card));
       const heading = el("h3");
       const link = original(card, "find-title");
@@ -191,19 +148,66 @@ window.paFindCard = (() => {
       // Why it was shown, in words (panels/feedpage.py page): the 推荐记录 list's rows carry it.
       if (card.reason) body.append(el("p", "find-reason", card.reason));
       if (card.excerpt) body.append(el("p", "find-text", card.excerpt));
-
       // The cover and the site's icon already say what kind it is: the foot says only how old.
       const foot = el("div", "find-foot");
-      if (card.at) {
-        const stamp = el("time", "", ago(card.at));
-        stamp.dateTime = card.at;
-        stamp.title = new Date(card.at).toLocaleString(paI18n.locale);
-        foot.append(stamp);
+      if (card.at && !plain) foot.append(stamp(card));
+      // A video with no cover still reads as playable: its play button takes the age's place in the foot.
+      if (plain && video) {
+        const play = button("find-play", "", () => playIn(node, card));
+        play.setAttribute("aria-label", `${say("play")}: ${card.title || site}`);
+        play.append(svg(PLAY, "play-mark"), el("span", "", say("play")));
+        if (card.length) play.append(el("span", "dur", clock(card.length)));
+        foot.append(play);
       }
       foot.append(actions(card, node));
       body.append(foot);
-      node.append(cover, body);
+      node.append(body);
       return node;
+    }
+    function stamp(card) {
+      const time = el("time", "", ago(card.at));
+      time.dateTime = card.at;
+      time.title = new Date(card.at).toLocaleString(paI18n.locale);
+      return time;
+    }
+    // The picture card's cover, with the video's play button on it. A picture that does not arrive after its
+    // second ask, or will not decode, turns the card into the text card in its place (the chat keeps its end).
+    function coverOf(card, node, video, site) {
+      const cover = video ? el("div", "cover") : original(card, "cover");
+      if (!video) {
+        cover.tabIndex = -1;
+        cover.setAttribute("aria-hidden", "true");
+      }
+      const img = el("img");
+      const give = () => {
+        if (node.classList.contains("is-playing")) return;
+        card.bare = true;
+        node.replaceWith(findCard(card));
+        env.grew();
+      };
+      img.alt = "";
+      img.decoding = "async";
+      cover.classList.add("pa-shimmer");
+      img.addEventListener("load", () => cover.classList.remove("pa-shimmer"), { once: true });
+      img.addEventListener("error", give, { once: true });
+      // A first miss is tried once more: the page may have been busy.
+      const fetchIt = (left) =>
+        env
+          .picture(card.picture)
+          .then((url) => {
+            img.src = url;
+          })
+          .catch(() => (left ? setTimeout(() => fetchIt(left - 1), 2500) : give()));
+      fetchIt(1);
+      cover.append(img);
+      if (video) {
+        const play = button("play", "", () => playIn(node, card));
+        play.setAttribute("aria-label", `${say("play")}: ${card.title || site}`);
+        play.append(svg(PLAY, "play-mark"));
+        cover.append(play);
+        if (card.length) cover.append(el("span", "dur", clock(card.length)));
+      }
+      return cover;
     }
     // The player is put in place only when asked: an embedded player is heavy
     // and would start talking to its site as soon as it loads.
@@ -245,7 +249,7 @@ window.paFindCard = (() => {
         close.remove();
         players.get(node)?.();
         node.classList.remove("is-playing");
-        node.querySelector(".play")?.focus();
+        node.querySelector(".play, .find-play")?.focus();
       });
       close.append(svg(I.shrink), el("span", "", say("collapse")));
       player.append(frame);

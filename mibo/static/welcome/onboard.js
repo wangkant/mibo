@@ -570,17 +570,22 @@
     const card = el("article", "onboard-find");
     if (findPicture) URL.revokeObjectURL(findPicture);
     findPicture = "";
-    if (find.picture) {
+    // With no picture, or one that will not arrive, the find is the text card (findform.js).
+    if (window.paFindForm.of(find) === "picture") {
       const media = el("div", "onboard-find-media");
+      const give = () => {
+        media.remove();
+        card.classList.add("onboard-find-plain");
+      };
       ctx
         .picture(find.picture)
         .then((url) => {
           findPicture = url;
           media.append(Object.assign(el("img"), { src: url, alt: "" }));
         })
-        .catch(() => media.remove());
+        .catch(give);
       card.append(media);
-    }
+    } else card.classList.add("onboard-find-plain");
     const site = el("p", "onboard-find-site", find.site.replace(/^www\./, ""));
     if (find.kind === "video") site.append(el("span", "onboard-find-kind", t.video));
     card.append(site, el("h3", "onboard-find-title", find.title));

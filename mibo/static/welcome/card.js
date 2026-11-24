@@ -156,55 +156,77 @@ function makeCard(api) {
     // being written its room is kept, so the window is sized once.
     if (found.line || found.more) body.append(el("p", `card-words card-line${found.more ? " card-wait" : ""}`, found.line));
 
-    if (found.kind === "video" && found.player) {
+    // A find with no picture is the text card (findform.js): its title and summary take the room the picture would.
+    const plain = window.paFindForm.of(found) === "text";
+    const video = found.kind === "video" && found.player;
+    // The player in `media`; the picture, if there is one, stays under the play button until it plays.
+    const start = (media) => {
+      const frame = el("iframe");
+      const src = new URL(found.player);
+      src.searchParams.set("autoplay", "1");
+      if (YOUTUBE.includes(src.hostname)) {
+        // YouTube's player says, once asked to, when it cannot play here:
+        // the video's owner keeps it off other sites.
+        src.searchParams.set("enablejsapi", "1");
+        // Where its replies go, as YouTube's own API says.
+        src.searchParams.set("origin", location.origin);
+        // Asked until it answers, as YouTube's own API does: its player is ready a little after its page.
+        frame.addEventListener("load", () => {
+          let tries = 0;
+          const ask = setInterval(() => {
+            if (heard || playing !== frame || ++tries > 40) return clearInterval(ask);
+            frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: found.id, channel: "widget" }), src.origin);
+          }, 250);
+        });
+      }
+      playing = frame;
+      ran = told = 0;
+      since = performance.now();
+      heard = false;
+      frame.src = src.href;
+      frame.title = found.title;
+      frame.allow = "autoplay; encrypted-media; picture-in-picture";
+      frame.referrerPolicy = "strict-origin-when-cross-origin";
+      // The player's own clicks open the site in the browser; on the card only the
+      // play button plays, a click anywhere else opens the thing in the app.
+      media.replaceChildren(frame, el("div", "card-shield"));
+      // It stays while it plays; watching it is opening it.
+      clearTimeout(timer);
+      opened = true;
+      react(found, "open");
+    };
+    if (!plain) {
       const media = el("div", "card-media");
-      if (picture) media.append(Object.assign(el("img"), { src: picture, alt: "" }));
-      media.append(
-        button("card-play", "", words.play, () => {
-          const frame = el("iframe");
-          const src = new URL(found.player);
-          src.searchParams.set("autoplay", "1");
-          if (YOUTUBE.includes(src.hostname)) {
-            // YouTube's player says, once asked to, when it cannot play here:
-            // the video's owner keeps it off other sites.
-            src.searchParams.set("enablejsapi", "1");
-            // Where its replies go, as YouTube's own API says.
-            src.searchParams.set("origin", location.origin);
-            // Asked until it answers, as YouTube's own API does: its player is ready a little after its page.
-            frame.addEventListener("load", () => {
-              let tries = 0;
-              const ask = setInterval(() => {
-                if (heard || playing !== frame || ++tries > 40) return clearInterval(ask);
-                frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: found.id, channel: "widget" }), src.origin);
-              }, 250);
-            });
-          }
-          playing = frame;
-          ran = told = 0;
-          since = performance.now();
-          heard = false;
-          frame.src = src.href;
-          frame.title = found.title;
-          frame.allow = "autoplay; encrypted-media; picture-in-picture";
-          frame.referrerPolicy = "strict-origin-when-cross-origin";
-          // The player's own clicks open the site in the browser; on the card only the
-          // play button plays, a click anywhere else opens the thing in the app.
-          media.replaceChildren(frame, el("div", "card-shield"));
-          // It stays while it plays; watching it is opening it.
-          clearTimeout(timer);
-          opened = true;
-          react(found, "open");
-        }),
-      );
-      body.append(media);
-    } else if (picture) {
-      const media = el("div", "card-media");
-      media.append(Object.assign(el("img"), { src: picture, alt: "" }));
+      const img = Object.assign(el("img"), { src: picture, alt: "" });
+      // A picture that will not decode is no picture: the card is drawn again as the text card.
+      img.addEventListener("error", () => {
+        if (item !== found) return;
+        found.bare = true;
+        draw(found);
+        size();
+      });
+      media.append(img);
+      if (video) media.append(button("card-play", "", words.play, () => start(media)));
       body.append(media);
     }
     // Without a sentence of the character's the title stands alone: the page's own words may be in a
     // language the person does not read.
     body.append(el("div", "card-title", found.title));
+    if (plain) {
+      if (found.text) body.append(el("p", "card-words card-gist", found.text));
+      // A video with no cover still reads as playable.
+      if (video) {
+        const pill = button("card-playpill", "", words.play, () => {
+          const media = el("div", "card-media");
+          pill.replaceWith(media);
+          start(media);
+          size();
+        });
+        pill.append(el("span", "card-playmark"), el("span", "", words.play));
+        body.append(pill);
+      }
+      body.classList.add("card-plain");
+    }
 
     const foot = el("div", "card-foot");
     const labelled = (cls, name, text, handler) => {
@@ -368,6 +390,7 @@ function makeCard(api) {
     }
     if (picture) URL.revokeObjectURL(picture);
     picture = await fetchPicture(found.picture);
+    found.bare = !picture;
     if (item !== mine) return;
     item = null;
     asking = true;
@@ -432,6 +455,7 @@ function makeCard(api) {
     if (item || asking) return false;
     asking = true;
     picture = await fetchPicture(found.picture);
+    found.bare = !picture;
     return bring(found);
   }
 

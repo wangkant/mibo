@@ -640,18 +640,6 @@ button.att-file:hover {
   object-fit: cover;
   filter: var(--pa-cover-filter);
 }
-/* No picture: the sunken cover with where it is from, quietly. */
-.cover.blank {
-  display: grid;
-  place-items: center;
-}
-.cover-mark.i {
-  width: 36px;
-  height: 36px;
-  color: var(--pa-faint);
-  stroke-width: 1.25;
-  opacity: 0.7;
-}
 .play {
   position: absolute;
   left: 50%;
@@ -949,6 +937,88 @@ button.find-why:hover,
 }
 .find:has(.find-more-wrap.open) .cover {
   border-radius: var(--pa-r-md) 0 0 var(--pa-r-md);
+}
+
+/* The text card, for a find with no picture: no cover, the title carries it, and the summary has the room the
+   picture would have had. The site's icon, its author and its age are one quiet line over it. */
+.find-plain {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 132px;
+}
+.find-plain .find-body {
+  padding: var(--pa-s4) var(--pa-s5) var(--pa-s3);
+}
+.find-plain .site {
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--pa-r-xs);
+  background: var(--pa-sunken);
+}
+.find-plain .find-top {
+  height: 22px;
+  gap: var(--pa-s2);
+}
+.find-plain .find-top .src {
+  max-width: 40%;
+}
+.find-plain h3 {
+  margin-top: var(--pa-s3);
+  font: 600 var(--pa-fs-xl) / 1.45 var(--pa-font-display);
+  -webkit-line-clamp: 3;
+}
+.find-plain .find-text {
+  max-width: 68ch;
+  margin-top: var(--pa-s2);
+  font-size: var(--pa-fs-md);
+  line-height: 1.65;
+  -webkit-line-clamp: 4;
+}
+.find-plain .find-foot {
+  height: auto;
+  min-height: 32px;
+  padding-top: var(--pa-s3);
+}
+.find-plain .find-reason {
+  margin-top: var(--pa-s2);
+}
+/* A video with no cover: a play button where the cover's would be. */
+.find-play {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  height: 28px;
+  margin-left: -4px;
+  padding: 0 var(--pa-s3) 0 var(--pa-s2);
+  border: 1px solid var(--pa-line);
+  border-radius: var(--pa-r-pill);
+  background: var(--pa-surface);
+  color: var(--pa-ink);
+  font-size: var(--pa-fs-sm);
+  transition:
+    background var(--pa-t-fast),
+    border-color var(--pa-t-fast);
+}
+.find-play:hover {
+  border-color: var(--pa-line-strong);
+  background: var(--pa-hover);
+}
+.find-play .play-mark {
+  width: 12px;
+  height: 12px;
+  margin: 0 0 0 2px;
+}
+.find-play .dur {
+  position: static;
+  height: auto;
+  padding: 0;
+  background: none;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+  line-height: inherit;
+}
+.find.is-playing .find-play {
+  display: none;
 }
 
 /* Playing in place: the card opens into a 16:9 player, its details under it. */

@@ -129,3 +129,29 @@ def test_a_no_on_the_notice_keeps_the_pick_a_preference_and_skip_drops_a_yes(app
     now.filter(has_text="关于你").wait_for()
     assert app.get("/api/feed/interests?lang=zh").json()["agreed"] is False
     assert page.errors == [] and page.refused == []
+
+
+def test_a_sample_find_with_no_picture_is_the_text_card(app, browser):
+    measured(app)
+    page = browser.open(app)
+    p = page.page
+    finds = [{"id": "a" * 16, "kind": "article", "title": "没有封面的文章", "site": "shore.example", "words": "", "text": "一段说明。",
+              "picture": ""},
+             {"id": "b" * 16, "kind": "article", "title": "封面取不到的文章", "site": "shore.example", "words": "", "text": "",
+              "picture": "/api/library/picture/" + "b" * 16}]
+    p.route("**/api/feed/first*", lambda route: route.fulfill(json={"items": finds}))
+    now = p.locator(".onboard-dot-now .onboard-dot-name")
+    p.locator(".onboard-lang[lang='zh']").click()
+    now.filter(has_text="语言").wait_for()
+    for _ in range(3):
+        p.locator(".onboard-next").click()
+    now.filter(has_text="喜好").wait_for()
+    p.locator(".onboard-next").click()
+    card = p.locator(".onboard-find")
+    card.filter(has_text="没有封面的文章").wait_for()
+    assert "onboard-find-plain" in card.get_attribute("class") and card.locator(".onboard-find-media").count() == 0
+    p.locator(".onboard-find-no").click()
+    card.filter(has_text="封面取不到的文章").wait_for()
+    p.locator(".onboard-find-plain").wait_for()
+    assert card.locator(".onboard-find-media").count() == 0
+    assert page.errors == [] and page.refused == []
