@@ -122,8 +122,9 @@ FEET = """() => {
 def test_mibo_walking_keeps_the_foot_it_stands_on_still_and_comes_to_rest_facing_the_person(awake, browser):
     page = browser.open(awake, "/pet", bridge=True, width=200, height=278)
     page.context.add_init_script(CLOCK)
-    page.reload()
-    # The waits below look again on a timer: the frames they would wait on by default are the ones held here.
+    # Reloaded without the harness's settle, which reads the clock held here. The waits below look again on a
+    # timer: the frames they would wait on by default are held too.
+    page.page.reload()
     page.page.wait_for_function("() => document.getElementById('figure').dataset.figure && rig?.kind === 'mibo'",
                                 polling=50)
     # Nothing of its own while it walks: no blink, no idle clip.
