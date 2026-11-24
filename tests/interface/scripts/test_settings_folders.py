@@ -6,6 +6,7 @@ import json
 
 import pytest
 from harness.page import measured
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.browser
 
@@ -72,5 +73,7 @@ def test_the_select_sets_view_only_or_sorting_too(app, browser, folders):
     with page.page.expect_response(lambda r: r.url.endswith("/api/shell") and r.request.method == "POST"):
         selects[1].select_option("sort")
     assert sent == [{"add": str(long), "read_only": True}, {"add": str(short)}]
-    assert values() == ["read", "sort"]
+    # The rows are drawn again once the answer is in.
+    for select, value in zip(selects, ("read", "sort")):
+        expect(select).to_have_value(value)
     assert page.errors == []
