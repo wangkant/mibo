@@ -147,12 +147,12 @@ def test_a_short_result_such_as_a_card_said_no_to_stays_whole_while_older_result
 
 
 def test_many_short_results_beside_one_long_one_leave_the_long_one_its_room():
-    # One read and the calls past the round's limit, each answered by a one-line error: the short lines take only
+    # One read and many calls each answered by a one-line error: the short lines take only
     # what they hold, so the read is not counted as unreadable.
     plan = context.budget(16384, fixed=6600)
     fit = context.Fit(plan, lambda c: 6600 + _count(c), 1.0, PICTURES)
     convo = [{"role": "user", "content": "读一下"},
-             *_calls(1, _han(1, 30_000), *["Error: not run: at most 10 calls a round"] * 29)]
+             *_calls(1, _han(1, 30_000), *['Error: unknown tool "no_such_tool"'] * 29)]
     assert fit(convo)
     assert _readable(convo[2]["content"]) >= 300 and 6600 + _count(convo) <= plan.limit
 

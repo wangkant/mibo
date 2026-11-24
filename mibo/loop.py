@@ -26,11 +26,12 @@ from .textproc import _fence_search_results
 
 logger = logging.getLogger("agent")
 
-# The ceilings: rounds of calls a turn, calls run from one round, and seconds of model and tool time, not counting
-# the time spent waiting on the person (the app's browser, their press on a card).
+# The ceilings: rounds of calls a turn, and seconds of model and tool time, not counting the time spent waiting on
+# the person (the app's browser, their press on a card).
 ROUNDS = 50
-CALLS = 10
 WITHIN_S = 900.0
+# Reads of one round under way at a time; every call of a round is run (dsh's maxParallelToolCalls).
+CALLS = 10
 # Reviewer refusals in a turn that end its acting; three in a row do too (review.Tally sets the verdict's stop).
 REFUSALS = 20
 # A lookup's own time, so one slow page does not spend the turn's.
@@ -48,7 +49,6 @@ _REPEATED = {
     8: "\n\n<system-reminder>You have made this exact call 8 times. Stop calling it. Answer now with what you have "
        "and say what is left undone.</system-reminder>",
 }
-TOO_MANY = f"Error: not run: at most {CALLS} calls a round"
 STOPPED = "Error: stopped by them"
 OUTCOME_UNKNOWN = ("Error: interrupted after this call may have been sent; its outcome is unknown. Do not assume it "
                    "succeeded or failed: check the result before doing it again.")
@@ -418,8 +418,9 @@ class ToolLoop:
 
     async def _round(self, message: dict, calls: list, convo: list, schemas: dict, made: dict,
                      lookups: ChatLookups) -> None:
-        """One round's calls, each answered, up to CALLS, in the model's order: reads in a row run side by side,
-        and every other call is a barrier that runs alone. A stop answers each call under way and raises."""
+        """One round's calls, every one run and answered, in the model's order: reads in a row run side by side,
+        CALLS of them at a time, and every other call is a barrier that runs alone. A stop answers each call under
+        way and raises."""
         calls = [{"id": str(c.get("id") or f"call_{n}"), "type": "function",
                   "function": {"name": str(c["function"].get("name") or ""),
                                "arguments": _arguments(c["function"].get("arguments"))},
@@ -433,17 +434,19 @@ class ToolLoop:
         results: dict[str, str] = {}
         running: dict[str, bool] = {}
         try:
-            for c in calls[CALLS:]:
-                results[c["id"]] = TOO_MANY
+            gate = asyncio.Semaphore(CALLS)
+
+            async def read(one: dict) -> str:
+                async with gate:
+                    return await self._call(one, schemas, made, lookups)
             batch: list = []
-            for c in [*calls[:CALLS], None]:
+            for c in [*calls, None]:
                 if c is not None and c["function"]["name"] in catalog.READS:
                     batch.append(c)
                     continue
                 for one in batch:
                     running[one["id"]] = False
-                for one, result in zip(batch, await asyncio.gather(*(self._call(one, schemas, made, lookups)
-                                                                     for one in batch))):
+                for one, result in zip(batch, await asyncio.gather(*(read(one) for one in batch))):
                     results[one["id"]] = result
                     running.pop(one["id"])
                 batch = []

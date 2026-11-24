@@ -97,11 +97,11 @@ def test_on_a_small_window_a_deferred_tool_is_found_then_called_through_use_tool
     assert [(a["mark"], a["status"]) for a in done.entries[-1]["activity"]][-1] == ("computer", "ok")
 
 
-def test_calls_past_ten_at_once_are_answered_without_running(turn):
-    done = turn("Plan a lot", [_plan(f"step {n}") for n in range(12)], say("Planned."))
+def test_every_call_of_a_round_is_run_however_many(turn):
+    done = turn("Plan a lot", [_plan(f"step {n}") for n in range(loop.CALLS + 2)], say("Planned."))
     calls = done.calls()
-    assert [done.result_of(c["id"]) for c in calls[10:]] == [loop.TOO_MANY] * 2
-    assert all(done.result_of(c["id"]) != loop.TOO_MANY for c in calls[:10])
+    assert len(calls) == loop.CALLS + 2
+    assert all(done.result_of(c["id"]).startswith("Plan kept") for c in calls)
 
 
 def test_an_identical_call_is_run_again_with_a_growing_reminder(turn):
