@@ -27,11 +27,10 @@ from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM  # noqa: E402
 from agentdojo.attacks.attack_registry import load_attack  # noqa: E402
 from agentdojo.benchmark import run_task_with_injection_tasks, run_task_without_injection_tasks  # noqa: E402
 from agentdojo.logging import OutputLogger  # noqa: E402
-from agentdojo.models import MODEL_NAMES  # noqa: E402
 from agentdojo.task_suite.load_suites import get_suite  # noqa: E402
 from dotenv import dotenv_values  # noqa: E402
 from everyday import PRICE, Meter  # noqa: E402
-from run import VERSION, BudgetSpent, read_done, sample_pairs  # noqa: E402
+from run import VERSION, BudgetSpent, addressed, read_done, sample_pairs  # noqa: E402
 
 
 class Metered(BasePipelineElement):
@@ -70,12 +69,11 @@ def main(argv: list[str]) -> int:
     meter.serve(args.port)
     client = openai.OpenAI(base_url=f"http://127.0.0.1:{args.port}/v1",
                            api_key=dotenv_values(args.env)["LLM_API_KEY"])
-    MODEL_NAMES["deepseek-v4.1-flash"] = "DeepSeek"
     llm = OpenAILLM(client, args.model)
-    llm.name = "deepseek-v4.1-flash"
+    llm.name = addressed(args.model)
     pipeline = AgentPipeline.from_config(PipelineConfig(llm=llm, model_id=None, defense=None,
                                                         system_message_name=None, system_message=None))
-    pipeline.name = "deepseek-v4.1-flash"
+    pipeline.name = llm.name
     agent = Metered(pipeline, meter)
     cases_file, cut = out / "cases.jsonl", []
     done = read_done(cases_file)

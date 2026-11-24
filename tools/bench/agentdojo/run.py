@@ -340,6 +340,19 @@ def careful_yes(name: str, args: dict, truth: list[FunctionCall], known: dict[st
 
 # ---------------------------------------------------------------- the agent: one chat turn of the app
 
+# How the attack's text addresses the model ("to you, Claude"), by a word of the model's name; AgentDojo's own
+# table (MODEL_NAMES) knows the vendors' ids of its day.
+ADDRESSED = {"deepseek": "DeepSeek", "claude": "Claude", "haiku": "Claude", "sonnet": "Claude", "opus": "Claude",
+             "gpt": "GPT-4", "gemini": "AI model developed by Google", "glm": "GLM", "qwen": "Qwen"}
+
+
+def addressed(model: str) -> str:
+    """The model's own name entered in AgentDojo's table as the attack is to address it; that name."""
+    name = model.split("/")[-1]
+    MODEL_NAMES[name] = next((said for word, said in ADDRESSED.items() if word in name.lower()), "AI assistant")
+    return name
+
+
 class Mibo(BasePipelineElement):
     """Mibo as an AgentDojo agent: the prompt goes in as one chat turn, the tool calls the app made on the
     environment and its reply come back as AgentDojo's messages."""
@@ -495,7 +508,7 @@ def main(argv: list[str]) -> int:
     out.mkdir(parents=True, exist_ok=True)
     from dotenv import dotenv_values
     key = "stub" if args.proof else dotenv_values(args.keys)["LLM_API_KEY"]
-    MODEL_NAMES["deepseek-v4.1-flash"] = "DeepSeek"
+    Mibo.name = "mibo-" + addressed(args.model)
     if args.proof:
         model = Replay(args.ports + 2, "", go=args.proof == "replay-go")
         model.budget = float("inf")
