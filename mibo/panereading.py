@@ -24,6 +24,7 @@ SECRET_SCRIPT = "!!document.querySelector('input[type=password]')"
 # hands over all it read), and a list's rows.
 TEXT_MAX = 6000
 ROWS_MAX = 40
+PICTURE_ADDRESS_MAX = 2000
 
 
 def last_input_tick() -> int:
@@ -51,10 +52,12 @@ def facts_script() -> str:
     return f"({READER})({{}})"
 
 
-def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int = TEXT_MAX) -> dict:
+def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int = TEXT_MAX,
+            pictures: bool = False) -> dict:
     """What a read page gives: title, declared facts and readable text, as roam.py reads them, for a list its rows
-    (title, link, author, time, counts), and the page's own links to its messages or notifications ("inbox",
-    reader.js). The text is the `most` characters from `start`."""
+    (title, link, author, time, counts, and with `pictures` the cover's address, for a feed read to keep), and the
+    page's own links to its messages or notifications ("inbox", reader.js). The text is the `most` characters
+    from `start`."""
     from .pagefacts import facts_from
     data = data if isinstance(data, dict) else {}
     facts = facts_from(data, url)
@@ -62,6 +65,8 @@ def page_of(url: str, data, rows: list | None = None, start: int = 0, most: int 
              for link in (data.get("discovery") or {}).get("inbox") or [] if isinstance(link, dict) and link.get("href")]
     listed = [{k: str(row.get(k) or "")[:300] for k in ("title", "link", "author", "time") if row.get(k)}
               | ({"counts": row["counts"]} if isinstance(row.get("counts"), dict) and row["counts"] else {})
+              | ({"picture": row["picture"]} if pictures and isinstance(row.get("picture"), str)
+                 and len(row["picture"]) <= PICTURE_ADDRESS_MAX else {})
               for row in (data.get("rows") if rows is None else rows) or [] if isinstance(row, dict)]
     text = facts.get("text") or ""
     return {"url": url, "title": facts.get("title") or str(data.get("title") or ""),

@@ -21,6 +21,9 @@ from .web import read as reading
 
 PICTURE_SIDE = 480
 PICTURE_FETCH_MAX = 8_000_000
+# A camera's JPEG is decoded at an eighth of its size (`small_picture`), so its header may declare far more
+# pixels than the other formats are allowed to.
+JPEG_PIXELS_MAX = 120_000_000
 DESCRIPTION_MAX = 1000
 _KNOWN_SITES = {"bilibili.com": "Bilibili", "b23.tv": "Bilibili", "youtube.com": "YouTube",
                 "youtu.be": "YouTube"}
@@ -189,8 +192,9 @@ def facts_from(data: Any, url: str) -> dict:
 
     published = first(main.get("datePublished"), main.get("uploadDate"), meta.get("article:published_time"),
                       meta.get("datepublished"), meta.get("uploaddate"), limit=40)
-    pictures = [meta.get("og:image:secure_url"), meta.get("og:image"), meta.get("twitter:image"),
-                _image(main.get("thumbnailUrl")), _image(main.get("image"))]
+    pictures = [meta.get("og:image:secure_url"), meta.get("og:image"), meta.get("og:image:url"),
+                meta.get("twitter:image"), meta.get("twitter:image:src"), meta.get("thumbnailurl"),
+                _image(main.get("thumbnailUrl")), _image(main.get("image")), meta.get("image")]
     picture = next((p for p in (_absolute(url, _text(v, 2000)) for v in pictures)
                     if p and len(p) <= 2000), "")
     embed = _embed(data, meta, main, url)
@@ -239,16 +243,19 @@ def wall_of(data: Any, url: str, facts: dict) -> str:
 
 
 def small_picture(data: bytes) -> bytes:
-    """A JPEG of the picture fitting PICTURE_SIDE and under the library's size limit, or b""."""
+    """A JPEG of the picture (as Pillow reads it here: JPEG, PNG, GIF, WebP, AVIF) fitting PICTURE_SIDE and under
+    the library's size limit, or b""."""
     try:
         from PIL import Image
     except ImportError:
         return b""
     try:
         with Image.open(io.BytesIO(data)) as source:
-            if source.width * source.height > MAX_IMAGE_PIXELS:
+            if source.width * source.height > (JPEG_PIXELS_MAX if source.format == "JPEG" else MAX_IMAGE_PIXELS):
                 return b""
             source.draft("RGB", (PICTURE_SIDE * 2, PICTURE_SIDE * 2))
+            if source.width * source.height > MAX_IMAGE_PIXELS:
+                return b""
             picture = source.convert("RGB")
         picture.thumbnail((PICTURE_SIDE, PICTURE_SIDE))
         for quality in (82, 70, 55):

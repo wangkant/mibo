@@ -30,7 +30,7 @@ import httpx
 
 from .. import db, langs, platforms, quiet, roam, situation
 from ..library import Library, item_id
-from ..pagefacts import PICTURE_FETCH_MAX, public_address, small_picture
+from ..pagefacts import PICTURE_FETCH_MAX, host_of, public_address, small_picture
 from ..panels import feed as feed_panel
 from . import base, judge, weights
 from .base import Find, Source
@@ -47,6 +47,8 @@ ROUND_EVERY_S = 30 * 60
 COVER_HOPS = 4
 # A page is read this far for the picture it declares: the head holds it.
 HEAD_READ_MAX = 300_000
+# The pause between two pages of one site read for their pictures.
+PAGE_PAUSE_S = 0.4
 # A thing about to be shown waits this long for its page's picture.
 SHOWN_COVER_S = 6
 # One the person asked for and is waiting on gets this long: most pages answer within it.
@@ -218,10 +220,9 @@ async def _fetch(http: httpx.AsyncClient, source: Source, gate: asyncio.Semaphor
 
 async def _cover(http: httpx.AsyncClient, address: str, referer: str) -> bytes:
     """The cover made small, or b"": only https to public addresses, every redirect checked again."""
-    # An http picture is asked for over https, as a browser upgrades one on a secure page.
-    if address.startswith("http://"):
-        address = "https://" + address.removeprefix("http://")
     for _ in range(COVER_HOPS):
+        # An http picture, or a redirect to one, is asked for over https, as a browser upgrades it.
+        address = base.secure(address)
         if not address.startswith("https://") or not await public_address(address):
             return b""
         # A header takes ASCII only: an address with Chinese in its path goes percent-encoded.
@@ -245,6 +246,7 @@ async def _page_picture(http: httpx.AsyncClient, address: str) -> str:
     """The picture a page declares for itself (og:image and its kin), or "": what a link preview shows, for a
     find whose source gave none. Only https to public addresses, every redirect checked again."""
     for _ in range(COVER_HOPS):
+        address = base.secure(address)
         if not address.startswith("https://") or not await public_address(address):
             return ""
         async with http.stream("GET", address, follow_redirects=False) as answer:
@@ -264,30 +266,45 @@ async def _page_picture(http: httpx.AsyncClient, address: str) -> str:
     return ""
 
 
-async def _own_picture(http: httpx.AsyncClient, found: Find, gate: asyncio.Semaphore) -> str:
-    async with gate:
+async def _own_picture(http: httpx.AsyncClient, found: Find, gate: asyncio.Semaphore,
+                       hosts: dict[str, asyncio.Lock]) -> str:
+    # One site's pages are asked for one at a time with a pause between: a dozen at once is a flood to it.
+    async with hosts.setdefault(host_of(found.item.url), asyncio.Lock()), gate:
         try:
             return await asyncio.wait_for(_page_picture(http, found.item.url), base.TIMEOUT_S)
         except Exception:
             return ""
+        finally:
+            await asyncio.sleep(PAGE_PAUSE_S)
 
 
 async def _fill(http: httpx.AsyncClient, library: Library, lacking: list[Find], gate: asyncio.Semaphore) -> int:
     """The pages' own pictures for kept finds that have none; how many got one."""
-    declared = await asyncio.gather(*(_own_picture(http, f, gate) for f in lacking))
+    hosts: dict[str, asyncio.Lock] = {}
+    declared = await asyncio.gather(*(_own_picture(http, f, gate, hosts) for f in lacking))
     # One address declared by two pages is the site's emblem, not a cover of either.
     emblems = {address for address, count in Counter(declared).items() if count > 1}
     for found, address in zip(lacking, declared):
         found.picture = "" if address in emblems else address
     covers = await asyncio.gather(*(_covered(http, f, gate) for f in lacking))
+    return await asyncio.to_thread(_attach, library, lacking, covers)
 
-    def keep() -> int:
-        for found, cover in zip(lacking, covers):
-            if cover:
-                library.change(found.item.id, picture=library.save_picture(found.item.id, cover))
-        return sum(1 for cover in covers if cover)
 
-    return await asyncio.to_thread(keep)
+def _attach(library: Library, finds: list[Find], covers: list[bytes]) -> int:
+    """The covers kept with finds already in the library; how many there were."""
+    for found, cover in zip(finds, covers):
+        if cover:
+            library.change(found.item.id, picture=library.save_picture(found.item.id, cover))
+    return sum(1 for cover in covers if cover)
+
+
+async def cover_kept(runtime: Path, kept: list[Find]) -> int:
+    """The covers that finds already in the library name (a signed-in feed's rows), fetched as a visitor and kept
+    with them; how many there were."""
+    gate = asyncio.Semaphore(AT_ONCE)
+    async with base.client(**situation.client_options(runtime)) as http:
+        covers = await asyncio.gather(*(_covered(http, f, gate) for f in kept))
+    return await asyncio.to_thread(_attach, Library(runtime), kept, covers)
 
 
 async def cover_shown(runtime: Path, item, within: float = SHOWN_COVER_S) -> str:

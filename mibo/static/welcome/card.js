@@ -104,15 +104,18 @@ function makeCard(api) {
     return react(found, "play", { play_s: Math.round(now * 10) / 10 });
   }
 
-  // A picture is behind the page's token, so it comes as a blob.
-  async function fetchPicture(path) {
+  // A picture is behind the page's token, so it comes as a blob; a first miss is tried once more.
+  async function fetchPicture(path, again = true) {
     if (!path) return "";
     try {
       const response = await api(path);
-      return response.ok ? URL.createObjectURL(await response.blob()) : "";
+      if (response.ok) return URL.createObjectURL(await response.blob());
     } catch {
-      return "";
+      // Tried again below.
     }
+    if (!again) return "";
+    await new Promise((done) => setTimeout(done, 2500));
+    return fetchPicture(path, false);
   }
 
   // The chip under the site: why this one. A press swaps the row for "more" and "less" of what it names;

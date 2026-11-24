@@ -114,7 +114,7 @@ _SMALLER = (
     ("", re.compile(r"/master/pass/"), "/master/w_640,c_limit/"),                           # Condé Nast titles
 )
 _QUERY_SMALLER = (("natgeofe.com", "w=640"), ("ignimgs.com", "width=640"), ("polygonimages.com", "w=640"),
-                  ("tmtpost.com", "imageView2/2/w/640"))
+                  ("tmtpost.com", "imageView2/2/w/640"), ("b-cdn.net", "width=640"))
 
 
 def smaller(picture: str) -> str:
@@ -129,7 +129,17 @@ def smaller(picture: str) -> str:
     # Bilibili's image host takes the size after an @.
     if host.endswith("hdslb.com") and "@" not in urlsplit(picture).path:
         return picture + "@640w_360h_1c.jpg"
+    # WordPress sites (and the Photon service in front of many) cut an upload to width; the others ignore it.
+    if "/wp-content/uploads/" in picture and "?" not in picture:
+        return f"{picture}?w=640"
     return picture
+
+
+def secure(picture: str) -> str:
+    """The address over https: a protocol-relative or http one is upgraded, as a browser does on a secure page."""
+    if picture.startswith("//"):
+        return "https:" + picture
+    return "https://" + picture.removeprefix("http://") if picture.startswith("http://") else picture
 
 
 def find(url: str, title: str, *, site: str = "", kind: str = "", text: str = "", author: str = "",
@@ -137,6 +147,7 @@ def find(url: str, title: str, *, site: str = "", kind: str = "", text: str = ""
     """A find from its public facts. A YouTube or Bilibili address becomes a
     video with its player; `kind` is otherwise article, post or page."""
     player = player_for(url)
+    picture = secure(picture)
     return Find(Item(url=url, site=site or site_name(url), kind="video" if player else (kind or "article"),
                      title=plain(title, 200), author=plain(author, 80), published=published,
                      length=length, description=plain(text), embed=player),

@@ -131,28 +131,43 @@ window.paFindCard = (() => {
         cover.tabIndex = -1;
         cover.setAttribute("aria-hidden", "true");
       }
+      const quiet = () => {
+        cover.classList.remove("pa-shimmer");
+        cover.classList.add("blank");
+        cover.append(svg(siteIcon(card), "i cover-mark"));
+      };
       if (card.picture) {
         const img = el("img");
         img.alt = "";
         img.decoding = "async";
         cover.classList.add("pa-shimmer");
         img.addEventListener("load", () => cover.classList.remove("pa-shimmer"), { once: true });
-        env.picture(card.picture)
-          .then((url) => {
-            img.src = url;
-          })
-          .catch(() => {
-            // A picture that does not arrive leaves the quiet cover, not a broken frame.
+        // A picture that does not arrive or does not decode leaves the quiet cover, not a broken frame.
+        img.addEventListener(
+          "error",
+          () => {
             img.remove();
-            cover.classList.remove("pa-shimmer");
-            cover.classList.add("blank");
-            cover.append(svg(siteIcon(card), "i cover-mark"));
-          });
+            quiet();
+          },
+          { once: true },
+        );
+        // A first miss is tried once more: the page may have been busy.
+        const fetchIt = (left) =>
+          env
+            .picture(card.picture)
+            .then((url) => {
+              img.src = url;
+            })
+            .catch(() => {
+              if (left) setTimeout(() => fetchIt(left - 1), 2500);
+              else {
+                img.remove();
+                quiet();
+              }
+            });
+        fetchIt(1);
         cover.append(img);
-      } else {
-        cover.classList.add("blank");
-        cover.append(svg(siteIcon(card), "i cover-mark"));
-      }
+      } else quiet();
       if (video) {
         const play = button("play", "", () => playIn(node, card));
         play.setAttribute("aria-label", `${say("play")}: ${card.title || site}`);

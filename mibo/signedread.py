@@ -3,6 +3,7 @@ pane's folder, made for the read and gone after, and `Feeds` reads the person's 
 turned that on, in the background, through the Reader."""
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from collections.abc import Callable
@@ -46,8 +47,6 @@ class Reader:
         page has more than one read gives), or {"error": why} with why one of not_web, sign_in_page,
         wall, host_day_cap, failed, or the wall met (verification, sign_in, sign_in_overlay, error, dead, empty,
         robots for a `background` read robots.txt refuses)."""
-        import asyncio
-
         from .web import read as reading
         from .web.tabs import HiddenTab
         with self.pace.slot(url):
@@ -69,7 +68,8 @@ class Reader:
             if wall:
                 return {"error": wall}
             # The whole text it read: the character's reader (web/pagetext.py) fits it to the model.
-            return page_of(page.url, page.data, page.rows, start, most=len(page.data.get("text") or ""))
+            return page_of(page.url, page.data, page.rows, start, most=len(page.data.get("text") or ""),
+                           pictures=background)
 
 
 class Feeds:
@@ -122,22 +122,28 @@ def feeds_on(runtime: Path) -> dict:
 
 def keep_finds(runtime: Path, key: str, rows: list) -> int:
     """A feed's rows as library finds of that site (source "feed <site>"); how many were new. A row whose link has
-    a platform's player (a Douyin or TikTok video) is a video with that player, so it plays on its card."""
+    a platform's player (a Douyin or TikTok video) is a video with that player, so it plays on its card. A row's
+    cover is fetched as a visitor would (the row's page as referer, no cookies) and kept with it."""
     from .library import Item, Library, item_id
     from .pagefacts import site_name
     from .players import player_for
+    from .sources import base, catalog
     from .web import sites
-    library, new = Library(runtime), 0
+    library, new, covered = Library(runtime), 0, []
     for row in rows[:FEED_ROWS]:
         link = str(row.get("link") or "")
         if not row.get("title") or not browsed.web(link) or sites.key_of(link) != key or browsed.secret(link):
             continue
         if library.get(item_id(link)) is None:
             player = player_for(link)
-            library.add(Item(url=link, site=site_name(link), kind="video" if player else "post", embed=player,
-                             title=str(row["title"])[:300], author=str(row.get("author") or "")[:200],
-                             source=f"feed {key}"))
+            item = library.add(Item(url=link, site=site_name(link), kind="video" if player else "post", embed=player,
+                                    title=str(row["title"])[:300], author=str(row.get("author") or "")[:200],
+                                    source=f"feed {key}"))
+            if str(row.get("picture") or "").startswith(("https://", "http://", "//")):
+                covered.append(base.Find(item, base.secure(row["picture"])))
             new += 1
+    if covered:
+        asyncio.run(catalog.cover_kept(runtime, covered))
     return new
 
 

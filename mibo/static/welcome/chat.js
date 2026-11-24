@@ -77,7 +77,13 @@ window.paChat = (() => {
     const history = (after) =>
       ctx.api(`chat/history?chat=${encodeURIComponent(id)}${after === undefined ? "" : `&after=${after}`}`);
     const blob = (path) => {
-      if (!blobs.has(path)) blobs.set(path, ctx.picture(path));
+      if (!blobs.has(path)) {
+        // A picture that failed is not kept as failed: the next ask goes to the server again.
+        blobs.set(path, ctx.picture(path).catch((error) => {
+          blobs.delete(path);
+          throw error;
+        }));
+      }
       return blobs.get(path);
     };
     const ask = (text) => !sending && send(text);
