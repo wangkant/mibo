@@ -362,8 +362,9 @@ def own_sid() -> str:
     confine._ok(adv.OpenProcessToken(k32.GetCurrentProcess(), confine.TOKEN_QUERY, ctypes.byref(token)),
                 "OpenProcessToken")
     try:
-        return confine._sid_text(confine.SID_AND_ATTRIBUTES.from_buffer(
-            confine._token_info(token, confine.TOKEN_USER_CLASS)).Sid)
+        # Kept by name: the SID is inside this buffer.
+        user = confine._token_info(token, confine.TOKEN_USER_CLASS)
+        return confine._sid_text(confine.SID_AND_ATTRIBUTES.from_buffer(user).Sid)
     finally:
         k32.CloseHandle(token)
 

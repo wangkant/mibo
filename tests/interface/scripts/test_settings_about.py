@@ -100,6 +100,10 @@ def test_each_state_of_the_update_has_its_sentence_and_only_its_controls(app, br
         page.page.locator('.setup-nav-item[data-part="device"]').click()
         page.page.locator('.setup-nav-item[data-part="about"]').click()
         page.settle()
+        # The row is drawn again once the state has been read: waited for, not read on the way.
+        page.page.wait_for_function(
+            """(s) => document.querySelector('.setup-section-about [data-item="updates"]').innerText.includes(s)""",
+            arg=expect[name][0])
         seen[name] = said(page)
         for sentence in expect[name]:
             assert sentence in seen[name]["text"], (name, sentence, seen[name]["text"])

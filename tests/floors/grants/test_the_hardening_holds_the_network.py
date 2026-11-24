@@ -96,7 +96,9 @@ def test_a_command_not_read_as_using_the_network_cannot_reach_it(hardened, tmp_p
         with _listener(family, kind) as (host, port, reached):
             done = _run(_connect(host, port, kind), tmp_path, tier, online)
             reached.wait(5 if allowed else 2)
-        assert reached.is_set() == allowed, (tier, online, done)
+        # What the command says of its own connection counts too: the listener's thread may be late to say so.
+        got = reached.is_set() or (kind == socket.SOCK_STREAM and done["out"] == "connected")
+        assert got == allowed, (tier, online, done)
 
 
 def test_no_command_but_a_programs_run_registers_a_scheduled_task(hardened, tmp_path):
@@ -106,21 +108,32 @@ def test_no_command_but_a_programs_run_registers_a_scheduled_task(hardened, tmp_
     assert subprocess.run(["schtasks", "/query", "/tn", name], capture_output=True).returncode != 0
 
 
+def _entries(folders: list) -> list:
+    """Each folder's list as its entries: the Task Scheduler marks a list it is given as inherited where it can
+    (the AI flag), which refuses and allows nothing."""
+    return [(f["path"], f["sddl"].replace("D:PAI(", "D:P(").replace("D:AI(", "D:(")) for f in folders]
+
+
+def _own(engine, layer) -> list:
+    """The app's own filters on a layer (other programs add and remove theirs all the time)."""
+    return sorted(str(f["key"]) for f in engine.filters(layer) if f["key"] in netguard.FILTERS.values())
+
+
 def test_turning_the_hardening_off_leaves_windows_as_it_was(tmp_path_factory):
     record = str(tmp_path_factory.mktemp("netguard-off") / netguard.RECORD)
     before = json.loads(netguard._powershell(netguard._FOLDERS) or "[]")
     engine = netguard.Engine()
     try:
-        filters = {name: len(engine.filters(layer)) for name, layer in netguard.LAYERS.items()}
+        filters = {name: _own(engine, layer) for name, layer in netguard.LAYERS.items()}
     finally:
         engine.close()
     sid = netguard.own_sid()
     assert netguard.apply(True, record, sid)["present"]
     assert netguard.apply(True, record, sid)["present"]  # twice is once
     assert not netguard.apply(False, record, sid)["present"]
-    assert json.loads(netguard._powershell(netguard._FOLDERS) or "[]") == before
+    assert _entries(json.loads(netguard._powershell(netguard._FOLDERS) or "[]")) == _entries(before)
     engine = netguard.Engine()
     try:
-        assert {name: len(engine.filters(layer)) for name, layer in netguard.LAYERS.items()} == filters
+        assert {name: _own(engine, layer) for name, layer in netguard.LAYERS.items()} == filters
     finally:
         engine.close()

@@ -517,7 +517,8 @@ def low_folder() -> str:
     own = ctypes.c_void_p()
     _ok(adv.OpenProcessToken(k32.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(own)), "OpenProcessToken")
     try:
-        me = _sid_text(SID_AND_ATTRIBUTES.from_buffer(_token_info(own, TOKEN_USER_CLASS)).Sid)
+        user = _token_info(own, TOKEN_USER_CLASS)
+        me = _sid_text(SID_AND_ATTRIBUTES.from_buffer(user).Sid)
     finally:
         k32.CloseHandle(own)
     _entry(path, me, GRANT_ACCESS, FILE_ALL_ACCESS)

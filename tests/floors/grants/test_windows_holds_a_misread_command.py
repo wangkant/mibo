@@ -105,8 +105,12 @@ public static int Limits() { int ui; return QueryInformationJobObject(IntPtr.Zer
 @pytest.mark.parametrize("tier", confine.TIERS)
 def test_nothing_leaves_the_job_and_its_limits_hold(laid_out, tier):
     folder, home = laid_out
-    done = running.run(INSIDE + "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
-                       "@{CommandLine = 'cmd.exe /c echo out> wmi.txt'} -ErrorAction SilentlyContinue | Out-Null",
+    # Started with no window: one that WMI starts is shown on the person's screen, and stays when it is ended.
+    done = running.run(INSIDE + "$hidden = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly "
+                       "-Property @{ShowWindow = [uint16]0}; "
+                       "Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
+                       "@{CommandLine = 'cmd.exe /c echo out> wmi.txt'; ProcessStartupInformation = $hidden} "
+                       "-ErrorAction SilentlyContinue | Out-Null",
                        str(folder), tier=tier, home=home)
     assert done["out"].splitlines()[0] == "stayed 5"
     ui = int(done["out"].splitlines()[1].split()[1])

@@ -67,8 +67,11 @@ def spellings(path: str, root: str) -> list[str]:
     """One protected path written as a model might: as is, with forward slashes, in other letters' case, climbing
     from a folder beside it, from ~, with a trailing dot, and its folder by a wildcard."""
     rel = os.path.relpath(path, root)
-    return [path, path.replace("\\", "/"), path.upper(), os.path.join(root, "Documents", "..", rel), "~\\" + rel,
-            path + ".", os.path.join(os.path.dirname(os.path.dirname(path)), "*", os.path.basename(path))]
+    anywhere = [path, os.path.join(root, "Documents", "..", rel),
+                os.path.join(os.path.dirname(os.path.dirname(path)), "*", os.path.basename(path))]
+    # The other slash, other letters' case, ~\\ and a trailing dot name the same place on Windows only.
+    only_windows = [path.replace("\\", "/"), path.upper(), "~\\" + rel, path + "."]
+    return anywhere + (only_windows if sys.platform == "win32" else [])
 
 
 def test_with_every_place_open_no_file_tool_reads_or_lists_a_protected_place_by_any_spelling(profile):
