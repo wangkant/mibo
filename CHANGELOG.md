@@ -7,25 +7,7 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
-Changes made after measuring the app on MCPMark's filesystem tasks and AgentDojo's banking suite, with limits and mechanisms taken from DeepSeek's dsh and Claude Code.
-
-### Connectors
-
-- A connected connector's tools are offered to the model under their own names while their definitions fit a tenth of its window. A connector not started yet, or too large, is still loaded on demand.
-- A connector's answer is read up to 100,000 characters; it was cut at 4,000.
-- When a file tool finds nothing by a name on this computer, its answer names the connectors that may hold it.
-
-### Files and tools
-
-- Reading a file returns up to 2,000 lines of up to 2,000 characters each (it was 400 lines of 500), and a search up to 250 matches.
-- A tool result too long for the model's window is kept whole in a file of the app's own, and the character reads the part it needs from there. Before, the part left out was gone.
-- Every tool call of a round runs, ten reads at a time. Calls past the tenth used to be answered without running.
-
-### Approvals
-
-- The character no longer asks for your yes in words before a step the app itself asks about: it calls the tool and the app asks once.
-
-## [0.2.0] - 2026-11-23
+## [0.2.0] - 2026-11-24
 
 The character asks in the chat instead of on cards, and asks less. It makes Word, Excel and PowerPoint files as files, reads the sites you are signed in to, and knows the app's own settings. Attached below are the same downloads as for 0.1.0.
 
@@ -34,6 +16,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - Word, Excel and PowerPoint files are made as files: asked for a document, a table or slides, the character writes the finished .docx, .xlsx or .pptx instead of typing into the program's window, and changes an existing one in place, keeping its layout. Such changes can be taken back like any other change to a file. Three built-in skills guide a good document, workbook and deck. Thirteen more built-in skills cover everyday jobs: summarizing, translating and studying a document, minutes, invoices into a table, renaming and sorting files, freeing disk space, filling a web form, new messages, research briefs, trip plans and scheduled briefings. Settings shows the skills as tiles.
 - A new file has a plain look unless you ask for another: a document is A4 in SimSun and Times New Roman with SimHei and Arial headings, a workbook has a shaded header row in DengXian, and a deck is 16:9 in Segoe UI and Microsoft YaHei, dark teal with one warm accent. An existing file keeps its own.
 - PDFs are read page by page; a scanned PDF is reported as holding no text.
+- Reading a file returns up to 2,000 lines of up to 2,000 characters each (it was 400 lines of 500), and a search up to 250 matches.
 
 ### Approvals
 
@@ -47,6 +30,7 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - Your whole user folder and your other drives are open without a grant: reads run at once and changes run under the turn's undo. Places holding passwords, keys, browser profiles or other programs' data, and Mibo's own folder, are never read, by any spelling of their path and wherever they are, a backup of a profile on another drive included. A file reached by another name (a hard link) is judged by every name it has. A change where something would then start by itself (Startup, a program's or Windows' folder, a folder on PATH, Git hooks, attributes and submodules, pip's settings, a virtual environment's activation scripts, anything in .vscode, a shell's start-up file) is asked every time, and its question names the program or place a scheduled task, a Run key, a link or a junction points at. A new script or shortcut elsewhere, and a project's own tool files (package.json, a Makefile, pyproject.toml, setup.py, conftest.py, a pre-commit config), go to the reviewer and are never written by auto-edit. Listing the Start menu, Program Files and a program's App Paths to find an installed program no longer stops or asks; what is inside those files is judged as any read.
 - On a site you named, your own words typed there go to it with no question (DeepL translating 你好). What a click or a choice makes the page send goes to the reviewer. A request of the page's own that it does not pass, carrying nothing of yours, on a site that is not sensitive, is not sent and nothing is asked, so a page's click statistics no longer stop the task; when that request is what the character's own click or choice sends, the step is reported as not done, and when your own words asked for that click on that site, it is asked with what it sends. A settings, subscription, admin or token page counts as sensitive on any site. Your words going to any other site are held, also by a stream, a body or a request a key at a time; a connection the page opens to another site while your words are on it is reported, as what goes over it cannot be seen. A step the automatic review does not pass is not done and counts toward the turn's limit on refusals, instead of asking you.
 - open finds a program by its name as Start's search does, also one started through a launcher (DeepL through Zero Install, Discord through Update.exe), and when it cannot open one it leaves the program's website to the character in the same turn. A shortcut is judged by what it starts: one to a program, script or macro document that came from the web, or to a file on another computer, is never started; one that hands a command to PowerShell, Python or another interpreter, or a web address to Explorer, is run as a command, judged as one; and a link to a web page opens in the app's browser like any link.
+- The character no longer asks for your yes in words before a step the app itself asks about: it calls the tool and the app asks once.
 
 ### Safety
 
@@ -74,6 +58,16 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - Asked about your messages, the character reads the sites you signed in to, one or all of them, and reports what is new. That step can only read: the pages go to a model call with no tools, and only its report comes back.
 - A standing request that sends or posts, such as a daily post on one site, stores its site, recipient, kind of act and text when you give it. Each run acts within that without asking; anything beyond it is not done and is reported, and a costly step still waits for you. After a run, one line in the chat says what was done.
 - A search on Douyin is made on the site itself.
+
+### Tools and connectors
+
+These follow measurements on MCPMark's filesystem tasks and AgentDojo's banking suite, with limits and mechanisms taken from DeepSeek's dsh and Claude Code.
+
+- A connected connector's tools are offered to the model under their own names while their definitions fit a tenth of its window. A connector not started yet, or too large, is still loaded on demand.
+- A connector's answer is read up to 100,000 characters; it was cut at 4,000.
+- When a file tool finds nothing by a name on this computer, its answer names the connectors that may hold it.
+- A tool result too long for the model's window is kept whole in a file of the app's own, and the character reads the part it needs from there. Before, the part left out was gone.
+- Every tool call of a round runs, ten reads at a time. Calls past the tenth used to be answered without running.
 
 ### Recommendations
 
