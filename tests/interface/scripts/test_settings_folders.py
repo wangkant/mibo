@@ -72,7 +72,7 @@ def test_the_select_sets_view_only_or_sorting_too(app, browser, folders):
     page.page.evaluate("document.querySelectorAll('.setup-shell-row').forEach((row) => { row.dataset.before = '1'; })")
     with page.page.expect_response(lambda r: r.url.endswith("/api/shell") and r.request.method == "POST"):
         selects[0].select_option("read")
-    page.page.wait_for_function("!document.querySelector('.setup-shell-row[data-before]')")
+    page.page.wait_for_function("() => !document.querySelector('.setup-shell-row[data-before]')")
     with page.page.expect_response(lambda r: r.url.endswith("/api/shell") and r.request.method == "POST"):
         selects[1].select_option("sort")
     assert sent == [{"add": str(long), "read_only": True}, {"add": str(short)}]
