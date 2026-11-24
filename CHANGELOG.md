@@ -7,6 +7,24 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+Changes made after measuring the app on MCPMark's filesystem tasks and AgentDojo's banking suite, with limits and mechanisms taken from DeepSeek's dsh and Claude Code.
+
+### Connectors
+
+- A connected connector's tools are offered to the model under their own names while their definitions fit a tenth of its window. A connector not started yet, or too large, is still loaded on demand.
+- A connector's answer is read up to 100,000 characters; it was cut at 4,000.
+- When a file tool finds nothing by a name on this computer, its answer names the connectors that may hold it.
+
+### Files and tools
+
+- Reading a file returns up to 2,000 lines of up to 2,000 characters each (it was 400 lines of 500), and a search up to 250 matches.
+- A tool result too long for the model's window is kept whole in a file of the app's own, and the character reads the part it needs from there. Before, the part left out was gone.
+- Every tool call of a round runs, ten reads at a time. Calls past the tenth used to be answered without running.
+
+### Approvals
+
+- The character no longer asks for your yes in words before a step the app itself asks about: it calls the tool and the app asks once.
+
 ## [0.2.0] - 2026-11-23
 
 The character asks in the chat instead of on cards, and asks less. It makes Word, Excel and PowerPoint files as files, reads the sites you are signed in to, and knows the app's own settings. Attached below are the same downloads as for 0.1.0.
