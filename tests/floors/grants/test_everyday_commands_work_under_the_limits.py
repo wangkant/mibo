@@ -78,7 +78,8 @@ CASES = [
     ("write a report", "Get-ChildItem -File | Select-Object Name | Out-File list.txt; (Get-Content list.txt).Count -gt 2"),
     ("recycle bin delete", "Remove-Item e.txt; Test-Path e.txt"),
     ("tar", "tar -cf t.tar a.txt b.txt; tar -tf t.tar"),
-    ("curl version", "(curl.exe --version | Select-Object -First 1).Split(' ')[0]"),
+    # All of its output first: a pipeline that stops at the first line can end curl before it has written the rest.
+    ("curl version", "(curl.exe --version)[0].Split(' ')[0]"),
     ("robocopy", "robocopy sub sub3 /E /NJH /NJS /NP /NFL /NDL | Out-Null; (Get-ChildItem sub3 -File).Count; "
                  "$global:LASTEXITCODE = 0"),
     ("ssh version", "ssh -V 2>&1 | ForEach-Object { \"$_\".Split('_')[0] }"),
