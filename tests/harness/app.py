@@ -5,6 +5,7 @@ token, and the window key when a route takes only the app's own page."""
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import sys
 import threading
@@ -62,7 +63,12 @@ class App:
             stacks = "\n".join(f"-- {names.get(ident, ident)}\n" + "".join(traceback.format_stack(frame)[-12:])
                                for names in [{t.ident: t.name for t in threading.enumerate()}]
                                for ident, frame in sys._current_frames().items())
-            raise AssertionError("the app did not stop\n" + stacks)
+            # And each task its loop still waits for: a stopped server's loop ends only when every task it
+            # cancelled has ended (asyncio.run), so the one that did not is named here.
+            tasks = "\n".join(f"-- task {task.get_name()}: {task.get_coro()!r}\n"
+                              + "".join(traceback.format_stack(frame)[-1] for frame in task.get_stack(limit=8))
+                              for task in gc.get_objects() if isinstance(task, asyncio.Task) and not task.done())
+            raise AssertionError("the app did not stop\n" + stacks + "\n" + tasks)
 
     def request(self, method: str, path: str, *, own_page: bool = False, timeout: float = 120, **sent) -> httpx.Response:
         headers = {welcome.TOKEN_HEADER: TOKEN}
