@@ -1818,7 +1818,7 @@
   "setup_shell": {
     "hint": "Laissez le personnage consulter et ranger les fichiers de cet ordinateur par commande, quand vous le demandez.",
     "onTitle": "L'autoriser à agir sur cet ordinateur par commande",
-    "onText": "Une fois activé, le personnage peut exécuter les commandes que vous demandez dans la conversation : consulter et ranger les fichiers de votre dossier utilisateur et de vos autres disques, vérifier l'espace disque, etc. Chaque commande est analysée et classée avant d'être exécutée ; les emplacements qui contiennent des mots de passe, des clés, des profils de navigateur ou les données d'autres programmes ne sont jamais lus ; la suppression, le réseau et l'installation de logiciels sont demandés dans la discussion, la modification de fichiers et le lancement de programmes suivent le mode ci-dessous, et certaines actions ne sont jamais effectuées. Windows limite aussi chaque commande : aucune ne peut ouvrir les fichiers propres à l'application, et une commande qui ne fait que lire ne peut rien modifier. Désactivé, aucune commande n'est exécutée.",
+    "onText": "Une fois activé, le personnage peut exécuter les commandes que vous demandez dans la conversation : consulter et ranger les fichiers de votre dossier utilisateur et de vos autres disques, vérifier l'espace disque, etc. Chaque commande est analysée et classée avant d'être exécutée ; les emplacements qui contiennent des mots de passe, des clés, des profils de navigateur ou les données d'autres programmes ne sont jamais lus ; la suppression, le réseau et l'installation de logiciels sont demandés dans la discussion, la modification de fichiers et le lancement de programmes suivent le mode ci-dessous, et certaines actions ne sont jamais effectuées. Windows limite aussi chaque commande : aucune ne peut ouvrir les fichiers propres à l'application ni les emplacements listés sous « Limites de Windows » ci-dessous, et une commande qui ne fait que lire ne peut rien modifier. Désactivé, aucune commande n'est exécutée.",
     "onAsk": "L'autoriser à agir sur cet ordinateur par commande ?",
     "onAskText": "Le personnage n'exécute des commandes que pendant que vous discutez avec lui et seulement pour ce que vous demandez. Avant de supprimer, remplacer, déplacer hors d'un dossier, utiliser le réseau, installer un logiciel ou lancer un programme, il indique dans la discussion ce qui va se passer et attend votre réponse : « oui », « vas-y » et les réponses semblables saisies dans la discussion valent accord, et les étapes du même type ne sont plus demandées pendant cette tâche ; payer, supprimer ou modifier un compte reste confirmé à part. Toute autre réponse vaut refus. Rien sur une page, dans un fichier ou venant d'un outil ne peut répondre à votre place.",
     "onYes": "Activer",
@@ -1878,15 +1878,41 @@
       "rule_added": "Toujours autorisé"
     },
     "code": " (code de sortie {count})",
+    "logFold_one": "Historique des commandes (dernière {count})",
+    "limitsTitle": "Limites de Windows",
+    "limitsText": "Windows applique ces limites à chaque commande, quelle que soit la façon dont elle a été lue. Les programmes que vous ouvrez vous-même ne sont pas concernés.",
+    "guardsName": "Fermer les emplacements sensibles aux commandes",
+    "guardsText": "Les profils de navigateur, gestionnaires de mots de passe, portefeuilles et applications de discussion sont fermés à toutes les commandes. Les clés SSH et cloud ne sont ouvertes qu'aux commandes qui utilisent le réseau. Les dossiers de démarrage, profils de shell et clés Run ne peuvent pas être modifiés : rien de ce qu'une commande laisse ne s'exécute plus tard. Désactiver remet exactement les autorisations de chaque emplacement ; désinstaller ou réinitialiser Mibo aussi.",
+    "guardsOffAsk": "Rouvrir ces emplacements aux commandes ?",
+    "guardsOffText": "Les commandes pourront lire les données du navigateur, les mots de passe et les clés, et ajouter des éléments lancés à l'ouverture de session, dès que ce pour quoi elles ont été lues le permet. Les autorisations de chaque emplacement sont remises comme avant.",
+    "guardsOff": "Rouvrir",
+    "placesFold_zero": "Emplacements fermés",
+    "placesFold_one": "Emplacements fermés ({count})",
+    "placesFold_other": "Emplacements fermés ({count})",
+    "placeFailed": "Impossible de fermer : {path}",
+    "why": {
+      "secrets": "Mots de passe et données du navigateur",
+      "keys": "Clés réseau, ouvertes seulement aux commandes qui utilisent le réseau",
+      "later": "Lance quelque chose plus tard"
+    },
+    "hardeningName": "Limites renforcées (administrateur requis)",
+    "hardeningText": "Configurées une fois avec l'accord d'un administrateur : une commande qui n'a pas été lue comme utilisant le réseau ne peut pas l'atteindre, services de cet ordinateur compris, et aucune commande ne peut créer de tâche planifiée. Les désactiver retire les deux. Les résolutions de noms faites par le résolveur de Windows ne sont pas couvertes.",
+    "hardeningOnAsk": "Configurer les limites renforcées ?",
+    "hardeningOnText": "Windows demande l'accord d'un administrateur. Mibo ajoute ensuite des filtres réseau pour ses propres commandes et leur ferme les dossiers du Planificateur de tâches. Rien d'autre ne change sur cet ordinateur.",
+    "hardeningOn": "Continuer",
+    "hardeningOffAsk": "Retirer les limites renforcées ?",
+    "hardeningOffText": "Windows demande l'accord d'un administrateur. Les filtres sont retirés et les dossiers du Planificateur de tâches retrouvent leurs autorisations d'origine.",
+    "hardeningOff": "Retirer",
     "errors": {
       "folder_missing": "Ce dossier est introuvable.",
       "folder_root": "Un lecteur entier ne peut pas être autorisé. Choisissez un dossier à l'intérieur.",
       "folder_app": "C'est le dossier de Mibo lui-même ; il ne peut pas être autorisé.",
       "folder_secrets": "Ce dossier contient des mots de passe, des clés ou des données d'autres programmes ; il ne peut pas être autorisé.",
       "folder_system": "C'est un dossier système ; il ne peut pas être autorisé.",
-      "folder_wide": "Ce dossier est trop large (il contient le dossier utilisateur ou des dossiers système). Choisissez-en un plus petit à l'intérieur."
-    },
-    "logFold_one": "Historique des commandes (dernière {count})"
+      "folder_wide": "Ce dossier est trop large (il contient le dossier utilisateur ou des dossiers système). Choisissez-en un plus petit à l'intérieur.",
+      "hardening_cancelled": "L'accord de l'administrateur a été refusé. Rien n'a changé.",
+      "hardening_failed": "Les limites renforcées n'ont pas pu être configurées ou retirées. Réessayez."
+    }
   },
   "setup_skills": {
     "hint": "Une compétence est un ensemble d'étapes écrites pour un type de tâche. Le personnage ne la lit que lorsque votre demande y correspond, et ne travaille qu'avec les capacités qu'il a déjà ; une compétence n'accorde rien.",
@@ -2343,5 +2369,11 @@
       "claude": "Claude-chan, la demoiselle : distinguée, douce et franche, élevée selon des règles familiales strictes",
       "template": "J'écrirai le mien plus tard : un personnage de départ simple à modifier"
     }
+  },
+  "guards": {
+    "command": "Afficher, fermer ou rouvrir les emplacements fermés aux commandes (Windows)"
+  },
+  "netguard": {
+    "command": "Configurer ou retirer les limites renforcées ; droits d'administrateur requis (Windows)"
   }
 }

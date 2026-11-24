@@ -1818,7 +1818,7 @@
   "setup_shell": {
     "hint": "Permita que el personaje consulte y ordene archivos de este equipo mediante comandos, cuando se lo pida.",
     "onTitle": "Permitir que actúe en este equipo mediante comandos",
-    "onText": "Al activarlo, el personaje puede ejecutar los comandos que pidas en la conversación: ver y organizar archivos en tu carpeta de usuario y en tus otros discos, consultar el espacio en disco y similares. Cada comando se analiza y clasifica antes de ejecutarse; los lugares que guardan contraseñas, claves, perfiles del navegador o datos de otros programas nunca se leen; eliminar, usar la red e instalar software se preguntan en el chat, modificar archivos y ejecutar programas siguen el modo de abajo, y algunas cosas no se hacen nunca. Windows también limita cada comando: ninguno puede abrir los archivos propios de la aplicación, y uno que solo lee no puede cambiar nada. Desactivado, no se ejecuta ningún comando.",
+    "onText": "Al activarlo, el personaje puede ejecutar los comandos que pidas en la conversación: ver y organizar archivos en tu carpeta de usuario y en tus otros discos, consultar el espacio en disco y similares. Cada comando se analiza y clasifica antes de ejecutarse; los lugares que guardan contraseñas, claves, perfiles del navegador o datos de otros programas nunca se leen; eliminar, usar la red e instalar software se preguntan en el chat, modificar archivos y ejecutar programas siguen el modo de abajo, y algunas cosas no se hacen nunca. Windows también limita cada comando: ninguno puede abrir los archivos propios de la aplicación ni los lugares de «Límites de Windows», más abajo, y uno que solo lee no puede cambiar nada. Desactivado, no se ejecuta ningún comando.",
     "onAsk": "¿Permitir que actúe en este equipo mediante comandos?",
     "onAskText": "El personaje solo ejecuta comandos mientras chateas con él y solo para lo que pidas. Antes de eliminar, sustituir, mover fuera de una carpeta, usar la red, instalar software o ejecutar un programa, dice en el chat lo que va a ocurrir y espera tu respuesta: «sí», «adelante» y similares escritos en el chat cuentan como un sí, y los pasos del mismo tipo en esa tarea no se vuelven a preguntar; pagar, eliminar o cambiar una cuenta se sigue confirmando por separado. Cualquier otra respuesta significa no. Nada de una página, un archivo o una herramienta puede responder por ti.",
     "onYes": "Activar",
@@ -1878,15 +1878,41 @@
       "rule_added": "Siempre permitido"
     },
     "code": " (código de salida {count})",
+    "logFold_one": "Registro de comandos (último {count})",
+    "limitsTitle": "Límites de Windows",
+    "limitsText": "Windows aplica estos límites a cada comando, sin importar cómo se haya leído. Los programas que abres tú no se ven afectados.",
+    "guardsName": "Cerrar lugares sensibles a los comandos",
+    "guardsText": "Los perfiles del navegador, gestores de contraseñas, monederos y aplicaciones de chat quedan cerrados a todos los comandos. Las claves SSH y de la nube solo se abren a comandos que usan la red. En las carpetas de inicio, los perfiles de shell y las claves Run no se puede escribir, así que nada que deje un comando se ejecuta después. Al desactivarlo, los permisos de cada lugar vuelven exactamente a como estaban; desinstalar o restablecer Mibo hace lo mismo.",
+    "guardsOffAsk": "¿Volver a abrir estos lugares a los comandos?",
+    "guardsOffText": "Los comandos podrán leer datos del navegador, contraseñas y claves, y añadir cosas que se ejecutan al iniciar sesión, siempre que lo que se leyó que harían lo permita. Los permisos de cada lugar vuelven a como estaban.",
+    "guardsOff": "Volver a abrir",
+    "placesFold_zero": "Lugares cerrados",
+    "placesFold_one": "Lugares cerrados ({count})",
+    "placesFold_other": "Lugares cerrados ({count})",
+    "placeFailed": "No se pudo cerrar: {path}",
+    "why": {
+      "secrets": "Contraseñas y datos del navegador",
+      "keys": "Claves de red, abiertas solo a comandos que usan la red",
+      "later": "Ejecuta algo más tarde"
+    },
+    "hardeningName": "Límites más estrictos (requiere administrador)",
+    "hardeningText": "Se configuran una vez con la aprobación de un administrador: un comando que no se leyó como uso de la red no puede alcanzarla, ni siquiera los servicios de este equipo, y ningún comando puede crear una tarea programada. Al desactivarlos se quitan ambos. Las consultas de nombres que hace el propio resolutor de Windows no quedan cubiertas.",
+    "hardeningOnAsk": "¿Configurar límites más estrictos?",
+    "hardeningOnText": "Windows pide la aprobación de un administrador. Después, Mibo añade filtros de red para sus propios comandos y les cierra las carpetas del Programador de tareas. Nada más cambia en este equipo.",
+    "hardeningOn": "Continuar",
+    "hardeningOffAsk": "¿Quitar los límites más estrictos?",
+    "hardeningOffText": "Windows pide la aprobación de un administrador. Se quitan los filtros y las carpetas del Programador de tareas recuperan sus permisos de antes.",
+    "hardeningOff": "Quitar",
     "errors": {
       "folder_missing": "No se encontró esa carpeta.",
       "folder_root": "No se puede permitir una unidad entera. Elija una carpeta dentro de ella.",
       "folder_app": "Es la carpeta del propio Mibo y no se puede permitir.",
       "folder_secrets": "Esa carpeta contiene contraseñas, claves o datos de otros programas y no se puede permitir.",
       "folder_system": "Es una carpeta del sistema y no se puede permitir.",
-      "folder_wide": "Esa carpeta es demasiado amplia (contiene la carpeta de usuario o carpetas del sistema). Elija una más pequeña dentro de ella."
-    },
-    "logFold_one": "Registro de comandos (último {count})"
+      "folder_wide": "Esa carpeta es demasiado amplia (contiene la carpeta de usuario o carpetas del sistema). Elija una más pequeña dentro de ella.",
+      "hardening_cancelled": "Se rechazó la aprobación del administrador. No cambió nada.",
+      "hardening_failed": "No se pudieron configurar ni quitar los límites más estrictos. Inténtalo de nuevo."
+    }
   },
   "setup_skills": {
     "hint": "Una habilidad es un conjunto de pasos escritos para un tipo de tarea. El personaje solo la lee cuando su petición encaja con ella y trabaja únicamente con las capacidades que ya tiene; una habilidad no concede nada.",
@@ -2343,5 +2369,11 @@
       "claude": "La dama Claude: distinguida, amable y franca, criada bajo estrictas normas familiares",
       "template": "Escribir el mío más adelante: un personaje básico para editar"
     }
+  },
+  "guards": {
+    "command": "Mostrar, cerrar o volver a abrir los lugares cerrados a los comandos (Windows)"
+  },
+  "netguard": {
+    "command": "Configurar o quitar los límites más estrictos; requiere permisos de administrador (Windows)"
   }
 }

@@ -53,6 +53,28 @@
     const rulesList = el("div", "setup-shell-list");
     rules.append(el("p", "setup-help", t.rulesText), rulesList);
 
+    // ---- Windows' limits (Windows only, view.limits): the guards placed on places outside the app's home
+    // (shell/guards.py), taken out with {guards: false} and placed again with {guards: true}, and the optional
+    // hardening set up once through the system's administrator prompt ({hardening}, shell/netguard.py).
+    const limits = kit.item("limits", kit.card(t.limitsTitle));
+    const guardsRow = kit.optionRow(t.guardsName, t.guardsText, null);
+    const guardsBox = el("input", "setup-switch");
+    guardsBox.type = "checkbox";
+    guardsBox.setAttribute("role", "switch");
+    guardsBox.setAttribute("aria-label", t.guardsName);
+    guardsBox.addEventListener("change", () => setGuards(guardsBox.checked));
+    guardsRow.row.append(guardsBox);
+    const placesFold = kit.fold(t.placesFold);
+    const hardRow = kit.optionRow(t.hardeningName, t.hardeningText, null);
+    const hardBox = el("input", "setup-switch");
+    hardBox.type = "checkbox";
+    hardBox.setAttribute("role", "switch");
+    hardBox.setAttribute("aria-label", t.hardeningName);
+    hardBox.addEventListener("change", () => setHardening(hardBox.checked));
+    hardRow.row.append(hardBox);
+    const limitsError = kit.errorLine();
+    limits.append(el("p", "setup-help", t.limitsText), guardsRow.row, placesFold.node, hardRow.row, limitsError);
+
     // ---- Never run, and the record.
     const never = kit.fold(t.neverFold);
     const record = kit.fold(paI18n.t("setup_shell.logFold", { count: 0 }));
@@ -64,7 +86,7 @@
     record.node.addEventListener("toggle", () => {
       if (record.node.open) loadLog();
     });
-    node.append(main, folders, rules, never.node, record.node);
+    node.append(main, folders, rules, limits, never.node, record.node);
 
     // A row of a list: a name with its line under it (cut short, the whole in the tooltip), what is set for it, and the way to take it out.
     function row(name, line, tip, control, label, removal) {
@@ -105,12 +127,61 @@
           return row(name, folder.path, folder.path, access, paI18n.t("setup_shell.remove", { name }), { remove: folder.path });
         }));
       }
+      renderLimits();
       never.body.replaceChildren(el("p", "setup-help", t.neverText),
         (() => {
           const items = el("ul", "setup-shell-never");
           for (const row of view.never) items.append(el("li", "", zh ? row.zh : row.en));
           return items;
         })());
+    }
+
+    // Each guarded place: why, and its path; one that could not be guarded says so.
+    function renderLimits() {
+      const kept = view.limits;
+      limits.hidden = !kept;
+      if (!kept) return;
+      guardsBox.checked = kept.guards;
+      guardsBox.disabled = hardBox.disabled = false;
+      hardBox.checked = kept.hardening.on;
+      const failed = new Set(kept.failed);
+      placesFold.summary.lastChild.textContent = paI18n.t("setup_shell.placesFold", { count: kept.places.length });
+      placesFold.node.hidden = !kept.guards;
+      placesFold.body.replaceChildren(...kept.places.map((place) => {
+        const item = el("div", "setup-shell-row");
+        const words = el("div", "setup-option-words");
+        words.append(el("p", "setup-option-name", t.why[place.why] || place.why),
+          el("p", "setup-option-text", failed.has(place.path) ? paI18n.t("setup_shell.placeFailed", { path: place.path }) : place.path));
+        words.title = place.path;
+        item.append(words);
+        return item;
+      }));
+      if (kept.hardening.error) {
+        limitsError.textContent = t.errors.hardening_failed;
+        limitsError.hidden = false;
+      }
+    }
+
+    async function setGuards(on) {
+      if (!on) {
+        guardsBox.checked = true;
+        const sure = await ctx.confirm({ title: t.guardsOffAsk, text: t.guardsOffText, ok: t.guardsOff });
+        if (!sure) return;
+        guardsBox.checked = false;
+      }
+      guardsBox.disabled = true;
+      await change({ guards: on }, limitsError);
+      if (view) renderLimits();
+    }
+
+    async function setHardening(on) {
+      hardBox.checked = !on;
+      const sure = await ctx.confirm({ title: on ? t.hardeningOnAsk : t.hardeningOffAsk,
+        text: on ? t.hardeningOnText : t.hardeningOffText, ok: on ? t.hardeningOn : t.hardeningOff });
+      if (!sure) return;
+      hardBox.disabled = true;
+      await change({ hardening: on }, limitsError);
+      if (view) renderLimits();
     }
 
     async function load() {
@@ -193,7 +264,7 @@
       }
     }
 
-    folders.hidden = rules.hidden = never.node.hidden = record.node.hidden = true;
+    folders.hidden = rules.hidden = limits.hidden = never.node.hidden = record.node.hidden = true;
 
     function show() {
       load();

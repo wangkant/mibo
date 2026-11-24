@@ -19,6 +19,8 @@ NOT_SETTINGS = {
     "PATH", "TEMP", "USERPROFILE", "COMPUTERNAME",
     # Windows' own folder, read to tell its programs from the person's (desk/names.py).
     "SYSTEMROOT",
+    # The person's AppData folders, where shell/guards.py finds the places it closes to commands.
+    "APPDATA", "LOCALAPPDATA",
     # Python's own search path, which the measuring scripts' scratch homes extend (tools/scratchhome.py).
     "PYTHONPATH",
     # The OpenAI SDK's own variable, read to know whose key OPENAI_API_KEY is (panels/detect.py).

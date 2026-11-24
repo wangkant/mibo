@@ -146,7 +146,21 @@
       "tests/floors/grants/test_on_any_root.py::test_a_write_where_it_would_run_by_itself_is_asked_every_time_as_a_costly_step",
       "tests/floors/grants/test_on_any_root.py::test_in_the_program_places_only_names_sizes_and_dates_are_free",
       "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_shortcut_to_what_came_from_the_web_never_starts_it",
-      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_shortcut_that_hands_a_command_to_a_shell_is_not_the_program_named"
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_shortcut_that_hands_a_command_to_a_shell_is_not_the_program_named",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_a_guarded_secret_outside_the_home_is_read_only_by_the_tiers_it_belongs_to",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_a_change_command_cannot_plant_something_that_runs_later",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_the_persons_own_programs_use_the_guarded_places_as_before",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_taking_the_guards_out_leaves_every_descriptor_as_it_was",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_a_first_walk_cut_short_is_finished_on_the_next_start",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_a_file_moved_into_a_small_guarded_place_is_guarded_before_the_next_command",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_a_refusal_is_said_in_one_line_that_names_the_limit",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_the_model_is_told_which_limit_stopped_a_command",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_what_wmi_starts_for_a_command_outside_its_job_is_ended",
+      "tests/floors/grants/test_guards_hold_outside_the_home.py::test_every_place_windows_closes_is_one_the_reading_refuses_too",
+      "tests/floors/grants/test_everyday_commands_work_under_the_limits.py::test_an_everyday_command_works_as_it_does_with_no_limits",
+      "tests/floors/grants/test_the_hardening_holds_the_network.py::test_a_command_not_read_as_using_the_network_cannot_reach_it",
+      "tests/floors/grants/test_the_hardening_holds_the_network.py::test_no_command_but_a_programs_run_registers_a_scheduled_task",
+      "tests/floors/grants/test_the_hardening_holds_the_network.py::test_turning_the_hardening_off_leaves_windows_as_it_was"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",

@@ -260,6 +260,10 @@ def apply_pending(home: Path) -> None:
         return
     pending.unlink()
     if asked.get("reset"):
+        if sys.platform == "win32":
+            # The entries the app placed for its commands go first, with the record of them in the home.
+            from ..shell import guards
+            guards.keeper(home).remove(everything=True)
         _reset(home)
     elif isinstance(asked.get("restore"), str):
         error = _restore(home, Path(asked["restore"]))

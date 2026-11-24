@@ -1817,7 +1817,7 @@
   "setup_shell": {
     "hint": "Die Figur darf auf Ihre Bitte hin per Befehl Dateien auf diesem Computer ansehen und ordnen.",
     "onTitle": "Per Befehl auf diesem Computer arbeiten lassen",
-    "onText": "Wenn eingeschaltet, darf die Figur Befehle ausführen, um die du im Gespräch bittest: Dateien in deinem Benutzerordner und auf deinen anderen Laufwerken ansehen und ordnen, Speicherplatz prüfen und Ähnliches. Jeder Befehl wird vor der Ausführung gelesen und eingeordnet; Orte mit Passwörtern, Schlüsseln, Browserprofilen oder Daten anderer Programme werden nie gelesen; nach Löschen, Netzwerkzugriffen und Softwareinstallationen wird im Chat gefragt, Dateiänderungen und Programmstarts folgen der Arbeitsweise unten, und manches geschieht nie. Auch Windows selbst setzt jedem Befehl Grenzen: Keiner kann die eigenen Dateien der App öffnen, und ein Befehl, der nur liest, kann nichts ändern. Ausgeschaltet läuft kein Befehl.",
+    "onText": "Wenn eingeschaltet, darf die Figur Befehle ausführen, um die du im Gespräch bittest: Dateien in deinem Benutzerordner und auf deinen anderen Laufwerken ansehen und ordnen, Speicherplatz prüfen und Ähnliches. Jeder Befehl wird vor der Ausführung gelesen und eingeordnet; Orte mit Passwörtern, Schlüsseln, Browserprofilen oder Daten anderer Programme werden nie gelesen; nach Löschen, Netzwerkzugriffen und Softwareinstallationen wird im Chat gefragt, Dateiänderungen und Programmstarts folgen der Arbeitsweise unten, und manches geschieht nie. Auch Windows selbst setzt jedem Befehl Grenzen: Keiner kann die eigenen Dateien der App oder die Orte unter „Windows-Grenzen“ unten öffnen, und ein Befehl, der nur liest, kann nichts ändern. Ausgeschaltet läuft kein Befehl.",
     "onAsk": "Per Befehl auf diesem Computer arbeiten lassen?",
     "onAskText": "Die Figur führt Befehle nur aus, während du mit ihr chattest, und nur für das, worum du bittest. Vor dem Löschen, Ersetzen, Verschieben aus einem Ordner heraus, Netzwerkzugriff, Installieren von Software oder Starten eines Programms sagt sie im Chat, was passieren wird, und wartet auf deine Antwort: „ja“, „mach“ und Ähnliches im Chatfeld gelten als Zustimmung, und Schritte derselben Art werden in dieser Aufgabe nicht erneut erfragt; Zahlen, Löschen oder Kontoänderungen werden weiterhin eigens bestätigt. Jede andere Antwort bedeutet nein. Nichts auf einer Seite, in einer Datei oder aus einem Werkzeug kann für dich antworten.",
     "onYes": "Einschalten",
@@ -1877,15 +1877,41 @@
       "rule_added": "Immer erlaubt"
     },
     "code": " (Exit-Code {count})",
+    "logFold_one": "Befehlsprotokoll (letzter {count})",
+    "limitsTitle": "Windows-Grenzen",
+    "limitsText": "Windows setzt diese Grenzen bei jedem Befehl durch, unabhängig davon, wie er gelesen wurde. Programme, die du selbst öffnest, sind nicht betroffen.",
+    "guardsName": "Sensible Orte für Befehle sperren",
+    "guardsText": "Browserprofile, Passwortmanager, Wallets und Chat-Apps sind für jeden Befehl gesperrt. SSH- und Cloud-Schlüssel sind nur für Befehle offen, die das Netzwerk nutzen. In Autostart-Ordner, Shell-Profile und die Run-Schlüssel kann nicht geschrieben werden, sodass nichts, was ein Befehl hinterlässt, später läuft. Ausschalten stellt die Berechtigungen jedes Orts genau wieder her; Deinstallieren oder Zurücksetzen von Mibo ebenso.",
+    "guardsOffAsk": "Diese Orte für Befehle wieder öffnen?",
+    "guardsOffText": "Befehle können dann Browserdaten, Passwörter und Schlüssel lesen und Dinge hinzufügen, die bei der Anmeldung laufen, sofern das, wozu sie gelesen wurden, es erlaubt. Die Berechtigungen jedes Orts werden wiederhergestellt.",
+    "guardsOff": "Wieder öffnen",
+    "placesFold_zero": "Gesperrte Orte",
+    "placesFold_one": "Gesperrte Orte ({count})",
+    "placesFold_other": "Gesperrte Orte ({count})",
+    "placeFailed": "Konnte nicht gesperrt werden: {path}",
+    "why": {
+      "secrets": "Passwörter und Browserdaten",
+      "keys": "Netzwerkschlüssel, nur für Befehle mit Netzwerkzugriff offen",
+      "later": "Startet später etwas"
+    },
+    "hardeningName": "Strengere Grenzen (Administrator nötig)",
+    "hardeningText": "Einmal mit Zustimmung eines Administrators eingerichtet: Ein Befehl, der nicht als Netzwerkzugriff gelesen wurde, erreicht das Netzwerk nicht, auch nicht die Dienste dieses Computers, und kein Befehl kann eine geplante Aufgabe anlegen. Ausschalten entfernt beides. Namensauflösungen über den eigenen Resolver von Windows sind nicht erfasst.",
+    "hardeningOnAsk": "Strengere Grenzen einrichten?",
+    "hardeningOnText": "Windows fragt nach der Zustimmung eines Administrators. Mibo fügt dann Netzwerkfilter für seine eigenen Befehle hinzu und sperrt die Ordner der Aufgabenplanung für sie. Sonst ändert sich nichts auf diesem Computer.",
+    "hardeningOn": "Weiter",
+    "hardeningOffAsk": "Strengere Grenzen entfernen?",
+    "hardeningOffText": "Windows fragt nach der Zustimmung eines Administrators. Die Filter werden entfernt und die Ordner der Aufgabenplanung erhalten ihre Berechtigungen zurück.",
+    "hardeningOff": "Entfernen",
     "errors": {
       "folder_missing": "Dieser Ordner wurde nicht gefunden.",
       "folder_root": "Ein ganzes Laufwerk kann nicht erlaubt werden. Wählen Sie einen Ordner darin.",
       "folder_app": "Das ist der Ordner von Mibo selbst und kann nicht erlaubt werden.",
       "folder_secrets": "Dieser Ordner enthält Passwörter, Schlüssel oder Daten anderer Programme und kann nicht erlaubt werden.",
       "folder_system": "Das ist ein Systemordner und kann nicht erlaubt werden.",
-      "folder_wide": "Dieser Ordner ist zu umfassend (er enthält den Benutzerordner oder Systemordner). Wählen Sie einen kleineren darin."
-    },
-    "logFold_one": "Befehlsprotokoll (letzter {count})"
+      "folder_wide": "Dieser Ordner ist zu umfassend (er enthält den Benutzerordner oder Systemordner). Wählen Sie einen kleineren darin.",
+      "hardening_cancelled": "Die Administratorzustimmung wurde abgelehnt. Nichts wurde geändert.",
+      "hardening_failed": "Die strengeren Grenzen konnten nicht eingerichtet oder entfernt werden. Versuch es noch einmal."
+    }
   },
   "setup_skills": {
     "hint": "Ein Skill ist eine schriftliche Schrittfolge für eine bestimmte Art von Aufgabe. Die Figur liest ihn nur, wenn Ihre Anfrage dazu passt, und arbeitet nur mit den Fähigkeiten, die sie bereits hat; ein Skill gewährt nichts.",
@@ -2342,5 +2368,11 @@
       "claude": "Claude-chan, die junge Dame: wohlerzogen, sanft und aufrichtig, mit strengen Hausregeln aufgewachsen",
       "template": "Später selbst schreiben: eine schlichte Ausgangsfigur zum Bearbeiten"
     }
+  },
+  "guards": {
+    "command": "Für Befehle gesperrte Orte anzeigen, sperren oder wieder öffnen (Windows)"
+  },
+  "netguard": {
+    "command": "Strengere Grenzen einrichten oder entfernen; braucht Administratorrechte (Windows)"
   }
 }

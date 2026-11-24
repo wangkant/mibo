@@ -1813,7 +1813,7 @@
   "setup_shell": {
     "hint": "Let the character look at and sort files on this computer by command, when you ask.",
     "onTitle": "Let it do things on this computer by command",
-    "onText": "When on, the character may run commands you ask for in the chat: looking at and sorting files in your user folder and on your other drives, checking disk space and the like. Every command is read and sorted before it runs; places that hold passwords, keys, browser profiles or other programs' data are never read; deleting, using the network and installing software are asked about in the chat, changing files and running programs follow the mode below, and some things are never done. Windows itself holds every command too: none can open the app's own files, and one that only reads can change nothing. While off, no command runs.",
+    "onText": "When on, the character may run commands you ask for in the chat: looking at and sorting files in your user folder and on your other drives, checking disk space and the like. Every command is read and sorted before it runs; places that hold passwords, keys, browser profiles or other programs' data are never read; deleting, using the network and installing software are asked about in the chat, changing files and running programs follow the mode below, and some things are never done. Windows itself holds every command too: none can open the app's own files or the places under Windows limits below, and one that only reads can change nothing. While off, no command runs.",
     "onAsk": "Let it do things on this computer by command?",
     "onAskText": "The character runs commands only while you chat with it and only for what you ask. Before deleting, replacing, moving out of a folder, using the network, installing software or running a program, it says in the chat what will happen and waits for your reply: “yes”, “go ahead” and the like typed in the chat box count as a yes, and steps of the same kind in that task are not asked again; paying, deleting or changing an account is still confirmed on its own. Any other reply means no. Nothing on a page, in a file or from a tool can answer for you.",
     "onYes": "Turn on",
@@ -1873,13 +1873,39 @@
       "rule_added": "Always allowed"
     },
     "code": " (exit code {count})",
+    "limitsTitle": "Windows limits",
+    "limitsText": "Windows enforces these on every command, whatever the reading decided. Programs you open yourself are not affected.",
+    "guardsName": "Close sensitive places to commands",
+    "guardsText": "Browser profiles, password managers, wallets and chat apps are closed to every command. SSH and cloud keys are open only to a command that uses the network. Startup folders, shell profiles and the Run keys cannot be written, so nothing a command leaves behind runs later. Turning this off puts each place's permissions back exactly as they were; uninstalling or resetting Mibo does the same.",
+    "guardsOffAsk": "Reopen these places to commands?",
+    "guardsOffText": "Commands will be able to read browser data, passwords and keys, and to add things that run at sign-in, whenever what they were read to do allows it. Each place's permissions are put back as they were.",
+    "guardsOff": "Reopen",
+    "placesFold_zero": "Closed places",
+    "placesFold_one": "Closed places ({count})",
+    "placesFold_other": "Closed places ({count})",
+    "placeFailed": "Could not be closed: {path}",
+    "why": {
+      "secrets": "Passwords and browser data",
+      "keys": "Network keys, open only to commands that use the network",
+      "later": "Runs something later"
+    },
+    "hardeningName": "Stronger limits (needs administrator)",
+    "hardeningText": "Set up once with administrator approval: a command not read as using the network cannot reach it, this computer's own services included, and no command can create a scheduled task. Turning it off removes both. Name lookups made by Windows' own resolver are not covered.",
+    "hardeningOnAsk": "Set up stronger limits?",
+    "hardeningOnText": "Windows asks for administrator approval. Mibo then adds network filters for its own commands and closes the Task Scheduler's folders to them. Nothing else on this computer changes.",
+    "hardeningOn": "Continue",
+    "hardeningOffAsk": "Remove the stronger limits?",
+    "hardeningOffText": "Windows asks for administrator approval. The filters are removed and the Task Scheduler's folders get their permissions back as they were.",
+    "hardeningOff": "Remove",
     "errors": {
       "folder_missing": "That folder was not found.",
       "folder_root": "A whole drive cannot be allowed. Choose a folder in it.",
       "folder_app": "That is Mibo's own folder and cannot be allowed.",
       "folder_secrets": "That folder holds passwords, keys or other programs' data and cannot be allowed.",
       "folder_system": "That is a system folder and cannot be allowed.",
-      "folder_wide": "That folder is too wide (it holds the user folder or system folders). Choose a smaller one in it."
+      "folder_wide": "That folder is too wide (it holds the user folder or system folders). Choose a smaller one in it.",
+      "hardening_cancelled": "Administrator approval was declined. Nothing changed.",
+      "hardening_failed": "The stronger limits could not be set up or removed. Try again."
     }
   },
   "setup_skills": {
@@ -2335,5 +2361,11 @@
       "claude": "The Claude lady: well-bred, gentle and candid, raised under strict house rules",
       "template": "Write my own later: a plain starting character to edit"
     }
+  },
+  "guards": {
+    "command": "Show, close or reopen the places closed to commands (Windows)"
+  },
+  "netguard": {
+    "command": "Set up or remove the stronger limits; needs administrator rights (Windows)"
   }
 }

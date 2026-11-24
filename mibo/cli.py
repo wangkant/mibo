@@ -16,6 +16,9 @@ from mibo import __version__, i18n, langs
 # name -> (module, function, its one-line help in the catalog). The function takes (argv, prog).
 COMMANDS = {
     "start": ("mibo.welcome", "main", "start.command"),
+    # Windows: the guards on other places (the uninstaller removes them), and the optional hardening's elevated helper.
+    "guards": ("mibo.shell.guards", "main", "guards.command"),
+    "netguard": ("mibo.shell.netguard", "main", "netguard.command"),
 }
 
 

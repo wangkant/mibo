@@ -37,6 +37,11 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - A change that widens what the character may do takes effect only when your own message of that turn asks for it; otherwise it is asked in the chat.
 - On Windows, Windows itself also limits every command: no administrator rights, no access to the app's own files, no way out of the group its programs run in, and no clipboard. A command read as only reading runs at low integrity and cannot change any file or setting, even if it was read wrong.
 - A command whose Windows limits cannot be set up is not run, and the reply says so.
+- On Windows, places outside the app's home are closed to commands by Windows itself: browser profiles, password managers, wallets and chat apps to every command; SSH, cloud and other network keys to any command not read as using the network; the startup folders, PowerShell profile folders, shell rc files and the Run, RunOnce, Environment, Winlogon and file-association keys to writing, so nothing a command leaves runs later. Programs you open yourself, and programs the character opens, are not affected. Settings › Files and commands › Windows limits lists each place; turning it off, a reset and an uninstall put every permission back exactly as it was.
+- When Windows refuses a command for one of these limits, the reply names the limit in one line.
+- A process a command starts through WMI, outside its group, is ended.
+- An optional one-time setup with administrator approval (Settings › Files and commands › Windows limits) adds network filters so that a command not read as using the network reaches no address, this computer's included, and closes the Task Scheduler's folders to commands. Turning it off or uninstalling removes both.
+- A command read as only reading gets a temporary folder of its own, removed after it.
 
 ### Connected sites
 

@@ -1818,7 +1818,7 @@
   "setup_shell": {
     "hint": "Deixe o personagem ver e organizar arquivos neste computador por comandos, quando você pedir.",
     "onTitle": "Permitir que aja neste computador por comandos",
-    "onText": "Ativado, o personagem pode executar os comandos que você pedir na conversa: ver e organizar arquivos na sua pasta de usuário e nos seus outros discos, verificar o espaço em disco e afins. Cada comando é analisado e classificado antes de ser executado; os locais que guardam senhas, chaves, perfis do navegador ou dados de outros programas nunca são lidos; excluir, usar a rede e instalar software são perguntados na conversa, alterar arquivos e executar programas seguem o modo abaixo, e algumas ações nunca são feitas. O próprio Windows também limita cada comando: nenhum pode abrir os arquivos do próprio aplicativo, e um comando que só lê não pode alterar nada. Desativado, nenhum comando é executado.",
+    "onText": "Ativado, o personagem pode executar os comandos que você pedir na conversa: ver e organizar arquivos na sua pasta de usuário e nos seus outros discos, verificar o espaço em disco e afins. Cada comando é analisado e classificado antes de ser executado; os locais que guardam senhas, chaves, perfis do navegador ou dados de outros programas nunca são lidos; excluir, usar a rede e instalar software são perguntados na conversa, alterar arquivos e executar programas seguem o modo abaixo, e algumas ações nunca são feitas. O próprio Windows também limita cada comando: nenhum pode abrir os arquivos do próprio aplicativo nem os locais em “Limites do Windows”, abaixo, e um comando que só lê não pode alterar nada. Desativado, nenhum comando é executado.",
     "onAsk": "Permitir que aja neste computador por comandos?",
     "onAskText": "O personagem só executa comandos enquanto você conversa com ele e só para o que você pedir. Antes de excluir, substituir, mover para fora de uma pasta, usar a rede, instalar software ou executar um programa, ele diz na conversa o que vai acontecer e espera sua resposta: “sim”, “pode fazer” e respostas parecidas digitadas na conversa contam como sim, e etapas do mesmo tipo nessa tarefa não são perguntadas de novo; pagar, excluir ou alterar uma conta continua sendo confirmado à parte. Qualquer outra resposta significa não. Nada em uma página, em um arquivo ou vindo de uma ferramenta pode responder por você.",
     "onYes": "Ativar",
@@ -1878,15 +1878,41 @@
       "rule_added": "Sempre permitido"
     },
     "code": " (código de saída {count})",
+    "logFold_one": "Registro de comandos (último {count})",
+    "limitsTitle": "Limites do Windows",
+    "limitsText": "O Windows aplica estes limites a cada comando, seja qual for a forma como ele foi lido. Programas que você mesmo abre não são afetados.",
+    "guardsName": "Fechar locais sensíveis aos comandos",
+    "guardsText": "Perfis do navegador, gerenciadores de senhas, carteiras e aplicativos de conversa ficam fechados a todos os comandos. Chaves SSH e de nuvem só ficam abertas a comandos que usam a rede. Pastas de inicialização, perfis de shell e as chaves Run não podem ser alterados, então nada que um comando deixe é executado depois. Desativar devolve as permissões de cada local exatamente como estavam; desinstalar ou redefinir o Mibo faz o mesmo.",
+    "guardsOffAsk": "Reabrir estes locais aos comandos?",
+    "guardsOffText": "Os comandos poderão ler dados do navegador, senhas e chaves, e adicionar itens executados ao entrar na conta, sempre que o que foi lido que fariam permitir. As permissões de cada local voltam a ser como eram.",
+    "guardsOff": "Reabrir",
+    "placesFold_zero": "Locais fechados",
+    "placesFold_one": "Locais fechados ({count})",
+    "placesFold_other": "Locais fechados ({count})",
+    "placeFailed": "Não foi possível fechar: {path}",
+    "why": {
+      "secrets": "Senhas e dados do navegador",
+      "keys": "Chaves de rede, abertas só a comandos que usam a rede",
+      "later": "Executa algo mais tarde"
+    },
+    "hardeningName": "Limites mais rígidos (requer administrador)",
+    "hardeningText": "Configurados uma vez com a aprovação de um administrador: um comando que não foi lido como uso da rede não consegue alcançá-la, incluindo os serviços deste computador, e nenhum comando pode criar uma tarefa agendada. Desativar remove os dois. Consultas de nomes feitas pelo próprio resolvedor do Windows não são cobertas.",
+    "hardeningOnAsk": "Configurar limites mais rígidos?",
+    "hardeningOnText": "O Windows pede a aprovação de um administrador. Depois, o Mibo adiciona filtros de rede para os próprios comandos e fecha para eles as pastas do Agendador de Tarefas. Nada mais muda neste computador.",
+    "hardeningOn": "Continuar",
+    "hardeningOffAsk": "Remover os limites mais rígidos?",
+    "hardeningOffText": "O Windows pede a aprovação de um administrador. Os filtros são removidos e as pastas do Agendador de Tarefas recuperam as permissões de antes.",
+    "hardeningOff": "Remover",
     "errors": {
       "folder_missing": "Essa pasta não foi encontrada.",
       "folder_root": "Não é possível permitir uma unidade inteira. Escolha uma pasta dentro dela.",
       "folder_app": "Essa é a pasta do próprio Mibo e não pode ser permitida.",
       "folder_secrets": "Essa pasta contém senhas, chaves ou dados de outros programas e não pode ser permitida.",
       "folder_system": "Essa é uma pasta do sistema e não pode ser permitida.",
-      "folder_wide": "Essa pasta é ampla demais (contém a pasta do usuário ou pastas do sistema). Escolha uma menor dentro dela."
-    },
-    "logFold_one": "Registro de comandos (último {count})"
+      "folder_wide": "Essa pasta é ampla demais (contém a pasta do usuário ou pastas do sistema). Escolha uma menor dentro dela.",
+      "hardening_cancelled": "A aprovação do administrador foi recusada. Nada mudou.",
+      "hardening_failed": "Não foi possível configurar ou remover os limites mais rígidos. Tente novamente."
+    }
   },
   "setup_skills": {
     "hint": "Uma habilidade é um conjunto de passos escritos para um tipo de tarefa. O personagem só a lê quando o seu pedido combina com ela e trabalha apenas com as capacidades que já tem; uma habilidade não concede nada.",
@@ -2343,5 +2369,11 @@
       "claude": "A senhorita Claude: bem-educada, gentil e franca, criada sob regras rígidas de família",
       "template": "Escrever o meu depois: um personagem básico para editar"
     }
+  },
+  "guards": {
+    "command": "Mostrar, fechar ou reabrir os locais fechados aos comandos (Windows)"
+  },
+  "netguard": {
+    "command": "Configurar ou remover os limites mais rígidos; requer direitos de administrador (Windows)"
   }
 }

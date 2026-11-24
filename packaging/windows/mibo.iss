@@ -78,6 +78,12 @@ Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; Work
 ; The app's own update (mibo/updates.py) runs setup silently with /RESTARTHOME: the app opens again on that home.
 Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:RestartHome}"" --restart"; WorkingDir: "{code:RestartHome}"; Flags: nowait; Check: Restarting
 
+[UninstallRun]
+; Windows' limits (mibo/shell/guards.py): each place's permissions put back as they were, the home's too.
+Filename: "{app}\mibo.exe"; Parameters: "guards remove --home ""{code:DataHome}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveGuards"
+; The stronger limits, when they were set up (mibo/shell/netguard.py): removed through the administrator prompt.
+Filename: "{app}\mibo.exe"; Parameters: "netguard off ""{code:HardeningRecord}"" -"; Verb: "runas"; Flags: shellexec runhidden waituntilterminated; Check: HardeningOn; RunOnceId: "RemoveHardening"
+
 [Code]
 { The home the app uses with no --home: AGENT_HOME, else ~\mibo,
   written as the app writes it (~ expanded, backslashes, none at the end). }
@@ -152,6 +158,19 @@ begin
         SW_SHOWNORMAL, ewNoWait, Code);
   except
   end;
+end;
+
+{ The stronger limits' record, which says whether they are on. }
+function HardeningRecord(Param: String): String;
+begin
+  Result := DataHome('') + '\runtime\desktop\netguard.json';
+end;
+
+function HardeningOn: Boolean;
+var
+  Text: AnsiString;
+begin
+  Result := LoadStringFromFile(HardeningRecord(''), Text) and (Pos('"on": true', String(Text)) > 0);
 end;
 
 function IsUpgrade: Boolean;

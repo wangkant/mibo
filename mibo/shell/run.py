@@ -4,13 +4,15 @@ Every command runs in a Windows PowerShell of its own with no profile, not
 elevated, in a granted folder, with an environment rebuilt from a short list
 (none of the app's keys and tokens), a time limit, and its whole process tree
 in a job object that is ended on stop or time out. Output is capped. Windows'
-own limits hold it too, by the tier its reading gave it (confine.py): a
-restricted token that cannot reach the app's home, low integrity for a command
-that only reads, and a job it cannot leave. A command whose limits cannot be
-set up is not run.
+own limits hold it too, by the tier its reading gave it and whether it was
+read as using the network (confine.py): a restricted token that cannot reach
+the app's home or the places guards.py closes, low integrity for a command
+that only reads, and a job it cannot leave; the guards are checked before it
+starts, and what WMI starts for it outside the job is ended while it runs. A
+command whose limits cannot be set up is not run.
 
 That PowerShell is started ahead and waits with the preamble loaded (`Spare`),
-one for each token a tier runs under, as terminals and agents keep a warm
+one for each token a command runs under (`Spare.KINDS`), as terminals and agents keep a warm
 shell: the command is piped in when it comes and another one is started to
 wait for the next. A command so begins at once instead of after PowerShell's
 own start, and since each still has its own process, nothing one command
@@ -34,9 +36,10 @@ import sys
 import tempfile
 import threading
 import time
+import typing
 from pathlib import Path
 
-from . import confine
+from . import confine, guards
 from .grants import SECRET_NAMES, SECRET_SUFFIXES
 
 
@@ -169,62 +172,69 @@ def elevated() -> bool:
 
 
 class Spare:
-    """The PowerShells waiting for the next command, one under each token a tier runs under ("read" at low integrity,
-    "change" for the others), each in its job from its first instruction."""
+    """The PowerShells waiting for the next command, one under each token a command may run under (`KINDS`), each in
+    its job from its first instruction. The two most commands use wait from the start; the others are started
+    when first needed and then kept waiting too."""
+
+    # (tier, read as using the network) of each token: confine.sids gives what it carries.
+    KINDS: typing.ClassVar[dict] = {"read": ("read", False), "change": ("change", False), "online": ("change", True),
+             "program": ("program", True)}
 
     def __init__(self):
         self.lock = threading.Lock()
         self.waiting: dict[str, tuple[confine.Process, confine.Job]] = {}
 
     @staticmethod
-    def _start(kind: str) -> tuple[confine.Process, confine.Job]:
+    def kind(tier: str, online: bool) -> str:
+        if tier in ("read", "program"):
+            return tier
+        return "online" if online else "change"
+
+    @classmethod
+    def _start(cls, kind: str) -> tuple[confine.Process, confine.Job]:
         encoded = base64.b64encode((PREAMBLE + BIN + WAIT).encode("utf-16-le")).decode("ascii")
+        tier, online = cls.KINDS[kind]
         # It waits in Windows' own folder, so it holds no granted folder open.
         try:
             return confine.start(subprocess.list2cmdline(
                 [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]),
-                _windows(), environment(), kind)
+                _windows(), environment(), tier, online=online)
         except confine.Unconfined:
             raise
         except OSError as e:
             raise confine.Unconfined(e.errno, str(e)) from e
 
     def warm(self) -> None:
-        """One is waiting under each token from now on, started if none is; one that cannot be started is tried
-        again when a command needs it."""
+        """One is waiting under each of the two usual tokens from now on, started if none is; one that cannot be
+        started is tried again when a command needs it."""
         with self.lock:
             for kind in ("read", "change"):
                 if kind not in self.waiting or self.waiting[kind][0].poll() is not None:
                     with contextlib.suppress(confine.Unconfined):
                         self.waiting[kind] = self._start(kind)
 
-    def take(self, tier: str) -> tuple[confine.Process, confine.Job]:
-        """The one waiting under `tier`'s token (or a new one when none is), its job set to `tier`'s limits, and
-        another started to wait in its place. Unconfined when none can be."""
-        kind = "read" if tier == "read" else "change"
+    def take(self, tier: str, online: bool = False) -> tuple[confine.Process, confine.Job]:
+        """The one waiting under the token of `tier` and `online` (or a new one when none is), its job set to the
+        tier's limits, and another started to wait in its place. Unconfined when none can be."""
+        kind = self.kind(tier, online)
         with self.lock:
             taken = self.waiting.pop(kind, None)
             with contextlib.suppress(confine.Unconfined):
                 self.waiting[kind] = self._start(kind)
         if taken is not None and taken[0].poll() is not None:
+            taken[0].clean()
             taken[1].close()
             taken = None
-        taken = taken or self._start(kind)
-        if tier == "program":
-            try:
-                taken[1].limit(tier)
-            except confine.Unconfined:
-                taken[1].end()
-                taken[1].close()
-                raise
-        return taken
+        return taken or self._start(kind)
 
     def close(self) -> None:
         """Ends the ones waiting: the app is closing."""
         with self.lock:
-            for _, job in self.waiting.values():
+            for process, job in self.waiting.values():
                 job.end()
                 job.close()
+                process.wait()
+                process.clean()
             self.waiting.clear()
 
 
@@ -277,15 +287,15 @@ def errors_of(raw: bytes) -> str:
     return plain if len(plain) <= ERRORS_KEPT else plain[:ERRORS_KEPT] + f"\n[... {len(plain) - ERRORS_KEPT} characters left out ...]"
 
 
-def run(command: str, cwd: str, *, tier: str, home: Path | None = None, limit_s: float = TIME_LIMIT_S,
-        stop: threading.Event | None = None, progress: dict | None = None) -> dict:
-    """Runs `command` in `cwd` under the limits of `tier` (confine.TIERS, as acts.tier read it), with the app's `home`
-    denied to it: {"code", "out", "err", "clipped", "timed_out", "stopped", "seconds", "recycled"}. `stop` set from
+def run(command: str, cwd: str, *, tier: str, online: bool = False, home: Path | None = None,
+        limit_s: float = TIME_LIMIT_S, stop: threading.Event | None = None, progress: dict | None = None) -> dict:
+    """Runs `command` in `cwd` under the limits of `tier` (confine.TIERS, as acts.tier read it) and of `online` (read
+    as using the network), with the app's `home` and the guarded places (guards.py) denied to it: {"code", "out", "err", "clipped", "timed_out", "stopped", "seconds", "recycled"}. `stop` set from
     another thread ends the whole tree at once; `progress` gets the last line printed as it runs; `recycled` lists
     what Remove-Item moved to the Recycle Bin. confine.Unconfined, with nothing run, when the limits cannot be set."""
     if home is not None:
-        confine.guard(home)
-    process, job = SPARE.take(tier)
+        guards.keeper(home).ready()
+    process, job = SPARE.take(tier, online)
     handle, bin_log = tempfile.mkstemp(prefix="mibo-bin-", suffix=".txt")
     os.close(handle)
     quoted = "'" + cwd.replace("'", "''") + "'"
@@ -316,6 +326,7 @@ def run(command: str, cwd: str, *, tier: str, home: Path | None = None, limit_s:
     err_reader = threading.Thread(target=drain_err, daemon=True)
     err_reader.start()
     timed_out = stopped = False
+    swept = started
     while process.poll() is None:
         if time.monotonic() - started > limit_s:
             timed_out = True
@@ -323,13 +334,19 @@ def run(command: str, cwd: str, *, tier: str, home: Path | None = None, limit_s:
             stopped = True
         else:
             time.sleep(0.1)
+            # What WMI started for it outside its job is ended as it is seen.
+            if time.monotonic() - swept > 1:
+                confine.strays()
+                swept = time.monotonic()
             continue
         job.end()
         break
     process.wait()
+    confine.strays()
     reader.join(5)
     err_reader.join(5)
     job.close()
+    process.clean()
     # A pipe still held by a program it opened is left to that program.
     for stream, drained in ((process.stdout, reader), (process.stderr, err_reader)):
         if not drained.is_alive():

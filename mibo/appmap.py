@@ -323,6 +323,9 @@ ITEMS = (
          lambda v, was: v == "auto", "setup_shell.modes"),
     Item("shell", "folders", "setup_shell.foldersTitle", "The folders it may use; granted when it asks in the chat"),
     Item("shell", "rules", "setup_shell.rulesTitle", "Programs always allowed in a folder, each taken back there"),
+    Item("shell", "limits", "setup_shell.limitsTitle",
+         "Windows' limits on every command: places closed to commands, and the stronger limits set up as administrator; "
+         "only the person changes them"),
     Item("shell", "record", "setup_shell.logFold", "Every command run, with its result"),
     Item("programs", "programs-on", "setup.names.programs", "Operating other programs' windows on this computer",
          field("/api/programs", "on"), "/api/programs", lambda v, now: {"on": v}, _switch, _turned_on),

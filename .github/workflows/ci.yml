@@ -93,6 +93,13 @@ jobs:
         run: |
           python -m pytest -q -n auto --dist loadfile --durations=25
           python -m compileall -q .
+      - name: Run the hardening's tests
+        # The runner is elevated, so the optional hardening (shell/netguard.py) is set up, checked and taken away
+        # here, alone, after the suite: its filters hold every command of the account while they are on.
+        shell: bash
+        env:
+          MIBO_HARDENING_TESTS: "1"
+        run: python -m pytest -q -rs -p no:cacheprovider tests/floors/grants/test_the_hardening_holds_the_network.py
 
   package:
     # A checkout hides packaging breakage, so the built artifacts are installed and run elsewhere.

@@ -28,6 +28,7 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -37,7 +38,7 @@ from fastapi.responses import JSONResponse
 
 from ..cardwait import Card
 from ..crossing import downloaded
-from . import checkpoint, confine, filejob, files, words
+from . import checkpoint, confine, filejob, files, guards, netguard, words
 from . import read as reading
 from . import run as running
 from .acts import tier as tier_of
@@ -317,6 +318,7 @@ class Shell:
             return {"status": "bad_folder"}, {}
         # The limits Windows holds it to as it runs (confine.py), from this same reading.
         context = {"cwd": cwd, "read": read_, "verdict": verdict, "tier": tier_of(read_.acts),
+                   "online": guards.online(read_.acts),
                    "said": {lang: words.summary(read_, lang, "ed") for lang in ("zh", "en")}}
         # What it would have done, for a command that was not run.
         asked_said = {lang: (card or {}).get(lang, {}).get("title") or words.summary(read_, lang, "card")
@@ -459,7 +461,8 @@ class Shell:
             self.running = {"started": time.monotonic(), "last": ""}
             try:
                 done = await asyncio.to_thread(running.run, command, context["cwd"], tier=context["tier"],
-                                               home=self.home, limit_s=limit_s, stop=stop, progress=self.running)
+                                               online=context["online"], home=self.home, limit_s=limit_s, stop=stop,
+                                               progress=self.running)
             except confine.Unconfined as e:
                 # Never run without Windows' limits.
                 self.log(command, context["cwd"], context["read"], context["verdict"], "unconfined", said=context["said"])
@@ -468,6 +471,8 @@ class Shell:
             finally:
                 watcher.cancel()
                 self.running = None
+            # When Windows' limits stopped it: which one and why, in one line for the model.
+            done["limit"] = guards.refused_line(done["err"], context["tier"], context["online"], self.home)
             changes = await asyncio.to_thread(self._kept, kept, moves, done["recycled"])
             self.log(command, context["cwd"], context["read"], context["verdict"], "ran", done, said=context["said"],
                      how=context["how"], review=context.get("review"))
@@ -551,7 +556,17 @@ class Shell:
                       for r in self.grants.rules()],
             "known": [{**row, "granted": norm(row["path"]) in granted} for row in known_folders()],
             "never": [{"zh": zh, "en": en} for zh, en in NEVER],
+            "limits": self.limits(),
         }
+
+    def limits(self) -> dict | None:
+        """Settings' Windows limits: the guards placed on other places, by why, and the optional hardening."""
+        if sys.platform != "win32":
+            return None
+        kept = guards.keeper(self.home).view()
+        places = [row for row in kept["places"] if row["why"] != "app"]
+        return {"guards": kept["on"], "places": places, "failed": [row["path"] for row in places if row["failed"]],
+                "hardening": netguard.state(self.desktop)}
 
 
 def mount(app, workspace, body) -> None:
@@ -594,6 +609,15 @@ def mount(app, workspace, body) -> None:
             await asyncio.to_thread(grants.log, {"granted": payload["add"].strip(), "outcome": "granted_in_settings"})
         elif isinstance(payload.get("remove"), str):
             await asyncio.to_thread(grants.remove, payload["remove"])
+        elif isinstance(payload.get("guards"), bool) and sys.platform == "win32":
+            # Off takes every guard of other places out, each list as it was; on places them again.
+            keeper = guards.keeper(shell().home)
+            await asyncio.to_thread(keeper.turn_on if payload["guards"] else keeper.remove)
+        elif isinstance(payload.get("hardening"), bool) and sys.platform == "win32":
+            # The system's elevation prompt for the one-time setup; cancelled there, nothing changes.
+            failed = await asyncio.to_thread(netguard.elevate, payload["hardening"], shell().desktop)
+            if failed:
+                return _error(f"hardening_{failed}")
         else:
             return _error("generic")
         return await asyncio.to_thread(shell().view)

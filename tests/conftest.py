@@ -148,6 +148,13 @@ def _no_walks(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_real_guards(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test places an entry on a real folder or key of this computer (shell/guards.py): only the test's own home is
+    guarded; the guards' tests lay out stand-ins of their own."""
+    monkeypatch.setenv("MIBO_GUARD_PLACES", "")
+
+
+@pytest.fixture(autouse=True)
 def _no_credential_store(monkeypatch: pytest.MonkeyPatch) -> None:
     """No test writes to this computer's credential store (secretstore.py): a dictionary stands in."""
     import keyring

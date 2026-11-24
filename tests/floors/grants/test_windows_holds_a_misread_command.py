@@ -160,7 +160,7 @@ def test_a_command_whose_limits_cannot_be_set_up_is_not_run(app, turn, tmp_path,
     folder.mkdir()
     assert Grants(app.home / "runtime" / "desktop", app.home).add(str(folder)) == ""
 
-    def refused(tier):
+    def refused(tier, online=False):
         raise confine.Unconfined(5, "CreateRestrictedToken: Access is denied.")
 
     # Nothing is waiting, and no restricted token can be made.
