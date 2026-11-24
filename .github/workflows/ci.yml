@@ -69,21 +69,28 @@ jobs:
 
   windows:
     # Windows is the main deployment platform and the only one running storage.FileLock's msvcrt branch. The suite
-    # is run in three parts side by side, on the Python the installer ships; every test is in exactly one of them.
+    # is run in four parts side by side, on the Python the installer ships; every test is in exactly one of them.
+    # The two parts whose tests time what they wait for run two processes, so a full runner does not stretch them.
     name: windows (${{ matrix.part }})
     runs-on: windows-2022
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        part: [floors, interface, layers and parts]
+        part: [floors, interface, layers, parts]
         include:
           - part: floors
             tests: tests/floors
+            processes: auto
           - part: interface
             tests: tests/interface
-          - part: layers and parts
-            tests: tests --ignore=tests/floors --ignore=tests/interface
+            processes: auto
+          - part: layers
+            tests: tests/layers
+            processes: 2
+          - part: parts
+            tests: tests --ignore=tests/floors --ignore=tests/interface --ignore=tests/layers
+            processes: 2
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,9 +107,9 @@ jobs:
       - name: Run the test suite
         # bash: PowerShell reports only the last command of a step, which hid failing tests here.
         shell: bash
-        run: python -m pytest -q -n auto --dist loadfile --durations=25 ${{ matrix.tests }}
+        run: python -m pytest -q -n ${{ matrix.processes }} --dist loadfile --durations=25 ${{ matrix.tests }}
       - name: Compile every file
-        if: matrix.part == 'layers and parts'
+        if: matrix.part == 'parts'
         run: python -m compileall -q .
 
   hardening:

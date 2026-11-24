@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
+import traceback
 
 import httpx
 import uvicorn
@@ -55,7 +57,12 @@ class App:
             # A slow machine with requests still closing: stopped without waiting for them.
             self.server.force_exit = True
             self._thread.join(30)
-        assert not self._thread.is_alive(), "the app did not stop"
+        if self._thread.is_alive():
+            # Where each thread stands, so the one the app waits on can be read from the failure.
+            stacks = "\n".join(f"-- {names.get(ident, ident)}\n" + "".join(traceback.format_stack(frame)[-12:])
+                               for names in [{t.ident: t.name for t in threading.enumerate()}]
+                               for ident, frame in sys._current_frames().items())
+            raise AssertionError("the app did not stop\n" + stacks)
 
     def request(self, method: str, path: str, *, own_page: bool = False, timeout: float = 120, **sent) -> httpx.Response:
         headers = {welcome.TOKEN_HEADER: TOKEN}
