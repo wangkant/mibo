@@ -3,15 +3,19 @@
 Every command runs in a Windows PowerShell of its own with no profile, not
 elevated, in a granted folder, with an environment rebuilt from a short list
 (none of the app's keys and tokens), a time limit, and its whole process tree
-in a job object that is ended on stop or time out. Output is capped.
+in a job object that is ended on stop or time out. Output is capped. Windows'
+own limits hold it too, by the tier its reading gave it (confine.py): a
+restricted token that cannot reach the app's home, low integrity for a command
+that only reads, and a job it cannot leave. A command whose limits cannot be
+set up is not run.
 
 That PowerShell is started ahead and waits with the preamble loaded (`Spare`),
-as terminals and agents keep a warm shell: the command is piped in when it
-comes and another one is started to wait for the next. A command so begins at
-once instead of after PowerShell's own start, and since each still has its own
-process, nothing one command leaves (variables, location, environment, loaded
-types, a program it started) reaches the next or is ended by the next one's
-time out.
+one for each token a tier runs under, as terminals and agents keep a warm
+shell: the command is piped in when it comes and another one is started to
+wait for the next. A command so begins at once instead of after PowerShell's
+own start, and since each still has its own process, nothing one command
+leaves (variables, location, environment, loaded types) reaches the next, and
+what it started ends with it unless it opened a program.
 
 Remove-Item, by any of its aliases, is a function of the preamble's that moves
 what it is given to the Recycle Bin and says each path it moved, so a delete
@@ -32,6 +36,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import confine
 from .grants import SECRET_NAMES, SECRET_SUFFIXES
 
 
@@ -163,68 +168,64 @@ def elevated() -> bool:
     return bool(ctypes.windll.shell32.IsUserAnAdmin())
 
 
-class _Job:
-    """A Windows job object holding a process and everything it starts, so the whole tree can be ended."""
-
-    def __init__(self, process: subprocess.Popen):
-        import ctypes
-        self.k32 = ctypes.windll.kernel32
-        self.k32.CreateJobObjectW.restype = ctypes.c_void_p
-        self.k32.OpenProcess.restype = ctypes.c_void_p
-        self.handle = self.k32.CreateJobObjectW(None, None)
-        proc = self.k32.OpenProcess(0x0001 | 0x0100, False, process.pid)  # PROCESS_TERMINATE | SET_QUOTA
-        self.k32.AssignProcessToJobObject(ctypes.c_void_p(self.handle), ctypes.c_void_p(proc))
-        self.k32.CloseHandle(ctypes.c_void_p(proc))
-
-    def end(self) -> None:
-        import ctypes
-        self.k32.TerminateJobObject(ctypes.c_void_p(self.handle), 1)
-
-    def close(self) -> None:
-        import ctypes
-        self.k32.CloseHandle(ctypes.c_void_p(self.handle))
-
-
 class Spare:
-    """The PowerShell waiting for the next command, in its own job object from the start."""
+    """The PowerShells waiting for the next command, one under each token a tier runs under ("read" at low integrity,
+    "change" for the others), each in its job from its first instruction."""
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.waiting: tuple[subprocess.Popen, _Job] | None = None
+        self.waiting: dict[str, tuple[confine.Process, confine.Job]] = {}
 
     @staticmethod
-    def _start() -> tuple[subprocess.Popen, _Job]:
+    def _start(kind: str) -> tuple[confine.Process, confine.Job]:
         encoded = base64.b64encode((PREAMBLE + BIN + WAIT).encode("utf-16-le")).decode("ascii")
         # It waits in Windows' own folder, so it holds no granted folder open.
-        process = subprocess.Popen(
-            [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            cwd=_windows(), env=environment(), stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return process, _Job(process)
+        try:
+            return confine.start(subprocess.list2cmdline(
+                [POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]),
+                _windows(), environment(), kind)
+        except confine.Unconfined:
+            raise
+        except OSError as e:
+            raise confine.Unconfined(e.errno, str(e)) from e
 
     def warm(self) -> None:
-        """One is waiting from now on, started if none is."""
+        """One is waiting under each token from now on, started if none is; one that cannot be started is tried
+        again when a command needs it."""
         with self.lock:
-            if self.waiting is None or self.waiting[0].poll() is not None:
-                self.waiting = self._start()
+            for kind in ("read", "change"):
+                if kind not in self.waiting or self.waiting[kind][0].poll() is not None:
+                    with contextlib.suppress(confine.Unconfined):
+                        self.waiting[kind] = self._start(kind)
 
-    def take(self) -> tuple[subprocess.Popen, _Job]:
-        """The one waiting (or a new one when none is), and another started to wait in its place."""
+    def take(self, tier: str) -> tuple[confine.Process, confine.Job]:
+        """The one waiting under `tier`'s token (or a new one when none is), its job set to `tier`'s limits, and
+        another started to wait in its place. Unconfined when none can be."""
+        kind = "read" if tier == "read" else "change"
         with self.lock:
-            taken, self.waiting = self.waiting, self._start()
-        if taken is not None and taken[0].poll() is None:
-            return taken
-        if taken is not None:
+            taken = self.waiting.pop(kind, None)
+            with contextlib.suppress(confine.Unconfined):
+                self.waiting[kind] = self._start(kind)
+        if taken is not None and taken[0].poll() is not None:
             taken[1].close()
-        return self._start()
+            taken = None
+        taken = taken or self._start(kind)
+        if tier == "program":
+            try:
+                taken[1].limit(tier)
+            except confine.Unconfined:
+                taken[1].end()
+                taken[1].close()
+                raise
+        return taken
 
     def close(self) -> None:
-        """Ends the one waiting: the app is closing."""
+        """Ends the ones waiting: the app is closing."""
         with self.lock:
-            if self.waiting is not None:
-                self.waiting[1].end()
-                self.waiting[1].close()
-                self.waiting = None
+            for _, job in self.waiting.values():
+                job.end()
+                job.close()
+            self.waiting.clear()
 
 
 SPARE = Spare()
@@ -276,11 +277,15 @@ def errors_of(raw: bytes) -> str:
     return plain if len(plain) <= ERRORS_KEPT else plain[:ERRORS_KEPT] + f"\n[... {len(plain) - ERRORS_KEPT} characters left out ...]"
 
 
-def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threading.Event | None = None,
-        progress: dict | None = None) -> dict:
-    """Runs `command` in `cwd`: {"code", "out", "err", "clipped", "timed_out", "stopped", "seconds", "recycled"}.
-    `stop` set from another thread ends the whole tree at once; `progress` gets the last line printed as it runs;
-    `recycled` lists what Remove-Item moved to the Recycle Bin."""
+def run(command: str, cwd: str, *, tier: str, home: Path | None = None, limit_s: float = TIME_LIMIT_S,
+        stop: threading.Event | None = None, progress: dict | None = None) -> dict:
+    """Runs `command` in `cwd` under the limits of `tier` (confine.TIERS, as acts.tier read it), with the app's `home`
+    denied to it: {"code", "out", "err", "clipped", "timed_out", "stopped", "seconds", "recycled"}. `stop` set from
+    another thread ends the whole tree at once; `progress` gets the last line printed as it runs; `recycled` lists
+    what Remove-Item moved to the Recycle Bin. confine.Unconfined, with nothing run, when the limits cannot be set."""
+    if home is not None:
+        confine.guard(home)
+    process, job = SPARE.take(tier)
     handle, bin_log = tempfile.mkstemp(prefix="mibo-bin-", suffix=".txt")
     os.close(handle)
     quoted = "'" + cwd.replace("'", "''") + "'"
@@ -288,7 +293,6 @@ def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threadin
     script = ("$__bin = '" + bin_log.replace("'", "''") + "'\n"
               f"try {{ Set-Location -LiteralPath {quoted} -ErrorAction Stop }} catch {{ $__err.WriteLine($_); exit 1 }}\n"
               f"[Environment]::CurrentDirectory = {quoted}\n" + WRAP.format(command=command))
-    process, job = SPARE.take()
     started = time.monotonic()
     # One line, then stdin is closed: what the command reads from stdin ends there, as it did with no stdin.
     process.stdin.write(base64.b64encode(script.encode("utf-8")) + b"\n")
@@ -326,6 +330,10 @@ def run(command: str, cwd: str, *, limit_s: float = TIME_LIMIT_S, stop: threadin
     reader.join(5)
     err_reader.join(5)
     job.close()
+    # A pipe still held by a program it opened is left to that program.
+    for stream, drained in ((process.stdout, reader), (process.stderr, err_reader)):
+        if not drained.is_alive():
+            stream.close()
     recycled = [line for line in Path(bin_log).read_text(encoding="utf-8").splitlines() if line]
     os.unlink(bin_log)
     return {"code": process.returncode, "out": kept.text(), "err": hide_secret_names(errors_of(b"".join(err))),

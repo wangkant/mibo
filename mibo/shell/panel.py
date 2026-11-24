@@ -37,9 +37,10 @@ from fastapi.responses import JSONResponse
 
 from ..cardwait import Card
 from ..crossing import downloaded
-from . import checkpoint, filejob, files, words
+from . import checkpoint, confine, filejob, files, words
 from . import read as reading
 from . import run as running
+from .acts import tier as tier_of
 from .grants import NEVER, Grants, known_folders, norm, under
 
 # A turn's name as the character's side makes it (shell/tool.py), which names its folder of checkpoints.
@@ -314,7 +315,8 @@ class Shell:
             ask_first = ""
         else:
             return {"status": "bad_folder"}, {}
-        context = {"cwd": cwd, "read": read_, "verdict": verdict,
+        # The limits Windows holds it to as it runs (confine.py), from this same reading.
+        context = {"cwd": cwd, "read": read_, "verdict": verdict, "tier": tier_of(read_.acts),
                    "said": {lang: words.summary(read_, lang, "ed") for lang in ("zh", "en")}}
         # What it would have done, for a command that was not run.
         asked_said = {lang: (card or {}).get(lang, {}).get("title") or words.summary(read_, lang, "card")
@@ -456,8 +458,13 @@ class Shell:
             watcher = asyncio.create_task(self._watch(conversation, stop))
             self.running = {"started": time.monotonic(), "last": ""}
             try:
-                done = await asyncio.to_thread(running.run, command, context["cwd"], limit_s=limit_s, stop=stop,
-                                               progress=self.running)
+                done = await asyncio.to_thread(running.run, command, context["cwd"], tier=context["tier"],
+                                               home=self.home, limit_s=limit_s, stop=stop, progress=self.running)
+            except confine.Unconfined as e:
+                # Never run without Windows' limits.
+                self.log(command, context["cwd"], context["read"], context["verdict"], "unconfined", said=context["said"])
+                return {"status": "error", "message": f"Windows' limits for this command could not be set up "
+                                                      f"({e.strerror or e}), so it was not run."}
             finally:
                 watcher.cancel()
                 self.running = None

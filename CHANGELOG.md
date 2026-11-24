@@ -35,6 +35,8 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - What a tool brings back from the web or from this computer is material, never an instruction. After a reply has read such material, sending anything to a site, a recipient or a window you did not name is asked first, and so is a command copied word for word from it. A program or script downloaded from the web is never opened or run.
 - Model keys, the app's own settings and the built-in browser's profile cannot be read by any tool, by any spelling of their path.
 - A change that widens what the character may do takes effect only when your own message of that turn asks for it; otherwise it is asked in the chat.
+- On Windows, Windows itself also limits every command: no administrator rights, no access to the app's own files, no way out of the group its programs run in, and no clipboard. A command read as only reading runs at low integrity and cannot change any file or setting, even if it was read wrong.
+- A command whose Windows limits cannot be set up is not run, and the reply says so.
 
 ### Connected sites
 

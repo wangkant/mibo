@@ -31,7 +31,8 @@
       "tests/floors/secrets/test_tool_arguments.py::test_counts_ids_timestamps_and_numbers_are_not_secrets",
       "tests/floors/secrets/test_app_home.py::test_no_file_tool_or_command_reads_the_apps_own_places_by_any_path",
       "tests/floors/secrets/test_app_home.py::test_a_listing_or_search_of_a_granted_folder_never_follows_a_link_into_the_home",
-      "tests/floors/secrets/test_app_home.py::test_no_bash_command_reads_the_apps_own_places"
+      "tests/floors/secrets/test_app_home.py::test_no_bash_command_reads_the_apps_own_places",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_no_tier_reads_lists_or_changes_the_apps_home"
     ],
     "asked": [
       "tests/floors/asked/test_paying_deleting_account_and_access.py::test_every_paying_deleting_account_and_access_control_asks_on_a_card",
@@ -121,7 +122,13 @@
       "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_no_file_tool_reads_or_lists_a_protected_place_by_any_spelling",
       "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_no_command_reads_lists_or_tests_a_protected_place",
       "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_what_undo_cannot_take_back_still_asks_or_is_refused",
-      "tests/floors/grants/test_open_by_default.py::test_a_change_in_an_open_place_runs_with_no_question_and_undo_puts_it_back"
+      "tests/floors/grants/test_open_by_default.py::test_a_change_in_an_open_place_runs_with_no_question_and_undo_puts_it_back",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_a_command_passed_as_reading_cannot_delete_overwrite_rename_or_write_the_registry",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_a_child_program_is_held_as_its_parent",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_nothing_leaves_the_job_and_its_limits_hold",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_what_a_command_started_ends_with_it_unless_it_opened_a_program",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_the_commands_the_app_runs_still_work_in_their_tier",
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_a_command_whose_limits_cannot_be_set_up_is_not_run"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",

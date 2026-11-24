@@ -44,6 +44,14 @@ class Reading:
     errors: list[str]
 
 
+def tier(acts: list[Act]) -> str:
+    """Which of Windows' own limits a command runs under (confine.py), from what it was read to do: "program" when it
+    runs or opens a program, "read" when it does nothing but read, else "change"."""
+    if any(a.kind in ("program", "install") or a.what == "open" for a in acts):
+        return "program"
+    return "read" if all(a.kind == "read" and not a.write for a in acts) else "change"
+
+
 def download_run(acts: list[Act]) -> list[Act]:
     """The never act of a command that both saves from the network and runs a program, or none."""
     if any(a.kind == "network" and a.paths for a in acts) and any(a.kind in ("program", "install") for a in acts):
