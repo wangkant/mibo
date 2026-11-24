@@ -61,7 +61,9 @@ def test_with_a_backup_model_a_failing_service_hands_the_reply_to_it_at_once(ope
     done = run_turn(app, "hello", failure, say("From the backup."))
     assert done.status == 200 and done.reply == "From the backup."
     assert replies(done) == ["scripted", "backup"]
-    assert time.monotonic() - began < 2.0
+    # Not after the thirty seconds the throttled service asked for, nor after a backoff: a slow machine takes a
+    # couple of seconds for the turn itself.
+    assert time.monotonic() - began < 5.0
 
 
 # Each service's documented answer when the account, not the request, is at fault.

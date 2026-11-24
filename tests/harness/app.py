@@ -51,6 +51,10 @@ class App:
     def close(self) -> None:
         self.server.should_exit = True
         self._thread.join(30)
+        if self._thread.is_alive():
+            # A slow machine with requests still closing: stopped without waiting for them.
+            self.server.force_exit = True
+            self._thread.join(30)
         assert not self._thread.is_alive(), "the app did not stop"
 
     def request(self, method: str, path: str, *, own_page: bool = False, timeout: float = 120, **sent) -> httpx.Response:
