@@ -7,7 +7,11 @@ person's behind and reads nothing of the computer it happens on:
 * settings.json holds the rest, the model's address and name among them (the page reads them there).
 * The person's computer is an empty folder beside the home (<home>-pc): its Desktop, Documents, Downloads,
   Pictures, Music and Videos are granted to read in place of the person's own, which a fresh home grants, and every
-  known folder the app reads (MIBO_USER_DIRS) and its shortcut folders point into it.
+  known folder the app reads (MIBO_USER_DIRS) and its shortcut folders point into it. It is the app's profile too
+  (USERPROFILE, APPDATA, LOCALAPPDATA), so a command's $env:USERPROFILE is the stand-in and the real
+  profile is a folder elsewhere on the system drive, asked for before anything reads it. Every drive is taken back
+  as a person takes a folder back in Settings, so nothing outside the stand-in's folders is open to the app's
+  tools: a place elsewhere is asked for, and the script answers.
 
     env = {**os.environ, **scratchhome.make(home, key="stub", LLM_BASE_URL=url, LLM_MODEL="stub")}
     python tools/scratchhome.py check <home>      what a run left behind: .env, keys in files or the store, folders
@@ -17,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import string
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -26,6 +31,8 @@ from keyring.backend import KeyringBackend
 HERE = Path(__file__).resolve().parent
 FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 DEFAULTS = {"UPDATE_CHECK_ENABLED": "false", "ROAM_ENABLED": "false"}
+# The profile's variables, each with its folder in the stand-in computer.
+PROFILE = {"USERPROFILE": "", "APPDATA": "AppData/Roaming", "LOCALAPPDATA": "AppData/Local"}
 
 
 class Keys(KeyringBackend):
@@ -79,10 +86,14 @@ def make(home, *, key: str = "", pc=None, **settings) -> dict:
     shell = home / "runtime" / "desktop" / grants.SETTINGS_FILE
     if not shell.exists():
         own = [str(pc / name) for name in FOLDERS]
+        drives = [f"{letter}:\\" for letter in string.ascii_uppercase if os.path.exists(f"{letter}:\\")]
         shell.parent.mkdir(parents=True, exist_ok=True)
-        shell.write_text(json.dumps({"folders": own, "read_only": own}), encoding="utf-8")
+        shell.write_text(json.dumps({"folders": own, "read_only": own, "removed": drives}), encoding="utf-8")
     from mibo import shortcut
-    env = {"AGENT_HOME": str(home), **store(),
+    for part in PROFILE.values():
+        (pc / part).mkdir(parents=True, exist_ok=True)
+    env = {"AGENT_HOME": str(home), **store(), **{name: str(pc / part) for name, part in PROFILE.items()},
+           "HOMEDRIVE": pc.drive, "HOMEPATH": str(pc)[len(pc.drive):],
            grants.DIRS_ENV: os.pathsep.join(str(pc / name.title()) for name in grants.DIRS),
            shortcut.DIRS_ENV: os.pathsep.join(str(pc / kind) for kind in shortcut.SPECIAL.values()),
            **{name: str(value) for name, value in settings.items()}}

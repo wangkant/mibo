@@ -581,7 +581,7 @@ class Hub:
             runner.calling = None
         self._log(server, tool_name, arguments, "error" if result.is_error else "done", how, result.text)
         return {"status": "done", "how": how, "is_error": result.is_error, "left_out": result.left_out,
-                "pictures": result.pictures, "text": result.text[: mcp_schema.RESULT_CHARS * 2],
+                "pictures": result.pictures, "text": result.text[: mcp_schema.RESULT_CHARS + 1],
                 "title": tool["title"] or tool["name"]}
 
     async def _review(self, server: str, tool: dict, arguments: dict):

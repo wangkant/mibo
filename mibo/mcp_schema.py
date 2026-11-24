@@ -15,8 +15,9 @@ from .textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source, scr
 
 OFFER_DESCRIPTION_CHARS = 300
 PROPERTY_DESCRIPTION_CHARS = 150
-#: Characters of one result the model reads, and the record keeps.
-RESULT_CHARS = 4000
+#: Characters of one result handed to the reply loop, which then holds it to its share of the window as it does any
+#: tool's result (context.Fit); about the 25,000 tokens Claude Code takes of an MCP tool's output.
+RESULT_CHARS = 100_000
 _TYPES = ("string", "integer", "number", "boolean", "object", "array")
 _PROPERTY_RE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _FORMATS = ("email", "uri", "date", "date-time")
@@ -176,8 +177,9 @@ def plain_arguments(arguments: dict, limit: int = 6) -> list[list[str]]:
 
 
 def result_for_model(server: str, tool: str, text: str, is_error: bool, left_out: list, pictures: int = 0) -> str:
-    """A tool's answer as the model reads it: which tool, then its text fenced as a third party's, cut; how many
-    of its pictures follow in a message of their own. A result the tool marks as an error begins "Error: "."""
+    """A tool's answer as the reply loop gets it: which tool, then its text fenced as a third party's, cut at
+    RESULT_CHARS; how many of its pictures follow in a message of their own. A result the tool marks as an error
+    begins "Error: "."""
     text = text.strip()
     cut = len(text) > RESULT_CHARS
     body = text[:RESULT_CHARS] + ("\n(the rest was cut)" if cut else "")
