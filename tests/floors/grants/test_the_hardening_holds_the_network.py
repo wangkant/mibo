@@ -72,7 +72,12 @@ def _listener(family, kind):
 
 def _connect(host: str, port: int, kind: int) -> str:
     if kind == socket.SOCK_STREAM:
-        return (f"$c = New-Object Net.Sockets.TcpClient; $c.Connect('{host}', {port}); 'connected'; $c.Close()")
+        # A client of the address's own family (one made with no family is IPv4 only), and its own word on
+        # whether it connected: a refused Connect ends its statement, not the script.
+        family = "InterNetworkV6" if ":" in host else "InterNetwork"
+        return (f"$c = New-Object Net.Sockets.TcpClient([Net.Sockets.AddressFamily]::{family}); "
+                f"try {{ $c.Connect('{host}', {port}) }} catch {{ }}; "
+                "if ($c.Connected) { 'connected' } else { 'refused' }; $c.Close()")
     return (f"$u = New-Object Net.Sockets.UdpClient('{host}', {port}); [void]$u.Send([byte[]](1,2), 2); 'sent'; "
             "$u.Close()")
 
@@ -97,7 +102,7 @@ def test_a_command_not_read_as_using_the_network_cannot_reach_it(hardened, tmp_p
             done = _run(_connect(host, port, kind), tmp_path, tier, online)
             reached.wait(5 if allowed else 2)
         # What the command says of its own connection counts too: the listener's thread may be late to say so.
-        got = reached.is_set() or (kind == socket.SOCK_STREAM and done["out"] == "connected")
+        got = reached.is_set() or done["out"] == "connected"
         assert got == allowed, (tier, online, done)
 
 
@@ -122,11 +127,6 @@ def _own(engine, layer) -> list:
 def test_turning_the_hardening_off_leaves_windows_as_it_was(tmp_path_factory):
     record = str(tmp_path_factory.mktemp("netguard-off") / netguard.RECORD)
     before = json.loads(netguard._powershell(netguard._FOLDERS) or "[]")
-    engine = netguard.Engine()
-    try:
-        filters = {name: _own(engine, layer) for name, layer in netguard.LAYERS.items()}
-    finally:
-        engine.close()
     sid = netguard.own_sid()
     assert netguard.apply(True, record, sid)["present"]
     assert netguard.apply(True, record, sid)["present"]  # twice is once
@@ -134,6 +134,6 @@ def test_turning_the_hardening_off_leaves_windows_as_it_was(tmp_path_factory):
     assert _entries(json.loads(netguard._powershell(netguard._FOLDERS) or "[]")) == _entries(before)
     engine = netguard.Engine()
     try:
-        assert {name: _own(engine, layer) for name, layer in netguard.LAYERS.items()} == filters
+        assert {name: _own(engine, layer) for name, layer in netguard.LAYERS.items()} == {name: [] for name in netguard.LAYERS}
     finally:
         engine.close()
