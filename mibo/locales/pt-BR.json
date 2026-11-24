@@ -1461,7 +1461,7 @@
     "onAsk": "Permitir que opere outros programas neste computador?",
     "onYes": "Ativar",
     "grantsTitle": "Programas permitidos",
-    "grantsText": "Na primeira vez que um programa for necessário, a conversa pergunta, e o seu sim ali vale para essa tarefa. Os programas que você permitiu sempre antes aparecem aqui.",
+    "grantsText": "Nenhum programa precisa ser permitido antes: quando você pede, qualquer programa fora da lista de exclusão abaixo é aberto e operado. Os programas que você permitiu sempre antes aparecem aqui.",
     "grantsNone": "Nenhum programa permitido sempre ainda.",
     "since": "Permitido {s}",
     "revoke": "Revogar {name}",
@@ -1786,16 +1786,16 @@
   "setup_shell": {
     "hint": "Deixe o personagem ver e organizar arquivos neste computador por comandos, quando você pedir.",
     "onTitle": "Permitir que aja neste computador por comandos",
-    "onText": "Ativado, o personagem pode executar os comandos que você pedir na conversa: ver e organizar arquivos nas pastas permitidas, verificar o espaço em disco e afins. Cada comando é analisado e classificado antes de ser executado; excluir, usar a rede e instalar software são perguntados na conversa, alterar arquivos e executar programas seguem o modo abaixo, e algumas ações nunca são feitas. Desativado, nenhum comando é executado.",
+    "onText": "Ativado, o personagem pode executar os comandos que você pedir na conversa: ver e organizar arquivos na sua pasta de usuário e nos seus outros discos, verificar o espaço em disco e afins. Cada comando é analisado e classificado antes de ser executado; os locais que guardam senhas, chaves, perfis do navegador ou dados de outros programas nunca são lidos; excluir, usar a rede e instalar software são perguntados na conversa, alterar arquivos e executar programas seguem o modo abaixo, e algumas ações nunca são feitas. Desativado, nenhum comando é executado.",
     "onAsk": "Permitir que aja neste computador por comandos?",
     "onAskText": "O personagem só executa comandos enquanto você conversa com ele e só para o que você pedir. Antes de excluir, substituir, mover para fora de uma pasta, usar a rede, instalar software ou executar um programa, ele diz na conversa o que vai acontecer e espera sua resposta: “sim”, “pode fazer” e respostas parecidas digitadas na conversa contam como sim, e etapas do mesmo tipo nessa tarefa não são perguntadas de novo; pagar, excluir ou alterar uma conta continua sendo confirmado à parte. Qualquer outra resposta significa não. Nada em uma página, em um arquivo ou vindo de uma ferramenta pode responder por você.",
     "onYes": "Ativar",
     "elevated": "O Mibo está sendo executado como administrador, então nenhum comando é executado. Abra o Mibo normalmente.",
     "foldersTitle": "Pastas que ele pode usar",
-    "foldersText": "Nas suas pastas Área de Trabalho, Documentos, Downloads, Imagens, Músicas e Vídeos e nas pastas abaixo, o personagem pode ver, criar, copiar, renomear e mover arquivos; excluir é confirmado na conversa, e alterar um arquivo segue o modo. Quando precisar de outra pasta, a conversa pergunta.",
+    "foldersText": "Sua pasta de usuário e seus outros discos estão abertos: o personagem pode ver, criar, copiar, renomear e mover arquivos neles, e as alterações de cada turno podem ser desfeitas; excluir é confirmado na conversa. Os locais que guardam senhas, chaves, perfis do navegador ou dados de outros programas, e a pasta deste aplicativo, nunca são lidos. Uma pasta abaixo definida como somente visualizar é apenas lida; uma pasta retirada é perguntada antes de ser usada.",
     "foldersNone": "Nenhuma pasta permitida ainda.",
     "modeName": "Modo de trabalho",
-    "modeText": "Somente visualizar: lê os arquivos das pastas permitidas e não altera nem executa nada. Revisão automática: alterar e criar arquivos nas pastas que pode organizar é feito sem perguntar, e “Desfazer estas alterações” abaixo da resposta as reverte; executar um programa em uma pasta permitida é avaliado primeiro por um modelo revisor e só pede confirmação quando a revisão não aprova. Excluir, usar a rede e instalar software sempre exigem sua confirmação.",
+    "modeText": "Somente visualizar: lê os arquivos e não altera nem executa nada. Revisão automática: alterar e criar arquivos é feito sem perguntar, e “Desfazer estas alterações” abaixo da resposta as reverte; executar um programa, ou uma etapa que o código não consegue decidir, é avaliado primeiro por um modelo revisor; uma leitura que a revisão não aprova não é feita e nada é perguntado. Excluir, usar a rede e instalar software sempre exigem sua confirmação.",
     "modes": {
       "read": "Somente visualizar",
       "auto": "Revisão automática"
@@ -1842,6 +1842,7 @@
       "folder_declined": "Pasta não permitida",
       "folder_unanswered": "Sem resposta: não executado",
       "read_mode": "Somente visualizar; não executado",
+      "not_passed": "Não aprovado pela revisão automática: não executado",
       "rule_added": "Sempre permitido"
     },
     "code": " (código de saída {count})",

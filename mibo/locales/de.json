@@ -1460,7 +1460,7 @@
     "onAsk": "Andere Programme auf diesem Computer bedienen lassen?",
     "onYes": "Einschalten",
     "grantsTitle": "Erlaubte Programme",
-    "grantsText": "Wenn ein Programm zum ersten Mal gebraucht wird, fragt der Chat, und dein Ja dort gilt für diese Aufgabe. Programme, die du früher immer erlaubt hast, werden hier aufgeführt.",
+    "grantsText": "Kein Programm muss vorher erlaubt werden: Wenn du darum bittest, wird jedes Programm außerhalb der Ausschlussliste unten geöffnet und bedient. Programme, die du früher immer erlaubt hast, werden hier aufgeführt.",
     "grantsNone": "Noch keine immer erlaubten Programme.",
     "since": "Erlaubt {s}",
     "revoke": "Erlaubnis für {name} entziehen",
@@ -1785,16 +1785,16 @@
   "setup_shell": {
     "hint": "Die Figur darf auf Ihre Bitte hin per Befehl Dateien auf diesem Computer ansehen und ordnen.",
     "onTitle": "Per Befehl auf diesem Computer arbeiten lassen",
-    "onText": "Wenn eingeschaltet, darf die Figur Befehle ausführen, um die du im Gespräch bittest: Dateien in freigegebenen Ordnern ansehen und ordnen, Speicherplatz prüfen und Ähnliches. Jeder Befehl wird vor der Ausführung gelesen und eingeordnet; nach Löschen, Netzwerkzugriffen und Softwareinstallationen wird im Chat gefragt, Dateiänderungen und Programmstarts folgen der Arbeitsweise unten, und manches geschieht nie. Ausgeschaltet läuft kein Befehl.",
+    "onText": "Wenn eingeschaltet, darf die Figur Befehle ausführen, um die du im Gespräch bittest: Dateien in deinem Benutzerordner und auf deinen anderen Laufwerken ansehen und ordnen, Speicherplatz prüfen und Ähnliches. Jeder Befehl wird vor der Ausführung gelesen und eingeordnet; Orte mit Passwörtern, Schlüsseln, Browserprofilen oder Daten anderer Programme werden nie gelesen; nach Löschen, Netzwerkzugriffen und Softwareinstallationen wird im Chat gefragt, Dateiänderungen und Programmstarts folgen der Arbeitsweise unten, und manches geschieht nie. Ausgeschaltet läuft kein Befehl.",
     "onAsk": "Per Befehl auf diesem Computer arbeiten lassen?",
     "onAskText": "Die Figur führt Befehle nur aus, während du mit ihr chattest, und nur für das, worum du bittest. Vor dem Löschen, Ersetzen, Verschieben aus einem Ordner heraus, Netzwerkzugriff, Installieren von Software oder Starten eines Programms sagt sie im Chat, was passieren wird, und wartet auf deine Antwort: „ja“, „mach“ und Ähnliches im Chatfeld gelten als Zustimmung, und Schritte derselben Art werden in dieser Aufgabe nicht erneut erfragt; Zahlen, Löschen oder Kontoänderungen werden weiterhin eigens bestätigt. Jede andere Antwort bedeutet nein. Nichts auf einer Seite, in einer Datei oder aus einem Werkzeug kann für dich antworten.",
     "onYes": "Einschalten",
     "elevated": "Mibo läuft als Administrator, daher wird überhaupt kein Befehl ausgeführt. Öffnen Sie Mibo normal.",
     "foldersTitle": "Ordner, die sie nutzen darf",
-    "foldersText": "In deinen Ordnern Desktop, Dokumente, Downloads, Bilder, Musik und Videos sowie in den Ordnern unten darf die Figur Dateien ansehen, erstellen, kopieren, umbenennen und verschieben; Löschen wird im Chat bestätigt, Änderungen an Dateien folgen der Arbeitsweise. Braucht sie einen anderen Ordner, fragt der Chat.",
+    "foldersText": "Dein Benutzerordner und deine anderen Laufwerke sind offen: Die Figur darf dort Dateien ansehen, erstellen, kopieren, umbenennen und verschieben, und die Änderungen jeder Runde lassen sich rückgängig machen; Löschen wird im Chat bestätigt. Orte mit Passwörtern, Schlüsseln, Browserprofilen oder Daten anderer Programme und der eigene Ordner dieser App werden nie gelesen. Ein Ordner unten, der auf Nur ansehen steht, wird nur gelesen; nach einem zurückgenommenen Ordner wird vor der Nutzung gefragt.",
     "foldersNone": "Noch keine Ordner erlaubt.",
     "modeName": "Arbeitsweise",
-    "modeText": "Nur ansehen: Dateien in den erlaubten Ordnern werden nur gelesen, nichts wird geändert oder ausgeführt. Automatische Prüfung: Dateien in Ordnern, die aufgeräumt werden dürfen, werden ohne Rückfrage geändert und angelegt; „Diese Änderungen rückgängig machen“ unter der Antwort stellt sie wieder her. Ein Programm in einem erlaubten Ordner beurteilt zuerst ein Prüfmodell, und Sie werden nur gefragt, wenn die Prüfung nicht besteht. Löschen, Netzwerkzugriffe und Softwareinstallationen erfordern stets Ihre Bestätigung.",
+    "modeText": "Nur ansehen: Dateien werden nur gelesen, nichts wird geändert oder ausgeführt. Automatische Prüfung: Dateien werden ohne Rückfrage geändert und angelegt; „Diese Änderungen rückgängig machen“ unter der Antwort stellt sie wieder her. Ein Programmstart oder ein Schritt, den der Code nicht entscheiden kann, wird zuerst von einem Prüfmodell beurteilt; ein Lesevorgang, den die Prüfung nicht freigibt, unterbleibt ohne Rückfrage. Löschen, Netzwerkzugriffe und Softwareinstallationen erfordern stets Ihre Bestätigung.",
     "modes": {
       "read": "Nur ansehen",
       "auto": "Automatische Prüfung"
@@ -1841,6 +1841,7 @@
       "folder_declined": "Ordner nicht erlaubt",
       "folder_unanswered": "Keine Antwort: nicht ausgeführt",
       "read_mode": "Nur ansehen; nicht ausgeführt",
+      "not_passed": "Von der automatischen Prüfung nicht freigegeben: nicht ausgeführt",
       "rule_added": "Immer erlaubt"
     },
     "code": " (Exit-Code {count})",

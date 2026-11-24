@@ -238,6 +238,11 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
             # The same step again in a turn where they said no to it: refused with no second question.
             reason = ("Not done: they already said no to this same step in this turn, so it was not asked "
                       "again and nothing was changed. Do not ask for it again this turn.")
+    elif status == "not_passed":
+        # The automatic review did not pass a step that only reads or that undo gives back: not done, not asked.
+        reason = (f"Not done: the app's automatic review did not pass this step ({outcome.get('reason') or 'no answer'})."
+                  " Nothing was changed. Go on another way that keeps to what they asked, or tell them what is left.")
+        shown = str(outcome.get("reason") or "")
     elif status == "folder_declined" and outcome.get("again"):
         reason = ("Not done: they already said no to that folder in this turn, so it was not asked again. Do not ask "
                   "for it again this turn.")

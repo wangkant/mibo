@@ -4,10 +4,11 @@ All of it lives in the desktop folder of the app's home, which no command may
 read or change (`blocked` names the home as the app's own, which holds the model
 keys' file, the settings and the browser pane's profile). Whether commands run
 at all is the one acting mode (acting.py). A fresh home is granted the person's
-own folders (Desktop, Documents, Downloads, Pictures, Music, Videos); other
-folders are granted from a question in the chat or in Settings. Any is set to
-read only or taken back in Settings, the person's own folders too, and that
-holds until they grant it again.
+own folders (Desktop, Documents, Downloads, Pictures, Music, Videos), and the
+rest of the profile and the other drives are open too (`open`), less the
+protected places; folders elsewhere on the system drive are granted from a
+question in the chat or in Settings. Any is set to read only or taken back in
+Settings, the person's own folders too, and that holds until they grant it again.
 """
 from __future__ import annotations
 
@@ -144,6 +145,15 @@ class Places:
         self.windows = norm(system_root)
         self.programs = [norm(p) for p in {env.get("ProgramFiles"), env.get("ProgramFiles(x86)"), env.get("ProgramW6432"),
                                            env.get("ProgramData")} if p]
+        # Where programs and their shortcuts are, as Start's search reads them: Program Files, the Start menu's
+        # folders for the person and for everyone, and per-user installs. They hold no secrets: read and listed
+        # like any open place, never written.
+        menu = os.path.join("Microsoft", "Windows", "Start Menu")
+        self.findable = [norm(p) for p in {env.get("ProgramFiles"), env.get("ProgramFiles(x86)"),
+                                           env.get("ProgramW6432")} if p] + [
+            norm(os.path.join(self.appdata, "Roaming", menu)),
+            norm(os.path.join(env.get("ProgramData") or r"C:\ProgramData", menu)),
+            norm(os.path.join(self.appdata, "Local", "Programs"))]
         # PowerShell's own profile and module folders: what is written there runs in the person's PowerShell.
         documents = known_folder(KNOWN[1][1]) or os.path.join(profile, "Documents")
         self.startup = [norm(os.path.join(documents, d)) for d in ("WindowsPowerShell", "PowerShell")]
@@ -152,13 +162,16 @@ class Places:
         # folder), never written (skills/).
         self.skills = [norm(Path(home) / "skills"), norm(Path(self.package) / "skills" / "builtin")]
 
-    def blocked(self, path: str, write: bool) -> str:
-        """Why a command may never touch this `norm`ed path ("app", "secrets", "system"), or ""."""
+    def blocked(self, path: str, write: bool, look: bool = False) -> str:
+        """Why a command may never touch this `norm`ed path ("app", "secrets", "system"), or "". Other programs'
+        data (AppData) is never read or listed, except its program places (`findable`) and, with `look`, whether a
+        path there exists and its size and dates: a name that is not a secret's says nothing of what it holds."""
         if not write and any(under(path, own) and path != own for own in self.skills):
             return ""
         if any(under(path, own) for own in (self.home, self.package, self.python)):
             return "app"
-        if under(path, self.appdata) and not (self.temp and under(path, self.temp)):
+        if under(path, self.appdata) and not (self.temp and under(path, self.temp)) and (
+                write or not (look or any(under(path, p) for p in self.findable))):
             return "secrets"
         rest = path[len(self.profile):].lstrip("\\/") if under(path, self.profile) else ""
         if rest.startswith("."):
@@ -235,6 +248,23 @@ class Grants:
         kept = self.read_only() if write else set()
         return [r for r in (norm(p) for p in self.folders()) if r not in kept]
 
+    def held_back(self, path: str, write: bool) -> bool:
+        """A `norm`ed place inside a folder the person took back in Settings, or, for a change, one they set to
+        read only: it stays as they set it, open places or not."""
+        data = self._read()
+        back = [norm(p) for p in data.get("removed") or [] if isinstance(p, str)]
+        return any(under(path, r) for r in back + (sorted(self.read_only()) if write else []))
+
+    def open(self, path: str, write: bool = False) -> bool:
+        """A `norm`ed place the character may use under the mode with no folder granted first: inside a granted
+        folder, or anywhere in the person's profile or on a drive other than Windows' own, unless the person took
+        it back or set it to read only (`held_back`). What is protected (Places.blocked) is refused before this is
+        asked."""
+        if any(under(path, r) for r in self.roots(write)):
+            return True
+        places = self.places
+        return (under(path, places.profile) or not under(path, places.drive)) and not self.held_back(path, write)
+
     def root_of(self, path: str) -> str:
         """The granted folder a `norm`ed path is in (the innermost), or ""."""
         hits = [r for r in self.roots() if under(path, r)]
@@ -262,13 +292,13 @@ class Grants:
         return ""
 
     def remove(self, folder: str) -> None:
-        """Takes a folder back; one of the person's own stays taken back (`removed`) until it is granted again."""
+        """Takes a folder back; it stays taken back (`removed`) until it is granted again."""
         with self.lock:
             data = self._read()
             for key in ("folders", "read_only", "removed"):
                 data[key] = [p for p in data.get(key) or [] if isinstance(p, str) and norm(p) != norm(folder)]
-            if norm(folder) in {norm(p) for p in own_folders()}:
-                data["removed"].append(folder)
+            # Taken back, it stays so (held_back) until it is granted again, whether or not it was one of theirs.
+            data["removed"].append(folder)
             data["rules"] = [r for r in self._rules(data) if norm(r["folder"]) != norm(folder)]
             self._write(data)
 

@@ -19,6 +19,11 @@ READ_RUN = 8
 BASE64 = re.compile(r"[A-Za-z0-9+/_-]{8,}={0,2}")
 # A typed text this short must be a whole value of the request to count as carried by it.
 CARRIED_MIN = 3
+# A path part a site's own telemetry is posted to: click and view statistics, logs, metrics, beacons. Not "events"
+# alone (a calendar's events are made by POST) and not "report" (reporting a person is an account act).
+BEACON = re.compile(r"(?:^|[/._-])(?:telemetry|statistics?|stats|analytics|metrics?|beacons?|collect|collector|"
+                    r"track|tracking|tracker|rum|vitals|heartbeat|monitor|monitoring|logs?|logging|client-?events?|"
+                    r"log-?events?|sentry|perf)(?=$|[/._-])", re.I)
 
 
 def shape(url: str) -> str:
@@ -112,6 +117,12 @@ def only_reads(request: dict, carried: list[dict], ping: bool) -> bool:
     """What code is certain only reads, let through with no card and no reviewer: a beacon or ping, or a GraphQL
     query, that carries nothing typed in this run. Every other request a press sends is the reviewer's."""
     return not carried and (ping or asks_only(request))
+
+
+def beacon(request: dict) -> bool:
+    """A POST to a telemetry address (BEACON in its path): the site's own counting of clicks and views."""
+    return str(request.get("method") or "").upper() == "POST" and bool(BEACON.search(urlsplit(str(
+        request.get("url") or "")).path))
 
 
 def leaving(url: str) -> dict:

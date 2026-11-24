@@ -224,12 +224,12 @@ def test_two_reads_with_acting_off_ask_once_and_the_yes_carries_the_second_folde
                                     call("read_file", path="note.txt", folder=str(tmp_path / "b"))], say("Read."))
     first, second = done.calls()
     assert "alpha" in done.result_of(first["id"]) and "beta" in done.result_of(second["id"])
-    # One question, for the first folder, which also turned acting on; the yes to it carries the second read of
-    # the turn, whose folder is granted to read as the step needs.
+    # One question, for the first folder, which also turned acting on; the second folder is an open place (another
+    # drive or the profile), read with no grant.
     shown = [Path(c["card"]["folder"]).name for c in done.cards]
     granted = sorted(Path(f).name for f in Grants(app.home / "runtime" / "desktop", app.home).folders()
                      if Path(f).parent.resolve() == tmp_path.resolve())
-    assert len(shown) == 1 and granted == ["a", "b"]
+    assert len(shown) == 1 and granted == ["a"]
 
 
 _STEPS = '[{"step": "pick a beach", "status": "in_progress"}]'

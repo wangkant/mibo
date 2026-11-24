@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse
 
 from .. import turnon
 from ..cardwait import Card
+from ..crossing import downloaded
 from . import grants as g
 
 LAUNCH_S = 15.0
@@ -60,6 +61,10 @@ NEVER = (
     (r"claude|chatgpt|codex|copilot|cursor|windsurf|agent|智能体|mibo",
      "其他 AI 智能体和本应用的权限页面", "Other AI agents, and this app's own permission screens"),
 )
+# The launchers an installed program's shortcut starts it through (Zero Install's, Squirrel's Update.exe for
+# Discord or Slack): their file names read as an installer's, so the entry is judged by its own name, and the window
+# that comes up by its program's (Hands._grant).
+LAUNCHERS = frozenset({"0install-win.exe", "0install.exe", "update.exe"})
 ACTION_WORDS = {
     "zh": {"invoke": "按下“{t}”", "click": "点击“{t}”", "press": "按下“{t}”", "toggle": "切换“{t}”",
            "check": "勾选“{t}”", "uncheck": "取消勾选“{t}”", "select": "选中“{t}”",
@@ -310,7 +315,8 @@ class Desk:
         off the never lists: {"hwnd"}, or the result that ends the task. A shortcut to something that is not a
         program is opened at once, and that ends the task."""
         from . import names, win32
-        why = never_named(app.name) or never_named(Path(app.target).name)
+        launcher = Path(app.target).name.lower() in LAUNCHERS
+        why = never_named(app.name) or (None if launcher else never_named(Path(app.target).name))
         word = "" if why else self.grants.blocked_by({"name": app.name, "exe": app.target or ""})
         if word:
             why = (f"名称含有你添加的词“{word}”", f"its name holds {word!r}, on your own never list")
@@ -327,8 +333,15 @@ class Desk:
             return {"status": "done", "line": f"[done] opened {app.name} ({app.file}), which starts "
                                               f"{app.target or 'what the shortcut names'}"}
 
-        def its(exe: str) -> bool:
-            return names.runs(app, exe) or names.beside(app, exe)
+        if downloaded(app.file or app.target):
+            # A program or a shortcut that came from the web is never started by the character (crossing.py).
+            self.grants.log({"do": "use", "program": app.name, "exe": app.file or app.target, "status": "refused",
+                             "line": "downloaded from the web"})
+            return {"status": "refused", "line": f"[refused] {app.name} came from the web and is never started for "
+                                                 f"them; they open it themselves"}
+
+        def its(window) -> bool:
+            return names.runs(app, window.exe) or names.beside(app, window.exe) or names.named(app, window)
         before = {w.hwnd for w in names.open_windows() if not win32.minimized(w.hwnd)}
         if app.file:
             win32.open_file(app.file)
@@ -338,7 +351,7 @@ class Desk:
         while time.monotonic() < end:
             time.sleep(0.3)
             # Its window: a new one, or one it had hidden or minimised and brings back.
-            hwnd = next((w.hwnd for w in names.open_windows() if w.hwnd not in before and its(w.exe)
+            hwnd = next((w.hwnd for w in names.open_windows() if w.hwnd not in before and its(w)
                          and not win32.minimized(w.hwnd)), 0)
             if hwnd:
                 self.grants.log({"do": "open", "program": app.name, "exe": app.target or app.aumid, "status": "ok",

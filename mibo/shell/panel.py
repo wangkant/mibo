@@ -55,6 +55,10 @@ PRESSED = ("said",)
 ELSEWHERE = ("elsewhere",)
 # The reasons a command asks that the reviewer may pass in automatic review.
 REVIEWED = ("program", "outside", "move_out")
+# The reasons that only read or change what the turn's undo gives back (a read outside the open places, a move out
+# of a folder): when the review does not pass such a step it is not done, never asked. A delete the review doubts
+# is still asked, though the Recycle Bin keeps it.
+UNDONE = ("outside", "move_out")
 
 
 def _reviewed(act) -> bool:
@@ -125,9 +129,8 @@ class Shell:
         if not reasons:
             return None
         if all(a.kind == "overwrite" for a in reasons):
-            writable = self.grants.roots(write=True)
             paths = [p for a in reasons for p in a.paths] + verdict.overwrites
-            if all(any(under(norm(p), r) for r in writable) for p in paths):
+            if all(self.grants.open(norm(p), True) for p in paths):
                 return {"key": "edit", "paths": paths}
             return None
         root = self.grants.root_of(norm(cwd))
@@ -373,6 +376,12 @@ class Shell:
                          review=context["review"])
                 return {"status": "refused", "said": asked_said, "why": {"zh": passed.reason, "en": passed.reason},
                         "reasons": [passed.reason], "declined": passed.declined()}, context
+            elif all(a.kind in UNDONE for a in verdict.reasons):
+                # It reads, or changes only what undo gives back: not a step asked of the person (cardwait.py). The
+                # review did not pass it (or gave no answer), so it is not done and the turn goes on another way.
+                self.log(command, cwd, read_, verdict, "not_passed", said=asked_said, how="review",
+                         review=context["review"])
+                return {"status": "not_passed", "said": asked_said, "reason": passed.reason}, context
         if verdict.action == "ask" and not context["how"]:
             # Said in the chat in the app's own reading of the step, asked as its risk (`_risk`, cardwait.reaches).
             asked = await self._question(command, cwd, read_, verdict, card, asked_said, passed)

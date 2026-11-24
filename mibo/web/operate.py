@@ -389,7 +389,7 @@ class Hands(Holding, PageAsks, Steps, Outside):
     async def _url(self) -> str:
         return str(await self.page._evaluate("() => location.href") or "")
 
-    async def _decided(self, kind: str, site: str, action: dict) -> tuple[str, str, str]:
+    async def _decided(self, kind: str, site: str, action: dict, key: str = "") -> tuple[str, str, str]:
         """What the person's mode makes of an outside action before any card: "read" (read only: nothing goes),
         "go" (the reviewer passed it), "turned" (the reviewer turned it down) or "ask" (the card), with the
         reviewer's line and its reading of an outward act (review.DOES, or ""). The reviewer sees only kinds and
@@ -400,7 +400,7 @@ class Hands(Holding, PageAsks, Steps, Outside):
             return "read", "", ""
         if decision != "review" or self.review is None:
             return "ask", "", ""
-        key = json.dumps([kind, site, action], ensure_ascii=False, sort_keys=True, default=str)
+        key = key or json.dumps([kind, site, action], ensure_ascii=False, sort_keys=True, default=str)
         if key not in self._verdicts:
             self._verdicts[key] = await self.review({"kind": kind, "where": site, **action})
         verdict = self._verdicts[key]

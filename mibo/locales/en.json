@@ -1459,7 +1459,7 @@
     "onAsk": "Let it operate other programs on this computer?",
     "onYes": "Turn on",
     "grantsTitle": "Programs allowed",
-    "grantsText": "The first time a program is needed, the chat asks you, and your yes there covers that task. Programs you allowed always before are listed here.",
+    "grantsText": "No program has to be allowed first: when you ask, any program off the never list below is opened and operated. Programs you allowed always before are listed here.",
     "grantsNone": "No programs allowed always yet.",
     "since": "Allowed {s}",
     "revoke": "Take back {name}",
@@ -1782,16 +1782,16 @@
   "setup_shell": {
     "hint": "Let the character look at and sort files on this computer by command, when you ask.",
     "onTitle": "Let it do things on this computer by command",
-    "onText": "When on, the character may run commands you ask for in the chat: looking at and sorting files in the folders you allow, checking disk space and the like. Every command is read and sorted before it runs; deleting, using the network and installing software are asked about in the chat, changing files and running programs follow the mode below, and some things are never done. While off, no command runs.",
+    "onText": "When on, the character may run commands you ask for in the chat: looking at and sorting files in your user folder and on your other drives, checking disk space and the like. Every command is read and sorted before it runs; places that hold passwords, keys, browser profiles or other programs' data are never read; deleting, using the network and installing software are asked about in the chat, changing files and running programs follow the mode below, and some things are never done. While off, no command runs.",
     "onAsk": "Let it do things on this computer by command?",
     "onAskText": "The character runs commands only while you chat with it and only for what you ask. Before deleting, replacing, moving out of a folder, using the network, installing software or running a program, it says in the chat what will happen and waits for your reply: “yes”, “go ahead” and the like typed in the chat box count as a yes, and steps of the same kind in that task are not asked again; paying, deleting or changing an account is still confirmed on its own. Any other reply means no. Nothing on a page, in a file or from a tool can answer for you.",
     "onYes": "Turn on",
     "elevated": "Mibo is running as administrator, so no command runs at all. Open Mibo normally.",
     "foldersTitle": "Folders it may use",
-    "foldersText": "In your Desktop, Documents, Downloads, Pictures, Music and Videos folders and the folders below, the character may look at files and create, copy, rename and move them; deleting is confirmed in the chat, and changing a file follows the mode. When it needs another folder, the chat asks you.",
+    "foldersText": "Your user folder and your other drives are open: the character may look at files there and create, copy, rename and move them, and each turn's changes can be undone; deleting is confirmed in the chat. Places that hold passwords, keys, browser profiles or other programs' data, and this app's own folder, are never read. A folder below set to view only is only read; a folder you take back is asked about before it is used.",
     "foldersNone": "No folders allowed yet.",
     "modeName": "How it works",
-    "modeText": "Read only: it reads files in the folders you allow and changes or runs nothing. Auto review: changing and creating files in folders you allow it to sort goes ahead, and Undo these changes under the reply puts them back; a program run in a folder you allow is judged by a reviewer first and asks you only when it does not pass; deleting, the network and installing software always ask.",
+    "modeText": "Read only: it reads files and changes or runs nothing. Auto review: changing and creating files goes ahead, and Undo these changes under the reply puts them back; a program run, or a step code cannot settle, is judged by a reviewer first; a read the reviewer does not pass is not done and nothing is asked; deleting, the network and installing software always ask.",
     "modes": {
       "read": "View only",
       "auto": "Auto review"
@@ -1838,6 +1838,7 @@
       "folder_declined": "Folder not allowed",
       "folder_unanswered": "Nobody answered: not run",
       "read_mode": "View only; not run",
+      "not_passed": "Not passed by the automatic review: not run",
       "rule_added": "Always allowed"
     },
     "code": " (exit code {count})",

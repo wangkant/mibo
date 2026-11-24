@@ -1461,7 +1461,7 @@
     "onAsk": "¿Permitir que maneje otros programas de este equipo?",
     "onYes": "Activar",
     "grantsTitle": "Programas permitidos",
-    "grantsText": "La primera vez que se necesita un programa, el chat te pregunta, y tu sí allí vale para esa tarea. Aquí aparecen los programas que antes permitiste siempre.",
+    "grantsText": "No hace falta permitir antes ningún programa: cuando lo pides, se abre y se maneja cualquier programa fuera de la lista de exclusión de abajo. Aquí aparecen los programas que antes permitiste siempre.",
     "grantsNone": "Aún no hay programas permitidos siempre.",
     "since": "Permitido {s}",
     "revoke": "Retirar {name}",
@@ -1786,16 +1786,16 @@
   "setup_shell": {
     "hint": "Permita que el personaje consulte y ordene archivos de este equipo mediante comandos, cuando se lo pida.",
     "onTitle": "Permitir que actúe en este equipo mediante comandos",
-    "onText": "Al activarlo, el personaje puede ejecutar los comandos que pidas en la conversación: ver y organizar archivos en las carpetas permitidas, consultar el espacio en disco y similares. Cada comando se analiza y clasifica antes de ejecutarse; eliminar, usar la red e instalar software se preguntan en el chat, modificar archivos y ejecutar programas siguen el modo de abajo, y algunas cosas no se hacen nunca. Desactivado, no se ejecuta ningún comando.",
+    "onText": "Al activarlo, el personaje puede ejecutar los comandos que pidas en la conversación: ver y organizar archivos en tu carpeta de usuario y en tus otros discos, consultar el espacio en disco y similares. Cada comando se analiza y clasifica antes de ejecutarse; los lugares que guardan contraseñas, claves, perfiles del navegador o datos de otros programas nunca se leen; eliminar, usar la red e instalar software se preguntan en el chat, modificar archivos y ejecutar programas siguen el modo de abajo, y algunas cosas no se hacen nunca. Desactivado, no se ejecuta ningún comando.",
     "onAsk": "¿Permitir que actúe en este equipo mediante comandos?",
     "onAskText": "El personaje solo ejecuta comandos mientras chateas con él y solo para lo que pidas. Antes de eliminar, sustituir, mover fuera de una carpeta, usar la red, instalar software o ejecutar un programa, dice en el chat lo que va a ocurrir y espera tu respuesta: «sí», «adelante» y similares escritos en el chat cuentan como un sí, y los pasos del mismo tipo en esa tarea no se vuelven a preguntar; pagar, eliminar o cambiar una cuenta se sigue confirmando por separado. Cualquier otra respuesta significa no. Nada de una página, un archivo o una herramienta puede responder por ti.",
     "onYes": "Activar",
     "elevated": "Mibo se está ejecutando como administrador, así que no se ejecuta ningún comando. Abra Mibo de forma normal.",
     "foldersTitle": "Carpetas que puede usar",
-    "foldersText": "En tus carpetas Escritorio, Documentos, Descargas, Imágenes, Música y Vídeos y en las carpetas de abajo, el personaje puede ver, crear, copiar, renombrar y mover archivos; eliminar se confirma en el chat y modificar un archivo sigue el modo. Cuando necesite otra carpeta, se te preguntará en el chat.",
+    "foldersText": "Tu carpeta de usuario y tus otros discos están abiertos: el personaje puede ver, crear, copiar, renombrar y mover archivos en ellos, y los cambios de cada turno se pueden deshacer; eliminar se confirma en el chat. Los lugares que guardan contraseñas, claves, perfiles del navegador o datos de otros programas, y la carpeta de esta aplicación, nunca se leen. Una carpeta de abajo marcada como solo ver solo se lee; por una carpeta retirada se pregunta antes de usarla.",
     "foldersNone": "Aún no hay carpetas permitidas.",
     "modeName": "Modo de trabajo",
-    "modeText": "Solo ver: lee los archivos de las carpetas permitidas y no cambia ni ejecuta nada. Revisión automática: modificar y crear archivos en las carpetas que puede ordenar se hace sin preguntar, y «Deshacer estos cambios» bajo la respuesta los revierte; ejecutar un programa en una carpeta permitida lo evalúa primero un modelo revisor y solo se le pregunta si no supera la revisión. Eliminar, usar la red e instalar software siempre requieren su confirmación.",
+    "modeText": "Solo ver: lee los archivos y no cambia ni ejecuta nada. Revisión automática: modificar y crear archivos se hace sin preguntar, y «Deshacer estos cambios» bajo la respuesta los revierte; ejecutar un programa, o un paso que el código no puede decidir, lo evalúa primero un modelo revisor; una lectura que no supera la revisión no se hace y no se pregunta nada. Eliminar, usar la red e instalar software siempre requieren su confirmación.",
     "modes": {
       "read": "Solo ver",
       "auto": "Revisión automática"
@@ -1842,6 +1842,7 @@
       "folder_declined": "Carpeta no permitida",
       "folder_unanswered": "Sin respuesta: no se ejecutó",
       "read_mode": "Solo ver; no se ejecutó",
+      "not_passed": "No aprobado por la revisión automática: no se ejecutó",
       "rule_added": "Siempre permitido"
     },
     "code": " (código de salida {count})",

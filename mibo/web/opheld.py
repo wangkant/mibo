@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import secrets
 import time
 from urllib.parse import urlsplit
 
 from . import gate
-from .opcarry import bears, leaves_of, leaving, only_reads, summary_of, texts_of
+from .opcarry import beacon, bears, leaves_of, leaving, only_reads, shape, squeeze, summary_of, texts_of
 from .opoutside import HEAR_S, RESTORE_JS, reading
 from .opsaid import SAID
 from .pagewords import clip
@@ -137,6 +138,11 @@ class Holding:
             return []
         if not top and only_reads(request, carried, params.get("resourceType") == "Ping"):
             return []
+        if not top and not carried and self._own(site) and (beacon(request) or self._works_on_theirs(request, site)):
+            # The page's own telemetry to its own site, or the page working on the person's own words there (a
+            # translation, a search), with nothing typed in it beyond those words: no one's act, let through by rule
+            # with no reviewer. A press is judged by its control before it is made, whatever its requests are called.
+            return []
         if self._watching is not None and sends and self._submits(request):
             return [self._watching, *carried]
         if carried:
@@ -147,19 +153,35 @@ class Holding:
             # The page going by itself to a site that is not the run's.
             return [{"leave": True, "field": "", "text": ""}]
         return []
+    def _own(self, site: str) -> bool:
+        """The site of the page the run is on, when it is not a sensitive one (acting.sensitive)."""
+        from .. import acting
+        return site == gate.site_of(self._address) and not acting.sensitive(site)
+
+    def _works_on_theirs(self, request: dict, site: str) -> bool:
+        """A request, not a DELETE, that takes the person's own words typed on this site (`asked`) to it."""
+        texts = texts_of(request)
+        return str(request.get("method") or "").upper() != "DELETE" and any(
+            t.get("asked") and t["site"] == site and bears(texts, t["text"]) for t in self.typed)
+
     def _carries(self, params: dict) -> list[dict]:
         """The typed entries a paused request carries, in its body or address: a GET only when it goes to
-        another site than the one the text was typed on (a new tab, a fetch)."""
+        another site than the one the text was typed on (a new tab, a fetch). The person's own words typed on a site
+        they named (`asked`) are carried only to another site."""
         request = params.get("request") or {}
         if not self.typed:
             return []
         get = str(request.get("method") or "GET").upper() in ("GET", "HEAD", "OPTIONS")
+        site = gate.site_of(str(request.get("url") or ""))
         if not get and request.get("hasPostData") and not request.get("postData") and not request.get("postDataEntries"):
             # A body the browser would not show: whatever was typed may be in it.
-            return list(self.typed)
-        site = gate.site_of(str(request.get("url") or ""))
+            return [t for t in self.typed if not (t.get("asked") and site == t["site"])]
         texts = texts_of(request)
-        return [t for t in self.typed if not ((get or t.get("went")) and site == t["site"]) and bears(texts, t["text"])]
+        # Typed a key at a time, a field's text is sent as it grows: to another site, any start of it is carried.
+        starts = {squeeze(x) for x in texts if squeeze(x)}
+        return [t for t in self.typed if not ((get or t.get("went") or t.get("asked")) and site == t["site"])
+                and (bears(texts, t["text"]) or (site != t["site"] and any(squeeze(t["text"]).startswith(x)
+                                                                           for x in starts)))]
 
     def _submits(self, request: dict) -> bool:
         """A request that leaves on a watched press and is its act: a DELETE, or one to the page's own site or its
@@ -305,9 +327,14 @@ class Holding:
             # with nothing typed carried is.
             return "ask", "", ""
         chose = any(c.get("choice") for c in carried)
-        return await self._decided(card["kind"], site, leaving(str(request.get("url") or "")) if carried[0].get(
+        # One verdict an endpoint in this turn: the same act to the same site, method and path is never judged twice
+        # with different outcomes, whatever ids and counters its body carries this time.
+        url = str(request.get("url") or "")
+        key = json.dumps(["held", card["kind"], site, str(request.get("method") or "GET").upper(), shape(url),
+                          card["text"], card["button"], chose], ensure_ascii=False)
+        return await self._decided(card["kind"], site, leaving(url) if carried[0].get(
             "leave") else {"text": card["text"], "page_says": card["button"], "request": summary_of(request),
-                           "effects": ["the page saves the choice the moment it is made"] if chose else []})
+                           "effects": ["the page saves the choice the moment it is made"] if chose else []}, key)
 
     async def _drop(self, params: dict, top: bool) -> None:
         """A held request that does not go: a navigation of the page answered 204 (nothing to show, the page stays

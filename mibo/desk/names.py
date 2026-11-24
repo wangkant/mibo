@@ -157,6 +157,13 @@ def apps(fresh: bool = False) -> list[App]:
                 target = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "explorer.exe")
             if "!" in aumid or target.lower().endswith(".exe"):
                 rows.append(App(name, aumid, "" if "!" in aumid else target))
+        # Start's shortcuts to programs its own list left out, and the programs registered by file name (App Paths),
+        # as Start's search finds them too.
+        listed = {plain(row.name) for row in rows}
+        rows += [App(name, "", target, file) for name, file, target in win32.start_links()
+                 if target.lower().endswith(".exe") and plain(name) not in listed]
+        listed |= {plain(row.name) for row in rows} | {plain(Path(row.target).stem) for row in rows if row.target}
+        rows += [App(name, "", file, file) for name, file in win32.app_paths() if plain(name) not in listed]
         _apps = (time.monotonic(), rows)
     return _apps[1]
 
@@ -188,6 +195,13 @@ def own_link(asked: str) -> App | None:
     if not on_desktop(path, profile_folders()):
         return None
     return App(Path(path).stem, "", win32.link_reader()(path), path)
+
+
+def named(app: App, window: Window) -> bool:
+    """Whether a window's program calls itself by the entry's name: a program a launcher started (DeepL by Zero
+    Install), whose file is neither the entry's nor beside it."""
+    return max(score(app.name, window.description), score(app.name, window.product),
+               score(app.name, Path(window.exe).stem)) >= FOUND
 
 
 def find(asked: str) -> Found:

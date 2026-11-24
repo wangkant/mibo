@@ -169,8 +169,8 @@ async def open_place(agent, args: dict, lookups) -> str:
     if found.kind == "none":
         listed = f" Programs open now: {', '.join(found.candidates)}." if found.candidates else ""
         return (f"Error: nothing called “{name}” was found: no open tab or window, no file there, no program or "
-                f"shortcut in Start or on the Desktop, and no site the app knows.{listed} Ask them where it is, or "
-                f"use a web address or a full path.")
+                f"shortcut in Start or on the Desktop, and no site the app knows.{listed} If a website does what they "
+                f"asked, open its address and go on; otherwise ask them where it is.")
     if found.kind in ("page", "tab"):
         return await _open_page(agent, home, found, show, lookups)
     if found.kind in ("window", "program"):
@@ -219,8 +219,12 @@ async def _open_window(agent, home, found: resolve.Resolved, show: bool, lookups
         lookups.trace.append({"tool": "desk", "status": "done",
                               "what": f"{found.title}：打开" if lang == "zh" else f"{found.title}: open"})
         return f"{line}. It has no window to work in; tell them it is open."
-    if status != "ok":
+    if status == "refused":
         return f"Error: not opened: {line}. Tell them in a sentence; do not try another way."
+    if status != "ok":
+        # Not found, or no window of it showed: the same task may be done on the program's website in this turn.
+        return (f"Error: not opened: {line}. If the program's website does what they asked, open that and go on; "
+                f"otherwise tell them in a sentence.")
     program, title = out.get("program") or found.title, out.get("title") or ""
     place = places.add(lookups.conversation, "window", out["hwnd"], title or program, program, shown=show)
     lookups.trace.append({"tool": "desk", "status": "done",

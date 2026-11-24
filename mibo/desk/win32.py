@@ -372,14 +372,44 @@ def shortcuts() -> list[tuple[str, str, str]]:
         if folder and os.path.isdir(folder):
             out += [(os.path.splitext(entry.name)[0], entry.path, target(entry.path)) for entry in os.scandir(folder)
                     if entry.is_file() and entry.name.lower().endswith((".lnk", ".url", ".exe"))]
+    return out + [row for row in start_links(target) if row[2] and not row[2].lower().endswith(".exe")]
+
+
+def start_links(target=None) -> list[tuple[str, str, str]]:
+    """Every .lnk in Start's Programs folders, the person's own and everyone's, as (name, the file, what it opens)."""
+    from ..shell.grants import known_folder
+    target = target or link_reader()
+    out = []
     for folder in filter(None, map(known_folder, PROGRAMS)):
         for root, _dirs, files in os.walk(folder):
-            for name in files:
-                if name.lower().endswith(".lnk"):
-                    path = os.path.join(root, name)
-                    aim = target(path)
-                    if aim and not aim.lower().endswith(".exe"):
-                        out.append((os.path.splitext(name)[0], path, aim))
+            out += [(os.path.splitext(name)[0], os.path.join(root, name), target(os.path.join(root, name)))
+                    for name in files if name.lower().endswith(".lnk")]
+    return out
+
+
+# Where Windows registers a program by its file name, for Run and Start's search (winword for Word).
+APP_PATHS = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
+
+
+def app_paths() -> list[tuple[str, str]]:
+    """The programs registered under App Paths for the person and for everyone: (the name without .exe, the
+    file), the ones whose file is there."""
+    import winreg
+    out = []
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        try:
+            key = winreg.OpenKey(root, APP_PATHS)
+        except OSError:
+            continue
+        with key:
+            for i in range(winreg.QueryInfoKey(key)[0]):
+                name = winreg.EnumKey(key, i)
+                try:
+                    file = os.path.expandvars(winreg.QueryValue(key, name)).strip().strip('"')
+                except OSError:
+                    continue
+                if name.lower().endswith(".exe") and os.path.isfile(file):
+                    out.append((os.path.splitext(name)[0], file))
     return out
 
 

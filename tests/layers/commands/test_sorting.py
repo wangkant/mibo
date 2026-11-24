@@ -146,7 +146,8 @@ FILE_TOOLS = [
 
 @pytest.fixture
 def granted(tmp_path, monkeypatch):
-    """<tmp>/files granted to change in, with a few files; <tmp>/home the app's home; <tmp>/elsewhere not granted."""
+    """<tmp>/files granted to change in, with a few files; <tmp>/home the app's home; <tmp>/elsewhere taken back in
+    Settings, so it is not one of the open places."""
     folder, home = tmp_path / "files", tmp_path / "home"
     (folder / "临时" / "子").mkdir(parents=True)
     (home / "runtime" / "desktop").mkdir(parents=True)
@@ -158,6 +159,7 @@ def granted(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_HOME", str(home))
     grants = Grants(home / "runtime" / "desktop", home)
     assert grants.add(str(folder)) == ""
+    grants.remove(str(tmp_path / "elsewhere"))
     yield folder, grants
     reading.PARSER.close()
 

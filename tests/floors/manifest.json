@@ -66,7 +66,8 @@
       "tests/floors/asked/test_the_question_is_conversation.py::test_after_a_yes_the_chat_holds_request_question_answer_and_reply",
       "tests/floors/asked/test_the_question_is_conversation.py::test_after_a_no_its_words_are_answered_once_where_they_stand",
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_card_is_answered_by_its_buttons_in_the_apps_words",
-      "tests/floors/asked/test_the_question_is_conversation.py::test_a_question_left_waiting_by_an_ended_process_waits_no_more"
+      "tests/floors/asked/test_the_question_is_conversation.py::test_a_question_left_waiting_by_an_ended_process_waits_no_more",
+      "tests/layers/web_operate/test_same_site_steps.py::test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called"
     ],
     "injection": [
       "tests/floors/asked/test_yes_in_the_chat.py::test_only_the_apps_own_page_answers",
@@ -103,7 +104,10 @@
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_second_answer_to_an_answered_question_decides_nothing",
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_button_answers_only_a_card",
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_pages_amount_never_names_the_pay_button",
-      "tests/floors/asked/test_the_question_is_conversation.py::test_an_overlong_answer_is_refused_like_any_message"
+      "tests/floors/asked/test_the_question_is_conversation.py::test_an_overlong_answer_is_refused_like_any_message",
+      "tests/floors/grants/test_open_by_default.py::test_page_text_never_poses_as_the_person_and_a_reviewer_with_no_answer_passes_nothing",
+      "tests/layers/web_operate/test_same_site_steps.py::test_their_words_going_to_another_site_are_held_for_them_and_never_left_to_the_reviewer",
+      "tests/layers/programs/test_open_by_name.py::test_a_program_that_came_from_the_web_is_never_started"
     ],
     "grants": [
       "tests/floors/grants/test_what_is_granted.py::test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written",
@@ -113,7 +117,11 @@
       "tests/layers/web_operate/test_act.py::test_going_to_another_site_is_free_unless_the_address_carries_words_read_on_a_page",
       "tests/floors/grants/test_what_is_granted.py::test_the_programs_on_the_never_list_are_never_operated",
       "tests/floors/grants/test_what_is_granted.py::test_the_persons_own_folder_set_to_read_only_or_taken_back_in_settings_stays_so",
-      "tests/test_mcp_tools.py::test_a_local_program_starts_only_once_allowed_and_each_call_asks"
+      "tests/test_mcp_tools.py::test_a_local_program_starts_only_once_allowed_and_each_call_asks",
+      "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_no_file_tool_reads_or_lists_a_protected_place_by_any_spelling",
+      "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_no_command_reads_lists_or_tests_a_protected_place",
+      "tests/floors/grants/test_open_by_default.py::test_with_every_place_open_what_undo_cannot_take_back_still_asks_or_is_refused",
+      "tests/floors/grants/test_open_by_default.py::test_a_change_in_an_open_place_runs_with_no_question_and_undo_puts_it_back"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",

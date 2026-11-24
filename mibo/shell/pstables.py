@@ -242,7 +242,11 @@ NET_METHODS = {"downloadstring", "downloadfile", "downloaddata", "uploadstring",
 REGISTRY_READ = (r"hklm\software\microsoft\windows\currentversion\uninstall",
                  r"hklm\software\wow6432node\microsoft\windows\currentversion\uninstall",
                  r"hkcu\software\microsoft\windows\currentversion\uninstall",
-                 r"hklm\software\microsoft\windows nt\currentversion")
+                 r"hklm\software\microsoft\windows nt\currentversion",
+                 # Where a program is: what Run and Start's search read to find it by its file name.
+                 r"hklm\software\microsoft\windows\currentversion\app paths",
+                 r"hklm\software\wow6432node\microsoft\windows\currentversion\app paths",
+                 r"hkcu\software\microsoft\windows\currentversion\app paths")
 # And the values it may change, after asking: light or dark, and file name extensions shown.
 REGISTRY_WRITE = (r"hkcu\software\microsoft\windows\currentversion\themes\personalize",
                   r"hkcu\software\microsoft\windows\currentversion\explorer\advanced")

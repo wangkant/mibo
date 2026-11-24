@@ -26,14 +26,16 @@ def verdict(decision: str, reason: str) -> dict:
 
 @pytest.fixture
 def desktop(app, tmp_path):
-    """A granted Desktop holding a 'grok bot' folder and a junction to a folder outside every grant."""
+    """A granted Desktop holding a 'grok bot' folder and a junction to a folder the person took back in Settings."""
     import _winapi
     place, outside = tmp_path / "Desktop", tmp_path / "elsewhere" / "Game"
     (place / "grok bot").mkdir(parents=True)
     outside.mkdir(parents=True)
     (outside / "save.dat").write_text("x", encoding="utf-8")
     _winapi.CreateJunction(str(outside), str(place / "Game"))
-    assert Grants(app.home / "runtime" / "desktop", app.home).add(str(place)) == ""
+    grants = Grants(app.home / "runtime" / "desktop", app.home)
+    assert grants.add(str(place)) == ""
+    grants.remove(str(tmp_path / "elsewhere"))
     return place
 
 
@@ -61,17 +63,18 @@ def test_a_listing_through_links_out_of_the_granted_folder_runs_on_the_reviewers
     assert row["review"]["reason"] == "只读查找桌面上的 grok bot。"
 
 
-def test_when_the_reviewer_asks_the_question_says_why_and_a_yes_runs_that_step_alone(app, turn, desktop):
+def test_a_read_the_reviewer_does_not_pass_is_not_done_and_nothing_is_asked(app, turn, desktop):
+    # A read is not a step asked of the person (cardwait.py): the review's doubt, or its failure, leaves it undone
+    # and the model is told so, with no question.
     app.model.script(verdict("ask", "需要你确认是否读取桌面外的文件夹。"), purpose="reviewer")
-    done = turn(ASKED, listing(desktop), say("找到了。"), cards="可以")
-    ((card,),) = [[c["card"] for c in done.cards]]
-    assert "需要你确认是否读取桌面外的文件夹。" in card["zh"]["review"]
-    assert logged(app)[-1]["review"]["decision"] == "ask" and logged(app)[-1]["outcome"] == "ran"
+    done = turn(ASKED, listing(desktop), say("没有找。"), cards="可以")
+    assert done.cards == [] and done.questions == [] and len(done.asked("reviewer")) == 1
+    assert (logged(app)[-1]["outcome"], logged(app)[-1]["review"]["decision"]) == ("not_passed", "ask")
     # No folder outside was granted by it: the next turn's listing goes to the reviewer again.
     assert all(f["zh"] != "Game" for f in app.get("/api/shell").json()["folders"])
     app.model.script(verdict("ask", "需要你确认是否读取桌面外的文件夹。"), purpose="reviewer")
     again = turn(ASKED, listing(desktop), say("没有找。"), cards="no")
-    assert len(again.cards) == 1 and len(again.asked("reviewer")) == 1
+    assert again.cards == [] and len(again.asked("reviewer")) == 1
 
 
 def test_a_fetch_that_only_reads_is_the_reviewers_and_one_that_sends_asks_every_time(app, turn, desktop):

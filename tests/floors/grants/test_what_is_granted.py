@@ -1,5 +1,5 @@
-"""Nothing reaches beyond what the person granted: a file tool outside the granted folders asks for the folder
-first, a folder granted to read is never changed, the one acting mode is honoured (off does nothing until they
+"""Nothing reaches beyond what the person allows: the profile and the other drives are open places, but a file tool
+in a folder the person took back or set to read only in Settings asks for the folder first, a folder granted to read is never changed, the one acting mode is honoured (off does nothing until they
 turn it on, read only changes nothing), the app's home and key files are never touched, a run that starts on a
 site nobody named asks first, and the programs on the never list are never operated."""
 from __future__ import annotations
@@ -22,12 +22,13 @@ ASKED = "Write a short note called plan.txt there"  # copy: voice
 
 @pytest.fixture
 def places(app, tmp_path):
-    """A folder granted to change in, one granted to read only, and one nobody granted."""
+    """A folder granted to change in, one granted to read only, and one the person took back in Settings."""
     made = {name: tmp_path / name for name in ("granted", "read_only", "elsewhere")}
     for place in made.values():
         place.mkdir()
     grants = Grants(app.home / "runtime" / "desktop", app.home)
     assert grants.add(str(made["granted"])) == "" and grants.add(str(made["read_only"]), read_only=True) == ""
+    grants.remove(str(made["elsewhere"]))
     return made
 
 
@@ -51,8 +52,8 @@ def test_the_acting_mode_holds_off_waits_for_the_person_and_read_only_changes_no
     assert json.loads(modes.path.read_text(encoding="utf-8")) == {"mode": mode}
 
 
-# File tools on the app's home, a key file and a folder nobody granted: {f} the granted folder, {h} the home, {e}
-# a folder not granted. (tool, its job as panel.py makes it, what the gate must do)
+# File tools on the app's home, a key file and a folder the person took back: {f} the granted folder, {h} the home,
+# {e} a folder taken back in Settings. (tool, its job as panel.py makes it, what the gate must do)
 REACHES = [
     ("read", {"path": "{h}/.env"}, "refuse"),
     ("read", {"path": "{f}/../home/.env"}, "refuse"),
@@ -89,6 +90,7 @@ def test_no_file_tool_reaches_the_home_a_key_file_or_an_ungranted_folder(tmp_pat
     (home / ".env").write_text("SECRET=1\n", encoding="utf-8")
     grants = Grants(home / "runtime" / "desktop", home)
     assert grants.add(str(folder)) == ""
+    grants.remove(str(elsewhere))
     job = {"op": op, "recursive": False, "copy": False, "kind": "write",
            **filled(job, {"f": str(folder), "h": str(home), "e": str(elsewhere)})}
     job["folder"] = os.path.dirname(job.get("path", ""))

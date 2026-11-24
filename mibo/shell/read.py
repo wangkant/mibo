@@ -160,8 +160,9 @@ def _folder_to_grant(grants: Grants, path: str) -> str:
     return grants.folder_of(held) if held else folder_for(path)
 
 
-def _escaping_links(folder: str, roots: list[str], most: int = 20000) -> list[str]:
-    """Links and junctions under `folder` that lead outside the granted folders (a recursive walk would follow)."""
+def _escaping_links(folder: str, inside, most: int = 20000) -> list[str]:
+    """Links and junctions under `folder` that lead where `inside` (a `norm`ed place) does not hold (a recursive walk
+    would follow)."""
     found, seen, stack = [], 0, [folder]
     while stack and seen < most:
         try:
@@ -171,7 +172,7 @@ def _escaping_links(folder: str, roots: list[str], most: int = 20000) -> list[st
         for entry in entries:
             seen += 1
             link = entry.is_symlink() or (entry.is_dir(follow_symlinks=False) and running._junction(entry.path))
-            if link and not any(under(norm(entry.path), r) for r in roots):
+            if link and not inside(norm(entry.path)):
                 found.append(entry.path)
             elif not link and entry.is_dir(follow_symlinks=False):
                 stack.append(entry.path)
@@ -214,7 +215,7 @@ def _pattern_protected(glob: str, write: bool, deep: bool, content: bool, places
     literal = _base(glob)[0]
     for root in (places.home, places.package, places.python, places.appdata,
                  os.path.join(places.windows, "system32", "config")):
-        if root == places.appdata and places.temp and under(norm(literal), places.temp):
+        if root == places.appdata and any(under(norm(literal), p) for p in [*places.findable, places.temp] if p):
             continue
         if _pattern_reaches(glob, root, deep):
             return root
@@ -268,7 +269,7 @@ def _refused_places(act: Act, cwd: str, places) -> list[Act]:
                     for path in dict.fromkeys(act.paths + [os.path.join(cwd, a) for a in act.args or []])
                     if downloaded(path)]
     for path in act.paths + ([act.dest] if act.dest else []):
-        why = places.blocked(norm(path), act.write or path == act.dest)
+        why = places.blocked(norm(path), act.write or path == act.dest, look=act.what == "look")
         # A program's own file (user installs live in AppData) is run, not read: only the app's own refuse.
         if not why or (why != "app" and act.args is not None and path == act.paths[0]):
             continue
@@ -278,7 +279,7 @@ def _refused_places(act: Act, cwd: str, places) -> list[Act]:
     return refused
 
 
-def _moves_and_links(act: Act, grants: Grants, roots: list[str]) -> list[Act]:
+def _moves_and_links(act: Act, grants: Grants) -> list[Act]:
     """Asks for a move out of its granted folder, and for links a recursive act would follow outside them."""
     asks = []
     if act.what == "move" and act.dest and act.paths:
@@ -287,8 +288,9 @@ def _moves_and_links(act: Act, grants: Grants, roots: list[str]) -> list[Act]:
             asks.append(Act("move_out", "move_out", f"moves out of {', '.join(sorted(src_roots))}",
                             paths=act.paths, dest=act.dest))
     if act.recurse and act.kind in ("read", "change", "delete"):
-        asks += [Act("outside", "outside", f"{link} inside leads outside the granted folders", paths=[link])
-                 for path in act.paths if os.path.isdir(path) for link in _escaping_links(path, roots)]
+        asks += [Act("outside", "outside", f"{link} inside leads outside the open places", paths=[link])
+                 for path in act.paths if os.path.isdir(path)
+                 for link in _escaping_links(path, lambda p: grants.open(p) and not grants.places.blocked(p, False))]
     return asks
 
 
@@ -345,7 +347,6 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
     past_bin = [a for a in reading.acts if a.what == "skip_bin"]
     if past_bin:
         return Verdict("bin", past_bin)
-    roots, writable = grants.roots(), grants.roots(write=True)
     asks += [a for a in reading.acts if a.kind in ASK_KINDS]
     # A place computed only as it runs cannot be checked first: asked (a new name in the same folder is the
     # exception, Rename-Item cannot move a file).
@@ -357,7 +358,10 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
              if not (act.args is not None and p == act.paths[0])]
     for act, path in every:
         write = act.write or path == act.dest
-        if any(under(norm(path), r) for r in (writable if write else roots)):
+        # Open by default (Grants.open): the profile and the other drives; a place's name, size and dates anywhere;
+        # the program places Start reads. What is protected was refused above.
+        if grants.open(norm(path), write) or (not write and (act.what == "look" or any(
+                under(norm(path), p) for p in places.findable))):
             continue
         folder = _folder_to_grant(grants, path)
         if folder and not places.grantable(norm(folder)):
@@ -365,7 +369,7 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
         asks.append(Act("outside", "outside", f"{act.why}; {path} is outside the folders they granted", paths=[path],
                         write=act.write))
     for act in reading.acts:
-        asks += _moves_and_links(act, grants, roots)
+        asks += _moves_and_links(act, grants)
     verdict = Verdict("run", [])
     asks += _listed_changes(reading.acts, verdict)
     if verdict.overwrites and not any(a.kind == "overwrite" for a in asks):

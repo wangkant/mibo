@@ -26,6 +26,9 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - A delete you asked for that goes to the Recycle Bin runs without a question; a delete the bin cannot give back is asked every time.
 - Your own Desktop, Documents, Downloads, Pictures, Music and Videos folders no longer need a grant: files there are read and written for you. A folder you remove or set to read-only in Settings stays that way.
 - Pictures of a window are sent to the model service without a question, unless the window looks sensitive or you turn this off in Settings.
+- Your whole user folder and your other drives are open without a grant: reads run at once and changes run under the turn's undo. Places holding passwords, keys, browser profiles or other programs' data, and Mibo's own folder, are never read, by any spelling of their path. Listing the Start menu, Program Files and a program's App Paths to find an installed program no longer stops or asks.
+- A page's own click statistics, and its requests that take your words to the site you named (DeepL translating 你好), no longer reach the reviewer or ask you; your words going to any other site are held, even a key at a time. A read the automatic review does not pass is not done and the turn goes on another way, instead of asking you.
+- open finds a program by its name as Start's search does, also one started through a launcher (DeepL through Zero Install, Discord through Update.exe), and when it cannot open one it leaves the program's website to the character in the same turn.
 
 ### Safety
 

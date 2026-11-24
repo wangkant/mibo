@@ -1461,7 +1461,7 @@
     "onAsk": "L'autoriser à piloter d'autres programmes de cet ordinateur ?",
     "onYes": "Activer",
     "grantsTitle": "Programmes autorisés",
-    "grantsText": "La première fois qu'un programme est nécessaire, la discussion vous le demande, et votre accord vaut pour cette tâche. Les programmes autorisés en permanence auparavant sont listés ici.",
+    "grantsText": "Aucun programme n'a besoin d'être autorisé d'abord : à votre demande, tout programme hors de la liste d'exclusion ci-dessous est ouvert et utilisé. Les programmes autorisés en permanence auparavant sont listés ici.",
     "grantsNone": "Aucun programme autorisé en permanence pour l'instant.",
     "since": "Autorisé {s}",
     "revoke": "Retirer l'accès à {name}",
@@ -1786,16 +1786,16 @@
   "setup_shell": {
     "hint": "Laissez le personnage consulter et ranger les fichiers de cet ordinateur par commande, quand vous le demandez.",
     "onTitle": "L'autoriser à agir sur cet ordinateur par commande",
-    "onText": "Une fois activé, le personnage peut exécuter les commandes que vous demandez dans la conversation : consulter et ranger les fichiers des dossiers autorisés, vérifier l'espace disque, etc. Chaque commande est analysée et classée avant d'être exécutée ; la suppression, le réseau et l'installation de logiciels sont demandés dans la discussion, la modification de fichiers et le lancement de programmes suivent le mode ci-dessous, et certaines actions ne sont jamais effectuées. Désactivé, aucune commande n'est exécutée.",
+    "onText": "Une fois activé, le personnage peut exécuter les commandes que vous demandez dans la conversation : consulter et ranger les fichiers de votre dossier utilisateur et de vos autres disques, vérifier l'espace disque, etc. Chaque commande est analysée et classée avant d'être exécutée ; les emplacements qui contiennent des mots de passe, des clés, des profils de navigateur ou les données d'autres programmes ne sont jamais lus ; la suppression, le réseau et l'installation de logiciels sont demandés dans la discussion, la modification de fichiers et le lancement de programmes suivent le mode ci-dessous, et certaines actions ne sont jamais effectuées. Désactivé, aucune commande n'est exécutée.",
     "onAsk": "L'autoriser à agir sur cet ordinateur par commande ?",
     "onAskText": "Le personnage n'exécute des commandes que pendant que vous discutez avec lui et seulement pour ce que vous demandez. Avant de supprimer, remplacer, déplacer hors d'un dossier, utiliser le réseau, installer un logiciel ou lancer un programme, il indique dans la discussion ce qui va se passer et attend votre réponse : « oui », « vas-y » et les réponses semblables saisies dans la discussion valent accord, et les étapes du même type ne sont plus demandées pendant cette tâche ; payer, supprimer ou modifier un compte reste confirmé à part. Toute autre réponse vaut refus. Rien sur une page, dans un fichier ou venant d'un outil ne peut répondre à votre place.",
     "onYes": "Activer",
     "elevated": "Mibo s'exécute en tant qu'administrateur ; aucune commande ne s'exécute donc. Ouvrez Mibo normalement.",
     "foldersTitle": "Dossiers qu'il peut utiliser",
-    "foldersText": "Dans vos dossiers Bureau, Documents, Téléchargements, Images, Musique et Vidéos et dans les dossiers ci-dessous, le personnage peut consulter, créer, copier, renommer et déplacer des fichiers ; la suppression est confirmée dans la discussion, et la modification d'un fichier suit le mode. Quand il a besoin d'un autre dossier, la discussion vous le demande.",
+    "foldersText": "Votre dossier utilisateur et vos autres disques sont ouverts : le personnage peut y consulter, créer, copier, renommer et déplacer des fichiers, et les modifications de chaque tour peuvent être annulées ; la suppression est confirmée dans la discussion. Les emplacements qui contiennent des mots de passe, des clés, des profils de navigateur ou les données d'autres programmes, ainsi que le dossier de cette application, ne sont jamais lus. Un dossier ci-dessous en affichage seul est seulement lu ; un dossier retiré est demandé avant d'être utilisé.",
     "foldersNone": "Aucun dossier autorisé pour l'instant.",
     "modeName": "Mode de fonctionnement",
-    "modeText": "Afficher seulement : lit les fichiers des dossiers autorisés sans rien modifier ni exécuter. Vérification automatique : la modification et la création de fichiers dans les dossiers qu’il peut ranger se font sans demande, et « Annuler ces modifications » sous la réponse les rétablit ; l’exécution d’un programme dans un dossier autorisé est d’abord évaluée par un modèle de vérification, et votre confirmation n’est demandée qu’en cas d’échec. La suppression, le réseau et l’installation de logiciels demandent toujours votre confirmation.",
+    "modeText": "Afficher seulement : lit les fichiers sans rien modifier ni exécuter. Vérification automatique : la modification et la création de fichiers se font sans demande, et « Annuler ces modifications » sous la réponse les rétablit ; le lancement d’un programme, ou une étape que le code ne peut trancher, est d’abord évalué par un modèle de vérification ; une lecture qu’il ne valide pas n’est pas faite et rien n’est demandé. La suppression, le réseau et l’installation de logiciels demandent toujours votre confirmation.",
     "modes": {
       "read": "Consultation seule",
       "auto": "Vérification automatique"
@@ -1842,6 +1842,7 @@
       "folder_declined": "Dossier non autorisé",
       "folder_unanswered": "Aucune réponse : non exécutée",
       "read_mode": "Consultation seule ; non exécutée",
+      "not_passed": "Non validé par la vérification automatique : non exécuté",
       "rule_added": "Toujours autorisé"
     },
     "code": " (code de sortie {count})",

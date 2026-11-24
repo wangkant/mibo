@@ -28,6 +28,13 @@ The asking rule, decided here and in the gates, never by the model:
   local material (crossing.py), is asked once; that yes reaches the rest of the turn for its own kind (`reaches`).
 - Every other step the person asked for runs to the end with no question.
 
+So a step in automatic review has three outcomes. It runs by rule: a read of a place that is not protected
+(shell/grants.py Places.blocked, the open places of Grants.open), a change undo gives back in an open place, a page's
+own requests to its own site carrying nothing of the person's beyond their words for that site (web/opheld.py). It
+runs once the reviewer passes it (review.py). Or it is asked, as above. A step the reviewer does not pass, or gets no
+answer for, that is none of the asked ones (a read, a move the checkpoint keeps: shell/panel.py UNDONE) is not done,
+and the tool tells the model so; it never becomes a question.
+
 Presence is the app running with the person's own chat turn under way for that conversation, not the page in view.
 A question stays until it is answered or the turn is stopped. When the app window is not in front the system
 notification says so once (window.notify), and the pet's line shows that a reply is awaited (petline.js). A

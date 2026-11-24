@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
 from . import gate, signin
-from .opcarry import words_carried
+from .opcarry import squeeze, words_carried
 from .opheld import FOLLOW_S, TYPED_WATCHED
 from .opoutside import DRAWN, HEAR_S, PRESS_TAIL_S, strictness
 from .opsaid import SAID
@@ -583,6 +583,16 @@ class Steps:
             ends.append(({"id": fresh, **at}, name or str(element or "")))
         return ends
 
+    def _theirs(self, text: str, site: str) -> bool:
+        """What was typed is the person's own words of this turn, typed on a site their words name (deepl for
+        deepl.com), holding no identity number, address or account (gate.hands_over), on a site that is not a
+        sensitive one: the page's own requests may take it to that site with no card (Holding._carries)."""
+        from .. import acting, crossing
+        from ..review import _fold
+        said = self.said()
+        return (bool(site) and not acting.sensitive(site) and not gate.hands_over(text)
+                and squeeze(_fold(text)) in squeeze(_fold(said)) and crossing.named(site, said, site=True))
+
     async def _select(self, ident: int, words: str, element: str) -> dict:
         """Text selected in a control or a block of text (Page.select_text), for a page that acts on what is
         selected; it presses nothing and nothing reaches the clipboard."""
@@ -624,9 +634,10 @@ class Steps:
             if not self.typed:
                 # From now on a picture or a script from another site could carry it out in its address.
                 await self.tab.cdp("Fetch.enable", {"patterns": TYPED_WATCHED})
+            site = gate.site_of(self.page.frame_url(ident) or url)
             self.typed.append({"text": text.strip(), "field": clip(name or str(facts.get("label") or ""), 40),
-                               "site": gate.site_of(self.page.frame_url(ident) or url), "node": ident,
-                               "before": before, "out": False})
+                               "site": site, "node": ident, "before": before, "out": False,
+                               "asked": self._theirs(text, site)})
         if facts.get("tag") == "select":
             line = await self._choosing(lambda: self.page.type(ident, text), name or str(facts.get("label") or ""), url,
                                         text)
