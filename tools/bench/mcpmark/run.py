@@ -28,7 +28,8 @@ anything reaching outside that folder, a program's window or the browser, which 
 past --budget dollars; no task starts with less than a task's worth left. The key is read from --keys (LLM_API_KEY
 and LLM_BASE_URL lines), never printed, and reaches each scratch home's app only through its environment
 (tools/scratchhome.py); the person's computer is an empty folder beside each home. Per task, <work>/<task>/ keeps the reply, the steps, the MCP
-log, the model calls and verify's output; the summary goes to --out.
+log, the model calls and verify's output; the summary goes to --out. On Windows a failed task is verified once
+more with the backslashes of the text files it made read as slashes (`verify_slashes`), and both results are kept.
 """
 from __future__ import annotations
 
@@ -168,6 +169,22 @@ def verify(task: dict, folder: Path) -> tuple[bool, str]:
                           encoding="utf-8", errors="replace", timeout=300,
                           env={**os.environ, "FILESYSTEM_TEST_DIR": str(folder), "PYTHONIOENCODING": "utf-8"})
     return done.returncode == 0, (done.stdout + done.stderr)[-1500:]
+
+
+def verify_slashes(task: dict, folder: Path, data: Path) -> bool:
+    """On Windows, after a fail: verify.py again on a copy of the folder in which the text files the task made
+    have each backslash as a slash. The scorers compare a relative path written into an answer with "a/b", the
+    form of the macOS and Linux they were validated on; a path here is written with backslashes. Reported beside
+    the strict result, never in its place."""
+    copy = folder.parent / "slashes" / folder.name
+    shutil.rmtree(copy.parent, ignore_errors=True)
+    shutil.copytree(folder, copy)
+    for made in copy.rglob("*"):
+        if made.suffix in (".txt", ".md", ".csv", ".json") and not (data / folder.name / made.relative_to(copy)).exists():
+            made.write_bytes(made.read_bytes().replace(b"\\", b"/"))
+    passed = verify(task, copy)[0]
+    shutil.rmtree(copy.parent, ignore_errors=True)
+    return passed
 
 
 # ---------------------------------------------------------------- one home of the app
@@ -342,11 +359,13 @@ def one(task: dict, data: Path, work: Path, shared: Path, model_url: str, model:
         app.close()
     seconds = round(time.time() - began, 1)
     passed, said = verify(task, folder)
+    slashes = WIN and not passed and verify_slashes(task, folder, data)
     reply = result["reply"]
     entries = [m for m in reply.get("messages") or [] if m.get("role") != "user"]
     rows = meter.rows[rows_before:] if meter else []
     record = {
-        "task": task["id"], "pass": passed, "seconds": seconds,
+        "task": task["id"], "pass": passed, "pass_with_backslashes_read_as_slashes": passed or slashes,
+        "seconds": seconds,
         "model_calls": len(rows), "reply_rounds": sum(1 for r in rows if "find_tools" in r["tools"]),
         "tokens_in": sum(r["in"] for r in rows), "tokens_out": sum(r["out"] for r in rows),
         "tokens_cached": sum(r["cached"] for r in rows), "cost": round(sum(r["cost"] for r in rows), 5),
@@ -560,7 +579,9 @@ def run(args) -> int:
         except Exception as error:
             record = {"task": task["id"], "pass": False, "error": f"{type(error).__name__}: {str(error)[:300]}"}
         results.append(record)
-        print(f"  {'PASS' if record['pass'] else 'fail'} {record.get('seconds')}s ${record.get('cost')} "
+        lenient = record.get("pass_with_backslashes_read_as_slashes") and not record["pass"]
+        print(f"  {'PASS' if record['pass'] else 'fail'}{' (passes with backslashes read as slashes)' if lenient else ''} "
+              f"{record.get('seconds')}s ${record.get('cost')} "
               f"rounds {record.get('reply_rounds')} cards {record.get('cards')} spent ${meter.spent:.4f}", flush=True)
         summary = {"benchmark": "MCPMark Filesystem standard (MCPMark Verified task set), MCP condition",
                    "model": args.model, "commit": git("rev-parse", "--short", "HEAD"),
@@ -569,6 +590,8 @@ def run(args) -> int:
                    "server": SERVER, "command": " ".join(["python", "tools/bench/mcpmark/run.py", *sys.argv[1:]]),
                    "started": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(began)),
                    "passed": sum(1 for r in results if r["pass"]), "ran": len(results), "of": len(wanted),
+                   "passed_with_backslashes_read_as_slashes": sum(
+                       1 for r in results if r.get("pass_with_backslashes_read_as_slashes")),
                    "spent": round(meter.spent, 5), "budget": args.budget, "left_out": left, "sample": drawn,
                    "published_on_these_tasks": published_on([r["task"] for r in results]), "tasks": results}
         out.write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")

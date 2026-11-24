@@ -31,14 +31,16 @@ from .paths import _base, _copy_overwrites, _local_host
 from .pssort import Sorter
 from .pstables import EXE_NEVER, EXE_OPEN, INSTALLERS, OPEN_RISKY, VERBED
 
-# Lines a read returns when no limit is given, and the most it may ask for; characters kept of one line.
-READ_LINES = 400
+# Lines a read returns when no limit is given, and the most it may ask for; characters kept of one line;
+# characters of one read (dsh's read: 2000 lines, 2000 characters a line, 50 KiB; Claude Code's Read the same
+# lines). The reply loop holds the answer to its share of a smaller window (context.Fit).
+READ_LINES = 2000
 READ_MAX = 2000
-LINE_CHARS = 500
-# Characters of one tool answer, rows of a listing, matches of a search, entries walked at most.
-ANSWER_CHARS = 24000
+LINE_CHARS = 2000
+ANSWER_CHARS = 50 * 1024
+# Rows of a listing, matches of a search (dsh's grep: 250), entries walked at most.
 LIST_ROWS = 300
-SEARCH_ROWS = 120
+SEARCH_ROWS = 250
 WALK_MOST = 50000
 # Files larger than this are not searched, nor read whole for an edit.
 TEXT_MAX = 10 * 1024 * 1024
