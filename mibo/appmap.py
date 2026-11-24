@@ -351,10 +351,11 @@ ITEMS = (
          field("/api/runtime", "background"), "/api/runtime/background", lambda v, now: {"on": v}, _switch),
     Item("device", "pet-shown", "setup_device.petTitle", "The desktop pet shown",
          field("/api/pet", "shown"), "/api/pet", lambda v, now: {"shown": v}, _switch),
-    Item("device", "updates", "setup_device.updateTitle", "The version, and whether a newer one is out",
-         field("/api/runtime", "version")),
     Item("device", "data", "setup_device.dataTitle", "Backing up, restoring and resetting everything; only they do it"),
     Item("about", "version", "setup_about.version", "The app's version", field("/api/state", "version")),
+    # Read only: the update itself is a press on the page, never a change made from the chat.
+    Item("about", "updates", "setup_about.updateTitle", "Whether a newer version is out, and updating to it",
+         field("/api/runtime", "version")),
     Item("about", "licences", "setup_about.licences", "The licences"),
 )
 BY_ID = {item.id: item for item in ITEMS}

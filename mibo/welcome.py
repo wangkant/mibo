@@ -491,6 +491,8 @@ def _serve(args: argparse.Namespace, home: Path, sockets: list[socket.socket], i
     atomic_write_text(info, json.dumps({"url": url}))
     windowed = not (args.browser or args.no_browser) and appwindow.available()
     print(i18n.t("start.inWindow" if windowed else "start.inTerminal", lang, version=__version__, url=url), flush=True)
+    # What became of an update the run before began (updates.settle): the page says it once.
+    updates.settle(home)
     found = updates.notice(home)
     if found:
         print(i18n.t("start.update", lang, **found), flush=True)

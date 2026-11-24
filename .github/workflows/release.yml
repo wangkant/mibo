@@ -80,7 +80,7 @@ jobs:
     # frozen folder also goes out as a zip, for a person who would rather not install.
     needs: build
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 80
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -112,6 +112,23 @@ jobs:
           if ($LASTEXITCODE) { throw "the installed program did not say its version" }
           python tools/welcome_smoke.py --mibo "$where\mibo.exe" --own-store
           if ($LASTEXITCODE) { throw "the installed program did not start, chat and exit" }
+      - name: Update an older installed copy to this installer from inside the app
+        # A copy of this commit whose version is 0.0.0 and whose release source is a stand-in on 127.0.0.1
+        # (tools/update_e2e.py lower; nothing else differs) is built and installed. The stand-in offers this
+        # build's setup.exe with its real size and SHA-256; the old app's own update route downloads, checks and
+        # runs it, and the app must open again from the same folder on the same home as this version. A failure
+        # here stops the release: PyPI and the GitHub Release need this job.
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $lower = Join-Path $env:RUNNER_TEMP "lower"
+          git worktree add --detach $lower HEAD
+          if ($LASTEXITCODE) { throw "no copy of the checkout" }
+          python tools/update_e2e.py lower $lower
+          if ($LASTEXITCODE) { throw "the lower copy could not be made" }
+          & (Join-Path $lower "packaging/windows/build.ps1")
+          python tools/update_e2e.py run --old (Join-Path $lower "dist/mibo-0.0.0-setup.exe") --new "dist/mibo-$version-setup.exe" --version $version
+          if ($LASTEXITCODE) { throw "the installed app did not update itself to this installer" }
       - name: Start the copy in the zip
         shell: pwsh
         run: |
@@ -237,12 +254,46 @@ jobs:
           (cd apps && sha256sum *) > SHA256SUMS.txt
           (cd dist && sha256sum *) >> SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - name: Take the public key the apps carry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: source
+          sparse-checkout: mibo/updates.py
+          sparse-checkout-cone-mode: false
+      - name: Sign SHA256SUMS.txt
+        # Ed25519 over the exact bytes of SHA256SUMS.txt, with the private key in the RELEASE_SIGNING_KEY secret
+        # (PEM). The apps check it with the public half they carry (mibo/updates.py SIGNING_KEY) before an update
+        # runs, so the signature is tested against that key here. Without the secret the release goes out with
+        # its checksums alone, as before.
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "No RELEASE_SIGNING_KEY: the release carries its checksums without a signature"
+            exit 0
+          fi
+          public=$(grep -m1 '^SIGNING_KEY = "' source/mibo/updates.py | cut -d'"' -f2)
+          if [ -z "$public" ]; then
+            echo "::error::RELEASE_SIGNING_KEY is set, but mibo/updates.py carries no SIGNING_KEY to check it with"
+            exit 1
+          fi
+          umask 077
+          key="$RUNNER_TEMP/signing.pem"
+          trap 'rm -f "$key"' EXIT
+          echo "$RELEASE_SIGNING_KEY" > "$key"
+          openssl pkeyutl -sign -inkey "$key" -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig
+          # The 32-byte key the apps carry, after the 12 bytes that make it the DER public key openssl reads.
+          printf 'MCowBQYDK2VwAyEA%s' "$public" | base64 -d > "$RUNNER_TEMP/public.der"
+          openssl pkeyutl -verify -pubin -keyform DER -inkey "$RUNNER_TEMP/public.der" -rawin -in SHA256SUMS.txt -sigfile SHA256SUMS.txt.sig
       - name: Create the GitHub Release with the sdist, the wheel and the apps
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* apps/* SHA256SUMS.txt \
+          signature=()
+          if [ -f SHA256SUMS.txt.sig ]; then signature=(SHA256SUMS.txt.sig); fi
+          gh release create "$GITHUB_REF_NAME" dist/* apps/* SHA256SUMS.txt "${signature[@]}" \
             --verify-tag \
             --title "Mibo ${GITHUB_REF_NAME#v}" \
             --notes-file notes/release-notes.md

@@ -56,6 +56,12 @@ The character asks in the chat instead of on cards, and asks less. It makes Word
 - The sample finds of the first-run tour are chosen to teach the app the most from your answers: each of your topics and platforms, video and text, and a couple outside your topics come up, from different sites and subjects, so ten answers say more about what you like.
 - Finds from your signed-in feeds (Douyin, Xiaohongshu, Weibo, TikTok and the rest) now keep their cover, and a card whose picture failed to load once asks again instead of staying blank; more covers are kept from sites that serve large photos, pages of one site are asked for theirs one at a time, and covers named without https are fetched over it.
 
+### Updates
+
+- Settings › About shows the version, checks for a new release on request, and says what to do for the way Mibo runs here. The installed Windows app updates itself from there: it downloads the installer, checks it, closes, installs over the same folder with the options chosen at the first install, and opens again on the same data. The first start after says in the chat which version is now running, or that the update did not finish, with the release page. The first such update is from 0.2.0 to the release after it.
+- The installer is taken only from the release the app's own check found, newer than this version, over https from GitHub, no larger than the release lists it; its SHA-256 must match the release's `SHA256SUMS.txt`, and once a release with a signed checksum file is installed, an unsigned one is refused. Setup runs as you, never as administrator, and the file is held unchanged from the check until it starts. Only the button in the app's own window starts an update; the character cannot.
+- The Mac app downloads and checks the new disk image and opens it for you to drag over the old copy. A pip install, a checkout and the zip are shown the command or the download that updates them.
+
 ### Settings
 
 - The character knows the app's settings: it can list them, open Settings at an item and change one. A change that widens nothing is made at once; keys are never shown.

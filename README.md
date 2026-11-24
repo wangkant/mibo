@@ -44,7 +44,7 @@ Download from the [latest release](https://github.com/wangkant/mibo/releases/lat
 | Windows 10 or 11 (x64) | `mibo-0.2.0-setup.exe` | If the browser says the file is not commonly downloaded, choose **Keep**. When SmartScreen shows "Windows protected your PC", choose **More info**, then **Run anyway**. Setup installs for your account only and needs no administrator rights. |
 | macOS (Apple silicon) | `mibo-0.2.0-macos-arm64.dmg` | Open the disk image and drag `mibo.app` to Applications. The first open is blocked because the app is not notarized: close the message, then choose **Open Anyway** in System Settings › Privacy & Security, and confirm. |
 
-A new release installs the same way, over the old one. Uninstalling keeps the data folder.
+A new release installs the same way, over the old one. The installed Windows app can also update itself: Settings › About offers the new version, checks the download against the release's checksums, installs it over the old one with the same options and opens again. Uninstalling keeps the data folder.
 
 ### Without the installer
 

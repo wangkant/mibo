@@ -6,7 +6,7 @@
 // This file is the view, the composer, sending and the answers to the questions a reply waits on; the thread
 // (the questions among it) is drawn by chatthread.js, a find by findcard.js, what rides on a message by attach.js.
 window.paChat = (() => {
-  const { I, el, button, svg, iconButton, motion, pressHeaders } = window.paKit;
+  const { I, el, button, svg, iconButton, anchor, fill, motion, pressHeaders } = window.paKit;
   const MAIN = "main";
   // Failures that the settings page can fix get a way there.
   const SETTINGS_FIXES = new Set(["key_required", "chat_failed", "model_no_balance", "model_window_small"]);
@@ -362,11 +362,32 @@ window.paChat = (() => {
       parts.privateToggle.setAttribute("aria-pressed", String(privateChat));
       paintPlaceholder(empty);
       parts.banner.replaceChildren();
-      parts.banner.hidden = !(configured && state.modelUnreachable);
-      if (!parts.banner.hidden)
+      // The model out of reach; else, in the start after an update, what became of it (updates.outcome).
+      const updated = state?.updated;
+      parts.banner.hidden = !((configured && state.modelUnreachable) || updated);
+      if (configured && state.modelUnreachable)
         parts.banner.append(svg(I.alert), el("span", "chat-banner-text", say("unreachable")),
           settingsButton("pa-btn pa-btn-link chat-banner-link"));
+      else if (updated) parts.banner.append(...updateLine(updated));
+      parts.banner.classList.toggle("chat-banner-done", Boolean(updated?.ok) && !(configured && state.modelUnreachable));
       syncSend();
+    }
+    // One line: the version it is now, or that the update did not finish and where the installer is; closed once read.
+    function updateLine(updated) {
+      const text = fill(updated.ok ? words().updated : words().updateFailed,
+        { v: updated.version, current: state.version });
+      const line = [svg(updated.ok ? I.seen : I.alert), el("span", "chat-banner-text", text)];
+      if (!updated.ok) {
+        const page = anchor(updated.url, "pa-btn pa-btn-link chat-banner-link");
+        page.textContent = words().releasePage;
+        line.push(page);
+      }
+      line.push(iconButton("chat-banner-close", I.x, words().dismiss, async () => {
+        parts.banner.hidden = true;
+        await ctx.api("runtime/updated", {}).catch(() => null);
+        await refreshState();
+      }));
+      return line;
     }
     // The box's words at rest: while a question waits on the person, that their reply answers it.
     function paintPlaceholder(empty) {

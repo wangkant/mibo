@@ -716,6 +716,14 @@
   color: var(--pa-muted);
   font-variant-numeric: tabular-nums;
 }
+/* How much of a download has come in (About › Updates): --done of the bar. */
+.setup-meter {
+  max-width: 320px;
+  height: 6px;
+  margin-top: var(--pa-s2);
+  border-radius: var(--pa-r-pill);
+  background: linear-gradient(var(--pa-accent), var(--pa-accent)) left / var(--done, 0%) 100% no-repeat, var(--pa-sunken);
+}
 /* A tick under a row's words: what its button does besides (This computer › backups). */
 .setup-tick {
   display: inline-flex;

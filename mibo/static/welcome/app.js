@@ -38,8 +38,9 @@
       headers: {
         "Content-Type": raw ? "application/octet-stream" : "application/json",
         ...authHeaders(),
-        // Settings › Other programs grants a permission only from this window's own page.
-        ...(frameKey && (path === "window" || path === "programs") ? { "X-Mibo-Window": frameKey } : {}),
+        // Settings › Other programs grants a permission, and About starts an update, only from this window's own page.
+        ...(frameKey && (path === "window" || path === "programs" || path === "runtime/update")
+          ? { "X-Mibo-Window": frameKey } : {}),
       },
       body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       credentials: "same-origin",

@@ -75,6 +75,8 @@ Name: "{userstartup}\Mibo"; Filename: "{app}\mibo.exe"; Parameters: "start --hom
 
 [Run]
 Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:DataHome}"""; WorkingDir: "{code:DataHome}"; Description: "{cm:LaunchProgram,Mibo}"; Flags: nowait postinstall skipifsilent
+; The app's own update (mibo/updates.py) runs setup silently with /RESTARTHOME: the app opens again on that home.
+Filename: "{app}\mibo.exe"; Parameters: "start --home ""{code:RestartHome}"" --restart"; WorkingDir: "{code:RestartHome}"; Flags: nowait; Check: Restarting
 
 [Code]
 { The home the app uses with no --home: AGENT_HOME, else ~\mibo,
@@ -90,6 +92,66 @@ begin
   if (Home = '~') or (Copy(Home, 1, 2) = '~\') then
     Home := GetEnv('USERPROFILE') + Copy(Home, 2, MaxInt);
   Result := RemoveBackslashUnlessRoot(Home);
+end;
+
+{ Set by the app's own update (mibo/updates.py installer_command): the home to open the app on afterwards,
+  and the app's process, which setup waits for before it replaces its files. }
+function RestartHome(Param: String): String;
+begin
+  Result := ExpandConstant('{param:RESTARTHOME|}');
+end;
+
+function Restarting: Boolean;
+begin
+  Result := WizardSilent and (RestartHome('') <> '');
+end;
+
+function OpenProcess(Access: DWORD; Inherit: BOOL; ProcessId: DWORD): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: DWORD): DWORD;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): BOOL;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+var
+  Installed: Boolean;
+
+{ Before files are checked for being in use: the app that started the update has closed, or a minute passed. }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Process: THandle;
+begin
+  Result := '';
+  if StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0) <= 0 then
+    Exit;
+  { SYNCHRONIZE }
+  Process := OpenProcess($00100000, False, StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0));
+  if Process <> 0 then
+  begin
+    WaitForSingleObject(Process, 60000);
+    CloseHandle(Process);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    Installed := True;
+end;
+
+{ An update that did not install opens the copy that is still there, so the app is never left closed. }
+procedure DeinitializeSetup;
+var
+  Code: Integer;
+begin
+  if not Restarting or Installed then
+    Exit;
+  try
+    if FileExists(ExpandConstant('{app}\mibo.exe')) then
+      Exec(ExpandConstant('{app}\mibo.exe'), 'start --home "' + RestartHome('') + '" --restart', RestartHome(''),
+        SW_SHOWNORMAL, ewNoWait, Code);
+  except
+  end;
 end;
 
 function IsUpgrade: Boolean;

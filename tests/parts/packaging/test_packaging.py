@@ -187,8 +187,10 @@ def test_a_release_is_made_only_from_a_tested_commit_on_main() -> None:
     # Each app is started on its runner before anything is published.
     for app in ("windows-installer", "macos-app"):
         assert "welcome_smoke.py" in "\n".join(step.get("run", "") for step in jobs[app]["steps"])
-    # PyPI gets the wheel from a tag only, after both apps, by trusted publishing: no token is named anywhere.
+    # PyPI gets the wheel from a tag only, after both apps, by trusted publishing: no token is named anywhere. The
+    # one secret is the key that signs SHA256SUMS.txt, in the release's own job.
     assert {"windows-installer", "macos-app"} <= waits_for("pypi")
     assert jobs["pypi"]["if"] == "startsWith(github.ref, 'refs/tags/v')" == jobs["github-release"]["if"]
     assert jobs["pypi"]["permissions"] == {"id-token": "write"}
-    assert not re.search(r"secrets\.|twine upload|password:", text)
+    assert re.findall(r"secrets\.\w+", text) == ["secrets.RELEASE_SIGNING_KEY"]
+    assert "secrets." in str(jobs["github-release"]) and not re.search(r"twine upload|password:", text)

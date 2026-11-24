@@ -1,8 +1,8 @@
 "use strict";
 // Settings › This computer: start at sign-in (/api/desk/shortcuts), where links open
 // (GET/POST /api/browser {links: "app" | "system"}), closing the window keeps it running
-// (/api/runtime/background), whether a new release is out (/api/runtime, /api/runtime/check), and
-// backing up, restoring and resetting the home (/api/desk/data, backup, open, restore, reset).
+// (/api/runtime/background), and backing up, restoring and resetting the home (/api/desk/data,
+// backup, open, restore, reset). The version and updates are in About (about.js).
 (() => {
 
   window.paSetup.part("device", (kit) => {
@@ -12,12 +12,12 @@
     // Shown only where the computer has it; "other" is another copy's link.
     const start = { login: "off", saving: false, known: false };
     const links = { value: "", saving: false };
-    const runtime = { info: null, checking: false, background: false };
+    const runtime = { info: null, background: false };
     const node = kit.section("device");
     const box = kit.card();
     box.classList.add("setup-options");
     const pet = { saving: false };
-    box.append(buildStart(), buildLinks(), buildSideFold(), buildBackground(), buildPet(), buildUpdates());
+    box.append(buildStart(), buildLinks(), buildSideFold(), buildBackground(), buildPet());
     const data = { place: "", targets: [], backups: [], working: false };
     node.append(box, buildData());
 
@@ -202,57 +202,8 @@
       }
     }
 
-    // ---- Updates.
-    function buildUpdates() {
-      const check = kit.button("setup-button-secondary setup-button-sm", t.check, checkUpdates);
-      const buttons = el("div", "setup-option-actions");
-      buttons.append(check);
-      const { row, about } = kit.optionRow(t.updateTitle, "", buttons);
-      kit.item("updates", row);
-      row.hidden = true;
-      const release = el("a", "setup-link");
-      release.target = "_blank";
-      release.rel = "noopener noreferrer";
-      release.append(el("span", "", t.release), kit.icon("out", "setup-icon setup-icon-sm"));
-      release.hidden = true;
-      const error = kit.errorLine();
-      about.after(release, error);
-      Object.assign(runtime, { upRow: row, upAbout: about, upCheck: check, upRelease: release, upError: error });
-      return row;
-    }
-
-    function renderUpdates() {
-      const info = runtime.info;
-      const found = info.update;
-      const lines = [paI18n.t("setup_device.version", { v: info.version })];
-      if (found) lines.push(paI18n.t("setup_device.newer", { v: found.version }));
-      else if (info.checkFailed) lines.push(t.unknown);
-      else lines.push(info.checked ? t.latest : t.never);
-      runtime.upAbout.textContent = lines.join(t.join);
-      runtime.upAbout.hidden = false;
-      if (found) runtime.upRelease.href = found.url;
-      runtime.upRelease.hidden = !found;
-      kit.busy(runtime.upCheck, runtime.checking, runtime.checking ? t.checking : t.check);
-      runtime.upRow.hidden = false;
-    }
-
-    async function checkUpdates() {
-      runtime.checking = true;
-      runtime.upError.hidden = true;
-      renderUpdates();
-      try {
-        runtime.info = await ctx.api("runtime/check", {});
-      } catch (error) {
-        kit.failed(runtime.upError, error, t);
-      } finally {
-        runtime.checking = false;
-        renderAll();
-      }
-    }
-
     function renderAll() {
       renderBackground();
-      renderUpdates();
     }
 
     // ---- 备份与恢复 (/api/desk/data, backup, open, restore, reset): a restore or a reset starts Mibo again.
@@ -412,13 +363,12 @@
     }
 
     async function loadRuntime() {
-      if (runtime.background || runtime.checking) return;
+      if (runtime.background) return;
       try {
         runtime.info = await ctx.api("runtime");
-        runtime.upError.hidden = true;
+        runtime.bgError.hidden = true;
       } catch (error) {
-        runtime.upRow.hidden = false;
-        kit.failed(runtime.upError, error, t);
+        kit.failed(runtime.bgError, error, t);
         return;
       }
       renderAll();

@@ -1,16 +1,19 @@
-"""The runtime panel: keep running behind the window, the app window's bar, and whether a new release is out."""
+"""The runtime panel: keep running behind the window, the app window's bar, whether a new release is out, and
+the update to it (updates.py)."""
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
 
 from fastapi import Request
+from fastapi.responses import JSONResponse
 
 from .. import __version__, updates, usage
 from ..window import ACTIONS
 
 # Error codes this panel raises as ValueError, which the page may show.
-ERRORS: frozenset[str] = frozenset({"background_unavailable", "window_unavailable"})
+ERRORS: frozenset[str] = frozenset({"background_unavailable", "window_unavailable", "update_unsupported",
+                                    "update_gone", "update_running"})
 # The key the app window's own page sends to draw and use the window's bar.
 WINDOW_HEADER = "X-Mibo-Window"
 
@@ -23,12 +26,19 @@ def mount(app, workspace, body) -> None:
     def summary() -> dict:
         window = getattr(app.state, "window", None)
         last = updates._read(workspace.home)
+        how = updates.way()
         checked = last.get("checked")
         return {
             "version": __version__,
             "background": bool(app_settings(desktop).get("background")),
             "canHide": bool(window is not None and window.can_hide),
             "update": updates.notice(workspace.home, always=True),
+            # How this copy is updated, the command for the ways it does not update itself, the update under way,
+            # and what became of the one the last run began.
+            "how": how,
+            "command": updates.command(how),
+            "job": updates.job(workspace.home),
+            "updated": updates.outcome(workspace.home),
             "checked": checked if isinstance(checked, (int, float)) else None,
             # The last attempt did not reach the release page: "up to date" would be a guess.
             "checkFailed": bool(last.get("failed")),
@@ -93,4 +103,26 @@ def mount(app, workspace, body) -> None:
     async def check(request: Request):
         await body(request)
         await asyncio.to_thread(updates.check, workspace.home, 10.0)
+        return await asyncio.to_thread(summary)
+
+    @app.post("/api/runtime/update")
+    async def update(request: Request):
+        """Download, check and install the version the app's own check found. A press on the app's own page, as
+        /api/confirm takes it (cardwait.py): no tool and no model reaches this, and nothing in the request is
+        read: no version, address or file name comes from the page."""
+        window = getattr(app.state, "window", None)
+        if window is not None and not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
+            return JSONResponse({"error": "local_only"}, status_code=403)
+        await body(request)
+        try:
+            updates.start(workspace.home, leave=lambda: app.state.shutdown())
+        except updates.Refused as refused:
+            raise ValueError(str(refused)) from None
+        return await asyncio.to_thread(summary)
+
+    @app.post("/api/runtime/updated")
+    async def updated(request: Request):
+        """The line about the last update was read."""
+        await body(request)
+        await asyncio.to_thread(updates.dismiss, workspace.home)
         return await asyncio.to_thread(summary)

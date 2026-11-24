@@ -44,7 +44,7 @@ Baixe da [versão mais recente](https://github.com/wangkant/mibo/releases/latest
 | Windows 10 ou 11 (x64) | `mibo-0.2.0-setup.exe` | Se o navegador alertar sobre o arquivo, escolha **Manter**. Quando o SmartScreen mostrar "O Windows protegeu o computador", escolha **Mais informações** e depois **Executar assim mesmo**. A instalação é feita só para a sua conta, sem permissões de administrador. |
 | macOS (Apple silicon) | `mibo-0.2.0-macos-arm64.dmg` | Abra a imagem de disco e arraste `mibo.app` para Aplicativos. A primeira abertura é bloqueada porque o aplicativo não é notarizado: feche a mensagem e, em Ajustes do Sistema › Privacidade e Segurança, escolha **Abrir Mesmo Assim** e confirme. |
 
-Uma nova versão é instalada da mesma forma, por cima da anterior. A desinstalação mantém a pasta de dados.
+Uma nova versão é instalada da mesma forma, por cima da anterior. O app instalado no Windows também pode se atualizar sozinho: Configurações › Sobre oferece a nova versão, confere o download com as somas de verificação da versão, instala por cima da anterior com as mesmas opções e abre de novo. A desinstalação mantém a pasta de dados.
 
 ### Sem o instalador
 

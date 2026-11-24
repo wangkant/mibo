@@ -1511,6 +1511,28 @@ button.find-why:hover,
   min-width: 200px;
   color: var(--pa-text);
 }
+/* The start after an update that went through: said, not warned. */
+.chat-banner.chat-banner-done {
+  border-color: var(--pa-line);
+  background: var(--pa-surface);
+  color: var(--pa-green600);
+}
+.chat .chat-banner-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pa-r-xs);
+  background: none;
+  color: var(--pa-faint);
+}
+.chat-banner-close:hover {
+  background: var(--pa-hover);
+  color: var(--pa-ink);
+}
 
 /* ---- Nothing yet: the character's bust fading out, a greeting, the composer, three ideas */
 .chat-empty,

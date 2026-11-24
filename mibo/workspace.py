@@ -196,6 +196,8 @@ class Workspace(ChatFinds):
             if avatar != sw.OWN_AVATAR and not sw.portrait(avatar):
                 avatar = origin[0] if origin and sw.portrait(origin[0]) else ""
             return {"version": __version__, "update": updates.notice(self.home),
+                    # The update the run before began, as this start found it: the chat says it in one line.
+                    "updated": updates.outcome(self.home),
                     "configured": bool(values.get("LLM_API_KEY")),
                     "provider": known.key if known else ("other" if values.get("LLM_BASE_URL")
                                                           else "deepseek" if values.get("LLM_API_KEY")

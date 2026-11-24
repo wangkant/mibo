@@ -168,7 +168,20 @@
       "tests/floors/boundary/test_safe_fetch.py::test_a_body_that_unpacks_past_the_decoded_cap_is_refused",
       "tests/floors/boundary/test_safe_fetch.py::test_links_in_a_message_to_inside_addresses_are_never_fetched",
       "tests/parts/finds/test_walks.py::test_internal_addresses_are_refused_by_rule",
-      "tests/floors/boundary/test_listening.py::test_a_turn_that_searches_the_web_binds_nothing_past_loopback"
+      "tests/floors/boundary/test_listening.py::test_a_turn_that_searches_the_web_binds_nothing_past_loopback",
+      "tests/floors/boundary/test_update_supply.py::test_a_press_installs_the_found_release_over_this_folder_with_the_exact_command",
+      "tests/floors/boundary/test_update_supply.py::test_nothing_runs_and_nothing_is_left_when_the_file_is_not_the_release",
+      "tests/floors/boundary/test_update_supply.py::test_a_name_that_answers_with_an_internal_address_is_never_reached",
+      "tests/floors/boundary/test_update_supply.py::test_only_a_newer_version_the_apps_own_check_found_is_installed_whatever_the_request_says",
+      "tests/floors/boundary/test_update_supply.py::test_only_the_apps_own_window_starts_it_and_never_without_the_token",
+      "tests/floors/boundary/test_update_supply.py::test_no_tool_and_no_other_part_of_the_app_reaches_the_update",
+      "tests/floors/boundary/test_update_supply.py::test_a_second_press_while_one_runs_starts_nothing_more",
+      "tests/floors/boundary/test_update_supply.py::test_a_file_changed_after_its_check_is_not_started",
+      "tests/floors/boundary/test_update_supply.py::test_while_the_checked_file_is_held_nothing_can_write_rename_or_delete_it",
+      "tests/floors/boundary/test_update_supply.py::test_a_signed_release_must_verify_and_after_one_an_unsigned_one_is_refused",
+      "tests/floors/boundary/test_update_supply.py::test_without_a_key_in_the_app_a_release_is_held_to_its_checksum_alone",
+      "tests/floors/boundary/test_update_supply.py::test_the_disk_image_is_checked_the_same_way_and_opened_for_the_person_to_drag",
+      "tests/floors/boundary/test_update_supply.py::test_a_blocked_installer_leaves_this_version_running_and_says_so"
     ],
     "honesty": [
       "tests/floors/honesty/test_honesty.py::test_the_chat_prompt_never_instructs_denial_and_an_admission_is_said",
