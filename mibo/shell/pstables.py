@@ -145,7 +145,8 @@ EXE_READ = {"hostname", "whoami", "systeminfo", "tasklist", "where", "getmac", "
 EXE_REMOTE = {"systeminfo", "tasklist", "getmac", "driverquery", "gpresult", "whoami", "quser"}
 # nvidia-smi only asked, never told: anything else sets clocks, power or modes.
 NVIDIA_READ = ("-q", "--query", "-l", "--list", "--format", "-i", "--id", "-d", "--display", "-h", "--help")
-INTERPRETERS = ("python", "python3", "py", "pythonw", "node", "deno", "bun", "ruby", "perl", "php", "java", "javaw")
+INTERPRETERS = ("python", "python3", "py", "pythonw", "node", "deno", "bun", "ruby", "perl", "php", "java", "javaw",
+                "rscript", "ipython")
 EXE_OPEN = {"notepad", "mspaint", "calc", "explorer", "write", "charmap"}
 EXE_NET = {"ping", "tracert", "pathping", "nslookup", "curl", "wget", "ftp", "tftp", "nc", "ncat", "git"}
 # git's subcommands that reach another computer; the rest work in the folder.
@@ -190,7 +191,44 @@ OPEN_RISKY = RUNNABLE + INSTALLERS + (
     ".reg", ".msc", ".chm", ".website", ".xbap", ".jnlp", ".wsc", ".sct", ".scf", ".theme", ".themepack",
     ".deskthemepack", ".search-ms", ".searchconnector-ms", ".cer", ".crt", ".der", ".p7b", ".xll", ".iqy", ".slk",
     ".docm", ".dotm", ".xlsm", ".xltm", ".xlam", ".pptm", ".potm", ".ppam", ".mht", ".mhtml", ".gadget", ".ps1xml",
-    ".psc1", ".ws", ".vb", ".mof", ".job", ".lnk")
+    ".psc1", ".ws", ".vb", ".mof", ".job", ".lnk", ".iso", ".img", ".vhd", ".vhdx", ".wsb", ".one", ".onepkg",
+    ".vsto", ".accde", ".accda", ".mde", ".ade", ".adp", ".pub")
+# Interpreters and runners that run code from a file: given a script, a module, a notebook or a project's tests, each
+# runs as code written out does (psprograms.Programs.runner, code.py), under a change's limits off the network. What
+# each is given: "script" a file of code; "tests" a project's tests, its own files; "notebook" a notebook (jupyter
+# execute, nbconvert --execute); "make" the folder's Makefile; "npm" a package.json script by name; "package" a
+# package's program, run when it is installed in the folder (else fetched: an install); "file" a script after -File
+# (powershell, pwsh); "bat" a batch file after /c (cmd).
+RUNNERS = {"python": "script", "python3": "script", "py": "script", "pythonw": "script", "node": "script",
+           "deno": "script", "bun": "script", "ruby": "script", "perl": "script", "php": "script", "rscript": "script",
+           "ipython": "script", "cscript": "script", "wscript": "script", "pytest": "tests", "py.test": "tests",
+           "tox": "tests", "nox": "tests", "jupyter": "notebook", "make": "make", "mingw32-make": "make",
+           "nmake": "make", "npm": "npm", "yarn": "npm", "pnpm": "npm", "npx": "package", "pnpx": "package",
+           "bunx": "package", "powershell": "file", "pwsh": "file", "cmd": "bat"}
+# The modules python -m runs as a project's tests.
+TEST_MODULES = ("pytest", "unittest", "doctest", "tox", "nox")
+# npm's, yarn's and pnpm's subcommands that run a package.json script (yarn and pnpm also take a script's bare name).
+NPM_RUNS = ("run", "run-script", "test", "t", "start", "stop", "restart", "exec", "x")
+# PowerShell's and cmd's switches a script's run may carry; any other keeps them a command never run (EXE_NEVER).
+SCRIPT_SWITCHES = ("-noprofile", "-nop", "-noninteractive", "-nologo", "-file", "-f", "/c", "//nologo", "//b")
+# git's settings that run a program (set with -c, --config-env or git config): judged as code, asked as a costly step.
+GIT_CODE = re.compile(r"^(?:core\.(?:fsmonitor|hookspath|sshcommand|editor|pager|gitproxy|askpass|virtualfilesystem)|"
+                      r"credential\.(?:.+\.)?helper|diff\.(?:.+\.)?(?:external|textconv|command)|"
+                      r"(?:merge|mergetool|difftool)\..+\.(?:driver|cmd)|filter\..+\.(?:clean|smudge|process)|"
+                      r"sequence\.editor|gpg\.(?:.+\.)?program|uploadpack\..+|receive\..+|"
+                      r"remote\..+\.(?:uploadpack|receivepack|proxy)|protocol\..*allow|include\.path|includeif\..+|"
+                      r"init\.templatedir|pager\..+|interactive\.difffilter|web\.browser|browser\..+\.cmd|"
+                      r"http\.(?:.+\.)?proxy|alias\..+)$", re.IGNORECASE)
+# Environment variables that make a program run code they name (a module to preload, an editor, a command): set,
+# they make the command one that runs code (pssort.Sorter.assign). PATH, PATHEXT, PSModulePath and COMSPEC change
+# what every later command runs, and are never set.
+CODE_ENV = re.compile(r"^(?:node_options|node_path|python(?:path|startup|home|inspect|userbase)|perl5opt|perl5lib|"
+                      r"perllib|rubyopt|rubylib|git_ssh|git_ssh_command|git_config\w*|git_exec_path|git_askpass|"
+                      r"git_editor|git_pager|git_external_diff|git_proxy_command|git_template_dir|ssh_askpass|editor|"
+                      r"visual|pager|browser|ld_preload|ld_library_path|dyld_\w+|__compat_layer|java_tool_options|"
+                      r"_java_options|jdk_java_options|classpath|dotnet_startup_hooks|dotnet_additional_deps|"
+                      r"cor_profiler\w*|cor_enable_profiling|coreclr_profiler\w*|coreclr_enable_profiling|"
+                      r"npm_config_\w+|pip_\w+)$", re.IGNORECASE)
 # Methods with no effect outside the command, and types whose static members are such.
 PURE_METHODS = {
     "tostring", "trim", "trimend", "trimstart", "substring", "replace", "split", "toupper", "tolower",
@@ -244,16 +282,21 @@ NET_METHODS = {"downloadstring", "downloadfile", "downloaddata", "uploadstring",
 CODE_NET_WORDS = ("urllib", "urlopen", "requests", "httpx", "http", "https", "aiohttp", "socket", "websocket",
                   "fetch", "xmlhttprequest", "ftplib", "smtplib", "smtp", "telnetlib", "paramiko", "pycurl",
                   "webclient", "webrequest", "httpclient", "dns", "net.connect", "net.socket", "dgram", "axios",
-                  "superagent", "open-uri", "net::http", "file_get_contents", "fsockopen", "curl_exec")
+                  "superagent", "open-uri", "net::http", "file_get_contents", "fsockopen", "curl_exec",
+                  "gethostbyname", "getaddrinfo")
 CODE_NET = re.compile(r"://|\\\\[\w.$-]+\\|\b(?:" + "|".join(re.escape(w) for w in sorted(
     {*CODE_NET_WORDS, *NETWORK, *EXE_NET - {"git"}, *NET_METHODS - {"send", "connect"},
      *(t.rsplit(".", 1)[-1] for t in NET_TYPES)}, key=len, reverse=True)) + r")\b", re.IGNORECASE)
 CODE_PIECES = re.compile(
     r"fromhex|unhexlify|b64decode|b32decode|a85decode|base64|\batob\b|frombase64|codecs\.decode|"
     r"\.decode\(\s*['\"](?:hex|rot)|\bchr\s*\(|fromcharcode|\[::-1\]|\.reverse\(\)|"
-    r"(['\"])[^'\"\n]*\1\s*\+\s*['\"]|\bpack\s*\(\s*['\"]H|\\x[0-9a-f]{2}|\\u[0-9a-f]{4}", re.IGNORECASE)
+    r"(['\"])[^'\"\n]*\1\s*\+\s*['\"]|\bpack\s*\(\s*['\"]H|\\x[0-9a-f]{2}|\\u[0-9a-f]{4}|"
+    r"\[[^\]\n]*\]\s*\.join\s*\(|\bbuffer\.from\s*\(|\b(?:require|import)\s*\(\s*[^'\"`\s)]", re.IGNORECASE)
 CODE_RUN = re.compile(r"(?<![\w.$-])(?:exec|eval|compile|execfile|Function|instance_eval|class_eval|create_function)"
                       r"\s*\(|\bnew\s+Function\b|\bvm\.run\w*|\brunpy\b|\b(?:Invoke-Expression|iex)\b", re.IGNORECASE)
+# Code that starts other programs, which its words do not show (code.words): asked.
+CODE_STARTS = re.compile(r"child_process|process\.binding|\b(?:system|popen|spawn|spawnSync|execSync|execFile|"
+                         r"shell_exec|proc_open|passthru)\s*\(|\bIO\.popen\b|\bOpen3\b", re.IGNORECASE)
 # The registry keys a command may read: installed programs and the Windows version.
 REGISTRY_READ = (r"hklm\software\microsoft\windows\currentversion\uninstall",
                  r"hklm\software\wow6432node\microsoft\windows\currentversion\uninstall",

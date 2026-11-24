@@ -85,9 +85,10 @@ def test_a_script_written_in_the_turn_is_code_and_after_outside_material_any_cod
     shell = SimpleNamespace(wrote={"t1": {norm(script)}}, workspace=None)
     monkeypatch.setattr(crossing, "turn_read", lambda workspace: {})
     read_ = reading.read("python fix.py", str(tmp_path))
-    code = Shell._code(shell, read_, reading.Verdict("ask", []), str(tmp_path), "t1")
-    assert [(a.kind, a.what) for a in code] == [("program", "written"), ("network", "code")]
-    assert tier(read_.acts + code) == "change"
+    # The reader reads the script it runs, whichever turn wrote it (code.py).
+    assert ("network", "code") in [(a.kind, a.what) for a in read_.acts]
+    assert Shell._code(shell, read_, reading.Verdict("ask", []), str(tmp_path), "t1") == []
+    assert tier(read_.acts) == "change"
     # Written in the same command it runs in: its code is the command's.
     read_ = reading.read("Set-Content run.py 'print(1)'; python run.py", str(tmp_path))
     assert [a.what for a in Shell._code(shell, read_, reading.Verdict("ask", []), str(tmp_path), "t2")] == ["written"]

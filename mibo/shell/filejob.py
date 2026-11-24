@@ -131,6 +131,9 @@ def _write(op: str, args: dict, base: str, grants: Grants) -> dict:
         job, before_lines, after_lines = _document(op, path, ext, args)
     else:
         job, before_lines, after_lines = _text_change(op, path, args)
+    # What the reviewer reads of it (shell/panel.py): the new text, or its whole difference from the file there.
+    job["shown"] = files.diff(before_lines, after_lines, name, most=1 << 30) if job["before"] is not None else \
+        "\n".join(after_lines)
     if job["before"] is not None:
         job["card"] = {lang: {"title": (f"修改「{name}」的内容" if lang == "zh" else f"Change the text of “{name}”")
                               if op == "edit" else (f"用新内容替换「{name}」" if lang == "zh"

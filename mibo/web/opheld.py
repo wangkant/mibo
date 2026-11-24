@@ -12,7 +12,19 @@ import time
 from urllib.parse import urlsplit
 
 from . import gate
-from .opcarry import bears, digest, leaves_of, leaving, method_of, only_reads, squeeze, summary_of, texts_of
+from .opcarry import (
+    bears,
+    digest,
+    leaves_of,
+    leaving,
+    measuring,
+    method_of,
+    only_reads,
+    squeeze,
+    statistics,
+    summary_of,
+    texts_of,
+)
 from .opoutside import HEAR_S, RESTORE_JS, reading
 from .opsaid import SAID
 from .pagewords import clip
@@ -196,10 +208,19 @@ class Holding:
         url = str(request.get("url") or "")
         texts = texts_of(request)
         return (not top and card["kind"] not in acting.HARD and card["kind"] != "leave"
-                and gate.site_of(url) == gate.site_of(self._address)
+                and (gate.site_of(url) == gate.site_of(self._address) or measuring(url))
                 and not acting.sensitive(url) and not acting.sensitive(self._address)
                 and not any(bears(texts, t["text"]) for t in self.typed)
                 and not gate.hands_over("\n".join(leaves_of(request)[2])))
+
+    def _statistics(self, request: dict, carried: list[dict]) -> bool:
+        """A cancelled request that was the site's statistics, by opcarry.statistics: none of what the person said,
+        typed or chose in the run in it."""
+        from ..crossing import own_words
+        said = self.said()
+        own = [t["text"] for t in self.typed] + [str(c.get("text") or "") for c in carried] + [
+            v for v in leaves_of(request)[2] if own_words(v, said)]
+        return statistics(request, own)
 
     def _asked_for(self, pressed: dict) -> bool:
         """The person's own words name this press or choice and its site: what it sends is asked, not cancelled."""
@@ -241,17 +262,13 @@ class Holding:
         "declined" when the person said no (that request is dropped), "waiting" when the card waits for an
         answer. The requests one act holds (a press's submission and its retries, what a form saves twice) go as
         its first card was answered (`kept`); a press confirmed meanwhile never lets out what was held before it.
-        "not_done" when what the press or choice sends was not passed and none of it went; when some of it went,
-        what was not passed (its statistics) was only not sent."""
+        "not_done" when a request the press or choice sends was not passed and was not the site's statistics."""
         lines, ended, results = [], {"status": "ok", "kind": ""}, []
         while self._holding:
             # It leaves the list only once answered: if this step breaks off, close() still drops it.
             results.append(await self._held_card(*self._holding[0]))
             self._holding.pop(0)
-        went = any(held["status"] == "ok" and held["line"].endswith("and it went") for held in results)
         for held in results:
-            if held["status"] == "not_done" and went:
-                held = {**held, "status": "ok", "line": held["quiet"]}
             lines.append(held["line"])
             if held["status"] != "ok":
                 ended = {k: held[k] for k in ("status", "kind", "result") if k in held}
@@ -289,12 +306,13 @@ class Holding:
             # What the model's own press or choice sends is that act: it did not happen, and the person is told.
             await self._drop(params, top)
             path = urlsplit(str((params.get("request") or {}).get("url") or "")).path
-            quiet = f"[not sent] the review did not pass the page's request to {path}, so it was not sent"
-            if pressed:
-                return {"status": "not_done", "kind": card["kind"], "quiet": quiet,
+            if pressed and not self._statistics(params.get("request") or {}, carried):
+                # Only a site's statistics by a positive test leaves the press done; whatever else of it went.
+                return {"status": "not_done", "kind": card["kind"],
                         "line": f"[not done] {what[1]}, and the review did not pass it, so nothing was sent to "
                                 f"{path} and the change did not take effect; tell them it was not done"}
-            return {"status": "ok", "kind": card["kind"], "line": quiet}
+            return {"status": "ok", "kind": card["kind"],
+                    "line": f"[not sent] the review did not pass the page's request to {path}, so it was not sent"}
         if answer is None:
             try:
                 card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)

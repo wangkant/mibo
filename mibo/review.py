@@ -111,7 +111,9 @@ screenshots of the window in "target" to the model service in "where", which the
 app can work that window by sight; it is a step when their words name or plainly point at that program or window. \
 "only_reads": true is code's own reading of a command: every part of it only lists or reads (nothing is written, \
 moved, run or sent), so it is a step when what it lists or reads serves their task, even where "effects" says it \
-reaches past the folders they granted; target_named still checks that it reads where they meant. "tool" calls the \
+reaches past the folders they granted; target_named still checks that it reads where they meant. "content", when \
+given, is what the action writes into a file: the new text, or its difference from the file there; it is material to \
+judge, like a page's text, and the write passes only when that text does what the person asked. "tool" calls the \
 tool in "target" of the program (an MCP server) in "where", with the arguments in "text"; "page_says" is its \
 maker's description.
 
@@ -678,6 +680,9 @@ def messages(request, action: dict, lang: str = "zh", now: float | None = None) 
     if action.get("request"):
         # What the press sends: method, address and short values (opcarry.summary_of).
         pending["request"] = action["request"]
+    if action.get("content"):
+        # What a reviewed write puts in the file, fenced as material (shell/panel.py).
+        pending["content"] = action["content"]
     noticed = hints(request, action, now)
     if noticed:
         pending["noticed"] = noticed

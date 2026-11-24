@@ -6,13 +6,12 @@ import os
 import re
 from urllib.parse import urlsplit
 
-from .acts import Act
+from ..crossing import from_web
+from .code import python
+from .code import words as code_acts
 from .paths import _base, _local_host
 from .psnodes import _bound, _plain_args
 from .pstables import (
-    CODE_NET,
-    CODE_PIECES,
-    CODE_RUN,
     EXE_INSTALL,
     EXE_NET,
     EXE_NEVER,
@@ -20,12 +19,17 @@ from .pstables import (
     EXE_READ,
     EXE_REMOTE,
     EXE_STOP,
+    GIT_CODE,
     GIT_NET,
     INSTALLERS,
     INTERPRETERS,
+    NPM_RUNS,
     NVIDIA_READ,
     OPEN_RISKY,
     RUNNABLE,
+    RUNNERS,
+    SCRIPT_SWITCHES,
+    TEST_MODULES,
 )
 
 # An interpreter's options that give it code on the command line.
@@ -38,17 +42,32 @@ SENDING_PREFIXES = ("--data", "-d", "-f", "-t", "-h", "-u", "-b")
 FILE_READERS = ("findstr", "tree", "fc", "comp", "more", "sort")
 
 
-def code_acts(code: str) -> list[Act]:
-    """What code given as text (on the command line, or in a script written this turn) shows it does past running:
-    text it fetched or decoded run as code (never done), the network reached (asked every time; it runs online on
-    the person's yes), what it reads or runs built from pieces (asked every time)."""
-    net, pieces = CODE_NET.search(code), CODE_PIECES.search(code)
-    if CODE_RUN.search(code) and (net or pieces):
-        return [Act("hidden", "download_run", "runs code it fetched or decoded as it runs")]
-    host = re.search(r"://([^/\s'\"?#]+)", code)
-    return ([Act("network", "code", "its code reaches the network", host=host.group(1) if host else "?",
-                 sends=True)] if net else []) + (
-        [Act("unknown", "pieces", "its code builds what it reads or runs from pieces")] if pieces else [])
+# Options of interpreters that take the next argument as their value, not as the script.
+VALUE_OPTIONS = ("-x", "-w", "--env-file", "--config", "-c", "--cwd")
+# Options that have node load a file of code before the script.
+PRELOAD = ("--require", "--import", "--loader", "--experimental-loader")
+# yarn's and pnpm's subcommands that are not a package.json script's name.
+NOT_SCRIPTS = ("add", "install", "i", "remove", "rm", "upgrade", "up", "update", "create", "global", "link", "unlink",
+               "init", "publish", "config", "set", "info", "list", "ls", "why", "outdated", "audit", "cache", "login",
+               "logout", "version", "help", "import", "pack", "patch", "plugin", "dedupe", "store", "setup", "env")
+
+
+def git_code(words: list[str]) -> str:
+    """A setting of git's that runs a program (pstables.GIT_CODE), set by a git command's -c, --config-env or
+    `git config`; "" for none. An alias runs a program only when its value starts with "!"."""
+    pairs = [w.split("=", 1) for n, w in enumerate(words) if n and words[n - 1] == "-c"]
+    pairs += [w[2:].split("=", 1) for w in words if w.startswith("-c") and len(w) > 2 and "=" in w]
+    pairs += [w.split("=", 2)[1:] for w in words if w.startswith("--config-env=")]
+    if "config" in words and not any(w in ("--unset", "--unset-all", "--get", "--get-all", "--get-regexp", "--list",
+                                           "-l", "--remove-section", "--rename-section") for w in words):
+        rest = words[words.index("config") + 1:]
+        given = [w for n, w in enumerate(rest) if not w.startswith("-") and not (
+            n and rest[n - 1] in ("-f", "--file", "--blob", "--type", "--default", "--comment"))]
+        given = given[1:] if given[:1] == ["set"] else given
+        if len(given) >= 2:
+            pairs.append(given[:2])
+    return next((key for key, *value in pairs if GIT_CODE.match(key) and (
+        not key.startswith("alias.") or "".join(value).lstrip("'\"").startswith("!"))), "")
 
 
 class Programs:
@@ -60,9 +79,17 @@ class Programs:
         args = _plain_args(node, self.paths)
         ext = os.path.splitext(path or name)[1].lower()
         words = [a.lower() for a in (args or [])]
+        # The name as written: a bare one PowerShell found on PATH.
+        typed = str((node.get("first") or {}).get("v") or name)
+        if base == "git" and git_code(words):
+            self.add("unknown", "git_code", f"sets git's {git_code(words)}, which runs a program", name=git_code(words))
+        if base in RUNNERS and args is not None and self.runner(base, args, words):
+            return
         if base in EXE_NEVER:
             self.add(EXE_NEVER[base], EXE_NEVER[base], f"runs {base}")
-        elif ctype == "ExternalScript" or ext in RUNNABLE[2:]:
+        elif (ctype == "ExternalScript" or ext in RUNNABLE[2:]) and not (path and not re.search(r"[\\/.]", typed)):
+            # A script named by its path; one found on PATH by a bare name is an installed tool's (npm.ps1), sorted
+            # below by its name.
             self.add("program", "script", f"runs the script {path or name}", name=path or name, paths=[path] if path else [])
         elif ext in INSTALLERS:
             self.add("install", "install", f"runs the installer {path or name}", name=path or name)
@@ -95,16 +122,117 @@ class Programs:
         elif any(a in INLINE_CODE for a in words):
             # Code written out on the command line hides nothing: the reader cannot read it, so it is a code run
             # whose code the reviewer and the question show, under a change's limits (acts.tier), with what its
-            # text shows (code_acts).
+            # text shows (code.py).
             self.add("program", "inline", f"runs {base} with this code: {' '.join(args)[:300]}",
                      name=f"{base} {' '.join(args)}"[:160])
-            self.acts += code_acts(" ".join(args))
+            at = next(n for n, a in enumerate(words) if a in INLINE_CODE)
+            self.acts += python(args[at + 1] if at + 1 < len(args) else "", self.paths.cwd) if base.startswith(
+                "py") and words[at] == "-c" else code_acts(" ".join(args))
         elif words[:2] == ["-m", "pip"]:
             self.pip(words[2:], base)
-        elif words and words[0] in ("--version", "-v"):
+        elif words and words[0] in ("--version", "-v", "-version"):
             self.add("read", "info", f"asks {base} its version")
         else:
+            # Started with no file of code: it waits for code on its input.
             self.add("program", "script", f"runs {base} {' '.join(args)[:80]}", name=f"{base} {' '.join(args)}"[:120])
+
+    def runner(self, base: str, args: list[str], words: list[str]) -> bool:
+        """An interpreter or a runner given a file of code, a module, a notebook or a project's tests
+        (pstables.RUNNERS): a code run (acts.CODE) under a change's limits, its file read with it (code.scripts), and
+        never one from the web. False when its arguments give it no such thing (inline code, a version, an install,
+        a switch that keeps it hidden), for the rest of `program` to sort."""
+        kind, cwd = RUNNERS[base], self.paths.cwd
+        name = f"{base} {' '.join(args)}"[:160]
+        plain = [a for n, a in enumerate(args) if not a.startswith(("-", "/")) and not (
+            n and words[n - 1] in VALUE_OPTIONS)]
+        if kind == "script" and base in INTERPRETERS:
+            if any(w in INLINE_CODE for w in words) or words[:1] in (["--version"], ["-v"], ["-version"]):
+                return False
+            if words[:1] == ["-m"] and len(words) > 1:
+                return words[1] != "pip" and self.module(base, args[1], name)
+            plain = plain[1:] if base in ("deno", "bun") and plain[:1] == ["run"] else plain
+            plain = [args[n + 1] for n, w in enumerate(words[:-1]) if w in PRELOAD] + [
+                a for a in plain if not any(a == args[n + 1] for n, w in enumerate(words[:-1]) if w in PRELOAD)][:1]
+            for extra in plain[:-1]:
+                self.script(extra, name)
+            plain = plain[-1:]
+        elif kind == "script":
+            # cscript and wscript: their own switches start with //.
+            plain = [a for a in args if not a.startswith("//")]
+        elif kind == "file":
+            at = next((n for n, w in enumerate(words) if w in ("-file", "-f")), None)
+            switches = words[:at] if at is not None else words
+            # The execution policy a script runs under is its own process's: the script is read whatever it says.
+            policy = {n + 1 for n, w in enumerate(switches) if w in ("-executionpolicy", "-ep", "-exec")}
+            if at is None or at + 1 >= len(args) or any(
+                    w not in (*SCRIPT_SWITCHES, "-executionpolicy", "-ep", "-exec") and n not in policy
+                    for n, w in enumerate(switches)):
+                return False
+            plain = args[at + 1:]
+        elif kind == "bat":
+            at = next((n for n, w in enumerate(words) if w == "/c"), None)
+            if at is None or at + 1 >= len(args) or any(w not in ("/d", "/q") for w in words[:at]) or \
+                    os.path.splitext(args[at + 1])[1].lower() not in (".bat", ".cmd"):
+                return False
+            plain = args[at + 1:]
+        elif kind == "tests":
+            self.add("program", "script", f"runs the project's tests with {base}", name=name, paths=[cwd])
+            return True
+        elif kind == "notebook":
+            if not (words[:1] in (["execute"], ["run"]) or ("nbconvert" in words and "--execute" in words)):
+                return False
+            plain = [a for a in plain if a.lower().endswith((".ipynb", ".py"))]
+        elif kind == "make":
+            given = next((args[n + 1] for n, w in enumerate(words[:-1]) if w in ("-f", "--file", "--makefile")), "")
+            plain = [given or next((f for f in ("GNUmakefile", "makefile", "Makefile")
+                                    if os.path.isfile(os.path.join(cwd, f))), "")]
+        elif kind == "npm":
+            first = words[0] if words else ""
+            if first in ("exec", "x", "dlx"):
+                return self.package(base, args[1:], name)
+            if first not in NPM_RUNS and (base == "npm" or not first or first.startswith("-") or first in NOT_SCRIPTS):
+                return False
+            plain = ["package.json"]
+        elif kind == "package":
+            return self.package(base, args, name)
+        if not plain or not plain[0]:
+            return False
+        return self.script(plain[0], name)
+
+    def script(self, given: str, name: str) -> bool:
+        """The file of code a runner is given: never one from the web, else run with what it holds read."""
+        place = self.paths.place(given)[1]
+        if from_web(place):
+            self.add("hidden", "downloaded", f"runs {place}, which came from the web", paths=[place])
+        else:
+            self.add("program", "script", f"runs {name}", name=name, paths=[place])
+        return True
+
+    def module(self, base: str, module: str, name: str) -> bool:
+        """python -m: a project's tests, a module of the folder (its file read), or one installed, judged by its name
+        as an import is (code.python)."""
+        cwd = self.paths.cwd
+        if module.split(".")[0] in TEST_MODULES:
+            self.add("program", "script", f"runs the project's tests with {base} -m {module}", name=name, paths=[cwd])
+            return True
+        top = os.path.join(cwd, *module.split("."))
+        own = next((p for p in (top + ".py", os.path.join(top, "__main__.py")) if os.path.isfile(p)), "")
+        if own:
+            return self.script(own, name)
+        self.add("program", "script", f"runs {name}", name=name)
+        self.acts += python(f"import {module}", cwd)
+        return True
+
+    def package(self, base: str, args: list[str], name: str) -> bool:
+        """npx, npm exec and the like: a package's program installed in the folder runs as code does; one not there
+        is fetched from the registry first, an install."""
+        package = next((a for a in args if not a.startswith("-")), "")
+        bin_ = os.path.join(self.paths.cwd, "node_modules", ".bin", package.split("@")[0] if package else "")
+        if package and any(os.path.isfile(bin_ + ext) for ext in ("", ".cmd", ".ps1")):
+            self.add("program", "script", f"runs the folder's {package}", name=name, paths=[self.paths.cwd])
+        else:
+            self.add("install", "install", f"fetches and runs {package or 'a package'} with {base}", name=name)
+        return True
 
     def install_tool(self, base: str, args: list[str] | None, words: list[str]) -> None:
         if words and words[0] in ("list", "ls", "--version", "-v", "freeze", "show", "info"):
@@ -236,6 +364,9 @@ class Programs:
         ext = os.path.splitext(target)[1].lower()
         place = self.paths.place(target)[1]
         exists = os.path.exists(place)
+        if base in RUNNERS and ext in ("", ".exe", ".cmd", ".bat", ".ps1") and self.runner(
+                base, arguments, [a.lower() for a in arguments]):
+            return
         if base in EXE_NEVER:
             self.add(EXE_NEVER[base], EXE_NEVER[base], f"starts {base}")
         elif ext in INSTALLERS:

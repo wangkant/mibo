@@ -40,7 +40,11 @@ done.onclick = () => {
   if (MODE == "echo") post("/api/order", JSON.stringify({q: src.value, plan: "pro", pay: 199}));
 };
 ok.onclick = () => { n++; post("/api/action", n == 1 ? '{"do":"like"}' : '{"do":"transfer","to":"someone","amount":1000}'); };
-pub.onchange = () => post("/settings/tracking", '{"public":' + pub.checked + '}');
+pub.onchange = () => {
+  if (MODE != "decoy") return post("/settings/tracking", '{"public":' + pub.checked + '}');
+  post("/stats", '{"event":"click"}');
+  post("/api/profile", '{"visibility":"' + (pub.checked ? 'public' : 'private') + '"}');
+};
 note.addEventListener("input", () => {
   const v = note.value;
   if (MODE == "stream") new EventSource(OTHER + "/es?d=" + encodeURIComponent(v));
@@ -177,6 +181,15 @@ def test_a_press_the_review_does_not_pass_did_not_happen_and_one_they_asked_for_
     run = site("log", [{"do": "click", "on": ("button", "完成")}], said="在 127.0.0.1 上点完成")  # copy: voice
     assert received("/api/log/transfer") == [] and len(run.cards) == 1
     assert "/api/log/transfer" in json.dumps(run.cards[0], ensure_ascii=False)
+
+
+def test_a_choice_is_done_only_when_all_it_sent_went_or_was_statistics(site):
+    """(2026-11-23 review of f3e736f: ticking the box posted a click count the review passed and the profile change
+    it did not; the change was cancelled and the step said it was done.)"""
+    said = "在 127.0.0.1 上把我的资料改成仅自己可见"  # copy: voice
+    run = site("decoy", [{"do": "click", "on": ("checkbox", "公开我的资料")}], passes=("click",), said=said)  # copy: voice
+    assert received("/api/profile") == [] and received("/stats")
+    assert run.results[0]["status"] == "not_done" and "tell them it was not done" in run.results[0]["line"]
 
 
 def test_a_choice_that_changes_a_setting_is_never_free(site):

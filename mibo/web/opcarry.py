@@ -24,6 +24,19 @@ CARRIED_MIN = 3
 # action): a POST that says delete deletes.
 OVERRIDE_KEYS = ("_method", "x-http-method-override", "x-http-method", "x-method-override")
 DELETE_VERB = re.compile(r"(?:^|[/._-])(?i:delete|remove|destroy|purge|erase)(?=$|[/._-]|[A-Z])")
+# Measurement services that count other sites' visits and clicks, by their hosts.
+MEASURING = ("google-analytics.com", "analytics.google.com", "googletagmanager.com", "doubleclick.net",
+             "hm.baidu.com", "cnzz.com", "umeng.com", "sentry.io", "segment.io", "segment.com", "mixpanel.com",
+             "amplitude.com", "hotjar.com", "clarity.ms", "nr-data.net", "datadoghq.com", "growingio.com",
+             "sensorsdata.cn", "mmstat.com", "bat.bing.com", "scorecardresearch.com", "quantserve.com")
+# The words a site's own statistics requests take in their path.
+STATISTICS_PATH = re.compile(r"(?:^|[/._-])(?:stats?|statistics|analytics|metrics?|telemetry|collect|track(?:ing)?|"
+                             r"beacon|events?|log|logs|logging|ping|pixel|rum|heartbeat)(?=$|[/._-])", re.IGNORECASE)
+# The names a statistics request gives what it counts: the event, the page, when, how long, which session.
+STATISTICS_KEYS = frozenset({
+    "event", "events", "e", "ev", "name", "type", "category", "label", "page", "path", "url", "title", "ref",
+    "referrer", "screen", "view", "n", "t", "ts", "time", "timestamp", "duration", "perf", "count", "seq", "id", "uid",
+    "cid", "sid", "session", "session_id", "client", "client_id", "v", "ver", "version", "lang", "ua", "platform"})
 
 
 def shape(url: str) -> str:
@@ -111,6 +124,32 @@ def summary_of(request: dict) -> dict:
     short = [v for v in dict.fromkeys(values) if v and len(v) <= 80][:16]
     return {"method": str(request.get("method") or "GET").upper(), "address": f"{parts.netloc}{parts.path}"[:200],
             "values": short, "body_chars": len(body)}
+
+
+def measuring(url: str) -> bool:
+    """An address of a measurement service that counts other sites' visits (MEASURING)."""
+    host = (urlsplit(url).hostname or "").lower()
+    return any(host == m or host.endswith("." + m) for m in MEASURING)
+
+
+def statistics(request: dict, own: list[str]) -> bool:
+    """A request that is a site's statistics by a positive test: to a measurement service (`measuring`), or to a
+    statistics path (STATISTICS_PATH) whose body and query name only what statistics count (STATISTICS_KEYS) and
+    carry none of `own`, the values the person said, typed or chose in the run. A path's name alone never decides."""
+    url = str(request.get("url") or "")
+    if measuring(url):
+        return True
+    body = leaves_of(request)[0]
+    keys = [k for k, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True)]
+    try:
+        given = json.loads(body) if body.strip() else {}
+        keys += list(given) if isinstance(given, dict) else ["?"]
+    except ValueError:
+        pairs = parse_qsl(body, keep_blank_values=True)
+        keys += [k for k, _ in pairs] if pairs else ["?"]
+    texts = texts_of(request)
+    return bool(STATISTICS_PATH.search(urlsplit(url).path)) and all(k.lower() in STATISTICS_KEYS for k in keys) and \
+        not any(bears(texts, value) for value in own if value.strip())
 
 
 def only_reads(request: dict, carried: list[dict], ping: bool) -> bool:

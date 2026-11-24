@@ -409,6 +409,9 @@ class DirectMessages:
         committed = False
         conversation = user_id.split(":", 1)[-1]
         lookups = ChatLookups(self.memory_file.parent / "desktop" / CHAT_DOING_FILE, conversation)
+        # Outside material an earlier turn of the chat read still counts for code (crossing.code_outside).
+        read_outside = vars(self).setdefault("_read_outside", set())
+        lookups.crossing.earlier = conversation in read_outside
         context = chat_lookups.set(lookups)
         # Where the stop button finds this turn (`stop_turn`).
         vars(self).setdefault("_page_turns", {})[conversation] = lookups
@@ -534,6 +537,8 @@ class DirectMessages:
                 self._dm_unanswered[user_id] = said
                 self._recent_dirty.add(pkey)
             chat_lookups.reset(context)
+            if lookups.crossing.outside or lookups.crossing.came_in:
+                read_outside.add(conversation)
             lookups.done()
             if vars(self).get("_page_turns", {}).get(conversation) is lookups:
                 del self._page_turns[conversation]

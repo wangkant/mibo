@@ -96,6 +96,20 @@ def test_a_file_url_a_share_a_risky_document_and_an_address_handed_to_explorer_a
     assert desktop.started == []
 
 
+@pytest.mark.parametrize("name", ["disk.iso", "disk.img", "disk.vhdx", "box.wsb", "notes.one", "addin.vsto",
+                                  "db.accde", "card.pub"])
+def test_a_downloaded_disk_image_sandbox_or_notebook_file_is_never_started(desktop, name):
+    """A disk image mounts and shows what is inside it with no mark, a .wsb starts a sandbox with what it names and a
+    OneNote, Office add-in, Access or Publisher file runs what it holds. A document of their own sort is opened."""
+    from mibo import crossing
+    risky = from_the_web(desktop.downloads / name, b"x")
+    assert crossing.downloaded(str(risky))
+    (desktop.desk / "Risky.lnk").write_text(f"{risky}|", encoding="utf-8")
+    assert launch("Risky")["status"] == "refused" and desktop.started == []
+    for plain in ("contract.docx", "quote.xlsx", "invoice.pdf", "page.html"):
+        assert not crossing.downloaded(str(from_the_web(desktop.downloads / plain, b"x"))), plain
+
+
 def test_a_link_to_a_page_opens_in_the_apps_browser_never_by_windows(desktop):
     (desktop.desk / "News.url").write_text("[InternetShortcut]\nURL=https://news.example.com/today\n", encoding="utf-8")
     result = launch("News")

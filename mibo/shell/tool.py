@@ -306,6 +306,8 @@ async def use(agent, args: dict, lookups) -> str:
     finally:
         ticker.cancel()
     _changed(lookups, outcome or {})
+    # Files it read that came from the web or a mail are outside material for code (crossing.code_outside).
+    lookups.crossing.came_in += (outcome or {}).get("came_in") or []
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or ((plain or {}).get(lang) or {}).get("ed") or ""
     logger.info("[Agent] use_computer -> %s", status)
@@ -371,6 +373,8 @@ async def use_file(agent, name: str, args: dict, lookups) -> str:
               "turn": _turn(lookups), "said_no": bool(getattr(lookups, "desk_said_no", None)),
               "from_outside": op == "open" and lookups.crossing.runs_written(path)}))
     _changed(lookups, outcome or {})
+    # Files it read that came from the web or a mail are outside material for code (crossing.code_outside).
+    lookups.crossing.came_in += (outcome or {}).get("came_in") or []
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or file_doing(op, args, lang, done=True)
     logger.info("[Agent] %s -> %s", name, status)

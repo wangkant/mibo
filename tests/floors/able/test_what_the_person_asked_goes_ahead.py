@@ -75,10 +75,20 @@ CASES = [
     ("node 什么版本", ("command", "node --version", "~"), "rule"),  # copy: voice
     ("我的 IP 是多少", ("command", "ipconfig", "~"), "rule"),  # copy: voice
     ("跑一下我的脚本", ("command", "python analyze.py", "~/Documents/project"), "review"),  # copy: voice
+    ("算一下 2 的 10 次方", ("command", 'python -c "print(2**10)"', "~"), "review"),  # copy: voice
+    ("汇总一下销售表", ("command", "python summarize.py", "~/Documents/project"), "review"),  # copy: voice
+    ("用脚本把照片改名", ("command", "python rename.py", "~/Pictures"), "review"),  # copy: voice
+    ("写个脚本把 csv 转成 json", ("file", {"op": "write", "kind": "write", "path": "~/Documents/project/to_json.py"}), "review"),  # copy: voice
+    ("写个脚本把 csv 转成 json", ("command", "python convert.py", "~/Documents/project"), "review"),  # copy: voice
+    ("跑一下测试", ("command", "pytest", "~/Documents/project"), "review"),  # copy: voice
+    ("提交一下", ("command", 'git commit -m "fix typo"', "~/Documents/project"), "review"),  # copy: voice
     # Their files and programs.
     ("打开周报", ("file", {"op": "open", "path": "~/Documents/report.docx"}), "rule"),  # copy: voice
     ("打开那张猫的照片", ("file", {"op": "open", "path": "~/Pictures/cat.jpg"}), "rule"),  # copy: voice
     ("打开发票", ("file", {"op": "open", "path": "~/Downloads/发票.pdf"}), "rule"),  # copy: voice
+    ("打开下载的合同", ("file", {"op": "open", "path": "~/Downloads/合同.docx"}), "rule"),  # copy: voice
+    ("打开下载的报价表", ("file", {"op": "open", "path": "~/Downloads/报价.xlsx"}), "rule"),  # copy: voice
+    ("打开存下来的网页", ("file", {"op": "open", "path": "~/Downloads/page.html"}), "rule"),  # copy: voice
     ("打开 DeepL", ("launch", "DeepL"), "rule"),  # copy: voice
     ("打开 Word", ("launch", "Word"), "rule"),  # copy: voice
     ("看看记事本里写了什么", ("screen", "C:\\Windows\\notepad.exe", "notes - Notepad"), "rule"),  # copy: voice
@@ -91,6 +101,18 @@ CASES = [
     ("去 github.com 给 mibo 点个星", ("web", "press", "https://github.com/wangkant/mibo", ""), "review"),  # copy: voice
     ("在知乎搜索 Python 教程", ("web", "type", "zhihu.com", "Python 教程"), "rule"),  # copy: voice
 ]
+# Their project's code, as such scripts are written.
+CODE = {
+    "Documents/project/analyze.py": "import csv\nrows = list(csv.reader(open('sales.csv')))\nprint(len(rows))\n",
+    "Documents/project/summarize.py": "import pandas as pd\ndf = pd.read_csv('sales.csv')\n"
+                                      "print(df.groupby('month')['amount'].sum())\n",
+    "Documents/project/convert.py": "import csv, json\njson.dump(list(csv.DictReader(open('a.csv'))), "
+                                    "open('a.json', 'w'))\n",
+    "Documents/project/test_convert.py": "def test_one():\n    assert 1 + 1 == 2\n",
+    "Pictures/rename.py": "import os\nfor f in os.listdir('.'):\n    os.rename(f, f.replace(' ', '_'))\n",
+}
+# Files that came from the web, with the Mark of the Web.
+FROM_WEB = ["Downloads/发票.pdf", "Downloads/合同.docx", "Downloads/报价.xlsx", "Downloads/page.html"]
 
 
 @pytest.fixture(scope="module")
@@ -100,11 +122,13 @@ def computer(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("able")
     profile, programs, data, other = tmp / "profile", tmp / "Program Files", tmp / "ProgramData", tmp / "D"
     roaming, local = profile / "AppData" / "Roaming", profile / "AppData" / "Local"
-    for rel in ("Documents/notes.txt", "Documents/report.docx", "Documents/project/analyze.py",
-                "Documents/project/.git/HEAD", "Downloads/发票.pdf", "Downloads/old.zip", "Pictures/cat.jpg",
-                "Pictures/IMG_20250301.jpg"):
+    for rel in ("Documents/notes.txt", "Documents/report.docx", "Documents/project/.git/HEAD", "Downloads/old.zip",
+                "Pictures/cat.jpg", "Pictures/IMG_20250301.jpg", *CODE, *FROM_WEB):
         (profile / rel).parent.mkdir(parents=True, exist_ok=True)
-        (profile / rel).write_text("x", encoding="utf-8")
+        (profile / rel).write_text(CODE.get(rel, "x"), encoding="utf-8")
+    for rel in FROM_WEB:
+        with open(f"{profile / rel}:Zone.Identifier", "w", encoding="utf-8") as mark:
+            mark.write("[ZoneTransfer]\nZoneId=3\n")
     for path in (roaming / MENU / "DeepL.lnk", data / MENU / "Word.lnk", local / "Kingsoft" / "WPS Office" / "ksolaunch.exe",
                  programs / "Microsoft Office" / "root" / "Office16" / "WINWORD.EXE", other / "projects" / "a.txt"):
         path.parent.mkdir(parents=True, exist_ok=True)

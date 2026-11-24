@@ -47,6 +47,14 @@ RUNNABLE = (".exe", ".msi", ".msix", ".appx", ".bat", ".cmd", ".com", ".scr", ".
             ".dll", ".application", ".appref-ms")
 # Windows' zones for a file's Mark of the Web: 3 the internet, 4 restricted sites.
 WEB_ZONES = ("3", "4")
+# The turn record's marks of outside material that only code is asked for (`code_outside`): files read on this
+# computer that came from the web or a mail (`came_in`), and outside material read in an earlier turn of the chat.
+CAME_IN, EARLIER = "came_in", "earlier"
+# Where, under the person's profile, browsers save downloads and mail programs and messengers save what they receive.
+CAME_IN_PLACES = re.compile(r"^/downloads(?:/|$)|/inetcache/content\.outlook/|/olk/attachments/|"
+                            r"/microsoft/windows/temporary internet files/|/(?:wechat files|xwechat_files)/.+/(?:filestorage|"
+                            r"msg/file)/|/tencent files/.+/filerecv/|/telegram desktop/|/dingtalk/.+/(?:download|file)",
+                            re.IGNORECASE)
 # The readings of an outward act whose destination is checked, per area (the gates' kinds before review.judged). A
 # bare press, whose name says no sending, is the reviewer's.
 SENDS = {"browser": frozenset({"send", "comment", "like", "post", "submit", "outward", "upload"}),
@@ -62,11 +70,14 @@ def _squeeze(text: str) -> str:
 @dataclass
 class Read:
     """The material one turn has read: where outside and local material came from, its text for the verbatim check,
-    and the scripts written from it."""
+    and the scripts written from it; the files on this computer it read that came from the web or a mail
+    (`came_in`), and whether an earlier turn of the chat read outside material (`earlier`)."""
     outside: list[str] = field(default_factory=list)
     local: list[str] = field(default_factory=list)
     texts: list[str] = field(default_factory=list)
     scripts: set[str] = field(default_factory=set)
+    came_in: list[str] = field(default_factory=list)
+    earlier: bool = False
 
     def saw(self, material: str, where: str = "", text: str = "") -> None:
         """One read of `material` (OUTSIDE or LOCAL) from `where`, with the text it brought."""
@@ -79,7 +90,9 @@ class Read:
 
     def summary(self) -> dict:
         """What the turn record carries to the gates: the places each kind of material came from."""
-        return {OUTSIDE: list(dict.fromkeys(self.outside))[-20:], LOCAL: list(dict.fromkeys(self.local))[-20:]}
+        return {OUTSIDE: list(dict.fromkeys(self.outside))[-20:], LOCAL: list(dict.fromkeys(self.local))[-20:],
+                **({CAME_IN: list(dict.fromkeys(self.came_in))[-20:]} if self.came_in else {}),
+                **({EARLIER: True} if self.earlier else {})}
 
     def verbatim(self, text: str, words: str = "") -> bool:
         """`text` (a command, a script), whole or one of its lines, is found in material read this turn and not in
@@ -106,6 +119,39 @@ def turn_read(workspace) -> dict:
     from .cardwait import doing
     read = doing(workspace).get("read")
     return read if isinstance(read, dict) else {}
+
+
+def code_outside(read: dict) -> bool:
+    """Whether code written or run now may follow outside material (`turn_read`): the turn read some, read a file on
+    this computer that came from the web or a mail, or an earlier turn of the chat read some. Only code given as
+    text, a script written, a project's tool file and a new shortcut are asked for it (shell/panel.py)."""
+    return bool(read.get(OUTSIDE) or read.get(CAME_IN) or read.get(EARLIER))
+
+
+def came_in(path: str) -> bool:
+    """A file on this computer that is outside material: its Mark of the Web names the internet (`from_web`), or it
+    lies where browsers save downloads and mail programs and messengers save what they receive (CAME_IN_PLACES)."""
+    if from_web(path):
+        return True
+    profile = os.path.normcase(os.environ.get("USERPROFILE") or os.path.expanduser("~")).rstrip("\\/")
+    place = os.path.normcase(os.path.abspath(str(path)))
+    rest = place[len(profile):] if place.startswith(profile + os.sep) else ""
+    return bool(rest) and bool(CAME_IN_PLACES.search(rest.replace("\\", "/")))
+
+
+def fence(label: str, text: str) -> str:
+    """`text` framed as outside material for a model (textproc's U+0002/U+0003): data, never the person's words."""
+    from .textproc import _WEB_DESC_CLOSE, _WEB_DESC_OPEN, _clean_prompt_source
+    return f"{_WEB_DESC_OPEN}[{label}]\n{_clean_prompt_source(text)}\n[/{label}]{_WEB_DESC_CLOSE}"
+
+
+def excerpt(text: str, most: int) -> tuple[str, bool]:
+    """`text` cut to about `most` characters, its head and tail kept with a line saying how much was left out; and
+    whether anything was."""
+    if len(text) <= most:
+        return text, False
+    half = most // 2
+    return f"{text[:half]}\n[... {len(text) - 2 * half} characters left out ...]\n{text[-half:]}", True
 
 
 def _site_names(site: str) -> tuple[list[str], list[str]]:
@@ -214,8 +260,12 @@ def downloaded(path: str) -> bool:
     its own program opens it (a macro document, a .reg: pstables.OPEN_RISKY), whose Mark of the Web names the internet
     zone (Windows' Zone.Identifier, the browsers' origin attribute elsewhere)."""
     from .shell.pstables import OPEN_RISKY
-    if os.path.splitext(str(path))[1].lower() not in RUNNABLE + OPEN_RISKY:
-        return False
+    return os.path.splitext(str(path))[1].lower() in RUNNABLE + OPEN_RISKY and from_web(path)
+
+
+def from_web(path: str) -> bool:
+    """A file whose Mark of the Web names the internet zone (Windows' Zone.Identifier, the browsers' origin attribute
+    elsewhere), whatever its type."""
     try:
         with open(f"{path}:Zone.Identifier", encoding="utf-8", errors="replace") as mark:
             zone = re.search(r"ZoneId\s*=\s*(\d+)", mark.read())

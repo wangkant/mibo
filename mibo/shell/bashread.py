@@ -50,6 +50,7 @@ from .bashtables import (
     WRAPPERS,
 )
 from .bashwords import Word, _descendants, _numeric, _short, _text, _texts, _tree
+from .code import scripts
 from .grants import SECRET_NAMES, SECRET_SUFFIXES
 from .paths import _local_host
 
@@ -710,7 +711,7 @@ def read(command: str, cwd: str, home: str | None = None) -> Reading:
     sorter.survey(root)
     sorter.statement(root)
     acts = sorter.acts
-    acts += download_run(acts)
+    acts += scripts(acts) + download_run(acts)
     return Reading(command, cwd, acts, [])
 
 

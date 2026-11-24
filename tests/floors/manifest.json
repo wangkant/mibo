@@ -34,7 +34,8 @@
       "tests/floors/secrets/test_app_home.py::test_no_bash_command_reads_the_apps_own_places",
       "tests/floors/grants/test_windows_holds_a_misread_command.py::test_no_tier_reads_lists_or_changes_the_apps_home",
       "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_hard_link_to_a_key_is_the_key",
-      "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_program_that_names_a_keys_folder_is_refused_not_asked"
+      "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_program_that_names_a_keys_folder_is_refused_not_asked",
+      "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_secrets_data_stream_and_a_junction_to_its_link_are_the_secret"
     ],
     "asked": [
       "tests/floors/asked/test_paying_deleting_account_and_access.py::test_every_paying_deleting_account_and_access_control_asks_on_a_card",
@@ -85,7 +86,10 @@
       "tests/floors/asked/test_steps_not_passed_count.py::test_steps_the_reviewer_does_not_pass_end_the_turns_acting_and_are_not_reworded",
       "tests/floors/asked/test_what_a_page_sends.py::test_a_press_the_review_does_not_pass_did_not_happen_and_one_they_asked_for_is_asked",
       "tests/floors/asked/test_site_names.py::test_a_settings_subscription_admin_or_tokens_page_is_sensitive_however_its_address_is_written",
-      "tests/floors/asked/test_system_steps_alone.py::test_a_system_step_is_asked_alone_and_its_question_names_its_target"
+      "tests/floors/asked/test_system_steps_alone.py::test_a_system_step_is_asked_alone_and_its_question_names_its_target",
+      "tests/floors/asked/test_a_write_is_judged_with_what_it_writes.py::test_the_reviewer_reads_what_a_write_puts_in_the_file",
+      "tests/floors/asked/test_a_write_is_judged_with_what_it_writes.py::test_one_too_long_to_show_whole_is_asked",
+      "tests/floors/asked/test_what_a_page_sends.py::test_a_choice_is_done_only_when_all_it_sent_went_or_was_statistics"
     ],
     "injection": [
       "tests/floors/asked/test_yes_in_the_chat.py::test_only_the_apps_own_page_answers",
@@ -125,7 +129,13 @@
       "tests/floors/asked/test_the_question_is_conversation.py::test_an_overlong_answer_is_refused_like_any_message",
       "tests/floors/grants/test_open_by_default.py::test_page_text_never_poses_as_the_person_and_a_reviewer_with_no_answer_passes_nothing",
       "tests/layers/web_operate/test_same_site_steps.py::test_their_words_going_to_another_site_are_held_for_them_and_never_left_to_the_reviewer",
-      "tests/layers/programs/test_open_by_name.py::test_a_program_that_came_from_the_web_is_never_started"
+      "tests/layers/programs/test_open_by_name.py::test_a_program_that_came_from_the_web_is_never_started",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_a_file_from_the_web_or_a_mail_is_outside_material",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_the_mark_stays_with_the_chat",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_after_outside_material_in_the_chat_code_is_asked_and_nothing_else",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_with_no_outside_material_the_same_steps_are_not_asked",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_a_file_from_the_web_read_in_an_earlier_turn_still_counts",
+      "tests/floors/injection/test_outside_files_on_this_computer.py::test_with_none_read_the_same_code_goes_to_the_reviewer_with_no_question"
     ],
     "grants": [
       "tests/floors/grants/test_what_is_granted.py::test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written",
@@ -177,7 +187,21 @@
       "tests/floors/grants/test_writes_that_run_later.py::test_a_projects_tool_file_goes_to_the_reviewer_and_never_by_rule",
       "tests/floors/grants/test_writes_that_run_later.py::test_after_outside_material_a_projects_tool_file_or_a_new_shortcut_is_asked",
       "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_file_url_a_share_a_risky_document_and_an_address_handed_to_explorer_are_never_started",
-      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_link_to_a_page_opens_in_the_apps_browser_never_by_windows"
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_link_to_a_page_opens_in_the_apps_browser_never_by_windows",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_code_that_runs_or_imports_what_it_decoded_is_never_run",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_code_that_reaches_the_network_or_starts_a_computed_command_is_a_costly_step",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_a_runner_given_the_projects_code_runs_it_as_code_under_a_changes_limits",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_the_file_a_runner_is_given_is_read_whichever_turn_wrote_it",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_code_not_shown_off_the_network_is_costly_unless_the_block_holds_now",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_a_script_from_the_web_is_never_run_by_any_runner",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_a_package_not_in_the_folder_is_fetched_an_install",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_a_git_setting_that_runs_a_program_is_asked_as_a_costly_step",
+      "tests/floors/grants/test_code_run_from_a_file.py::test_plain_git_work_is_not",
+      "tests/floors/grants/test_variables_that_run_code.py::test_a_variable_that_runs_code_makes_the_command_a_code_run",
+      "tests/floors/grants/test_variables_that_run_code.py::test_one_set_to_last_is_a_costly_step_or_never_done",
+      "tests/floors/grants/test_variables_that_run_code.py::test_where_commands_find_their_programs_is_never_set",
+      "tests/floors/grants/test_variables_that_run_code.py::test_reading_a_variable_is_not_setting_it",
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_downloaded_disk_image_sandbox_or_notebook_file_is_never_started"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",

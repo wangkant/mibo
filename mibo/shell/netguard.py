@@ -331,6 +331,30 @@ def state(desktop) -> dict:
     return {"on": bool(record.get("on")), "at": record.get("at"), "error": error}
 
 
+# How long what Windows' network stack holds is taken as known (`blocking`).
+BLOCKING_S = 30.0
+_held: list = [-BLOCKING_S, False]
+
+
+def blocking() -> bool:
+    """Whether the block holds now: its filter is in Windows' network stack, whatever Settings or the record says
+    (code.py judges code that may reach the network by it)."""
+    if sys.platform != "win32":
+        return False
+    now = time.monotonic()
+    if now - _held[0] >= BLOCKING_S:
+        try:
+            engine = Engine()
+            try:
+                held = engine.present()
+            finally:
+                engine.close()
+        except OSError:
+            held = False
+        _held[:] = [now, held]
+    return _held[1]
+
+
 def own_sid() -> str:
     from . import confine
     k32, adv = confine._api()

@@ -15,6 +15,7 @@ from .psnodes import _bound, _items, _named, _switch
 from .psprograms import Programs
 from .pstables import (
     CHANGES,
+    CODE_ENV,
     DISK_CLASSES,
     DRY_DEFEATERS,
     EXE_INSTALL,
@@ -42,6 +43,7 @@ from .pstables import (
     READS,
     REGISTRY_READ,
     REGISTRY_WRITE,
+    RUNNERS,
     SELECT_RESHAPED,
     SYSTEM_NOUNS,
     VARIABLE_CMDLETS,
@@ -50,7 +52,7 @@ from .pstables import (
 )
 
 # The programs sorted by their name even when PowerShell does not find them here.
-KNOWN_PROGRAMS = {*EXE_NEVER, *INTERPRETERS, *EXE_READ, *EXE_NET, *EXE_INSTALL, *EXE_OPEN, *EXE_STOP}
+KNOWN_PROGRAMS = {*EXE_NEVER, *INTERPRETERS, *EXE_READ, *EXE_NET, *EXE_INSTALL, *EXE_OPEN, *EXE_STOP, *RUNNERS}
 # Commands that move where the command works.
 LOCATIONS = ("set-location", "push-location", "pop-location")
 
@@ -161,6 +163,15 @@ class Sorter(Programs, Methods):
             strings = self.paths.strings(el)
             if strings is None:
                 unresolved = True
+                # Its written part up to what is computed, when that names a file there (a stream's spelling,
+                # `.env::$DATA`): a secret named so is still refused.
+                head = re.split(r"[$`(]", str(el.get("t") or "") if isinstance(el, dict) else "", maxsplit=1)[0]
+                head = re.sub(r"(?<=..):+[^\\/:]*$", "", head.strip("\"'"))
+                provider, place = self.paths.place(head) if head else ("", "")
+                if provider == "file" and os.path.isfile(place):
+                    out.append(place)
+                    raws.append(head)
+                    globs.append(place)
                 continue
             for raw in strings:
                 provider, place = self.paths.place(raw)
@@ -244,6 +255,8 @@ class Sorter(Programs, Methods):
             self.add("system", "provider", f"reaches PowerShell's {place.split(':')[0]} provider")
         elif provider == "env" and write and re.match(r"env:(path|pathext|psmodulepath|comspec)\b", place):
             self.add("hidden", "redefine", "changes where programs are looked up, which hides what later commands run")
+        elif provider == "env" and write and CODE_ENV.match(place[4:]):
+            self.env(place[4:])
 
     def sort(self) -> None:
         """Sorts every node parse.ps1 found, in the order they stand in the command."""
@@ -316,6 +329,11 @@ class Sorter(Programs, Methods):
                 self.add("overwrite" if exists and not append else "change", "append" if append else "write",
                          f"{'appends' if append else 'writes'} its output to {place}", paths=[place], write=True)
 
+    def env(self, name: str) -> None:
+        """An environment variable that makes a program run the code it names (pstables.CODE_ENV), set for the
+        command: a code run (acts.CODE), the reviewer's at least."""
+        self.add("program", "env", f"sets {name}, which makes programs run the code it names", name=name.upper())
+
     def assign(self, node: dict) -> None:
         var = _scopeless(node.get("var"))
         left = str(node.get("left") or "").lower().replace("{", "").replace("}", "")
@@ -327,6 +345,8 @@ class Sorter(Programs, Methods):
             pass
         elif var.startswith("env:") and var[4:] in ("path", "pathext", "psmodulepath", "comspec"):
             self.add("hidden", "redefine", "changes where programs are looked up, which hides what later commands run")
+        elif var.startswith("env:") and CODE_ENV.match(var[4:]):
+            self.env(var[4:])
         elif var and node.get("op") == "Equals" and isinstance(node.get("right"), dict) and not self.no_consts \
                 and var not in self.unstable:
             self.paths.consts[var] = node["right"]

@@ -18,9 +18,11 @@ SECURITY = re.compile(r"firewall|defender|mppreference|mpcmdrun|executionpolicy|
                       r"nltest|ksetup|wevtutil|security|\blsa\b|credential|winlogon|this computer's own services",
                       re.I)
 ASK_KINDS = ("delete", "overwrite", "outside", "move_out", "network", "install", "program", "unknown")
-# Code given as text, and what its text shows (psprograms.code_acts) or the turn around it (shell/panel.py): it runs
-# under a change's limits (`tier`), online only for its "code" network act, which is asked every time.
-CODE = ("inline", "written")
+# Code run: given as text, a file of code an interpreter or a runner is given (pstables.RUNNERS), an environment
+# variable that makes a program run code (pstables.CODE_ENV); with what its text shows (code.py) or the turn around
+# it (shell/panel.py). It runs under a change's limits (`tier`), online only for its "code" network act, which is
+# asked every time.
+CODE = ("inline", "written", "script", "env")
 CODE_SIGNS = ("pieces", "read_outside")
 # Writes the reviewer judges as it judges a program run (read._new_runnable): a file that runs when opened, a project's
 # tool file. They run nothing now, so they never lift a command's limits (`tier`).
@@ -74,8 +76,8 @@ class Reading:
 
 def tier(acts: list[Act]) -> str:
     """Which of Windows' own limits a command runs under (confine.py), from what it was read to do: "program" when it
-    runs or opens a program, "read" when it does nothing but read, else "change". Code given as text (python -c, a
-    script written this turn: `CODE`) is never a program's run, whatever else the command runs with it."""
+    runs or opens a program, "read" when it does nothing but read, else "change". Code run (python -c, a script, a
+    project's tests: `CODE`) is never a program's run, whatever else the command runs with it."""
     if any(a.what in CODE for a in acts):
         return "change"
     if any((a.kind in ("program", "install") and a.what not in RUNS_WHEN_STARTED) or a.what == "open" for a in acts):

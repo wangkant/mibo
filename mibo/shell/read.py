@@ -27,6 +27,7 @@ from pathlib import Path
 from ..crossing import downloaded
 from . import run as running
 from .acts import ASK_KINDS, COMMAND_MAX, NEVER_KINDS, Act, Reading, download_run, never
+from .code import scripts
 from .grants import PROJECT_FILES, RUNS_LATER, Grants, known_folders, norm, under
 from .paths import LIST_MOST, _base, _matches, _walk, _wild
 from .psnodes import _items
@@ -118,7 +119,7 @@ def read(command: str, cwd: str) -> Reading:
     if not errors:
         sorter.sort()
     acts = sorter.acts
-    acts += download_run(acts)
+    acts += scripts(acts) + download_run(acts)
     return Reading(command, cwd, acts, errors)
 
 

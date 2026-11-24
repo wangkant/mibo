@@ -100,6 +100,7 @@ PHRASES = {
     "written": ("运行本次写入的脚本 {n}", "Running the script {n} written in this task",
                 "Ran the script {n} written in this task"),
     "code": ("由代码连接 {n}", "Its code reaching {n}", "Its code reached {n}"),
+    "env": ("设置环境变量 {n}", "Setting the environment variable {n}", "Set the environment variable {n}"),
     "stop": ("关闭程序", "Closing a program", "Closed a program"),
     "clipboard": ("读取剪贴板", "Reading the clipboard", "Read the clipboard"),
     "setting": ("更改 Windows 设置", "Changing a Windows setting", "Changed a Windows setting"),
@@ -281,6 +282,9 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
                 line = f"写入项目工具会运行的文件：{act.name}" if zh else f"Write a file the project's tools run: {act.name}"
             elif act.what == "written":
                 line = f"运行本次任务中写入的脚本：{act.name}" if zh else f"Run a script written in this task: {act.name}"
+            elif act.what == "env":
+                line = f"设置让程序运行其指定代码的环境变量：{act.name}" if zh else (
+                    f"Set an environment variable that makes programs run the code it names: {act.name}")
             elif act.what == "stop":
                 line = f"关闭正在运行的程序：{act.name}" if zh else f"Close a running program: {act.name}"
             elif act.what == "script":
@@ -298,8 +302,14 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
             line = "代码由片段拼出要读取或运行的内容，无法预先看清" if zh else (
                 "The code builds what it reads or runs from pieces, so it cannot be seen first")
         elif act.what == "read_outside":
-            line = "本次任务已读取网页、消息或外部文件，此步骤可能受其内容影响" if zh else (
-                "This task has read a page, a message or an outside file, and this step may follow what it said")
+            line = "此对话已读取网页、消息或外部文件，此步骤可能受其内容影响" if zh else (
+                "This chat has read a page, a message or an outside file, and this step may follow what it said")
+        elif act.what == "git_code":
+            line = f"更改 Git 会运行程序的设置：{act.name}" if zh else f"Change a Git setting that runs a program: {act.name}"
+        elif act.what == "started":
+            line = "代码会启动运行时才确定的程序" if zh else "The code starts a program it names only as it runs"
+        elif act.what == "unparsed":
+            line = "代码无法解析，无法预先看清其操作" if zh else "The code does not parse, so what it does cannot be read first"
         elif act.what == "from_outside":
             line = "此命令的内容来自本次读取的网页、消息或文件，并非你的消息" if zh else (
                 "This command's text comes from a page, message or file read in this task, not from your messages")

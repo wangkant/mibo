@@ -81,6 +81,30 @@ def _fetch(act) -> bool:
 READ_MODE = {"zh": "当前为只读模式，未进行任何更改", "en": "Read only: nothing was changed"}
 
 
+# Files of code a project's runner may load, read when the chat's steps wrote them (`Shell._code`).
+CODE_FILES = (".py", ".js", ".mjs", ".cjs", ".ts", ".ps1", ".bat", ".cmd", ".ipynb", ".json", ".toml", ".cfg", ".ini")
+# How much of a reviewed write the reviewer reads (`_shown`); a longer one is asked.
+SHOWN_CHARS = 6000
+
+
+def _shown(job: dict | None) -> tuple[str, bool]:
+    """What a file tool writes, as the reviewer reads it: the new text or its difference from the file there
+    (filejob.py), fenced as material (crossing.fence), its head and tail when it is longer than SHOWN_CHARS; and
+    whether anything was left out."""
+    from ..crossing import excerpt, fence
+    if not job or not job.get("shown"):
+        return "", False
+    text, cut = excerpt(job["shown"], SHOWN_CHARS)
+    return fence("file", text), cut
+
+
+def _came_in(read_: reading.Reading) -> list[str]:
+    """The files a step read that came from the web or a mail (crossing.came_in), for the turn's record."""
+    from ..crossing import came_in
+    return [p for a in read_.acts if a.kind in ("read", "program") and not a.write for p in a.paths
+            if os.path.isfile(p) and came_in(p)][:20]
+
+
 def _error(code: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"error": code}, status_code=status)
 
@@ -368,7 +392,9 @@ class Shell:
             # After a no in this turn, only what the person allowed themselves (an always-allow rule) skips a question.
             context["how"] = ""
         passed = None
-        if verdict.action == "ask" and mild and not context["how"] and mode == "auto" and not no and all(
+        # A write the reviewer judges is judged with what it writes; one too long to show whole is asked.
+        shown, cut = _shown(job)
+        if verdict.action == "ask" and mild and not context["how"] and mode == "auto" and not no and not cut and all(
                 _reviewed(a) or _fetch(a) for a in verdict.reasons):
             # A program run, a step outside the granted folders, a delete to the Recycle Bin, a page opened for them
             # or a request that only fetches: the reviewer first, on the person's own words of this turn. A costly
@@ -377,7 +403,8 @@ class Shell:
             from ..crossing import turn_read
             passed = await review.decide("commands", await asyncio.to_thread(acting.asked, self.workspace), {
                 "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6],
-                "only_reads": all(a.kind == "read" and not a.write for a in read_.acts), "undo": True},
+                "only_reads": all(a.kind == "read" and not a.write for a in read_.acts), "undo": True,
+                **({"content": shown} if shown else {})},
                 ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"),
                 read=turn_read(self.workspace))
             # The reviewer's decision and reason go with the log row, so a question that came can be read from it.
@@ -438,31 +465,32 @@ class Shell:
                 "reasons": [a.why for a in verdict.reasons][:6]}
 
     def _code(self, read_: reading.Reading, verdict: reading.Verdict, cwd: str, turn: str) -> list:
-        """Code given as text, past what the reader sees (acts.CODE): a script this turn wrote, run now, with what its
-        text shows (psprograms.code_acts); and that, code on the command line, or a file that runs later
-        (acts.RUNS_WHEN_STARTED) after the turn read outside material (crossing.py), asked every time."""
-        from ..crossing import OUTSIDE, turn_read
-        from .psprograms import code_acts
+        """Code run, past what the reader sees of it (acts.CODE, code.py): a script this command writes and runs,
+        with what the command's text shows; the files of code the chat's steps wrote into a folder whose tests, Makefile
+        or package a runner runs, read as the reader reads a script; and that, code on the command line, a script the
+        chat's steps wrote, or a file that runs later (acts.RUNS_WHEN_STARTED) after the chat read outside material
+        (crossing.code_outside), asked every time."""
+        from ..crossing import code_outside, turn_read
+        from .code import file_acts, words
         # What this command writes itself counts, its code being in the command's own text.
         now = {norm(p) for a in read_.acts for p in ([a.dest] if a.dest else []) + (a.paths if a.write else [])}
-        wrote = self.wrote.get(turn, set()) | now
+        wrote = set().union(*self.wrote.values()) - now
         code = []
         for act in read_.acts:
-            if act.kind != "program" or act.what != "script":
+            if act.what != "script" or not act.paths:
                 continue
-            for name in act.paths or [w.strip("'\"") for w in act.name.split(" ")[1:] if not w.startswith("-")][:1]:
-                path = norm(os.path.join(cwd, name))
-                if path not in wrote:
-                    continue
-                text = read_.command
-                if path not in now and os.path.isfile(path):
-                    with open(path, encoding="utf-8", errors="replace") as f:
-                        text = f.read(1 << 18)
-                code += [reading.Act("program", "written", f"runs {name}, a script written in this task",
-                                     name=name, paths=[path]), *code_acts(text)]
-        if (code or any(a.what in ("inline", *RUNS_WHEN_STARTED) for a in read_.acts + verdict.reasons)) and turn_read(
-                self.workspace).get(OUTSIDE):
-            code.append(reading.Act("unknown", "read_outside", "it comes after the task read outside material"))
+            path = norm(os.path.join(cwd, act.paths[0]))
+            if path in now and not os.path.isfile(path):
+                code += [reading.Act("program", "written", f"runs {act.paths[0]}, a script written in this task",
+                                     name=os.path.basename(path), paths=[path]), *words(read_.command)]
+            elif os.path.isdir(path):
+                code += [a for p in sorted(wrote) if under(p, path) and p.endswith(CODE_FILES) and os.path.isfile(p)
+                         for a in file_acts(p, False)]
+        ran_written = any(a.what == "script" and a.paths and norm(os.path.join(cwd, a.paths[0])) in wrote
+                          for a in read_.acts)
+        given = any(a.what in ("inline", *RUNS_WHEN_STARTED) for a in read_.acts + verdict.reasons)
+        if (code or ran_written or given) and code_outside(turn_read(self.workspace)):
+            code.append(reading.Act("unknown", "read_outside", "it comes after the chat read outside material"))
         return code
 
     async def _question(self, command: str, cwd: str, read_: reading.Reading, verdict: reading.Verdict,
@@ -534,7 +562,8 @@ class Shell:
             self.log(command, context["cwd"], context["read"], context["verdict"], "ran", done, said=context["said"],
                      how=context["how"], review=context.get("review"))
             return {"status": "done", "said": context["said"], "asked": context["how"] in PRESSED, "how": context["how"],
-                    "cwd": context["cwd"], "changes": changes, **done}
+                    "cwd": context["cwd"], "changes": changes, "came_in": await asyncio.to_thread(
+                        _came_in, context["read"]), **done}
 
     def _kept(self, kept: checkpoint.Turn, moves: list, recycled: list) -> int:
         """The turn's list of changes brought up to date after a step; how many it gained."""
@@ -591,7 +620,8 @@ class Shell:
                      {"code": 0, "out": out, "seconds": 0, "timed_out": False, "stopped": False},
                      said=job.get("said") or context["said"], how=context["how"], review=context.get("review"))
             return {"status": "done", "out": out, "said": job.get("said") or context["said"],
-                    "asked": context["how"] in PRESSED, "how": context["how"], "cwd": context["cwd"], "changes": changes}
+                    "asked": context["how"] in PRESSED, "how": context["how"], "cwd": context["cwd"], "changes": changes,
+                    "came_in": await asyncio.to_thread(_came_in, context["read"])}
 
     async def _watch(self, conversation: str, stop: threading.Event) -> None:
         """The turn ended in the chat (stopped, or the page went away): the command's tree is ended."""

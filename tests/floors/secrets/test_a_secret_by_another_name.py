@@ -61,3 +61,22 @@ def test_a_program_that_names_a_keys_folder_is_refused_not_asked(app, turn, key,
         encoding="utf-8").splitlines()]
     assert [row["outcome"] for row in logged] == ["refused", "refused"]
     assert not (folder / "bk").exists() and not (folder / "out.tar").exists()
+
+
+def test_a_secrets_data_stream_and_a_junction_to_its_link_are_the_secret(key, tmp_path):
+    """(2026-11-23 review of f3e736f: `Get-Content .env::$DATA` in a granted project was only asked; a key's hard link
+    read through a junction, and the browser's History and the app's own files by hard links, are refused too.)"""
+    import _winapi
+    docs = tmp_path / "Documents"
+    docs.mkdir()
+    (docs / ".env").write_text("TOKEN=x\n", encoding="utf-8")
+    os.link(key, docs / "k.txt")
+    _winapi.CreateJunction(str(docs), str(tmp_path / "J"))
+    home = tmp_path / "home"
+    grants = Grants(home / "runtime" / "desktop", home)
+    assert grants.add(str(docs)) == ""
+    for command in ("Get-Content .env::$DATA", "Get-Content '.env::$DATA'", "Copy-Item .env::$DATA x.txt",
+                    f"Get-Content '{key}::$DATA'", f"Get-Content '{key}:$DATA'", f'Get-Content "{tmp_path / "J" / "k.txt"}"'):
+        verdict = reading.judge(reading.read(command, str(docs)), grants)
+        assert verdict.action == "refuse", command
+    reading.PARSER.close()
