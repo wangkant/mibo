@@ -97,7 +97,7 @@ def test_on_a_small_window_a_deferred_tool_is_found_then_called_through_use_tool
     assert [(a["mark"], a["status"]) for a in done.entries[-1]["activity"]][-1] == ("computer", "ok")
 
 
-def test_every_call_of_a_round_is_run_however_many(turn):
+def test_every_call_of_one_answer_is_run_however_many(turn):
     done = turn("Plan a lot", [_plan(f"step {n}") for n in range(loop.CALLS + 2)], say("Planned."))
     calls = done.calls()
     assert len(calls) == loop.CALLS + 2

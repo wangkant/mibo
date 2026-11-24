@@ -56,8 +56,9 @@ def test_thirty_steps_of_long_reads_each_newest_result_arrives_readable_within_t
     # Every round was asked with its tools, and the stand-in, which refuses a request past its window, answered it.
     assert done.reply == "读完了。" and len(bodies) == ROUNDS + 1 and all(b.get("tools") for b in bodies)
     assert all(tokens(b) + b["max_tokens"] <= window for b in bodies)
-    # No newest result arrives as a cut mark alone: each carries at least a few hundred characters of its page.
-    assert min(len(_WIDE.findall(text)) for text in _first_seen(done)) >= 600
+    # No newest result arrives as a cut mark alone: each carries at least a few hundred characters of its page
+    # (the mark names the file the whole result is in, so the least it leaves changes with that path's length).
+    assert min(len(_WIDE.findall(text)) for text in _first_seen(done)) >= 500
 
 
 def test_a_file_larger_than_the_window_arrives_cut_once_saying_what_was_left_out_and_how_to_read_it(
