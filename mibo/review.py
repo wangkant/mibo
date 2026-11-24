@@ -187,8 +187,8 @@ SAID = {
     "blocked": ("该命令涉及{what}，已拒绝执行。", "This command touches {what}; it is not run for you."),
     "person": ("该命令涉及{what}，需要你确认。", "This command touches {what}; you confirm it yourself."),
     "effects": ("此操作将删除或覆盖文件，需要你确认。", "This step deletes or overwrites files; you confirm it yourself."),
-    "startup": ("此操作将更改开机启动项或命令行配置，已拒绝执行。",
-                "This step changes what starts with the computer or a shell's setup; it is not done for you."),
+    "startup": ("此操作将更改开机启动项或命令行配置，需要你确认。",
+                "This step changes what starts with the computer or a shell's setup; you confirm it yourself."),
     "failed": ("审查未返回结果，需要你确认。", "The review gave no answer, so it asks you."),
     "unclear": ("审查结果无法解析，需要你确认。", "The review's answer was unclear, so it asks you."),
     "consent": ("仅保留必要 Cookie 并关闭提示，不会分享你的任何信息。",
@@ -210,7 +210,7 @@ KIND_NAMES = {
     "open": ("打开文件", "opening a file"), "": ("未能归类的操作", "something code could not sort"),
 }
 WHAT = {
-    "elevation": ("管理员权限", "administrator rights"), "security": ("系统或安全设置", "system or security settings"),
+    "elevation": ("管理员权限", "administrator rights"), "security": ("安全设置", "security settings"), "system": ("系统设置", "system settings"),
     "credentials": ("密码或密钥", "passwords or keys"), "encoded": ("隐藏或编码的命令", "hidden or encoded commands"),
     "download_run": ("下载后运行", "downloading and running"), "install": ("安装", "installing"),
     "delete": ("删除或覆盖", "deleting or overwriting"),
@@ -288,31 +288,34 @@ POINTERS = re.compile(r"https?://\S+|www\.\S+|\b[\w.+-]+@[\w-]+\.[\w.]+|(?<![\w@
 INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\u00ad]")
 SECRET_FIELDS = {"password", "payment", "card", "code", "otp", "cvv", "secret"}
 
-# Commands: the block list (refused) and the always-ask list, decided on the text.
+# Commands: the block list (refused: the never list of shell/acts.py, read on the text) and the always-ask list.
 CMD_BLOCKED = (
     ("elevation", re.compile(r"\b(?:sudo|doas|runas|gsudo|pkexec)\b|-Verb\s+RunAs|\bsu\s+(?:-|root)", re.I)),
     ("security", re.compile(
-        r"\b(?:Set-MpPreference|Add-MpPreference|netsh|bcdedit|Set-ExecutionPolicy|schtasks|icacls|takeown|cacls|"
-        r"ufw|iptables|setenforce|visudo|systemctl|launchctl|csrutil|spctl|secedit|auditpol|vssadmin|wbadmin|"
-        r"diskpart|mkfs|gpupdate|Disable-\w+|Enable-WindowsOptionalFeature|Stop-Service|Set-Service|New-Service)\b|"
-        r"\breg(?:\.exe)?\s+(?:add|delete|import|load)\b|\bsc(?:\.exe)?\s+(?:config|create|delete|stop)\b|"
-        r"\bHK(?:LM|CU|EY_)|\bformat\s+[a-z]:|\bdd\s+if=|\battrib\s+[+-][shr]|\bwevtutil\s+cl|"
-        r"\bdefaults\s+write|\bchmod\s+(?:-R\s+)?[0-7]*7[0-7]*\s+/|\bchown\b", re.I)),
+        r"\b(?:Set-MpPreference|Add-MpPreference|netsh|Set-ExecutionPolicy|icacls|takeown|cacls|ufw|iptables|"
+        r"setenforce|visudo|csrutil|spctl|secedit|auditpol|gpupdate|Enable-PSRemoting|Disable-(?:NetFirewall\w*|"
+        r"PSRemoting|BitLocker\w*|LocalUser))\b|\bwevtutil\s+cl|\bchmod\s+(?:-R\s+)?[0-7]*7[0-7]*\s+/|\bchown\b",
+        re.I)),
     ("credentials", re.compile(
         r"\.ssh\b|id_rsa|id_ed25519|\.aws\b|\.netrc|\.git-credentials|(?:^|[\\/\s])\.env\b|credential|"
         r"cookies?\.sqlite|Login Data|keychain|\bcmdkey\b|vaultcmd|Get-Credential|SecureString|"
-        r"\bsecurity\s+find-|mimikatz|lsass|\.kdbx|wallet\.dat|\bSAM\b|token|password|passwd|密码", re.I)),
+        r"\bsecurity\s+find-|mimikatz|lsass|\.kdbx|wallet\.dat|\bSAM\b|\btokens?\b|password|passwd|密码", re.I)),
+    # Built to hide what runs. Code written out on the command line (python -c) hides nothing: the reviewer reads it.
     ("encoded", re.compile(
         r"\s-e(?:nc(?:odedcommand)?)?\s+[A-Za-z0-9+/=]{16,}|FromBase64String|base64\s+(?:-d|--decode)|"
         r"certutil|\bIEX\b|Invoke-Expression|\beval\b|-WindowStyle\s+Hidden|\s-w\s+hidden|\\x[0-9a-f]{2}|"
-        r"\bpython[0-9.]*\s+-c\b|\bnode\s+-e\b|\bperl\s+-e\b|\bruby\s+-e\b|mshta|regsvr32|rundll32|wscript|"
-        r"cscript|bitsadmin|\bexec\b|-NoProfile|-nop\b", re.I)),
+        r"mshta|regsvr32|rundll32|wscript|cscript|bitsadmin", re.I)),
     ("download_run", re.compile(
         r"\b(?:curl|wget|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)\b.*"
         r"(?:\||;|&&).*\b(?:sh|bash|zsh|python[0-9.]*|pwsh|powershell|iex|cmd|node|start|\./)|"
         r"\b(?:curl|wget|iwr|Invoke-WebRequest)\b.*\.(?:exe|msi|bat|cmd|ps1|sh|vbs|js|scr|dll|jar|apk)\b", re.I)),
 )
 CMD_PERSON = (
+    ("system", re.compile(
+        r"\b(?:bcdedit|schtasks|systemctl|launchctl|vssadmin|wbadmin|diskpart|mkfs|Disable-\w+|"
+        r"Enable-WindowsOptionalFeature|Stop-Service|Set-Service|New-Service)\b|"
+        r"\breg(?:\.exe)?\s+(?:add|delete|import|load)\b|\bsc(?:\.exe)?\s+(?:config|create|delete|stop)\b|"
+        r"\bHK(?:LM|CU|EY_)|\bformat\s+[a-z]:|\bdd\s+if=|\battrib\s+[+-][shr]|\bdefaults\s+write", re.I)),
     ("install", re.compile(
         r"\b(?:pip[0-9.]*|pipx|npm|pnpm|yarn|gem|cargo|go|conda|mamba|uv)\s+(?:install|i|add|get)\b|"
         r"\buv\s+pip\s+install\b|\b(?:winget|choco|scoop|apt|apt-get|yum|dnf|pacman|brew|snap|flatpak|port)\s+"
@@ -337,7 +340,8 @@ BIN_VERBS = re.compile(r"\b(?:rm|rmdir|del|erase|rd|Remove-Item|ri)\b", re.I)
 
 def costly_command(text: str) -> str:
     """What makes a command costly by its text, past what the turn's checkpoint and the Recycle Bin give back: an
-    install, a delete or overwrite by a program or a switch, or sending over the network; "" for none."""
+    change to the system's setup, an install, a delete or overwrite by a program or a switch, or sending over the
+    network; "" for none."""
     rest = BIN_VERBS.sub(" ", text)
     return next((what for what, rule in CMD_PERSON if rule.search(rest)), "")
 
@@ -350,7 +354,7 @@ EFFECTS_DELETE = re.compile(r"delet|remov|recycle|trash|overwrit|mirror|purg|删
 # Effects that take files off this computer or out to others: a hint for the reviewer.
 EFFECTS_OUT = re.compile(r"shar|upload|public|anyone|network (?:share|drive|path|folder)|共享|公开|上传|所有人|"
                          r"网络(?:共享|驱动器|位置)", re.I)
-# Places that start things with the computer or change a shell's setup: a system setting, refused.
+# Places that start things with the computer or change a shell's setup: a system setting, asked every time.
 STARTUP = re.compile(r"Start Menu[\\/]Programs[\\/]Startup|[\\/]Startup(?:[\\/]|$)|CurrentVersion[\\/]Run|"
                      r"LaunchAgents|LaunchDaemons|autostart|crontab|\.bashrc|\.zshrc|\.bash_profile|\.profile\b|"
                      r"WindowsPowerShell[\\/]\S*profile|启动文件夹", re.I)
@@ -554,7 +558,7 @@ def precheck(request, action: dict, lang: str = "zh", now: float | None = None) 
     if {str(f).lower() for f in action.get("fields") or []} & SECRET_FIELDS:
         return Verdict("refuse", said("field", lang), "code")
     if STARTUP.search(whole):
-        return Verdict("refuse", said("startup", lang), "code")
+        return Verdict("ask", said("startup", lang), "code")
     # A delete to the Recycle Bin or a change the turn's checkpoint keeps (`undo`) is given back by undo.
     if EFFECTS_DELETE.search(" ".join(map(str, action.get("effects") or []))) and not action.get("undo"):
         return Verdict("ask", said("effects", lang), "code")

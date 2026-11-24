@@ -1,6 +1,7 @@
 """Nothing reaches beyond what the person allows: the profile and the other drives are open places, but a file tool
-in a folder the person took back or set to read only in Settings asks for the folder first, a folder granted to read is never changed, the one acting mode is honoured (off does nothing until they
-turn it on, read only changes nothing), the app's home and key files are never touched, a run that starts on a
+in a folder on Windows' own drive outside the profile that nobody granted, or in one the person took back or set to
+read only in Settings, asks for the folder first; a folder granted to read is never changed, the one acting mode is
+honoured (off does nothing until they turn it on, read only changes nothing), the app's home and key files are never touched, a run that starts on a
 site nobody named asks first, and the programs on the never list are never operated."""
 from __future__ import annotations
 
@@ -21,18 +22,22 @@ ASKED = "Write a short note called plan.txt there"  # copy: voice
 
 
 @pytest.fixture
-def places(app, tmp_path):
-    """A folder granted to change in, one granted to read only, and one the person took back in Settings."""
-    made = {name: tmp_path / name for name in ("granted", "read_only", "elsewhere")}
+def places(app, tmp_path, monkeypatch):
+    """A folder granted to change in, one granted to read only, one the person took back in Settings, and one nobody
+    granted on Windows' own drive (the temp folder's, a stand-in) outside the profile (a stand-in beside it)."""
+    made = {name: tmp_path / name for name in ("granted", "read_only", "elsewhere", "never_granted", "profile")}
     for place in made.values():
         place.mkdir()
+    for name in ("USERPROFILE", "HOME"):
+        monkeypatch.setenv(name, str(made["profile"]))
+    monkeypatch.setenv("SystemDrive", tmp_path.drive)
     grants = Grants(app.home / "runtime" / "desktop", app.home)
     assert grants.add(str(made["granted"])) == "" and grants.add(str(made["read_only"]), read_only=True) == ""
     grants.remove(str(made["elsewhere"]))
     return made
 
 
-@pytest.mark.parametrize("where", ["elsewhere", "read_only"])
+@pytest.mark.parametrize("where", ["never_granted", "elsewhere", "read_only"])
 def test_a_write_outside_what_was_granted_asks_for_the_folder_and_on_no_nothing_is_written(app, turn, places, where):
     target = places[where] / "plan.txt"
     done = turn(ASKED, call("write_file", path=str(target), content="buy milk"), say("I left it."), cards="no")

@@ -61,7 +61,7 @@ class PageAsks:
         if act in self.kept:
             return self.kept[act]
         if review is not None:
-            decision, passed, _ = await self._decided(kind, card["site"], review)
+            decision, passed, _ = await self._decided(kind, card["site"], review, where=url)
             if decision in ("go", "turned"):
                 self.kept[act] = {"yes": True, "passed": passed} if decision == "go" else {"turned": passed}
                 return self.kept[act]

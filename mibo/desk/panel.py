@@ -27,13 +27,16 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import unquote
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from .. import turnon
 from ..cardwait import Card
-from ..crossing import downloaded
+from ..crossing import RUNNABLE, downloaded
+from ..shell.pstables import EXE_INSTALL, EXE_NET, EXE_NEVER, INTERPRETERS
+from ..shell.tool import NAME as SHELL_TOOL
 from . import grants as g
 
 LAUNCH_S = 15.0
@@ -116,6 +119,25 @@ def never_named(program: str) -> tuple[str, str] | None:
                                           for part in SEVERAL.split(name)):
         return "在永不操作的清单上", "It is on the never list"
     return None
+
+
+def what_runs(app) -> tuple[list[str], str]:
+    """What starting an entry of Start or the Desktop runs: the files (the entry itself, a shortcut's target, a .url's
+    file, the scripts a shortcut gives its program), and the command line when its program is an interpreter or a
+    system tool given arguments, which is a command, not the program the person named ("" otherwise)."""
+    from . import win32
+    files, args = [f for f in (app.file, app.target) if f], ""
+    if app.file.lower().endswith(".url"):
+        aim = re.search(r"^\s*URL\s*=\s*file:/*(.+?)\s*$", Path(app.file).read_text(encoding="utf-8", errors="replace"),
+                        re.M | re.I)
+        files += [unquote(aim.group(1))] if aim else []
+    elif app.file.lower().endswith(".lnk"):
+        args = win32.link_arguments(app.file).strip()
+        files += [w.strip('"') for w in re.findall(r'"[^"]+"|\S+', args)
+                  if os.path.splitext(w.strip('"'))[1].lower() in RUNNABLE]
+    base = Path(app.target).stem.lower()
+    tool = base in INTERPRETERS or base in EXE_NEVER or base in EXE_INSTALL or base in EXE_NET
+    return files, f"{app.target} {args}" if tool and args else ""
 
 
 def said(action: dict, node, status: str, outside: bool, lang: str) -> str:
@@ -324,6 +346,18 @@ class Desk:
             self.grants.log({"do": "use", "program": app.name, "exe": app.target, "status": "refused", "line": why[1]})
             return {"status": "refused", "line": f"[refused] {app.name} is never operated: {why[1]}",
                     "why": {"zh": why[0], "en": why[1]}}
+        files, command = what_runs(app)
+        if any(downloaded(f) for f in files):
+            # What came from the web is never started by the character (crossing.py), whatever shortcut names it.
+            self.grants.log({"do": "use", "program": app.name, "exe": app.file or app.target, "status": "refused",
+                             "line": "downloaded from the web"})
+            return {"status": "refused", "line": f"[refused] {app.name} starts what came from the web, which is never "
+                                                 f"started for them; they open it themselves"}
+        if command:
+            # A shortcut that hands a command to an interpreter or a system tool is that command: judged as one.
+            return {"status": "unfound", "line": f"{app.name} is a shortcut that runs a command, not a program to work "
+                                                 f"in: {command[:300]}. If running it is what they asked for, run it "
+                                                 f"with {SHELL_TOOL}, where it is judged as any command."}
         if app.file and not app.target.lower().endswith(".exe"):
             # A shortcut to a script, a folder or a page, which the person named: opened as a double-click on it
             # opens it, and it has no window of its own to work in.
@@ -332,13 +366,6 @@ class Desk:
                              "line": "opened the shortcut"})
             return {"status": "done", "line": f"[done] opened {app.name} ({app.file}), which starts "
                                               f"{app.target or 'what the shortcut names'}"}
-
-        if downloaded(app.file or app.target):
-            # A program or a shortcut that came from the web is never started by the character (crossing.py).
-            self.grants.log({"do": "use", "program": app.name, "exe": app.file or app.target, "status": "refused",
-                             "line": "downloaded from the web"})
-            return {"status": "refused", "line": f"[refused] {app.name} came from the web and is never started for "
-                                                 f"them; they open it themselves"}
 
         def its(window) -> bool:
             return names.runs(app, window.exe) or names.beside(app, window.exe) or names.named(app, window)

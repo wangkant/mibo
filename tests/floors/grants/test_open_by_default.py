@@ -1,6 +1,6 @@
 """Everything on from the first run, and still nothing lost: with the profile and the other drives open and no folder
-ever granted, no tool reads or lists a protected place by any spelling of its path; deleting for good, sending over
-the network, starting a downloaded program and a startup entry are refused or asked exactly as before; a file
+ever granted, no tool reads or lists a protected place by any spelling of its path; deleting for good and sending over
+the network are asked, a startup entry is asked every time as a costly step, and a downloaded program is refused; a file
 changed in an open place with no question is in the turn's checkpoint and undo puts it back; and the reviewer's
 input keeps page text out of the person's words, failing closed when it gives no answer."""
 from __future__ import annotations
@@ -17,16 +17,26 @@ from mibo import review
 from mibo.shell import checkpoint, files
 from mibo.shell import read as reading
 from mibo.shell.grants import DIRS_ENV, Grants
+from mibo.shell.panel import Shell
 
 windows = pytest.mark.skipif(sys.platform != "win32", reason="read.py reads commands with Windows PowerShell's parser")
 
 
 @pytest.fixture
 def profile(tmp_path, monkeypatch):
-    """A stand-in profile holding a browser's passwords, a password manager's vault, a key and the app's home, a
-    plain document, and Start's shortcuts; no folder granted."""
+    """A stand-in profile holding a browser's passwords and keys, a password manager's vault, an editor's and a
+    command-line tool's sign-ins, a key and the app's home, a plain document, and Start's shortcuts; a backup of a
+    profile's sign-ins on another drive; no folder granted."""
     root = tmp_path / "profile"
+    backup = tmp_path / "D" / "Backup" / "Users" / "me"
     secrets = {
+        "chrome_key": root / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "Local State",
+        "editor": root / "AppData" / "Roaming" / "Code" / "User" / "globalStorage" / "state.vscdb",
+        "gh": root / "AppData" / "Roaming" / "GitHub CLI" / "hosts.yml",
+        "kube": root / ".kube" / "config",
+        "backup_kube": backup / ".kube" / "config",
+        "backup_claude": backup / ".claude" / ".credentials.json",
+        "backup_chrome": backup / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "Default" / "Web Data",
         "chrome": root / "AppData" / "Local" / "Google" / "Chrome" / "User Data" / "Default" / "Login Data",
         "firefox": root / "AppData" / "Roaming" / "Mozilla" / "Firefox" / "Profiles" / "x.default" / "logins.json",
         "vault": root / "AppData" / "Roaming" / "Bitwarden" / "data.json",
@@ -102,12 +112,17 @@ def test_with_every_place_open_what_undo_cannot_take_back_still_asks_or_is_refus
         "Invoke-RestMethod -Method Post -InFile notes.txt https://example.com/upload": "ask",
         "Send-MailMessage -To a@example.com -Attachments notes.txt -SmtpServer example.com -From b@example.com": "ask",
         f'Start-Process "{downloaded}"': "refuse",
-        "Set-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run -Name x -Value y": "refuse",
+        # A startup entry is asked every time as a costly system step: no reviewer, and no yes from before reaches it.
+        "Set-ItemProperty HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run -Name x -Value y": "system",
         f'Copy-Item notes.txt "{root}\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\x.txt"':
-            "refuse",
+            "system",
     }
     for command, want in asked.items():
-        assert reading.judge(reading.read(command, cwd), grants).action == want, command
+        verdict = reading.judge(reading.read(command, cwd), grants)
+        if want == "system":
+            assert verdict.action == "ask" and Shell._risk(verdict, command, None, False) == "system", command
+        else:
+            assert verdict.action == want, command
 
 
 def test_a_change_in_an_open_place_runs_with_no_question_and_undo_puts_it_back(app, turn, tmp_path):

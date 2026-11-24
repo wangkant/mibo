@@ -32,6 +32,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .cardwait import COSTLY, doing
 
@@ -40,19 +41,29 @@ DEFAULT = "auto"
 FILE = "acting.json"
 # The kinds that ask in every mode, each time: the costly ones.
 HARD = COSTLY
-# Sites where every kind asks and nothing is let through: banks, payment, brokers, health, mail and accounts.
+# Sites where every kind asks and nothing is let through: banks, payment, brokers, health, mail and accounts, by any
+# label of the full host (mail.google.com, console.aws.amazon.com), not only the registrable one.
 SENSITIVE = re.compile(
-    r"(?:^|\.)(?:bank|banking|pay|wallet|alipay|paypal|stripe|venmo|broker|securities|stock|fund|insurance|health|"
-    r"hospital|clinic|medical|pharmacy|mail|webmail|outlook|icloud|account|accounts|login|signin|passport|id|gov|tax|"
+    r"(?:^|\.)(?:bank|banking|pay|payment|payments|checkout|billing|wallet|alipay|paypal|stripe|venmo|broker|"
+    r"securities|stock|fund|insurance|health|hospital|clinic|medical|pharmacy|mail|webmail|outlook|icloud|account|"
+    r"accounts|myaccount|console|login|signin|passport|id|gov|tax|"
     r"icbc|ccb|abchina|boc|bankcomm|cmbchina|psbc|spdb|cib|citicbank|cebbank|cmbc|pingan|webank|mybank|95516|"
     r"unionpay|chase|wellsfargo|citi|hsbc|barclays|schwab|fidelity|vanguard|robinhood|coinbase|binance|okx|gmail|"
     r"proton)\.", re.I)
 
 
-def sensitive(site: str) -> bool:
-    """A bank's, a payment service's, a broker's, a health service's or a mail service's site."""
-    host = str(site or "").split(":")[0].lower()
-    return bool(host) and bool(SENSITIVE.search(host))
+# The same on a large site's own pages: its account, billing, payment and security pages.
+SENSITIVE_PATH = re.compile(r"/(?:account|accounts|myaccount|billing|checkout|payment|payments|pay|wallet|security|"
+                            r"signin|login|password)(?:[/?#._-]|$)", re.I)
+
+
+def sensitive(where: str) -> bool:
+    """A bank's, a payment service's, a broker's, a health service's or a mail service's site or page: `where` is
+    an address, a full host or a site, judged by every label of its host and by its path."""
+    where = str(where or "").strip().lower()
+    parts = urlsplit(where if "://" in where else "//" + where)
+    host = parts.hostname or ""
+    return bool(host) and bool(SENSITIVE.search(host) or SENSITIVE_PATH.search(parts.path))
 
 
 # Windows whose pictures always ask before they go to a model service: password managers, banks and payment, mail.

@@ -38,6 +38,7 @@ def start(tmp_path, monkeypatch):
     monkeypatch.setattr(grants, "known_folder", lambda guid: folders.get(guid, ""))
     monkeypatch.setattr(win32, "link_reader", lambda: lambda path: path if path.lower().endswith(".exe")
                         else Path(path).read_text(encoding="utf-8"))
+    monkeypatch.setattr(win32, "link_arguments", lambda path: "")
     monkeypatch.setattr(win32, "start_apps", list)
     monkeypatch.setattr(win32, "app_paths", lambda: [("WINWORD", r"C:\stand-in\Office\WINWORD.EXE"),
                                                      ("vlc", r"C:\stand-in\VLC\vlc.exe")])

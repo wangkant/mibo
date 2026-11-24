@@ -6,14 +6,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 import secrets
 import time
 from urllib.parse import urlsplit
 
 from . import gate
-from .opcarry import beacon, bears, leaves_of, leaving, only_reads, shape, squeeze, summary_of, texts_of
+from .opcarry import bears, digest, leaves_of, leaving, method_of, only_reads, squeeze, summary_of, texts_of
 from .opoutside import HEAR_S, RESTORE_JS, reading
 from .opsaid import SAID
 from .pagewords import clip
@@ -26,7 +25,7 @@ logger = logging.getLogger("mibo.web")
 WATCHED = [{"urlPattern": "*", "resourceType": kind, "requestStage": "Request"}
            for kind in ("Document", "XHR", "Fetch", "Ping", "Other")]
 TYPED_WATCHED = WATCHED + [{"urlPattern": "*", "resourceType": kind, "requestStage": "Request"}
-                           for kind in ("Image", "Script", "Stylesheet", "Font", "Media")]
+                           for kind in ("Image", "Script", "Stylesheet", "Font", "Media", "EventSource")]
 # After a link the run followed or an address it was let go to, how long the page may go on to other sites by
 # itself (a redirect, a search result's hop) without a card.
 FOLLOW_S = 10.0
@@ -63,6 +62,12 @@ class Holding:
         def answered(params: dict) -> None:
             if self._noting:
                 self._status[str(params.get("requestId") or "")] = int((params.get("response") or {}).get("status") or 0)
+
+        def socket(params: dict) -> None:
+            # A socket is not a request the browser lets anyone hold (Fetch never sees it): one to another site while
+            # typed text waits is told, as what the app could not stop.
+            if not self._closed:
+                loop.call_soon_threadsafe(self._socket, str(params.get("url") or ""))
         self._address = await self._url()
         self.sites.add(gate.site_of(self._address))
         self._frame = (await self.tab.cdp("Page.getFrameTree", {}))["frameTree"]["frame"]["id"]
@@ -70,6 +75,7 @@ class Holding:
         await self.tab.events("Page.fileChooserOpened", chooser)
         await self.tab.events("Page.javascriptDialogOpening", dialog)
         await self.tab.events("Network.responseReceived", answered)
+        await self.tab.events("Network.webSocketCreated", socket)
         await self.tab.cdp("Network.enable", {})
         await self.tab.cdp("Fetch.enable", {"patterns": WATCHED})
         try:
@@ -96,7 +102,16 @@ class Holding:
         site = gate.site_of(str(request.get("url") or ""))
         get = str(request.get("method") or "GET").upper() in ("GET", "HEAD", "OPTIONS")
         top = params.get("resourceType") == "Document" and params.get("frameId") == self._frame
-        hold = self._hold(params, self._carries(params), site, get, top)
+        carried = self._carries(params)
+        if not top and not carried and self._covert(params, site):
+            # What was typed is on the page and not sent yet: another site's request that may carry it in a form
+            # code cannot read does not go, and nobody is asked (`_covert`).
+            await self._drop(params, False)
+            self._told.append(f"[not sent] the page's {params.get('resourceType') or 'request'} to "
+                              f"{urlsplit(str(request.get('url') or '')).hostname or site}, another site, while what "
+                              f"was typed was not sent yet; it was stopped")
+            return
+        hold = self._hold(params, carried, site, get, top)
         if hold is None:
             return
         if hold and top:
@@ -138,11 +153,8 @@ class Holding:
             return []
         if not top and only_reads(request, carried, params.get("resourceType") == "Ping"):
             return []
-        if not top and not carried and self._own(site) and (beacon(request) or self._works_on_theirs(request, site)):
-            # The page's own telemetry to its own site, or the page working on the person's own words there (a
-            # translation, a search), with nothing typed in it beyond those words: no one's act, let through by rule
-            # with no reviewer. A press is judged by its control before it is made, whatever its requests are called.
-            return []
+        # A press or a choice watched is judged by what it sends, whatever its address is called and whatever of the
+        # person's words the page puts in it: none of its requests goes by rule (the reviewer, then `_cancels`).
         if self._watching is not None and sends and self._submits(request):
             return [self._watching, *carried]
         if carried:
@@ -153,16 +165,41 @@ class Holding:
             # The page going by itself to a site that is not the run's.
             return [{"leave": True, "field": "", "text": ""}]
         return []
-    def _own(self, site: str) -> bool:
-        """The site of the page the run is on, when it is not a sensitive one (acting.sensitive)."""
-        from .. import acting
-        return site == gate.site_of(self._address) and not acting.sensitive(site)
 
-    def _works_on_theirs(self, request: dict, site: str) -> bool:
-        """A request, not a DELETE, that takes the person's own words typed on this site (`asked`) to it."""
+    def _covert(self, params: dict, site: str) -> bool:
+        """While text typed in the run (not let out, not gone to its own site) is on the page: a request to another
+        site that has a body, is an event stream, or asks an address with a query it did not ask before the typing
+        (one character a request). It may carry the text in a form no check reads (hex, a cipher), so it does not
+        go; what goes to the text's own site, encrypted or not, is that site's own business."""
+        request = params.get("request") or {}
+        parts = urlsplit(str(request.get("url") or ""))
+        pending = {t["site"] for t in self.typed if not t["out"] and not t.get("went")}
+        if not pending or site in pending:
+            self._queries.setdefault((parts.netloc, parts.path), set()).add(parts.query)
+            return False
+        if params.get("resourceType") == "EventSource" or request.get("hasPostData") or request.get("postData"):
+            return True
+        return bool(parts.query) and parts.query not in self._queries.get((parts.netloc, parts.path), ())
+
+    def _socket(self, url: str) -> None:
+        site = gate.site_of(url.replace("ws", "http", 1))
+        if any(not t["out"] and not t.get("went") and t["site"] != site for t in self.typed):
+            self._told.append(f"[socket] the page opened a connection to {site}, another site, while what was typed "
+                              f"was on the page; what goes over it cannot be seen or stopped, so tell them")
+
+    def _cancels(self, card: dict, request: dict, top: bool) -> bool:
+        """A held request the review did not pass that is cancelled with no question: the page's own request to its
+        own site, from a press or a choice that is not a costly kind, carrying nothing typed in the run (the person's
+        words for the site too) and nothing private, on a page and to an address that are not sensitive. Cancelled,
+        a site's statistics cost nothing and a real act does not happen."""
+        from .. import acting
+        url = str(request.get("url") or "")
         texts = texts_of(request)
-        return str(request.get("method") or "").upper() != "DELETE" and any(
-            t.get("asked") and t["site"] == site and bears(texts, t["text"]) for t in self.typed)
+        return (not top and card["kind"] not in acting.HARD and card["kind"] != "leave"
+                and gate.site_of(url) == gate.site_of(self._address)
+                and not acting.sensitive(url) and not acting.sensitive(self._address)
+                and not any(bears(texts, t["text"]) for t in self.typed)
+                and not gate.hands_over("\n".join(leaves_of(request)[2])))
 
     def _carries(self, params: dict) -> list[dict]:
         """The typed entries a paused request carries, in its body or address: a GET only when it goes to
@@ -171,7 +208,7 @@ class Holding:
         request = params.get("request") or {}
         if not self.typed:
             return []
-        get = str(request.get("method") or "GET").upper() in ("GET", "HEAD", "OPTIONS")
+        get = method_of(request) in ("GET", "HEAD", "OPTIONS")
         site = gate.site_of(str(request.get("url") or ""))
         if not get and request.get("hasPostData") and not request.get("postData") and not request.get("postDataEntries"):
             # A body the browser would not show: whatever was typed may be in it.
@@ -187,7 +224,7 @@ class Holding:
         """A request that leaves on a watched press and is its act: a DELETE, or one to the page's own site or its
         form's (a save, a submission). The page's monitoring and reads to its other hosts on the same click are not
         the press's act."""
-        if str(request.get("method") or "").upper() == "DELETE":
+        if method_of(request) == "DELETE":
             return True
         return gate.site_of(str(request.get("url") or "")) in self._watching["sites"]
 
@@ -232,6 +269,12 @@ class Holding:
             await self._drop(params, top)
             return {"status": "declined", "kind": card["kind"], "line": f"[declined] {what[1]}; {passed}"}
         answer = kept if kept is not None else {"yes": True} if decision == "go" else None
+        if answer is None and decision == "ask" and passed and self._cancels(card, params.get("request") or {}, top):
+            # The reviewer did not pass it, and nothing of theirs is in it: not sent, and nobody asked (cardwait.py).
+            await self._drop(params, top)
+            path = urlsplit(str((params.get("request") or {}).get("url") or "")).path
+            return {"status": "ok", "kind": card["kind"],
+                    "line": f"[not sent] the review did not pass the page's request to {path}, so it was not sent"}
         if answer is None:
             try:
                 card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)
@@ -303,8 +346,9 @@ class Holding:
             card.update(kind="submit" if first["text"] else "press", button=first["button"], to="",
                         text=first["text"] or card["text"], why=f"pressing {first['button']!r} sends this ({label})")
             what = (f"pressing {first['button']!r} sent {label}", f"pressing {first['button']!r} would send {label}")
-            if str(request.get("method") or "").upper() == "DELETE":
-                # A DELETE deletes, whatever the button says: a delete's card, never the reviewer's.
+            if method_of(request) == "DELETE":
+                # A DELETE deletes, whatever the button says or the method it is sent as: a delete's card, never the
+                # reviewer's.
                 card.update(kind="delete", why=f"pressing {first['button']!r} sends a DELETE ({label})")
         else:
             what = (f"the page sent {card['text'][:60]!r} by itself ({label})",
@@ -313,7 +357,9 @@ class Holding:
                 "\n".join(f"{c['field']}: {c['text']}" for c in carried if c["text"])):
             # What was typed holds an identity number, a home address or a bank account: handed over, costly.
             card["kind"] = "grant"
-        card["act"] = ("held", card["kind"], site, card["button"] if first.get("watch") else card["text"])
+        # One request, not one button: another body from the same press is another act (opcarry.digest).
+        card["act"] = ("held", card["kind"], site, card["button"] if first.get("watch") else card["text"],
+                       digest(request))
         return card, what
 
     async def _held_decided(self, card: dict, request: dict, carried: list[dict],
@@ -326,15 +372,14 @@ class Holding:
             # What was typed on one site going to another is never left to the reviewer; going on to another site
             # with nothing typed carried is.
             return "ask", "", ""
+        from .. import acting
         chose = any(c.get("choice") for c in carried)
-        # One verdict an endpoint in this turn: the same act to the same site, method and path is never judged twice
-        # with different outcomes, whatever ids and counters its body carries this time.
+        # One verdict a request: its method, its address and the values its body and query carry (opcarry.digest).
         url = str(request.get("url") or "")
-        key = json.dumps(["held", card["kind"], site, str(request.get("method") or "GET").upper(), shape(url),
-                          card["text"], card["button"], chose], ensure_ascii=False)
         return await self._decided(card["kind"], site, leaving(url) if carried[0].get(
             "leave") else {"text": card["text"], "page_says": card["button"], "request": summary_of(request),
-                           "effects": ["the page saves the choice the moment it is made"] if chose else []}, key)
+                           "effects": ["the page saves the choice the moment it is made"] if chose else []},
+            f"held {card['kind']} {digest(request)}", url if acting.sensitive(url) else self._address)
 
     async def _drop(self, params: dict, top: bool) -> None:
         """A held request that does not go: a navigation of the page answered 204 (nothing to show, the page stays

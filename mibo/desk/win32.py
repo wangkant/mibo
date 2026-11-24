@@ -421,12 +421,17 @@ def link_reader():
     from System.Reflection import BindingFlags
     shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"))
 
-    def target(path: str) -> str:
+    def target(path: str, field: str = "TargetPath") -> str:
         if path.lower().endswith(".exe"):
-            return path
+            return path if field == "TargetPath" else ""
         link = shell.GetType().InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, None, shell, [path])
-        return str(link.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, None, link, None) or "")
+        return str(link.GetType().InvokeMember(field, BindingFlags.GetProperty, None, link, None) or "")
     return target
+
+
+def link_arguments(path: str) -> str:
+    """What a .lnk gives the program it starts, as Explorer passes it ("" for none, and for anything else)."""
+    return link_reader()(path, "Arguments") if path.lower().endswith(".lnk") else ""
 
 
 def open_app(aumid: str) -> bool:

@@ -202,8 +202,9 @@ def test_an_unanswered_card_leaves_the_errand_waiting_and_its_later_answer_is_ke
 
 @pytest.mark.browser
 @pytest.mark.slow
-def test_a_press_that_saves_to_the_site_itself_is_asked_about_before_it_goes(creator_page):
-    errand = Errand(creator_page.page, answers=[{"yes": False, "never": False}], tmp=creator_page.tmp)
+def test_a_press_that_saves_to_the_site_itself_goes_only_on_the_reviewers_pass(creator_page):
+    # Not passed, carrying nothing of theirs: not sent, and nobody asked (web/opheld.py _cancels).
+    errand = Errand(creator_page.page, tmp=creator_page.tmp)
 
     async def go():
         await errand.hands.look()
@@ -213,7 +214,7 @@ def test_a_press_that_saves_to_the_site_itself_is_asked_about_before_it_goes(cre
         await errand.hands.close()
         return pressed
     pressed = creator_page.run(go())
-    assert pressed["status"] == "declined" and len(errand.cards) == 1
+    assert "[not sent]" in pressed["line"] and errand.cards == [] and len(errand.reviews) == 1
     assert posted("/api/pin") == []
 
 

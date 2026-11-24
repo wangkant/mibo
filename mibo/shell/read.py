@@ -26,14 +26,18 @@ from pathlib import Path
 
 from ..crossing import downloaded
 from . import run as running
-from .acts import ASK_KINDS, COMMAND_MAX, NEVER_KINDS, Act, Reading, download_run
-from .grants import Grants, known_folders, norm, under
+from .acts import ASK_KINDS, COMMAND_MAX, NEVER_KINDS, Act, Reading, download_run, never
+from .grants import RUNS_LATER, Grants, known_folders, norm, under
 from .paths import LIST_MOST, _base, _matches, _walk, _wild
 from .psnodes import _items
 from .pssort import Sorter
 from .pstables import CONTENT_READS
 
 READ_TIMEOUT_S = 20
+# What Places.blocked says is never touched; its "system" is asked every time instead.
+NEVER_PLACES = ("app", "secrets")
+# Acts that take only names, sizes and dates: free in the program places Start reads (grants.FINDABLE).
+NAMES_ONLY = ("look", "list", "info")
 # A parser just started loads PowerShell and compiles parse.ps1 before its first answer; on a busy computer
 # that alone has taken more than READ_TIMEOUT_S.
 START_TIMEOUT_S = 90
@@ -225,15 +229,39 @@ def _pattern_protected(glob: str, write: bool, deep: bool, content: bool, places
     if len(p) > len(r) and _pattern_reaches(glob, places.profile, False) and (
             fnmatch.fnmatch(".x", p[len(r)]) or p[len(r)].startswith(".")) and (len(p) > len(r) + 1 or content):
         return places.profile + "\\."
-    return next((place for place in _matches(glob) if places.blocked(norm(place), write)), "")
+    return next((place for place in _matches(glob) if places.blocked(norm(place), write) in NEVER_PLACES), "")
 
 
 def _inside_protected(folder: str, write: bool, places) -> str:
-    """A protected place inside `folder`, "" none, "?" when there are too many files to tell."""
+    """A place inside `folder` never touched (the app's own, a secret's), "" none, "?" when there are too many files
+    to tell."""
     found = _walk(folder)
     if found is None:
         return "?"
-    return next((place for place in found if places.blocked(os.path.normcase(place), write)), "")
+    return next((place for place in found if places.blocked(os.path.normcase(place), write) in NEVER_PLACES), "")
+
+
+def _receives(act: Act, path: str) -> bool:
+    """Whether `act` puts content at `path` (a write, a copy's or a move's destination), not only takes a file away
+    (a delete, a move's source)."""
+    return (bool(path) and path == act.dest) or (act.kind != "delete" and act.what != "move")
+
+
+def _reaches_system(act: Act, places) -> str:
+    """For a change by wildcard or to a whole folder: a file in it that is Windows', a program's, or one that runs by
+    itself (Places.blocked's "system"), asked every time as `_system_places` asks a named one; "" none."""
+    if not act.write:
+        return ""
+    receives = _receives(act, "")
+    for glob in act.globs:
+        found = [norm(p) for p in _matches(glob)] if _wild(glob) else []
+        reached = next((p for p in found if places.blocked(p, True, receives=receives) == "system"), "")
+        if not reached and act.recurse and os.path.isdir(_base(glob)[0]):
+            reached = next((p for p in _walk(_base(glob)[0]) or [] if places.blocked(
+                os.path.normcase(p), True, receives=receives) == "system"), "")
+        if reached:
+            return reached
+    return ""
 
 
 def _targets(act: Act) -> list[str] | None:
@@ -260,8 +288,18 @@ def _outermost(paths: list[str]) -> list[str]:
     return [p for p, n in zip(paths, normed) if not inside(n)]
 
 
+def _names(act: Act) -> str:
+    """How much a read takes of the places it names (grants.Places.blocked): "" their contents; "look" whether one
+    is there, its size and dates; "shallow" or "deep" the names in a folder, or all below it."""
+    if act.what not in NAMES_ONLY or act.write:
+        return ""
+    return "look" if act.what != "list" else "deep" if act.recurse else "shallow"
+
+
 def _refused_places(act: Act, cwd: str, places) -> list[Act]:
-    """What `act` may never do by its places: run a file from the web, or touch a protected place."""
+    """What `act` may never do by its places: run a file from the web, or touch the app's own or a secret place. A
+    change to Windows', a program's or a drive's own files, or one that would run by itself later, is asked every
+    time as a costly system step instead (`_system_places`)."""
     refused = []
     # A program or script that came from the web is never run or opened by the character (crossing.py).
     if act.kind in ("program", "install") or act.args is not None or act.what == "open":
@@ -269,14 +307,36 @@ def _refused_places(act: Act, cwd: str, places) -> list[Act]:
                     for path in dict.fromkeys(act.paths + [os.path.join(cwd, a) for a in act.args or []])
                     if downloaded(path)]
     for path in act.paths + ([act.dest] if act.dest else []):
-        why = places.blocked(norm(path), act.write or path == act.dest, look=act.what == "look")
+        why = places.blocked(norm(path), act.write or path == act.dest, _names(act))
         # A program's own file (user installs live in AppData) is run, not read: only the app's own refuse.
-        if not why or (why != "app" and act.args is not None and path == act.paths[0]):
+        if why in ("", "system") or (why != "app" and act.args is not None and path == act.paths[0]):
             continue
         whose = "this app's own files" if why == "app" else "protected"
         refused.append(Act("secrets" if why in ("app", "secrets") else "system", why,
                            f"touches {path}, which is {whose}", paths=[path]))
     return refused
+
+
+def _system_places(act: Act, places) -> list[Act]:
+    """The changes asked every time as a costly system step (cardwait.COSTLY, by shell/panel.py's `_risk`): to
+    Windows', a program's or a drive's own files, other programs' data, and anywhere what is written would run or be
+    loaded without the person starting it (grants.Places.runs_later)."""
+    asks = []
+    for path in act.paths + ([act.dest] if act.dest else []):
+        write = act.write or path == act.dest
+        if write and places.blocked(norm(path), True, receives=_receives(act, path)) == "system":
+            asks.append(Act("unknown", "runs_later", f"{act.why}; {places.runs_later(norm(path), _receives(act, path)) or 'it changes a system or program file'}",
+                            paths=[path], write=True))
+    return asks
+
+
+def _new_runnable(act: Act, path: str) -> Act | None:
+    """A new file that runs when it is opened (a script, a batch file), written in an ordinary folder: the
+    reviewer's, on the person's words; asked when it does not pass. It runs only when someone starts it."""
+    if (act.write or path == act.dest) and not os.path.exists(path) and os.path.splitext(path)[1].lower() in RUNS_LATER:
+        return Act("program", "new_runnable", f"writes {os.path.basename(path)}, a file that runs when it is opened",
+                   paths=[path], name=os.path.basename(path), write=True)
+    return None
 
 
 def _moves_and_links(act: Act, grants: Grants) -> list[Act]:
@@ -330,8 +390,10 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
     if reading.errors:
         return Verdict("invalid", [Act("unknown", "invalid", "; ".join(reading.errors)[:400])])
     places = grants.places
-    refused = [a for a in reading.acts if a.kind in NEVER_KINDS]
-    asks: list[Act] = []
+    # Only what is never done is refused (acts.never); a system change past that is asked every time.
+    refused = [a for a in reading.acts if a.kind in NEVER_KINDS and never(a)]
+    asks: list[Act] = [Act("unknown", "system", a.why, paths=a.paths, name=a.name) for a in reading.acts
+                       if a.kind in NEVER_KINDS and not never(a)]
     for act in reading.acts:
         reached = _reaches_protected(act, places)
         if reached == "?":
@@ -340,8 +402,12 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
         elif reached:
             refused.append(Act("secrets", "secrets", f"{act.why}, which reaches {reached}, which is protected",
                                paths=[reached]))
+        elif (system := _reaches_system(act, places)) and system != "?":
+            asks.append(Act("unknown", "runs_later", f"{act.why}, which reaches {system}, a program's or the "
+                                                     "system's own file", paths=act.paths, write=True))
     for act in reading.acts:
         refused += _refused_places(act, reading.cwd, places)
+        asks += _system_places(act, places)
     if refused:
         return Verdict("refuse", refused)
     past_bin = [a for a in reading.acts if a.what == "skip_bin"]
@@ -358,10 +424,17 @@ def judge(reading: Reading, grants: Grants) -> Verdict:
              if not (act.args is not None and p == act.paths[0])]
     for act, path in every:
         write = act.write or path == act.dest
-        # Open by default (Grants.open): the profile and the other drives; a place's name, size and dates anywhere;
-        # the program places Start reads. What is protected was refused above.
-        if grants.open(norm(path), write) or (not write and (act.what == "look" or any(
-                under(norm(path), p) for p in places.findable))):
+        if write and any(norm(path) in a.paths or path in a.paths for a in asks if a.what == "runs_later"):
+            continue
+        new = _new_runnable(act, path)
+        if new:
+            asks.append(new)
+            continue
+        # Open by default (Grants.open): the profile and the other drives; a place's name, size and dates anywhere,
+        # and the program places Start reads by name (grants.FINDABLE). What is protected was refused above.
+        if grants.open(norm(path), write) or (not write and (act.what == "look" or (
+                _names(act) and not places.blocked(norm(path), False, "deep") and any(
+                    under(norm(path), p) for p in places.findable)))):
             continue
         folder = _folder_to_grant(grants, path)
         if folder and not places.grantable(norm(folder)):

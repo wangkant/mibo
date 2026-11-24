@@ -77,6 +77,8 @@ def test_a_secrets_place_is_still_refused_and_other_programs_data_is_not_read(co
                     f'Test-Path "{local}\\Google\\Chrome\\User Data\\Default\\Login Data"',
                     f'Get-ChildItem "{roaming}\\Bitwarden"', f'Get-Content "{roaming}\\Bitwarden\\data.json"',
                     f'Get-ChildItem "{local}\\Kingsoft" -Recurse',
-                    "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'",
-                    f'Set-Content "{roaming}\\Microsoft\\Windows\\Start Menu\\Programs\\x.lnk" x'):
+                    "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'"):
         assert run(command, grants, str(profile)) == "refuse", command
+    # A program place is never changed by rule: a shortcut written in Start is asked every time (read._system_places).
+    assert run(f'Set-Content "{roaming}\\Microsoft\\Windows\\Start Menu\\Programs\\x.lnk" x', grants,
+               str(profile)) == "ask"

@@ -73,8 +73,13 @@ class Programs:
                      paths=[path] if path else [], args=args)
 
     def interpreter(self, base: str, args: list[str] | None, words: list[str]) -> None:
-        if args is None or any(a in INLINE_CODE for a in words):
-            self.add("hidden", "hidden", f"runs {base} with code given on the command line")
+        if args is None:
+            self.add("hidden", "hidden", f"runs {base} with arguments computed as it runs")
+        elif any(a in INLINE_CODE for a in words):
+            # Code written out on the command line hides nothing: the reader cannot read it, so it is a program run
+            # whose code the reviewer and the question show.
+            self.add("program", "inline", f"runs {base} with this code: {' '.join(args)[:300]}",
+                     name=f"{base} {' '.join(args)}"[:160])
         elif words[:2] == ["-m", "pip"]:
             self.pip(words[2:], base)
         elif words and words[0] in ("--version", "-v"):

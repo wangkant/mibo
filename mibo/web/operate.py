@@ -171,6 +171,8 @@ class Hands(Holding, PageAsks, Steps, Outside):
         self._follow_until = 0.0
         # The reviewer's verdicts in this run, by action: the same control and request is not asked about twice.
         self._verdicts: dict[str, object] = {}
+        # The queries each address was asked with while no typed text waited (Holding._covert).
+        self._queries: dict[tuple[str, str], set[str]] = {}
         # Where each box that scrolls by itself stood after a read's last step on.
         self._read_at: dict = {}
         # Every page's words the model was shown from this tab: no address to another site carries them
@@ -389,13 +391,14 @@ class Hands(Holding, PageAsks, Steps, Outside):
     async def _url(self) -> str:
         return str(await self.page._evaluate("() => location.href") or "")
 
-    async def _decided(self, kind: str, site: str, action: dict, key: str = "") -> tuple[str, str, str]:
+    async def _decided(self, kind: str, site: str, action: dict, key: str = "",
+                       where: str = "") -> tuple[str, str, str]:
         """What the person's mode makes of an outside action before any card: "read" (read only: nothing goes),
         "go" (the reviewer passed it), "turned" (the reviewer turned it down) or "ask" (the card), with the
         reviewer's line and its reading of an outward act (review.DOES, or ""). The reviewer sees only kinds and
-        sites acting.decide sends it."""
+        sites acting.decide sends it; a sensitive page is judged by its full address `where` (mail.google.com)."""
         from .. import acting
-        decision = acting.decide(self.mode(), kind, site)
+        decision = acting.decide(self.mode(), kind, where or site)
         if decision == "refuse":
             return "read", "", ""
         if decision != "review" or self.review is None:

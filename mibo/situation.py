@@ -71,7 +71,9 @@ _NAV_FAILED = re.compile(r"net::ERR_(?:CONNECTION_[A-Z_]+|NAME_NOT_RESOLVED|TIME
 # Names that stand for one platform: a player or short link counts as the site.
 _SAME = {"youtube-nocookie.com": "youtube.com", "youtu.be": "youtube.com", "b23.tv": "bilibili.com",
          "iesdouyin.com": "douyin.com"}
-_SECOND_LEVEL = {"com", "net", "org", "co", "ne", "or", "ac", "go", "gov", "edu"}
+# The Public Suffix List (publicsuffix.org, MPL 2.0: NOTICE), its private section too: a host under a shared
+# domain (alice.github.io, a vercel.app or pages.dev deployment) is a site of its own.
+SUFFIXES = Path(__file__).with_name("web") / "public_suffix_list.dat"
 # The person's accounts that say which catalogue sources and walk sites are theirs.
 PLATFORMS = {"youtube": (("youtube-",), "YouTube"), "bilibili": (("bili-", "bilibili-"), "Bilibili"),
              "zhihu": (("zhihu-",), ""), "weibo": (("weibo-",), ""), "github": (("gh-", "github-"), "")}
@@ -243,9 +245,26 @@ def site_of(address: str) -> str:
     labels = [label for label in host.strip(".").split(".") if label]
     if len(labels) < 2 or labels[-1].isdigit():
         return host
-    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL else 2
-    site = ".".join(labels[-keep:])
+    rules, wild, kept = _suffixes()
+    suffix = 1
+    for i in range(len(labels)):
+        name = ".".join(labels[i:])
+        if name in kept:
+            suffix = len(labels) - i - 1
+            break
+        if name in rules or ".".join(labels[i + 1:]) in wild:
+            suffix = len(labels) - i
+            break
+    site = ".".join(labels[-suffix - 1:]) if len(labels) > suffix else ".".join(labels)
     return _SAME.get(site, site)
+
+
+@functools.lru_cache(maxsize=1)
+def _suffixes() -> tuple[frozenset, frozenset, frozenset]:
+    """The list's rules: plain suffixes, the domains a wildcard rule covers every label under, and exceptions."""
+    rules = [line for line in SUFFIXES.read_text(encoding="utf-8").splitlines() if line and not line.startswith("//")]
+    return (frozenset(r for r in rules if r[0] not in "*!"), frozenset(r[2:] for r in rules if r.startswith("*.")),
+            frozenset(r[1:] for r in rules if r.startswith("!")))
 
 
 def _up(row: dict | None) -> bool:

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
 import html
 import json
 import re
@@ -19,11 +20,10 @@ READ_RUN = 8
 BASE64 = re.compile(r"[A-Za-z0-9+/_-]{8,}={0,2}")
 # A typed text this short must be a whole value of the request to count as carried by it.
 CARRIED_MIN = 3
-# A path part a site's own telemetry is posted to: click and view statistics, logs, metrics, beacons. Not "events"
-# alone (a calendar's events are made by POST) and not "report" (reporting a person is an account act).
-BEACON = re.compile(r"(?:^|[/._-])(?:telemetry|statistics?|stats|analytics|metrics?|beacons?|collect|collector|"
-                    r"track|tracking|tracker|rum|vitals|heartbeat|monitor|monitoring|logs?|logging|client-?events?|"
-                    r"log-?events?|sentry|perf)(?=$|[/._-])", re.I)
+# A method a request asks for while sent as another (a form's _method, a header, a verb in its path or its body's
+# action): a POST that says delete deletes.
+OVERRIDE_KEYS = ("_method", "x-http-method-override", "x-http-method", "x-method-override")
+DELETE_VERB = re.compile(r"(?:^|[/._-])(?i:delete|remove|destroy|purge|erase)(?=$|[/._-]|[A-Z])")
 
 
 def shape(url: str) -> str:
@@ -115,14 +115,37 @@ def summary_of(request: dict) -> dict:
 
 def only_reads(request: dict, carried: list[dict], ping: bool) -> bool:
     """What code is certain only reads, let through with no card and no reviewer: a beacon or ping, or a GraphQL
-    query, that carries nothing typed in this run. Every other request a press sends is the reviewer's."""
+    query, that carries nothing typed in this run. Every other request a press sends is the reviewer's, whatever its
+    address is called."""
     return not carried and (ping or asks_only(request))
 
 
-def beacon(request: dict) -> bool:
-    """A POST to a telemetry address (BEACON in its path): the site's own counting of clicks and views."""
-    return str(request.get("method") or "").upper() == "POST" and bool(BEACON.search(urlsplit(str(
-        request.get("url") or "")).path))
+def method_of(request: dict) -> str:
+    """The method a request does: DELETE when its method, an override (OVERRIDE_KEYS in its headers, query or body)
+    or a delete verb in its path or in its body's action field says so; else the method it is sent as."""
+    method = str(request.get("method") or "GET").upper()
+    body, url = leaves_of(request)[:2]
+    headers = {str(k).lower(): str(v) for k, v in (request.get("headers") or {}).items()}
+    fields: dict = {}
+    with contextlib.suppress(ValueError, AttributeError):
+        fields = {str(k).lower(): str(v) for k, v in json.loads(body).items()}
+    fields.update((k.lower(), v) for k, v in parse_qsl(body, keep_blank_values=True) if not fields)
+    fields.update((k.lower(), v) for k, v in parse_qsl(urlsplit(url).query, keep_blank_values=True))
+    said = [headers.get(k) or fields.get(k) or "" for k in OVERRIDE_KEYS]
+    actions = [fields.get(k) or "" for k in ("action", "op", "operation", "do", "method", "verb", "type")]
+    if any(m.strip().upper() == "DELETE" for m in said) or DELETE_VERB.search(urlsplit(url).path) or any(
+            DELETE_VERB.search(a) for a in actions if len(a) <= 40):
+        return "DELETE"
+    return next((m.strip().upper() for m in said if m.strip()), method)
+
+
+def digest(request: dict) -> str:
+    """One request as a decision is kept for it: its method, its address's shape and its body's and query's
+    values, so another body from the same button is judged again."""
+    body, url, values = leaves_of(request)
+    raw = json.dumps([method_of(request), urlsplit(url).netloc, shape(url), sorted(values), "" if values else body],
+                     ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
 def leaving(url: str) -> dict:

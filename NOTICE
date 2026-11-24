@@ -75,6 +75,11 @@ Code taken from other projects, under the licences they were released with:
 - `mibo/modelcatalog.json` is a trimmed snapshot of the models.dev catalogue
   (anomalyco/models.dev, `https://models.dev/api.json`; its date and sha256 are in
   the file): MIT License, Copyright (c) 2025 models.dev.
+- `mibo/web/public_suffix_list.dat` is the Public Suffix List
+  (publicsuffix/list, `https://publicsuffix.org/list/public_suffix_list.dat`;
+  its version and commit are in the file), its ICANN and private sections with
+  the comments taken out: Mozilla Public License, Version 2.0,
+  `https://mozilla.org/MPL/2.0/`. The unchanged list is at that address.
 
 The MIT License, for the parts above that carry it:
 

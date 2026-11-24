@@ -241,7 +241,8 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
     elif status == "not_passed":
         # The automatic review did not pass a step that only reads or that undo gives back: not done, not asked.
         reason = (f"Not done: the app's automatic review did not pass this step ({outcome.get('reason') or 'no answer'})."
-                  " Nothing was changed. Go on another way that keeps to what they asked, or tell them what is left.")
+                  " Nothing was changed. Do not try the same step again in other words; go on with what is left of "
+                  "their task, or tell them what could not be done.")
         shown = str(outcome.get("reason") or "")
     elif status == "folder_declined" and outcome.get("again"):
         reason = ("Not done: they already said no to that folder in this turn, so it was not asked again. Do not ask "
@@ -261,11 +262,19 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
     return reason, shown
 
 
-def _hold(lookups, status: str) -> None:
+def _hold(lookups, status: str, outcome: dict | None = None) -> None:
     """No more commands or changes this turn while a question waits with no answer: they are away. A no holds for
-    its own step only (the page refuses that same step again with no question)."""
+    its own step only (the page refuses that same step again with no question). A step the reviewer turned down or
+    did not pass counts toward the turn's ceiling on refusals (loop.REFUSALS, three in a row: review.REFUSALS_STOP),
+    as the reviewer's verdicts in the service's own process do."""
+    from .. import review
     if status == "unanswered":
         lookups.shell_held = "a question is still waiting for their answer"
+    if status == "not_passed" or (status == "refused" and (outcome or {}).get("declined")):
+        verdicts = lookups.__dict__.setdefault("verdicts", [])
+        last = verdicts[-(review.REFUSALS_STOP - 1):]
+        verdicts.append(review.Verdict("refuse", str((outcome or {}).get("reason") or ""), "review", stop=len(last) == (
+            review.REFUSALS_STOP - 1) and all(v.decision == "refuse" for v in last)))
 
 
 async def use(agent, args: dict, lookups) -> str:
@@ -300,7 +309,7 @@ async def use(agent, args: dict, lookups) -> str:
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or ((plain or {}).get(lang) or {}).get("ed") or ""
     logger.info("[Agent] use_computer -> %s", status)
-    _hold(lookups, status)
+    _hold(lookups, status, outcome)
     if status != "done":
         reason, shown = _not_done(outcome or {}, status, lang)
         _trace(lookups, said, command, shown, status)
@@ -364,7 +373,7 @@ async def use_file(agent, name: str, args: dict, lookups) -> str:
     status = (outcome or {}).get("status") or "no_app"
     said = ((outcome or {}).get("said") or {}).get(lang) or file_doing(op, args, lang, done=True)
     logger.info("[Agent] %s -> %s", name, status)
-    _hold(lookups, status)
+    _hold(lookups, status, outcome)
     call = _call_line(name, args)
     if status != "done":
         reason, shown = _not_done(outcome or {}, status, lang)

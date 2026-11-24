@@ -22,7 +22,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
-from .review import _compact, _fold, _site
+from .review import _compact, _fold
 
 OUTSIDE, LOCAL = "outside", "local"
 # What each tool's result is: outside material (the web, a third party) or local material (this computer, the
@@ -108,36 +108,80 @@ def turn_read(workspace) -> dict:
     return read if isinstance(read, dict) else {}
 
 
-def _site_names(site: str) -> list[str]:
-    """The names a person calls a site by: its address, its own name, and the names the app knows for it (B站 for
-    bilibili.com, 微博 for weibo.com)."""
+def _site_names(site: str) -> tuple[list[str], list[str]]:
+    """What names a site: its full host and its registrable host, and the names the app knows for it (B站 for
+    bilibili.com, 微博 for weibo.com, DeepL for deepl.com: web/signin_sites.json, web/seeds.json, web/places.json,
+    platforms.py). Never a bare label of its address: "deepl" names deepl.com because the app knows that name for it,
+    not deepl.xyz."""
+    import json
+
+    from .platforms import PLATFORMS
+    from .resolve import PLACES
     from .situation import site_of
     from .web import signin, sites
     # The app's names are its own host's alone (douyin.example is not 抖音); a platform's other domains are the
     # platform (iesdouyin.com is Douyin's share pages).
     key = site_of(site) or site
-    names = [site, _site(site)]
+    names = []
     for row in signin.hints():
         if row["site"] == key:
             names += [row["name"].get("zh", ""), row["name"].get("en", ""), *row.get("also", [])]
     names += [seed["name"] for host, seed in sites.SEEDS.items() if host == key]
-    return [n for n in names if n]
+    names += [row["name"] for row in json.loads(PLACES.read_text(encoding="utf-8")) if site_of(row["home"]) == key]
+    names += [p.zh for p in PLATFORMS.values() if p.key == key] + [p.en for p in PLATFORMS.values() if p.key == key]
+    # A place given by a name (微博 in a standing request's scope) is that name.
+    hosts = [h for h in dict.fromkeys((site, key)) if h and "." in h]
+    return hosts, [n for n in dict.fromkeys([*names, *([] if "." in site else [site])]) if n]
+
+
+def _says(name: str, said: str) -> bool:
+    """A known name in the person's words as a whole: a Latin one between word boundaries, at least three letters
+    ("ate" is not in "translate"); one with other letters (B站, 微博) whole, spaces aside ("B 站")."""
+    name = " ".join(_fold(name).split())
+    if name.isascii():
+        return len(_compact(name)) >= 3 and bool(re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", said))
+    return len(name) >= 2 and "".join(name.split()) in "".join(said.split())
 
 
 def named(place: str, words, site: bool = False) -> bool:
-    """Whether the person's own `words` (a string or a list of their messages) name `place`: a site by its address or
-    any of its names (with `site`), else a recipient, a program, a window or a file by its name, a part of it between
-    dashes, or a path's last part."""
+    """Whether the person's own `words` (a string or a list of their messages) name `place`: a site by its full or
+    registrable host or a name the app knows for it (with `site`, `_site_names`), else a recipient, a program, a window
+    or a file by its name, a part of it between dashes, or a path's last part."""
     said = _fold(" ".join(words) if isinstance(words, (list, tuple)) else words)
     if not str(place or "").strip() or not said.strip():
         return False
-    names = _site_names(place.split(":")[0]) if site else [
-        place, *re.split(r"\s+[—–-]\s+", place), os.path.basename(place.rstrip("\\/"))]
+    if site:
+        hosts, known = _site_names(place.split(":")[0].strip().lower())
+        return any(re.search(rf"(?<![\w.-]){re.escape(_fold(h))}(?![\w-]|\.\w)", said) for h in hosts) or any(
+            _says(n, said) for n in known)
+    names = [place, *re.split(r"\s+[—–-]\s+", place), os.path.basename(place.rstrip("\\/"))]
     for name in names:
         name = _fold(name).strip()
         if len(_compact(name)) >= 2 and (name in said or _compact(name) in _compact(said)):
             return True
     return False
+
+
+# Quotes a person puts round words they want typed as they are.
+QUOTES = (('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’"), ("「", "」"), ("『", "』"), ("《", "》"), ("`", "`"))
+
+
+def own_words(text: str, words) -> bool:
+    """Whether `text` is the person's own words of `words`, to be typed as they are: quoted there, or a whole span of
+    them between natural boundaries at least two characters long in Chinese, Japanese or Korean and four in other
+    scripts (你好 in 将中文你好翻译成英文; never "1" or "ok" found inside other words)."""
+    said = _fold(" ".join(words) if isinstance(words, (list, tuple)) else words)
+    t = " ".join(_fold(text).split())
+    if not t:
+        return False
+    if any(f"{a}{t}{b}" in said for a, b in QUOTES):
+        return True
+    if len(t) < (2 if re.search(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]", t) else 4):
+        return False
+    edge = r"[a-z0-9]"
+    head = rf"(?<!{edge})" if re.match(edge, t) else ""
+    tail = rf"(?!{edge})" if re.match(edge, t[-1]) else ""
+    return bool(re.search(head + re.escape(t) + tail, " ".join(said.split())))
 
 
 def held(area: str, action: dict, words, read: dict) -> str:

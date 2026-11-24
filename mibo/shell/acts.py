@@ -2,13 +2,34 @@
 (files.py) sort it: one `Act` per effect, gathered in a `Reading` that `read.judge` holds against the grants."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
-# Kinds of act, mildest first. The never kinds are refused whatever was granted.
+# Kinds of act, mildest first. The never kinds are refused whatever was granted when they are what is never done
+# (`never`); the rest of them is asked every time as a costly system step (read.judge).
 NEVER_KINDS = ("elevate", "system", "secrets", "hidden", "shutdown")
+# What is never done, the one list every refusal of a command is for: reading a secret place (this app's own files,
+# keys, sign-ins, other programs' data, a registry key not listed as readable), running or opening what came from the
+# web, running as administrator, a command built to hide what it does (encoded, computed, downloaded and run), and
+# changing security settings (firewall, antivirus, policies, permissions on files, remote management, sign-in
+# secrets).
+SECURITY = re.compile(r"firewall|defender|mppreference|mpcmdrun|executionpolicy|\buac\b|i?cacls|xcacls|takeown|auditpol|"
+                      r"secedit|gpupdate|gpedit|polic|bcdedit|netsh|winrm|winrs|remote|another computer|ntdsutil|"
+                      r"nltest|ksetup|wevtutil|security|\blsa\b|credential|winlogon|this computer's own services",
+                      re.I)
 ASK_KINDS = ("delete", "overwrite", "outside", "move_out", "network", "install", "program", "unknown")
 # A longer command is not read: it comes back with an error.
 COMMAND_MAX = 4000
+
+
+def never(act: Act) -> bool:
+    """Whether a never kind of act is one of what is never done (SECURITY's list), not a system change to ask."""
+    if act.kind in ("secrets", "elevate", "hidden") or (act.kind, act.what) == ("system", "device"):
+        # A raw device path (\?\, \.\) reaches past every check of a place: hidden.
+        return True
+    if act.kind == "system" and act.what == "registry":
+        return act.why.startswith("reads") or bool(SECURITY.search(act.why))
+    return act.kind == "system" and bool(SECURITY.search(f"{act.why} {act.name}"))
 
 
 @dataclass

@@ -68,7 +68,19 @@
       "tests/floors/asked/test_the_question_is_conversation.py::test_after_a_no_its_words_are_answered_once_where_they_stand",
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_card_is_answered_by_its_buttons_in_the_apps_words",
       "tests/floors/asked/test_the_question_is_conversation.py::test_a_question_left_waiting_by_an_ended_process_waits_no_more",
-      "tests/layers/web_operate/test_same_site_steps.py::test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called"
+      "tests/layers/web_operate/test_same_site_steps.py::test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called",
+      "tests/floors/asked/test_what_a_page_sends.py::test_no_address_lets_a_press_past_the_reviewer",
+      "tests/floors/asked/test_what_a_page_sends.py::test_a_choice_that_changes_a_setting_is_never_free",
+      "tests/floors/asked/test_what_a_page_sends.py::test_a_request_built_around_their_words_is_not_theirs",
+      "tests/floors/asked/test_what_a_page_sends.py::test_a_request_kept_from_before_is_judged_again_when_what_it_sends_changes",
+      "tests/floors/asked/test_what_a_page_sends.py::test_their_typing_never_leaves_for_another_site_by_a_stream_a_key_at_a_time_or_a_body",
+      "tests/floors/asked/test_site_names.py::test_a_sensitive_host_is_judged_by_its_full_host_and_every_act_there_is_asked",
+      "tests/floors/asked/test_site_names.py::test_a_page_of_account_or_payment_is_sensitive_on_any_site_and_an_ordinary_one_is_not",
+      "tests/floors/asked/test_site_names.py::test_each_owner_on_a_shared_host_is_a_site_of_its_own",
+      "tests/floors/asked/test_site_names.py::test_the_public_suffix_list_ships_whole_with_its_private_section_and_its_rules_hold",
+      "tests/floors/asked/test_site_names.py::test_a_site_is_named_by_whole_words_only",
+      "tests/floors/asked/test_site_names.py::test_only_a_whole_span_of_their_words_is_theirs_to_type",
+      "tests/floors/asked/test_steps_not_passed_count.py::test_steps_the_reviewer_does_not_pass_end_the_turns_acting_and_are_not_reworded"
     ],
     "injection": [
       "tests/floors/asked/test_yes_in_the_chat.py::test_only_the_apps_own_page_answers",
@@ -128,7 +140,13 @@
       "tests/floors/grants/test_windows_holds_a_misread_command.py::test_nothing_leaves_the_job_and_its_limits_hold",
       "tests/floors/grants/test_windows_holds_a_misread_command.py::test_what_a_command_started_ends_with_it_unless_it_opened_a_program",
       "tests/floors/grants/test_windows_holds_a_misread_command.py::test_the_commands_the_app_runs_still_work_in_their_tier",
-      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_a_command_whose_limits_cannot_be_set_up_is_not_run"
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_a_command_whose_limits_cannot_be_set_up_is_not_run",
+      "tests/floors/grants/test_on_any_root.py::test_a_profiles_secrets_are_refused_wherever_the_profile_is",
+      "tests/floors/grants/test_on_any_root.py::test_a_git_repositorys_settings_holding_a_sign_in_are_refused_and_plain_ones_read",
+      "tests/floors/grants/test_on_any_root.py::test_a_write_where_it_would_run_by_itself_is_asked_every_time_as_a_costly_step",
+      "tests/floors/grants/test_on_any_root.py::test_in_the_program_places_only_names_sizes_and_dates_are_free",
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_shortcut_to_what_came_from_the_web_never_starts_it",
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_shortcut_that_hands_a_command_to_a_shell_is_not_the_program_named"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",
@@ -189,6 +207,12 @@
       "tests/floors/honesty/test_honesty.py::test_the_prompt_carries_the_honest_answer_after_the_persona",
       "tests/floors/honesty/test_honesty.py::test_the_safety_exception_reaches_the_prompt",
       "tests/floors/honesty/test_honesty.py::test_the_companionship_register_survives_every_knob_combination"
+    ],
+    "able": [
+      "tests/floors/able/test_what_the_person_asked_goes_ahead.py::test_what_the_person_asked_goes_ahead_with_no_refusal_and_no_question"
     ]
+  },
+  "abouts": {
+    "able": "Guards against needless refusals and questions: what a person ordinarily asks (the built-in skills, file tools, everyday commands, a site they named, their files and programs, a program's window) goes ahead by rule or after a passing reviewer, never asked and never refused. The other floors say what must still be asked or refused."
   }
 }

@@ -1,9 +1,9 @@
-"""Steps the person asked for on a site they named run through with no reviewer and no question (web/opheld.py):
-the site's own click statistics and the requests that take their own words to that site go by rule, while what
-they typed going to another site is still held for them, and a costly act stays asked whatever its button or its
-request is called. (2026-11-23: asked to open DeepL and translate 你好 into English, the app sent every click's
-statistics and the translate request to the reviewer, which passed the statistics endpoint once and not the next
-time, so a click on the target-language list asked the person and waited 42 seconds.)
+"""Steps the person asked for on a site they named run through with no question (web/opheld.py): their own words
+typed there go to that site as the field's content; what a choice or a press sends is the reviewer's, and what it
+does not pass that carries nothing of theirs is not sent and asks nobody (a site's statistics); what they typed going
+to another site is still held for them, and a costly act stays asked whatever its button or its request is called.
+(2026-11-23: asked to open DeepL and translate 你好 into English, the reviewer passed the statistics endpoint once and
+not the next time, so a click on the target-language list asked the person and waited 42 seconds.)
 
 The site is a stand-in translator on 127.0.0.1 in the headless browser, which posts statistics on every click and
 the text to translate as it is typed; with ?leak it also posts the text to another host (localhost). No model
@@ -78,7 +78,7 @@ def posted(path: str) -> list[str]:
 class Run:
     """Hands on the translator with scripted answers: each card the person is shown and each review asked."""
 
-    def __init__(self, page, tmp, answers=()):
+    def __init__(self, page, tmp, answers=(), passes=()):
         self.cards, self.reviews, self.answers = [], [], list(answers)
 
         async def ask(card):
@@ -86,8 +86,11 @@ class Run:
             return self.answers.pop(0)
 
         async def judge(action):
+            # A stand-in reviewer that passes only the addresses in `passes`, as a reviewer passes the translation
+            # the person asked for and doubts the site's own counting.
             self.reviews.append(action)
-            return review.Verdict("ask", "stand-in", "review")
+            address = (action.get("request") or {}).get("address", "")
+            return review.Verdict("go" if any(address.endswith(p) for p in passes) else "ask", "stand-in", "review")
         from mibo.web.tabs import PlaywrightTab
         self.hands = operate.Hands(PlaywrightTab(page), ask=ask, allowed=gate.Allowed(tmp), attended=lambda: True,
                                    review=judge, said=lambda: SAID)
@@ -131,11 +134,15 @@ def test_a_site_they_name_is_named_by_any_common_spelling():
         assert crossing.named("deepl.com", words, site=True), words
     assert not crossing.named("deepl.com", "用 deep 翻译", site=True)  # copy: voice
     assert not crossing.named("deepl-translate.example", "打开deepl", site=True)  # copy: voice
+    # A name the app knows for one site, never the first label of any address that happens to be in their words.
+    assert not crossing.named("deepl.xyz", "打开deepl翻译", site=True)  # copy: voice
+    for site, words in (("ate.xyz", "translate this"), ("lat.top", "translate this"), ("go.dev", "go translate")):
+        assert not crossing.named(site, words, site=True), site
 
 
 @pytest.mark.browser
 def test_typing_their_words_and_choosing_the_language_on_the_named_site_asks_nothing(translator):
-    run = Run(translator.page, translator.tmp)
+    run = Run(translator.page, translator.tmp, passes=("/jsonrpc",))
 
     async def go():
         await translator.page.goto(translator.address)
@@ -149,9 +156,11 @@ def test_typing_their_words_and_choosing_the_language_on_the_named_site_asks_not
         return typed, chose
     typed, chose = translator.run(go())
     assert (typed["status"], chose["status"]) == ("ok", "ok")
-    assert (run.cards, run.reviews) == ([], [])
+    assert run.cards == []
     assert any('"你好"' in body and '"EN"' in body for body in posted("/jsonrpc"))
-    assert posted("/web/statistics") and posted("/client-events")
+    # The statistics of the click that only typed went; those of the choice the reviewer did not pass were not sent,
+    # and the step says so.
+    assert posted("/web/statistics") and posted("/client-events") and "[not sent]" in chose["line"]
 
 
 @pytest.mark.browser
@@ -173,12 +182,12 @@ def test_their_words_going_to_another_site_are_held_for_them_and_never_left_to_t
 
 @pytest.mark.browser
 def test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called(translator):
-    run = Run(translator.page, translator.tmp, answers=[{"yes": False, "never": False}, {"yes": False, "never": False}])
+    run = Run(translator.page, translator.tmp, answers=[{"yes": False, "never": False}])
 
     async def go():
         await translator.page.goto(translator.address)
         await run.hands.look()
-        # An innocent name whose press saves to the site: the reviewer reads what it sends, and its doubt asks.
+        # An innocent name whose press orders: the reviewer reads what it sends; not passed, it is not sent.
         done = await run.hands.act({"do": "click", "id": run.ref("button", "完成")})
         await run.hands.look()
         # A paying name whose request looks like statistics: judged by the control before any press, no reviewer.
@@ -186,6 +195,7 @@ def test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called(tran
         await run.hands.close()
         return done, paid
     done, paid = translator.run(go())
-    assert (done["status"], paid["status"]) == ("declined", "declined")
-    assert [c["kind"] for c in run.cards][-1] == "order" and len(run.reviews) == 1
+    assert "[not sent]" in done["line"] and paid["status"] == "declined"
+    assert [c["kind"] for c in run.cards] == ["order"]
+    assert any((r.get("request") or {}).get("address", "").endswith("/api/order") for r in run.reviews)
     assert posted("/api/order") == [] and not any('"order"' in body for body in posted("/web/statistics"))

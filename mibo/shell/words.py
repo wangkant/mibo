@@ -95,6 +95,7 @@ PHRASES = {
     "browse": ("在浏览器中打开 {n}", "Opening {n} in the browser", "Opened {n} in the browser"),
     "install": ("安装或卸载软件", "Installing or removing software", "Installed or removed software"),
     "program": ("运行程序 {n}", "Running {n}", "Ran {n}"),
+    "inline": ("运行命令中写出的代码", "Running code written in the command", "Ran code written in the command"),
     "script": ("运行脚本 {n}", "Running the script {n}", "Ran the script {n}"),
     "stop": ("关闭程序", "Closing a program", "Closed a program"),
     "clipboard": ("读取剪贴板", "Reading the clipboard", "Read the clipboard"),
@@ -244,8 +245,17 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
                 line += (f"，保存为{_places(act, lang)}" if zh else f", saved as {_places(act, lang)}")
         elif act.kind == "install":
             line = f"安装或卸载软件：{act.name}" if zh else f"Install or remove software: {act.name}"
+        elif act.what == "runs_later":
+            line = (f"写入之后会自行运行或被程序加载的位置：{_places(act, lang)}" if zh else
+                    f"Write where it runs or is loaded later by itself: {_places(act, lang)}")
+        elif act.what == "system":
+            line = f"更改系统：{act.name or act.why}" if zh else f"Change the system: {act.name or act.why}"
         elif act.kind == "program":
-            if act.what == "stop":
+            if act.what == "new_runnable":
+                line = f"新建可运行的文件：{act.name}" if zh else f"Make a file that runs when opened: {act.name}"
+            elif act.what == "inline":
+                line = f"运行命令行中写出的代码：{act.name}" if zh else f"Run the code written in the command: {act.name}"
+            elif act.what == "stop":
                 line = f"关闭正在运行的程序：{act.name}" if zh else f"Close a running program: {act.name}"
             elif act.what == "script":
                 line = f"运行脚本：{act.name}（无法预先确定其操作）" if zh else (

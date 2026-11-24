@@ -162,9 +162,8 @@ class Outside:
         through on this site, at the app, or the reviewer passed it), then exactly one press, then a look
         for its result. In read only nothing is pressed."""
         from .. import acting
-        site = gate.site_of(url)
         said = str(facts.get("said") or "")
-        if acting.decide(self.mode(), kind, site) == "refuse":
+        if acting.decide(self.mode(), kind, url) == "refuse":
             return {"status": "failed", "kind": kind,
                     "line": f"[read-only] {kind} ({button[:40]}): the person set the browser to read only, so nothing "
                             f"was pressed; read and tell them, or ask_person"}
@@ -250,7 +249,7 @@ class Outside:
                 # fields it sends.
                 "text": (said or (str(facts.get("row") or "") if kind in ("like", "delete") else
                                   self._fields(facts) if kind in ("submit", "account", "order") else ""))[:2000],
-                "skippable": kind in gate.SKIPPABLE and not acting.sensitive(site) and why != gate.FRAME_WHY}
+                "skippable": kind in gate.SKIPPABLE and not acting.sensitive(url) and why != gate.FRAME_WHY}
         # Whatever was typed on this site in this run and not let out yet may leave with the press, not only the
         # box beside the button: the reviewer and code's floor (an address or number they never gave) see it all.
         typed = [f"{t['field']}: {t['text']}" for t in self.typed if not t["out"] and t["site"] == site
@@ -278,11 +277,12 @@ class Outside:
             skipped or why == gate.FRAME_WHY) else await self._decided(
             kind, site, {"target": [card["to"]] if card["to"] else [],
                          "text": "\n".join([card["text"], *typed]).strip()[:2000], "page_says": button[:120],
-                         "fields": ["password"] if (facts.get("form") or {}).get("password") else []})
+                         "fields": ["password"] if (facts.get("form") or {}).get("password") else []},
+            where=card["url"])
         if not skipped:
             # The card names the act as the reviewer read it; 始终允许 is offered for that reading.
             kind = card["kind"] = reading(kind, does)
-            card["skippable"] = kind in gate.SKIPPABLE and not acting.sensitive(site) and why != gate.FRAME_WHY
+            card["skippable"] = kind in gate.SKIPPABLE and not acting.sensitive(card["url"]) and why != gate.FRAME_WHY
         return skipped, decision, passed
 
     async def _asked_outside(self, card: dict, ident: int, facts: dict) -> tuple[dict | None, int]:

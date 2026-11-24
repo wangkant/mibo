@@ -15,5 +15,6 @@
  {"lang": "en", "name": "TikTok", "home": "https://www.tiktok.com/", "signin": "https://www.tiktok.com/login"},
  {"lang": "en", "name": "YouTube", "home": "https://www.youtube.com/"},
  {"lang": "en", "name": "LinkedIn", "home": "https://www.linkedin.com/", "signin": "https://www.linkedin.com/login"},
- {"lang": "en", "name": "Pinterest", "home": "https://www.pinterest.com/", "signin": "https://www.pinterest.com/login/"}
+ {"lang": "en", "name": "Pinterest", "home": "https://www.pinterest.com/", "signin": "https://www.pinterest.com/login/"},
+ {"lang": "en", "name": "DeepL", "home": "https://www.deepl.com/translator"}
 ]

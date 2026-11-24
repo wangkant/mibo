@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
 from . import gate, signin
-from .opcarry import squeeze, words_carried
+from .opcarry import words_carried
 from .opheld import FOLLOW_S, TYPED_WATCHED
 from .opoutside import DRAWN, HEAR_S, PRESS_TAIL_S, strictness
 from .opsaid import SAID
@@ -583,15 +583,16 @@ class Steps:
             ends.append(({"id": fresh, **at}, name or str(element or "")))
         return ends
 
-    def _theirs(self, text: str, site: str) -> bool:
-        """What was typed is the person's own words of this turn, typed on a site their words name (deepl for
-        deepl.com), holding no identity number, address or account (gate.hands_over), on a site that is not a
-        sensitive one: the page's own requests may take it to that site with no card (Holding._carries)."""
+    def _theirs(self, text: str, site: str, url: str) -> bool:
+        """What was typed is the person's own words of this turn (crossing.own_words), typed on a site their words
+        name (crossing.named: DeepL for deepl.com), holding no identity number, address or account
+        (gate.hands_over), on a page that is not a sensitive one: the page may take it to that site as the field's
+        own content with no card while nothing is pressed (Holding._carries). A request a press or a choice sends is
+        judged whatever it holds."""
         from .. import acting, crossing
-        from ..review import _fold
         said = self.said()
-        return (bool(site) and not acting.sensitive(site) and not gate.hands_over(text)
-                and squeeze(_fold(text)) in squeeze(_fold(said)) and crossing.named(site, said, site=True))
+        return (bool(site) and not acting.sensitive(url) and not gate.hands_over(text)
+                and crossing.own_words(text, said) and crossing.named(site, said, site=True))
 
     async def _select(self, ident: int, words: str, element: str) -> dict:
         """Text selected in a control or a block of text (Page.select_text), for a page that acts on what is
@@ -637,7 +638,7 @@ class Steps:
             site = gate.site_of(self.page.frame_url(ident) or url)
             self.typed.append({"text": text.strip(), "field": clip(name or str(facts.get("label") or ""), 40),
                                "site": site, "node": ident, "before": before, "out": False,
-                               "asked": self._theirs(text, site)})
+                               "asked": self._theirs(text, site, self.page.frame_url(ident) or url)})
         if facts.get("tag") == "select":
             line = await self._choosing(lambda: self.page.type(ident, text), name or str(facts.get("label") or ""), url,
                                         text)

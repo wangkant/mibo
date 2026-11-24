@@ -14,12 +14,18 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import time
 from pathlib import Path
 
 from ..storage import atomic_write_text
+from .pstables import OPEN_RISKY
+
+# What runs when it is opened (and a .pth, which every start of its Python loads): a file of these replaced is a
+# program changed.
+RUNS_LATER = (*OPEN_RISKY, ".pth")
 
 SETTINGS_FILE = "shell.json"
 LOG_FILE = "shell-log.jsonl"
@@ -28,9 +34,38 @@ LOG_KEPT = 500
 
 # File names that hold keys or passwords wherever they are.
 SECRET_NAMES = (".env", "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "wallet.dat", "credentials", ".git-credentials",
-                ".netrc", "_netrc", ".npmrc", ".pypirc", "login data", "cookies", "key3.db", "key4.db", "logins.json")
+                ".netrc", "_netrc", ".npmrc", ".pypirc", "login data", "cookies", "key3.db", "key4.db", "logins.json",
+                "local state", "web data", "state.vscdb", ".credentials.json", "credentials.json", ".vault-token",
+                "cert9.db", "places.sqlite")
 SECRET_SUFFIXES = (".pem", ".key", ".pfx", ".p12", ".ppk", ".kdbx", ".kdb", ".keychain", ".gpg", ".asc", ".jks",
-                   ".keystore", ".ovpn", ".rdp")
+                   ".keystore", ".ovpn", ".rdp", ".1pux", ".opvault", ".psafe3")
+# Folders that hold keys, tokens and sign-ins wherever they are: under any root and at any depth (a backup of a
+# profile, another drive, a WSL export, another user's profile), by their parts as `norm` folds them.
+SECRET_DIRS = ((".ssh",), (".aws",), (".gnupg",), (".kube",), (".docker",), (".azure",), (".claude",), (".codex",),
+               (".gcloud",), (".password-store",), (".terraform.d",), (".pki",), (".mozilla",), (".thunderbird",),
+               (".config", "gcloud"), (".config", "gh"), (".local", "share", "keyrings"), ("user data",),
+               ("appdata",))
+# A user's folder in a profile tree ("Users\me", "home/me"): its dot children are its settings and keys.
+PROFILE_TOPS = ("users", "home", "documents and settings")
+# Program places by their parts, where Start's search finds programs: listed and looked at (a name, a size, dates)
+# like any open place on any root; what is in their files is judged as any read. AppData's own folders are
+# looked at two levels down (AppData\Local\Kingsoft\WPS Office: whether a program is there), no further.
+FINDABLE = (("program files",), ("program files (x86)",), ("appdata", "roaming", "microsoft", "windows", "start menu"),
+            ("programdata", "microsoft", "windows", "start menu"), ("appdata", "local", "programs"))
+APPDATA_LOOK = 4
+# What runs, or is loaded, by itself once written, without the person starting it: a write there is asked every
+# time as a costly system step (cardwait.COSTLY), whatever folder it is in. By parts of the path: a package
+# manager's or a program's own tree (TREES: what is taken out of one changes a program too), Git's hooks and
+# settings, shell start-up folders, Startup, scheduled tasks.
+TREES = (("site-packages",), ("dist-packages",), ("node_modules",), ("program files",), ("program files (x86)",),
+         ("programdata",))
+RUNS_PLACES = (*TREES, ("profile.d",), (".git", "hooks"), (".git", "config"), ("start menu", "programs",
+               "startup"), ("system32", "tasks"), ("windowspowershell",), (".vscode", "tasks.json"))
+# Files that run when a shell, PowerShell or a drive starts.
+RUNS_NAMES = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".zshrc", ".zprofile", ".zshenv", ".zlogin",
+              ".cshrc", ".tcshrc", ".kshrc", ".inputrc", "profile.ps1", "microsoft.powershell_profile.ps1",
+              "microsoft.vscode_powershell_profile.ps1", "autorun.inf", "desktop.ini", "sitecustomize.py",
+              "usercustomize.py")
 
 # What is never run, as Settings and the card say it.
 NEVER = (
@@ -62,6 +97,37 @@ KNOWN = (
 def norm(path: str | Path) -> str:
     """A path as compared: absolute, links and junctions followed, `..` gone, case folded."""
     return os.path.normcase(os.path.realpath(os.path.abspath(str(path))))
+
+
+def parts_of(path: str) -> list[str]:
+    """A `norm`ed path's folder and file names, lower case, with what Windows drops (trailing dots and spaces, a
+    ::$DATA stream) dropped too."""
+    return [p.split(":")[0].rstrip(". ") if i else p for i, p in enumerate(re.split(r"[\\/]+", path.lower())) if p]
+
+
+def holds(parts: list[str], run: tuple) -> int:
+    """Where `run` (a few names in a row) begins among `parts`, or -1."""
+    return next((i for i in range(len(parts) - len(run) + 1) if tuple(parts[i:i + len(run)]) == run), -1)
+
+
+def _program_folder(folder: str) -> bool:
+    """A folder a program runs from: it holds a program or a library already."""
+    try:
+        return any(e.name.lower().endswith((".exe", ".dll")) for e in os.scandir(folder) if e.is_file())
+    except OSError:
+        return False
+
+
+def git_credentials(path: str) -> bool:
+    """A Git repository's settings that hold a sign-in: a password or token in a remote's address, or an
+    Authorization header Git sends."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read(65536)
+    except OSError:
+        return False
+    return bool(re.search(r"://[^/\s@:]+:[^/\s@]+@|extraheader\s*=.*authorization|\b(?:token|password)\s*=", text,
+                          re.I))
 
 
 def under(path: str, root: str) -> bool:
@@ -161,33 +227,79 @@ class Places:
         # Skills' folders, the person's and the built-in ones: read and run from (asking, as outside any granted
         # folder), never written (skills/).
         self.skills = [norm(Path(home) / "skills"), norm(Path(self.package) / "skills" / "builtin")]
+        # The folders programs are looked up in: what is written there runs in place of a program of the same name.
+        self.path_dirs = {norm(p) for p in env.get("PATH", "").split(os.pathsep) if p.strip()}
 
-    def blocked(self, path: str, write: bool, look: bool = False) -> str:
-        """Why a command may never touch this `norm`ed path ("app", "secrets", "system"), or "". Other programs'
-        data (AppData) is never read or listed, except its program places (`findable`) and, with `look`, whether a
-        path there exists and its size and dates: a name that is not a secret's says nothing of what it holds."""
+    def blocked(self, path: str, write: bool, names: str = "", receives: bool = True) -> str:
+        """Why a command may not touch this `norm`ed path: "app" (this app's own) and "secrets" (keys, sign-ins,
+        other programs' data) are never touched; "system" (Windows', a program's or a drive's own files) is changed
+        only on the person's yes each time (read.judge). "" when it is none of them. Names, sizes and dates (`names`:
+        "look" at one place, "shallow" or "deep" for a listing of a folder or of all below it) are free in the program
+        places Start reads (FINDABLE); a look, two levels into AppData (whether a program is installed there), at
+        anything but a file. Nothing of a secret's place is free, not even whether it is there."""
         if not write and any(under(path, own) and path != own for own in self.skills):
             return ""
         if any(under(path, own) for own in (self.home, self.package, self.python)):
             return "app"
-        if under(path, self.appdata) and not (self.temp and under(path, self.temp)) and (
-                write or not (look or any(under(path, p) for p in self.findable))):
-            return "secrets"
-        rest = path[len(self.profile):].lstrip("\\/") if under(path, self.profile) else ""
-        if rest.startswith("."):
-            return "secrets"
-        # Windows drops trailing dots and spaces, and reads "name::$DATA" as the file itself.
-        name = os.path.basename(path).split(":")[0].rstrip(". ")
-        if write and any(under(path, p) for p in self.startup):
+        parts = parts_of(path)
+        if self.temp and under(path, self.temp):
+            return ""
+        if not write and names and not self.secret(path, parts, SECRET_DIRS[:-1]):
+            if any(holds(parts, run) >= 0 for run in FINDABLE):
+                return ""
+            top = holds(parts, ("appdata",))
+            if names == "look" and top >= 0 and len(parts) - top <= APPDATA_LOOK and not os.path.isfile(path):
+                return ""
+        if write and holds(parts, ("appdata",)) >= 0 and not any(holds(parts, d) >= 0 for d in SECRET_DIRS[:-1]):
             return "system"
-        if (name in SECRET_NAMES or name.startswith((".env", "id_rsa", "id_ed25519", "id_ecdsa"))
-                or name.endswith(SECRET_SUFFIXES)):
+        if self.secret(path, parts):
             return "secrets"
-        if under(path, os.path.join(self.windows, "system32", "config")):
-            return "secrets"
-        if write and (under(path, self.windows) or any(under(path, p) for p in self.programs)
-                      or os.path.dirname(path) == self.drive.rstrip("\\") or path == self.drive):
+        if write and self.runs_later(path, receives):
             return "system"
+        return ""
+
+    def secret(self, path: str, parts: list[str], dirs: tuple = SECRET_DIRS) -> bool:
+        """A place that holds keys, tokens, sign-ins or other programs' data, on any root and at any depth."""
+        name = parts[-1] if parts else ""
+        if any(holds(parts, d) >= 0 for d in dirs) or under(path, os.path.join(self.windows, "system32", "config")):
+            return True
+        if under(path, self.profile) and path[len(self.profile):].lstrip("\\/").startswith("."):
+            return True
+        if any(parts[i] in PROFILE_TOPS and parts[i + 2].startswith(".") for i in range(len(parts) - 2)):
+            return True
+        if name in SECRET_NAMES or name.startswith((".env", "id_rsa", "id_ed25519", "id_ecdsa")) or name.endswith(
+                SECRET_SUFFIXES):
+            return True
+        return len(parts) >= 2 and parts[-2:] == [".git", "config"] and git_credentials(path)
+
+    def runs_later(self, path: str, receives: bool = True) -> str:
+        """Why a file written at this `norm`ed path would run, or be loaded, without the person starting it: a
+        program's or a package manager's own tree, a folder on PATH, Git's hooks, a shell's or PowerShell's start-up
+        file, Startup, a scheduled task, a drive's root; or a runnable file that is there already and would be
+        replaced. A file taken away (deleted, moved out: not `receives`) starts nothing: only a program's tree,
+        Windows' folder and PATH count then. "" for anywhere else."""
+        parts = parts_of(path)
+        unc = path.startswith("\\\\")
+        if not receives:
+            tree = next((run for run in TREES if holds(parts[:-1], run) >= 0), None)
+            if tree or (not unc and len(parts) > 2 and parts[1] == "windows") or os.path.dirname(path) in self.path_dirs:
+                return "it changes a program's or Windows' own files"
+            return ""
+        hit = next((run for run in RUNS_PLACES if holds(parts[:-1] if len(run) == 1 else parts, run) >= 0), None)
+        if hit:
+            return f"{os.sep.join(hit)} runs or loads what is written there"
+        if parts and parts[-1] in RUNS_NAMES:
+            return f"{parts[-1]} runs when a shell, PowerShell or a drive starts"
+        if len(parts) <= (3 if unc else 2):
+            return "a drive's root runs what is written there when the drive is opened"
+        if not unc and parts[1] == "windows":
+            return "Windows' own folder runs what is written there"
+        if any(under(path, p) for p in self.startup) or os.path.dirname(path) in self.path_dirs:
+            return "a folder on PATH or PowerShell's own profile runs what is written there"
+        if os.path.isfile(path) and os.path.splitext(path)[1] in RUNS_LATER:
+            return "it replaces a file that runs"
+        if os.path.splitext(path)[1] in RUNS_LATER and _program_folder(os.path.dirname(path)):
+            return "a program's own folder loads what is written beside it"
         return ""
 
     def grantable(self, path: str) -> str:
@@ -196,7 +308,8 @@ class Places:
             return "missing"
         if os.path.dirname(path.rstrip("\\/")) == path.rstrip("\\/") or len(path.rstrip("\\/")) <= 3:
             return "root"
-        why = self.blocked(path, True)
+        why = self.blocked(path, True) or ("system" if any(under(path, p) for p in [self.windows, *self.programs])
+                                           else "")
         if why:
             return why
         # A folder that holds the places above would hand them over with it.
