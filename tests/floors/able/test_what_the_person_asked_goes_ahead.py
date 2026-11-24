@@ -245,7 +245,4 @@ def test_what_the_person_asked_goes_ahead_with_no_refusal_and_no_question(comput
     for name, value in computer.env.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv(DIRS_ENV, os.pathsep)
-    try:
-        assert outcome(said, step, computer, monkeypatch) == want
-    finally:
-        reading.PARSER.close()
+    assert outcome(said, step, computer, monkeypatch) == want

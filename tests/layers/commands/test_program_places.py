@@ -39,7 +39,6 @@ def computer(tmp_path, monkeypatch):
     monkeypatch.setenv(DIRS_ENV, os.pathsep)
     grants = Grants(profile / "mibo" / "runtime" / "desktop", profile / "mibo")
     yield profile, programs, data, grants
-    reading.PARSER.close()
 
 
 def run(command: str, grants: Grants, cwd: str) -> str:

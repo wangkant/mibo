@@ -68,10 +68,11 @@ def test_the_select_sets_view_only_or_sorting_too(app, browser, folders):
         return [select.input_value() for select in selects]
 
     assert values() == ["sort", "read"]
+    # The rows are drawn again from each answer: the next choice is made in the new rows, not the ones on their way out.
+    page.page.evaluate("document.querySelectorAll('.setup-shell-row').forEach((row) => { row.dataset.before = '1'; })")
     with page.page.expect_response(lambda r: r.url.endswith("/api/shell") and r.request.method == "POST"):
         selects[0].select_option("read")
-    # Drawn again from that answer before the next choice, so the two answers cannot cross.
-    expect(selects[0]).to_have_value("read")
+    page.page.wait_for_function("!document.querySelector('.setup-shell-row[data-before]')")
     with page.page.expect_response(lambda r: r.url.endswith("/api/shell") and r.request.method == "POST"):
         selects[1].select_option("sort")
     assert sent == [{"add": str(long), "read_only": True}, {"add": str(short)}]

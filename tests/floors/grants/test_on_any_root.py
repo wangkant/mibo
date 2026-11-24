@@ -47,7 +47,6 @@ def computer(tmp_path, monkeypatch):
     monkeypatch.setenv(DIRS_ENV, os.pathsep)
     grants = Grants(profile / "mibo" / "runtime" / "desktop", profile / "mibo")
     yield tmp_path, profile, backup, programs, grants
-    reading.PARSER.close()
 
 
 def judged(grants: Grants, command: str, cwd: str) -> tuple[str, str]:

@@ -44,7 +44,6 @@ def test_a_hard_link_to_a_key_is_the_key(key, tmp_path):
         assert verdict.action == "refuse", command
     job = {"op": "read", "path": str(docs / "notes.txt"), "recursive": False}
     verdict = reading.judge(reading.Reading("read_file", str(docs), files.acts(job, str(docs)), []), grants)
-    reading.PARSER.close()
     assert verdict.action == "refuse"
 
 
@@ -79,4 +78,3 @@ def test_a_secrets_data_stream_and_a_junction_to_its_link_are_the_secret(key, tm
                     f"Get-Content '{key}::$DATA'", f"Get-Content '{key}:$DATA'", f'Get-Content "{tmp_path / "J" / "k.txt"}"'):
         verdict = reading.judge(reading.read(command, str(docs)), grants)
         assert verdict.action == "refuse", command
-    reading.PARSER.close()

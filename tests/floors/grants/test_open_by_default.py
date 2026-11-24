@@ -55,7 +55,6 @@ def profile(tmp_path, monkeypatch):
     monkeypatch.setenv(DIRS_ENV, os.pathsep)
     grants = Grants(root / "mibo" / "runtime" / "desktop", root / "mibo")
     yield root, secrets, grants
-    reading.PARSER.close()
 
 
 def judged(grants: Grants, op: str, path: str, cwd: str) -> str:

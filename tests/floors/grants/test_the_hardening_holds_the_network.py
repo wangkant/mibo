@@ -51,7 +51,8 @@ def _listener(family, kind):
     reached = threading.Event()
     if kind == socket.SOCK_STREAM:
         sock.listen(1)
-    sock.settimeout(15)
+    # Longer than a command takes on a slow computer: the listener must still be there when it connects.
+    sock.settimeout(120)
 
     def wait():
         with contextlib.suppress(OSError):

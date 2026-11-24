@@ -1,5 +1,6 @@
 # Reads PowerShell commands for Mibo with PowerShell's own parser and parameter binder.
-# One request a line on stdin: {"b64": <UTF-8 command, base64>, "cwd": <folder>}; one JSON answer a line.
+# One request a line on stdin: {"b64": <UTF-8 command, base64>, "cwd": <folder>, "env": <the command's environment,
+# when it is not the one this parser has>}; one JSON answer a line.
 # It only parses, binds and looks commands up; it never runs what it reads.
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
@@ -7,8 +8,14 @@ $utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::OutputEncoding = $utf8
 [Console]::InputEncoding = $utf8
 $A = 'System.Management.Automation.Language.'
-# Looking a name up can import the module that has it and run its code: only Windows' own module folders.
-$env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$PSHOME\Modules"
+# Where it was started: gone back to after each request, so no folder of the person's is held open.
+$Start = (Get-Location).Path
+
+function Set-Own {
+  # Looking a name up can import the module that has it and run its code: only Windows' own module folders.
+  $env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$PSHOME\Modules"
+}
+Set-Own
 # Variables whose value is the same here as in the command's own PowerShell.
 $Known = @('HOME', 'PWD', 'PSHOME', 'true', 'false', 'null')
 
@@ -132,11 +139,21 @@ while ($true) {
   if ($null -eq $line) { break }
   try {
     $req = $line | ConvertFrom-Json
+    if ($req.env) {
+      # Windows gives every process its own Program Files variables, whatever it was started with.
+      foreach ($p in $req.env.PSObject.Properties) {
+        if ($p.Name -notmatch '^(Common)?Program(Files|W6432)') { [Environment]::SetEnvironmentVariable($p.Name, $p.Value) }
+      }
+      Set-Own
+      $own = if ($env:HOMEDRIVE -and $env:HOMEPATH) { "$env:HOMEDRIVE$env:HOMEPATH" } else { $env:USERPROFILE }
+      Set-Variable -Name HOME -Value $own -Force -Scope Global
+    }
     $src = $utf8.GetString([Convert]::FromBase64String($req.b64))
     $out = Read-Source $src $req.cwd
   } catch {
     $out = @{ fatal = "$_" }
   }
+  Set-Location -LiteralPath $Start
   [Console]::Out.WriteLine(($out | ConvertTo-Json -Depth 14 -Compress))
   [Console]::Out.Flush()
 }

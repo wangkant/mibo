@@ -156,7 +156,6 @@ def standin(tmp_path_factory):
             keeper.remove(everything=True)
             from harness.guard_standin import _delete_tree
             _delete_tree(winreg.HKEY_CURRENT_USER, key)
-            reading.PARSER.close()
 
 
 def _run_both(command: str, tmp_path: Path, standin: dict, monkeypatch, tier: str, online: bool):

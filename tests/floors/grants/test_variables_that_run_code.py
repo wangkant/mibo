@@ -36,7 +36,6 @@ def judged(command: str, tmp_path):
 @pytest.mark.parametrize("command", SET)
 def test_a_variable_that_runs_code_makes_the_command_a_code_run(command, tmp_path):
     read_, verdict = judged(command, tmp_path)
-    reading.PARSER.close()
     assert verdict.action == "ask" and any(a.what == "env" for a in verdict.reasons)
     assert Shell._risk(verdict, command, None, False) == "act" and all(_reviewed(a) for a in verdict.reasons)
     assert tier(read_.acts) == "change" and not guards.online(read_.acts)
@@ -45,18 +44,15 @@ def test_a_variable_that_runs_code_makes_the_command_a_code_run(command, tmp_pat
 @pytest.mark.parametrize("command", LASTING)
 def test_one_set_to_last_is_a_costly_step_or_never_done(command, tmp_path):
     _, verdict = judged(command, tmp_path)
-    reading.PARSER.close()
     assert verdict.action == "refuse" or Shell._risk(verdict, command, None, False) in ALONE
 
 
 @pytest.mark.parametrize("command", NEVER)
 def test_where_commands_find_their_programs_is_never_set(command, tmp_path):
     _, verdict = judged(command, tmp_path)
-    reading.PARSER.close()
     assert verdict.action == "refuse"
 
 
 def test_reading_a_variable_is_not_setting_it(tmp_path):
     _, verdict = judged("$env:PYTHONPATH; Get-Date", tmp_path)
-    reading.PARSER.close()
     assert verdict.action == "run"

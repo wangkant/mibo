@@ -38,7 +38,6 @@ def profile(tmp_path, monkeypatch):
     with open(f"{home / 'Documents' / 'marked.txt'}:Zone.Identifier", "w", encoding="utf-8") as mark:
         mark.write("[ZoneTransfer]\nZoneId=3\n")
     yield home
-    reading.PARSER.close()
 
 
 def test_a_file_from_the_web_or_a_mail_is_outside_material(profile):

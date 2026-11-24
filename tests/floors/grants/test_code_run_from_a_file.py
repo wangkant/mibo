@@ -84,7 +84,6 @@ def project(tmp_path, monkeypatch):
     (folder / "notes.txt").write_text("x", encoding="utf-8")
     (profile / "Downloads").mkdir()
     yield folder, Grants(profile / "mibo" / "runtime" / "desktop", profile / "mibo")
-    reading.PARSER.close()
 
 
 def judged(command: str, folder, grants):

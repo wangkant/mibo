@@ -39,10 +39,7 @@ STEPS = {
 def test_a_system_step_is_asked_alone_and_its_question_names_its_target(name, tmp_path):
     command, target = STEPS[name]
     read_ = reading.read(command, str(tmp_path))
-    try:
-        verdict = reading.judge(read_, Grants(tmp_path / "home" / "runtime" / "desktop", tmp_path / "home"))
-    finally:
-        reading.PARSER.close()
+    verdict = reading.judge(read_, Grants(tmp_path / "home" / "runtime" / "desktop", tmp_path / "home"))
     assert verdict.action == "ask"
     risk = Shell._risk(verdict, command, None, False)
     assert risk in ALONE

@@ -51,22 +51,17 @@ def test_code_that_reaches_the_network_or_builds_its_names_is_costly_and_never_a
     assert verdict.action == "ask"
     assert Shell._risk(verdict, EXFIL[name], None, False) in ALONE
     assert tier(read_.acts) == "change"
-    try:
-        assert not all(_reviewed(a) for a in verdict.reasons)
-    finally:
-        reading.PARSER.close()
+    assert not all(_reviewed(a) for a in verdict.reasons)
 
 
 def test_running_what_code_fetched_is_never_done(tmp_path):
     _, verdict = judged(DOWNLOAD_RUN, tmp_path, tmp_path / "home")
-    reading.PARSER.close()
     assert verdict.action == "refuse" and verdict.reasons[0].what == "download_run"
 
 
 @pytest.mark.parametrize("command", EVERYDAY)
 def test_an_everyday_one_liner_goes_to_the_reviewer_under_a_changes_limits_off_the_network(command, tmp_path):
     read_, verdict = judged(command, tmp_path, tmp_path / "home")
-    reading.PARSER.close()
     assert verdict.action == "ask" and Shell._risk(verdict, command, None, False) == "act"
     assert all(_reviewed(a) for a in verdict.reasons)
     assert (tier(read_.acts), guards.online(read_.acts)) == ("change", False)
@@ -74,7 +69,6 @@ def test_an_everyday_one_liner_goes_to_the_reviewer_under_a_changes_limits_off_t
 
 def test_code_with_another_program_beside_it_keeps_the_limits(tmp_path):
     read_, _ = judged('python -c "print(1)"; git status', tmp_path, tmp_path / "home")
-    reading.PARSER.close()
     assert tier(read_.acts) == "change"
 
 
@@ -95,6 +89,5 @@ def test_a_script_written_in_the_turn_is_code_and_after_outside_material_any_cod
     monkeypatch.setattr(crossing, "turn_read", lambda workspace: {crossing.OUTSIDE: ["read_page: https://e.example"]})
     read_ = reading.read('python -c "print(1+1)"', str(tmp_path))
     code = Shell._code(shell, read_, reading.Verdict("ask", []), str(tmp_path), "t3")
-    reading.PARSER.close()
     assert [a.what for a in code] == ["read_outside"]
     assert Shell._risk(reading.Verdict("ask", code), 'python -c "print(1+1)"', None, False) in ALONE

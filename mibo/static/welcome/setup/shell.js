@@ -184,9 +184,15 @@
       if (view) renderLimits();
     }
 
+    // An answer is drawn only while it is the latest asked for: one that comes back late is not drawn over a newer one.
+    let asked = 0;
+
     async function load() {
+      const mine = ++asked;
       try {
-        view = await ctx.api("shell");
+        const got = await ctx.api("shell");
+        if (mine !== asked) return;
+        view = got;
         onError.hidden = true;
         render();
       } catch (error) {
@@ -207,8 +213,11 @@
     async function change(what, line = folderError, path = "shell") {
       line.hidden = true;
       sw.box.disabled = true;
+      const mine = ++asked;
       try {
-        view = await ctx.api(path, what ?? {});
+        const got = await ctx.api(path, what ?? {});
+        if (mine !== asked) return;
+        view = got;
         if (what?.add === input.value.trim()) input.value = "";
         render();
       } catch (error) {

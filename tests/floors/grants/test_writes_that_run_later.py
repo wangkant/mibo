@@ -41,10 +41,7 @@ def project(tmp_path):
 
 def judged(command: str, project):
     read_ = reading.read(command, str(project.place))
-    try:
-        return read_, reading.judge(read_, project.grants)
-    finally:
-        reading.PARSER.close()
+    return read_, reading.judge(read_, project.grants)
 
 
 @pytest.mark.parametrize("rel", RUNS_LATER)

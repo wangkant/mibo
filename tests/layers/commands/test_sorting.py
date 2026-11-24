@@ -163,7 +163,6 @@ def granted(tmp_path, monkeypatch):
     assert grants.add(str(folder)) == ""
     grants.remove(str(tmp_path / "elsewhere"))
     yield folder, grants
-    reading.PARSER.close()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="read.py reads commands with Windows PowerShell's own parser")

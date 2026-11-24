@@ -27,8 +27,5 @@ COMMANDS = (
 @pytest.mark.skipif(sys.platform != "win32", reason="read.py reads commands with Windows PowerShell's own parser")
 def test_each_command_runs_in_the_tier_its_reading_gives(tmp_path):
     (tmp_path / "notes.txt").write_text("total 3\n", encoding="utf-8")
-    try:
-        got = [(command, acts.tier(reading.read(command, str(tmp_path)).acts)) for command, _ in COMMANDS]
-    finally:
-        reading.PARSER.close()
+    got = [(command, acts.tier(reading.read(command, str(tmp_path)).acts)) for command, _ in COMMANDS]
     assert got == list(COMMANDS)

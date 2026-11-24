@@ -47,29 +47,37 @@ START_TIMEOUT_S = 90
 
 
 class Parser:
-    """A Windows PowerShell kept to read commands (parse.ps1), started on first use and again if it dies."""
+    """A Windows PowerShell kept to read commands (parse.ps1), started on first use and again if it dies. It reads
+    with the environment a command would get now: one that has changed since it started is sent with the request."""
 
     def __init__(self):
         self.lock = threading.Lock()
         self.process: subprocess.Popen | None = None
+        self.env: dict = {}
 
-    def _start(self) -> subprocess.Popen:
+    def _start(self, env: dict) -> subprocess.Popen:
         script = (Path(__file__).with_name("parse.ps1")).read_text(encoding="utf-8")
         encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
         return subprocess.Popen(
             [running.POWERSHELL, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-            cwd=os.environ.get("TEMP") or None, env=running.environment(), stdin=subprocess.PIPE,
+            cwd=os.environ.get("TEMP") or None, env=env, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
     def read(self, command: str, cwd: str) -> dict | None:
         """The parse of `command` as parse.ps1 answers it, or None when the parser gave no answer in time."""
-        request = json.dumps({"b64": base64.b64encode(command.encode("utf-8")).decode("ascii"), "cwd": cwd}) + "\n"
+        request = {"b64": base64.b64encode(command.encode("utf-8")).decode("ascii"), "cwd": cwd}
+        env = running.environment()
         with self.lock:
             for _ in range(2):
                 started = self.process is None or self.process.poll() is not None
                 if started:
-                    self.process = self._start()
-                parsed = _answer(self.process, request.encode("utf-8"), START_TIMEOUT_S if started else READ_TIMEOUT_S)
+                    self.process = self._start(env)
+                elif env != self.env:
+                    # A variable that is gone is sent as null, which takes it out.
+                    request["env"] = {**dict.fromkeys(self.env), **env}
+                self.env = env
+                parsed = _answer(self.process, (json.dumps(request) + "\n").encode("utf-8"),
+                                 START_TIMEOUT_S if started else READ_TIMEOUT_S)
                 if parsed is not None:
                     return parsed
                 self.process.kill()
