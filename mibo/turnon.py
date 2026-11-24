@@ -28,6 +28,20 @@ FEATURES = {
 }
 
 
+# The switch in Settings (the one acting mode) and the sentence under it.
+SWITCH = {
+    "zh": {"label": "允许{who}操作电脑上的其他程序",
+           "sentence": "开启后，仅当你在对话中提出要求时，{who}才会查看或操作电脑上的程序。发送、发布等操作由自动审查核对"
+                       "你的原话后执行；删除、付款和更改账号每次都需要你确认，可随时按 Esc 停止。始终不操作密码管理器、终端、"
+                       "系统设置和付款程序。"},
+    "en": {"label": "Let {who} operate other programs on this computer",
+           "sentence": "When on, {who} looks at or operates programs on this computer only while you ask in chat. "
+                       "Sending and posting go ahead once the automatic review finds them in your own words; deleting, "
+                       "paying and account changes ask you every time, and Esc stops it. Password managers, terminals, "
+                       "system settings and payment programs are never touched."},
+}
+
+
 def _who() -> str:
     return os.getenv("PERSONA_NAME", "").strip() or "Mibo"
 
@@ -40,7 +54,6 @@ def off(home: Path) -> list[str]:
 
 def card_of(feature: str) -> dict:
     who = _who()
-    from .desk.grants import SWITCH
     lines = {lang: SWITCH[lang]["sentence"].format(who=who) for lang in ("zh", "en")}
     return {"type": "turn_on", "feature": feature,
             "zh": {"title": f"开启「{FEATURES[feature]['zh']}」？", "lines": [lines["zh"]]},

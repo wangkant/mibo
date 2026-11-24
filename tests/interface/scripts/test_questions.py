@@ -40,6 +40,13 @@ def _type(page, text: str) -> None:
     box.press("Enter")
 
 
+def _again(page) -> list:
+    """The conversation as the page draws it after a reload, once its messages are there."""
+    page.reload()
+    page.page.locator(".chat-messages .line:not(.typing)").first.wait_for()
+    return page.page.evaluate(THREAD)
+
+
 def _ended(page) -> None:
     page.page.locator(".chat-send:not(.stopping)").wait_for()
     page.settle()
@@ -89,9 +96,8 @@ def test_a_typed_yes_is_the_persons_message_after_the_question_and_the_reply_fol
     assert page.page.locator(".chat-messages .ai").count() == 2
     assert _listed(model) and len(model.asked()) == 2
     # A reload draws the same conversation from what the chat kept.
-    page.reload()
-    assert page.page.evaluate(THREAD) == [["me", "What is on my desktop?"], ["ask", asked], ["me", "确定"],
-                                          ["ai", "Here is what I found."]]
+    assert _again(page) == [["me", "What is on my desktop?"], ["ask", asked], ["me", "确定"],
+                            ["ai", "Here is what I found."]]
     stored = app.get("/api/chat/history").json()["messages"]
     assert [m["role"] for m in stored] == ["user", "assistant", "user", "assistant"]
     assert stored[1]["ask"]["state"] == "yes" and stored[2]["answers"] == stored[1]["ask"]["id"]
@@ -116,8 +122,7 @@ def test_anything_else_typed_shows_as_their_message_leaves_the_step_undone_and_i
     assert not _listed(model) and len(model.asked()) == 3
     # The words are answered where they stand, once: the last request ends with them.
     assert "不用了，我自己看" in json.dumps(model.asked()[2]["body"]["messages"][-1], ensure_ascii=False)
-    page.reload()
-    assert page.page.evaluate(THREAD) == thread
+    assert _again(page) == thread
     assert page.errors == [] and page.refused == []
 
 
@@ -143,8 +148,8 @@ def test_a_very_important_step_is_one_card_whose_act_button_runs_it_and_stays_an
         answered = page.page.locator(".chat-messages .ask-card.answered")
         assert answered.count() == 1 and answered.locator("button").count() == 0
         assert answered.locator(".ask-card-told").inner_text().startswith("Done")
-        page.reload()
-    assert page.page.evaluate(THREAD) == thread
+        again = _again(page)
+    assert again == thread
     assert page.errors == [] and page.refused == []
 
 

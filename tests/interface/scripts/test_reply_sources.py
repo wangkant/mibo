@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 from harness.model import say
 from harness.page import measured
+from playwright.sync_api import Error
 
 pytestmark = pytest.mark.browser
 
@@ -24,7 +25,11 @@ def _replied(browser, app, model, pages: list) -> object:
     page = browser.open(app)
 
     def with_sources(route) -> None:
-        answer = route.fetch().json()
+        try:
+            answer = route.fetch().json()
+        except Error:
+            # Asked by the page the reload below replaced: its answer is gone with it.
+            return
         for message in answer["messages"]:
             if message["role"] == "assistant":
                 message["sources"] = pages

@@ -31,6 +31,7 @@ from types import SimpleNamespace
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from .. import turnon
 from ..cardwait import Card
 from . import grants as g
 
@@ -517,7 +518,7 @@ class Desk:
             # Pictures of a window only a picture can work: sent with no question unless turned off here.
             "pictures": {"on": when.Switch(self.desktop).on(),
                          "sentence": {lang: when.Switch.sentence(lang, who, service) for lang in ("zh", "en")}},
-            "switch": {lang: {k: v.format(who=who) for k, v in g.SWITCH[lang].items()} for lang in ("zh", "en")},
+            "switch": {lang: {k: v.format(who=who) for k, v in turnon.SWITCH[lang].items()} for lang in ("zh", "en")},
             "grants": [{**{k: row.get(k, "") for k in ("key", "name", "exe", "since")},
                         "tier": row["tier"] if row.get("tier") in g.TIERS else g.default_tier(row.get("exe", ""))}
                        for row in self.grants.all()],
