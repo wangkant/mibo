@@ -180,6 +180,7 @@
       "tests/floors/boundary/test_update_supply.py::test_while_the_checked_file_is_held_nothing_can_write_rename_or_delete_it",
       "tests/floors/boundary/test_update_supply.py::test_a_signed_release_must_verify_and_after_one_an_unsigned_one_is_refused",
       "tests/floors/boundary/test_update_supply.py::test_without_a_key_in_the_app_a_release_is_held_to_its_checksum_alone",
+      "tests/floors/boundary/test_update_supply.py::test_a_build_that_carries_the_key_takes_no_release_without_its_signature",
       "tests/floors/boundary/test_update_supply.py::test_the_disk_image_is_checked_the_same_way_and_opened_for_the_person_to_drag",
       "tests/floors/boundary/test_update_supply.py::test_a_blocked_installer_leaves_this_version_running_and_says_so"
     ],
