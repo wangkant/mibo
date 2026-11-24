@@ -32,7 +32,9 @@
       "tests/floors/secrets/test_app_home.py::test_no_file_tool_or_command_reads_the_apps_own_places_by_any_path",
       "tests/floors/secrets/test_app_home.py::test_a_listing_or_search_of_a_granted_folder_never_follows_a_link_into_the_home",
       "tests/floors/secrets/test_app_home.py::test_no_bash_command_reads_the_apps_own_places",
-      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_no_tier_reads_lists_or_changes_the_apps_home"
+      "tests/floors/grants/test_windows_holds_a_misread_command.py::test_no_tier_reads_lists_or_changes_the_apps_home",
+      "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_hard_link_to_a_key_is_the_key",
+      "tests/floors/secrets/test_a_secret_by_another_name.py::test_a_program_that_names_a_keys_folder_is_refused_not_asked"
     ],
     "asked": [
       "tests/floors/asked/test_paying_deleting_account_and_access.py::test_every_paying_deleting_account_and_access_control_asks_on_a_card",
@@ -80,7 +82,10 @@
       "tests/floors/asked/test_site_names.py::test_the_public_suffix_list_ships_whole_with_its_private_section_and_its_rules_hold",
       "tests/floors/asked/test_site_names.py::test_a_site_is_named_by_whole_words_only",
       "tests/floors/asked/test_site_names.py::test_only_a_whole_span_of_their_words_is_theirs_to_type",
-      "tests/floors/asked/test_steps_not_passed_count.py::test_steps_the_reviewer_does_not_pass_end_the_turns_acting_and_are_not_reworded"
+      "tests/floors/asked/test_steps_not_passed_count.py::test_steps_the_reviewer_does_not_pass_end_the_turns_acting_and_are_not_reworded",
+      "tests/floors/asked/test_what_a_page_sends.py::test_a_press_the_review_does_not_pass_did_not_happen_and_one_they_asked_for_is_asked",
+      "tests/floors/asked/test_site_names.py::test_a_settings_subscription_admin_or_tokens_page_is_sensitive_however_its_address_is_written",
+      "tests/floors/asked/test_system_steps_alone.py::test_a_system_step_is_asked_alone_and_its_question_names_its_target"
     ],
     "injection": [
       "tests/floors/asked/test_yes_in_the_chat.py::test_only_the_apps_own_page_answers",
@@ -160,7 +165,17 @@
       "tests/floors/grants/test_everyday_commands_work_under_the_limits.py::test_an_everyday_command_works_as_it_does_with_no_limits",
       "tests/floors/grants/test_the_hardening_holds_the_network.py::test_a_command_not_read_as_using_the_network_cannot_reach_it",
       "tests/floors/grants/test_the_hardening_holds_the_network.py::test_no_command_but_a_programs_run_registers_a_scheduled_task",
-      "tests/floors/grants/test_the_hardening_holds_the_network.py::test_turning_the_hardening_off_leaves_windows_as_it_was"
+      "tests/floors/grants/test_the_hardening_holds_the_network.py::test_turning_the_hardening_off_leaves_windows_as_it_was",
+      "tests/floors/grants/test_code_given_as_text.py::test_code_that_reaches_the_network_or_builds_its_names_is_costly_and_never_a_programs_run",
+      "tests/floors/grants/test_code_given_as_text.py::test_running_what_code_fetched_is_never_done",
+      "tests/floors/grants/test_code_given_as_text.py::test_an_everyday_one_liner_goes_to_the_reviewer_under_a_changes_limits_off_the_network",
+      "tests/floors/grants/test_code_given_as_text.py::test_code_with_another_program_beside_it_keeps_the_limits",
+      "tests/floors/grants/test_code_given_as_text.py::test_a_script_written_in_the_turn_is_code_and_after_outside_material_any_code_is_asked",
+      "tests/floors/grants/test_writes_that_run_later.py::test_a_write_that_runs_later_by_itself_is_costly",
+      "tests/floors/grants/test_writes_that_run_later.py::test_a_projects_tool_file_goes_to_the_reviewer_and_never_by_rule",
+      "tests/floors/grants/test_writes_that_run_later.py::test_after_outside_material_a_projects_tool_file_or_a_new_shortcut_is_asked",
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_file_url_a_share_a_risky_document_and_an_address_handed_to_explorer_are_never_started",
+      "tests/floors/grants/test_what_a_shortcut_starts.py::test_a_link_to_a_page_opens_in_the_apps_browser_never_by_windows"
     ],
     "private": [
       "tests/floors/private/test_forget_leaves_no_bytes.py::test_a_forget_leaves_the_words_in_no_byte_of_the_database",

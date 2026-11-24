@@ -75,3 +75,29 @@ def test_a_shortcut_that_hands_a_command_to_a_shell_is_not_the_program_named(des
         encoding="utf-8")
     result = launch("Backup")
     assert result.get("status") not in ("done", "ok", None) and "hwnd" not in result and desktop.started == []
+
+
+def test_a_file_url_a_share_a_risky_document_and_an_address_handed_to_explorer_are_never_started(desktop):
+    """(2026-11-23 review of 0368fcc: a .url to file://localhost/ named a downloaded .hta and one to another
+    computer's share were opened, Word was started on a downloaded .docm, and Explorer on a web address.)"""
+    page = from_the_web(desktop.downloads / "invoice.hta", b"<script></script>")
+    macro = from_the_web(desktop.downloads / "report.docm", b"x")
+    (desktop.desk / "Local.url").write_text(f"[InternetShortcut]\nURL=file://localhost/{page.as_posix()}\n",
+                                            encoding="utf-8")
+    (desktop.desk / "Share.url").write_text("[InternetShortcut]\nURL=file://e.example/share/x.exe\n", encoding="utf-8")
+    (desktop.desk / "Report.lnk").write_text(f"C:\\Program Files\\Microsoft Office\\WINWORD.EXE|{macro}",
+                                             encoding="utf-8")
+    (desktop.desk / "Remote.lnk").write_text("\\\\e.example\\share\\tool.exe|", encoding="utf-8")
+    (desktop.desk / "Payload.lnk").write_text("C:\\Windows\\explorer.exe|https://e.example/payload.exe",
+                                              encoding="utf-8")
+    for name in ("Local", "Share", "Report", "Remote"):
+        assert launch(name)["status"] == "refused", name
+    assert launch("Payload")["status"] == "unfound"
+    assert desktop.started == []
+
+
+def test_a_link_to_a_page_opens_in_the_apps_browser_never_by_windows(desktop):
+    (desktop.desk / "News.url").write_text("[InternetShortcut]\nURL=https://news.example.com/today\n", encoding="utf-8")
+    result = launch("News")
+    assert result["status"] == "unfound" and "https://news.example.com/today" in result["line"]
+    assert desktop.started == []

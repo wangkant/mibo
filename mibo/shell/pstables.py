@@ -238,6 +238,22 @@ NEVER_METHODS = {"invoke", "invokereturnasis", "create", "frombase64string", "lo
 NET_METHODS = {"downloadstring", "downloadfile", "downloaddata", "uploadstring", "uploadfile", "uploaddata",
                "openread", "openwrite", "getasync", "postasync", "putasync", "sendasync", "getstringasync",
                "getbytearrayasync", "getresponse", "send", "connect"}
+# Code written out on the command line (python -c, node -e) or in a script written this turn, read as text: the
+# words that reach the network (the reader's own cmdlets, programs, .NET types and methods, and each language's
+# libraries), the building of what it reads or runs from pieces, and running text it fetched or decoded.
+CODE_NET_WORDS = ("urllib", "urlopen", "requests", "httpx", "http", "https", "aiohttp", "socket", "websocket",
+                  "fetch", "xmlhttprequest", "ftplib", "smtplib", "smtp", "telnetlib", "paramiko", "pycurl",
+                  "webclient", "webrequest", "httpclient", "dns", "net.connect", "net.socket", "dgram", "axios",
+                  "superagent", "open-uri", "net::http", "file_get_contents", "fsockopen", "curl_exec")
+CODE_NET = re.compile(r"://|\\\\[\w.$-]+\\|\b(?:" + "|".join(re.escape(w) for w in sorted(
+    {*CODE_NET_WORDS, *NETWORK, *EXE_NET - {"git"}, *NET_METHODS - {"send", "connect"},
+     *(t.rsplit(".", 1)[-1] for t in NET_TYPES)}, key=len, reverse=True)) + r")\b", re.IGNORECASE)
+CODE_PIECES = re.compile(
+    r"fromhex|unhexlify|b64decode|b32decode|a85decode|base64|\batob\b|frombase64|codecs\.decode|"
+    r"\.decode\(\s*['\"](?:hex|rot)|\bchr\s*\(|fromcharcode|\[::-1\]|\.reverse\(\)|"
+    r"(['\"])[^'\"\n]*\1\s*\+\s*['\"]|\bpack\s*\(\s*['\"]H|\\x[0-9a-f]{2}|\\u[0-9a-f]{4}", re.IGNORECASE)
+CODE_RUN = re.compile(r"(?<![\w.$-])(?:exec|eval|compile|execfile|Function|instance_eval|class_eval|create_function)"
+                      r"\s*\(|\bnew\s+Function\b|\bvm\.run\w*|\brunpy\b|\b(?:Invoke-Expression|iex)\b", re.IGNORECASE)
 # The registry keys a command may read: installed programs and the Windows version.
 REGISTRY_READ = (r"hklm\software\microsoft\windows\currentversion\uninstall",
                  r"hklm\software\wow6432node\microsoft\windows\currentversion\uninstall",

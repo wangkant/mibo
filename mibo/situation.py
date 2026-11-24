@@ -239,9 +239,12 @@ def _observe(state: dict, name: str, origin: str, found, now: float) -> None:
 # ---------------------------------------------------------------- hosts and gates --
 
 def site_of(address: str) -> str:
-    """The platform a host or address belongs to: "www.youtube.com" and "youtu.be" are both "youtube.com"."""
+    """The platform a host or address belongs to: "www.youtube.com" and "youtu.be" are both "youtube.com". An IPv6
+    address, bracketed or bare, is its own host."""
     address = str(address or "").strip().lower()
-    host = (urlsplit(address).hostname or "") if "://" in address else address.split("/")[0].split(":")[0]
+    head = address.split("/")[0]
+    host = (urlsplit(address).hostname or "") if "://" in address else head[1:].split("]")[0] if head.startswith(
+        "[") else head if head.count(":") > 1 else head.split(":")[0]
     labels = [label for label in host.strip(".").split(".") if label]
     if len(labels) < 2 or labels[-1].isdigit():
         return host

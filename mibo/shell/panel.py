@@ -41,6 +41,7 @@ from ..crossing import downloaded
 from . import checkpoint, confine, filejob, files, guards, netguard, words
 from . import read as reading
 from . import run as running
+from .acts import RUNS_WHEN_STARTED
 from .acts import tier as tier_of
 from .grants import NEVER, Grants, known_folders, norm, under
 
@@ -105,6 +106,8 @@ class Shell:
         # again in that turn is refused with no second question; every other step of the turn goes on, and none
         # passes without a question but by what the person allowed themselves.
         self.said_no: dict[str, set[tuple]] = {}
+        # The files each turn's steps wrote, so a script among them that a later step runs is read as code (`_code`).
+        self.wrote: dict[str, set[str]] = {}
 
     def turn_on(self, conversation: str) -> bool:
         return self.cards.turn_on(conversation)
@@ -330,11 +333,7 @@ class Shell:
             self.log(command, cwd, read_, verdict, "use_bin")
             return {"status": "use_bin"}, context
         if verdict.action == "refuse":
-            refused_said = {lang: words.refused_said(read_, verdict, lang) for lang in ("zh", "en")}
-            self.log(command, cwd, read_, verdict, "refused", said=refused_said)
-            return {"status": "refused", "said": refused_said,
-                    "why": {lang: words.refused(verdict, lang) for lang in ("zh", "en")},
-                    "reasons": [a.why for a in verdict.reasons][:6]}, context
+            return self._refused(command, cwd, read_, verdict), context
         if mode == "read" and any(a.kind != "read" or a.write for a in read_.acts):
             # Read only: it reads files in the granted folders and nothing else, with no question to ask.
             self.log(command, cwd, read_, verdict, "read_mode", said=asked_said)
@@ -343,6 +342,16 @@ class Shell:
             self.last = cwd
         # The step as a no holds it: a write or an edit by what it would write too.
         step = ("step", command, cwd, hashlib.sha256(job["bytes"]).hexdigest()[:16] if job and "bytes" in job else "")
+        code = [] if verdict.action not in ("run", "ask") else await asyncio.to_thread(
+            self._code, read_, verdict, cwd, turn)
+        if code:
+            read_ = reading.Reading(read_.command, read_.cwd, read_.acts + code, read_.errors)
+            context.update(read=read_, tier=tier_of(read_.acts), online=guards.online(read_.acts))
+            never = [a for a in code if a.kind == "hidden"]
+            verdict = reading.Verdict("refuse" if never else "ask", never or verdict.reasons + code,
+                                      deletes=verdict.deletes, overwrites=verdict.overwrites, root=verdict.root)
+            if never:
+                return self._refused(command, cwd, read_, verdict), context
         if from_outside and verdict.action == "run":
             # A command or script taken from a page, a message or a file is asked even when it only reads.
             verdict = reading.Verdict("ask", [reading.Act("unknown", "from_outside",
@@ -386,6 +395,14 @@ class Shell:
                 self.log(command, cwd, read_, verdict, "not_passed", said=asked_said, how="review",
                          review=context["review"])
                 return {"status": "not_passed", "said": asked_said, "reason": passed.reason}, context
+        if verdict.action == "ask" and not context["how"] and not job:
+            # The reviewer's floor on a command's text (review.CMD_BLOCKED's credentials) holds for one asked with no
+            # review too: a program the reader cannot follow (robocopy, tar) naming a secret's place is refused.
+            from ..review import CMD_BLOCKED
+            secret = dict(CMD_BLOCKED)["credentials"].search(command)
+            if secret:
+                return self._refused(command, cwd, read_, reading.Verdict(
+                    "refuse", [reading.Act("secrets", "secrets", f"it names {secret.group()}")])), context
         if verdict.action == "ask" and not context["how"]:
             # Said in the chat in the app's own reading of the step, asked as its risk (`_risk`, cardwait.reaches).
             asked = await self._question(command, cwd, read_, verdict, card, asked_said, passed)
@@ -406,7 +423,47 @@ class Shell:
                 self.log(command, cwd, read_, again, "changed", said=asked_said)
                 return {"status": "changed", "said": asked_said}, context
             context["how"] = self.cards.how
+        if turn:
+            self.wrote.setdefault(turn, set()).update(
+                norm(p) for a in read_.acts for p in ([a.dest] if a.dest else []) + (a.paths if a.write else []))
+            while len(self.wrote) > 16:
+                self.wrote.pop(next(iter(self.wrote)))
         return None, context
+
+    def _refused(self, command: str, cwd: str, read_: reading.Reading, verdict: reading.Verdict) -> dict:
+        """A step refused, logged, with what it would have done and why, in the person's words."""
+        said = {lang: words.refused_said(read_, verdict, lang) for lang in ("zh", "en")}
+        self.log(command, cwd, read_, verdict, "refused", said=said)
+        return {"status": "refused", "said": said, "why": {lang: words.refused(verdict, lang) for lang in ("zh", "en")},
+                "reasons": [a.why for a in verdict.reasons][:6]}
+
+    def _code(self, read_: reading.Reading, verdict: reading.Verdict, cwd: str, turn: str) -> list:
+        """Code given as text, past what the reader sees (acts.CODE): a script this turn wrote, run now, with what its
+        text shows (psprograms.code_acts); and that, code on the command line, or a file that runs later
+        (acts.RUNS_WHEN_STARTED) after the turn read outside material (crossing.py), asked every time."""
+        from ..crossing import OUTSIDE, turn_read
+        from .psprograms import code_acts
+        # What this command writes itself counts, its code being in the command's own text.
+        now = {norm(p) for a in read_.acts for p in ([a.dest] if a.dest else []) + (a.paths if a.write else [])}
+        wrote = self.wrote.get(turn, set()) | now
+        code = []
+        for act in read_.acts:
+            if act.kind != "program" or act.what != "script":
+                continue
+            for name in act.paths or [w.strip("'\"") for w in act.name.split(" ")[1:] if not w.startswith("-")][:1]:
+                path = norm(os.path.join(cwd, name))
+                if path not in wrote:
+                    continue
+                text = read_.command
+                if path not in now and os.path.isfile(path):
+                    with open(path, encoding="utf-8", errors="replace") as f:
+                        text = f.read(1 << 18)
+                code += [reading.Act("program", "written", f"runs {name}, a script written in this task",
+                                     name=name, paths=[path]), *code_acts(text)]
+        if (code or any(a.what in ("inline", *RUNS_WHEN_STARTED) for a in read_.acts + verdict.reasons)) and turn_read(
+                self.workspace).get(OUTSIDE):
+            code.append(reading.Act("unknown", "read_outside", "it comes after the task read outside material"))
+        return code
 
     async def _question(self, command: str, cwd: str, read_: reading.Reading, verdict: reading.Verdict,
                         card: dict | None, asked_said: dict, passed) -> dict:

@@ -43,6 +43,10 @@ CASES = [
     ("把发票都读一下做成表", ("file", {"op": "read", "path": "~/Downloads/发票.pdf"}), "rule"),  # copy: voice
     # The real turns.
     ("帮我算一下 1+1", ("command", 'python -c "print(1+1)"', "~"), "review"),  # copy: voice
+    ("装了 python-docx 吗", ("command", 'python -c "import docx; print(docx.__version__)"', "~"), "review"),  # copy: voice
+    ("把照片名里的空格换成下划线", ("command", "python -c \"import os; [os.rename(f, f.replace(' ', '_')) for f in os.listdir('.')]\"", "~/Pictures"), "review"),  # copy: voice
+    ("node 是哪个版本", ("command", 'node -e "console.log(process.version)"', "~"), "review"),  # copy: voice
+    ("帮我建个 Node 项目", ("file", {"op": "write", "kind": "write", "path": "~/Documents/project/package.json"}), "review"),  # copy: voice
     ("用 Word 打开它", ("command", "Test-Path \"{programs}\\Microsoft Office\\root\\Office16\\WINWORD.EXE\"; Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\WINWORD.EXE'; Test-Path \"{local}\\Kingsoft\\WPS Office\"", "~"), "rule"),  # copy: voice
     ("开始菜单里有 DeepL 吗", ("command", "Get-ChildItem \"{roaming}\\" + MENU + "\",\"{data}\\" + MENU + "\" -Recurse -Include *eep*", "~"), "rule"),  # copy: voice
     ("看看 Office 装了什么", ("file", {"op": "list", "path": "{programs}/Microsoft Office"}), "rule"),  # copy: voice

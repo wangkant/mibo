@@ -59,13 +59,21 @@ APPDATA_LOOK = 4
 # settings, shell start-up folders, Startup, scheduled tasks.
 TREES = (("site-packages",), ("dist-packages",), ("node_modules",), ("program files",), ("program files (x86)",),
          ("programdata",))
-RUNS_PLACES = (*TREES, ("profile.d",), (".git", "hooks"), (".git", "config"), ("start menu", "programs",
-               "startup"), ("system32", "tasks"), ("windowspowershell",), (".vscode", "tasks.json"))
+RUNS_PLACES = (*TREES, ("profile.d",), (".git", "hooks"), (".git", "config"), (".git", "info", "attributes"),
+               ("start menu", "programs", "startup"), ("system32", "tasks"), ("windowspowershell",), (".vscode",))
 # Files that run when a shell, PowerShell or a drive starts.
 RUNS_NAMES = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".zshrc", ".zprofile", ".zshenv", ".zlogin",
               ".cshrc", ".tcshrc", ".kshrc", ".inputrc", "profile.ps1", "microsoft.powershell_profile.ps1",
               "microsoft.vscode_powershell_profile.ps1", "autorun.inf", "desktop.ini", "sitecustomize.py",
-              "usercustomize.py")
+              "usercustomize.py", ".gitattributes", ".gitmodules", "pip.ini", "pip.conf", ".envrc", ".npmrc")
+# A virtual environment's activation scripts (in its Scripts or bin folder), run each time it is activated.
+ACTIVATE = ("activate", "activate.bat", "activate.ps1", "activate.fish", "activate.csh", "activate.nu",
+            "activate_this.py")
+# A project's own tool files, run by the tools that build and test it (npm, make, pip, pytest, pre-commit), and a
+# new shortcut: never costly and never written by rule, they go to the reviewer on the person's words each time,
+# and are asked after the turn read outside material (shell/panel.py).
+PROJECT_FILES = ("package.json", "makefile", "gnumakefile", "pyproject.toml", "setup.py", "setup.cfg", "tox.ini",
+                 "noxfile.py", "conftest.py", ".pre-commit-config.yaml")
 
 # What is never run, as Settings and the card say it.
 NEVER = (
@@ -103,6 +111,39 @@ def parts_of(path: str) -> list[str]:
     """A `norm`ed path's folder and file names, lower case, with what Windows drops (trailing dots and spaces, a
     ::$DATA stream) dropped too."""
     return [p.split(":")[0].rstrip(". ") if i else p for i, p in enumerate(re.split(r"[\\/]+", path.lower())) if p]
+
+
+def link_names(path: str) -> list[str]:
+    """Every other name of a file that has more than one (hard links), `norm`ed, as Windows lists them
+    (FindFirstFileNameW): a secret reached by a second name is still the secret. [] for a file with one name."""
+    try:
+        if sys.platform != "win32" or os.stat(path).st_nlink < 2:
+            return []
+    except OSError:
+        return []
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.FindFirstFileNameW.restype = wintypes.HANDLE
+    k32.FindFirstFileNameW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
+                                       wintypes.LPWSTR]
+    k32.FindNextFileNameW.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD), wintypes.LPWSTR]
+    k32.FindClose.argtypes = [wintypes.HANDLE]
+    drive, names = os.path.splitdrive(path)[0], []
+    size = wintypes.DWORD(32768)
+    buf = ctypes.create_unicode_buffer(size.value)
+    handle = k32.FindFirstFileNameW(path, 0, ctypes.byref(size), buf)
+    if handle in (None, wintypes.HANDLE(-1).value):
+        return []
+    try:
+        while True:
+            names.append(norm(drive + buf.value))
+            size = wintypes.DWORD(32768)
+            if not k32.FindNextFileNameW(handle, ctypes.byref(size), buf):
+                break
+    finally:
+        k32.FindClose(handle)
+    return [n for n in names if n != path]
 
 
 def holds(parts: list[str], run: tuple) -> int:
@@ -242,6 +283,9 @@ class Places:
         if any(under(path, own) for own in (self.home, self.package, self.python)):
             return "app"
         parts = parts_of(path)
+        # A file's other names, wherever this one is: a second name never makes a secret readable.
+        if any(self.secret(other, parts_of(other)) or under(other, self.home) for other in link_names(path)):
+            return "secrets"
         if self.temp and under(path, self.temp):
             return ""
         if not write and names and not self.secret(path, parts, SECRET_DIRS[:-1]):
@@ -289,14 +333,16 @@ class Places:
         if hit:
             return f"{os.sep.join(hit)} runs or loads what is written there"
         if parts and parts[-1] in RUNS_NAMES:
-            return f"{parts[-1]} runs when a shell, PowerShell or a drive starts"
+            return f"{parts[-1]} runs when a shell, PowerShell, Git, pip or a drive starts"
+        if len(parts) > 2 and parts[-1] in ACTIVATE and parts[-2] in ("scripts", "bin"):
+            return "a virtual environment runs it each time it is activated"
         if len(parts) <= (3 if unc else 2):
             return "a drive's root runs what is written there when the drive is opened"
         if not unc and parts[1] == "windows":
             return "Windows' own folder runs what is written there"
         if any(under(path, p) for p in self.startup) or os.path.dirname(path) in self.path_dirs:
             return "a folder on PATH or PowerShell's own profile runs what is written there"
-        if os.path.isfile(path) and os.path.splitext(path)[1] in RUNS_LATER:
+        if os.path.isfile(path) and os.path.splitext(path)[1] in RUNS_LATER and parts[-1] not in PROJECT_FILES:
             return "it replaces a file that runs"
         if os.path.splitext(path)[1] in RUNS_LATER and _program_folder(os.path.dirname(path)):
             return "a program's own folder loads what is written beside it"

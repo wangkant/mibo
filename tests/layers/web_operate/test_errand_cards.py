@@ -203,7 +203,8 @@ def test_an_unanswered_card_leaves_the_errand_waiting_and_its_later_answer_is_ke
 @pytest.mark.browser
 @pytest.mark.slow
 def test_a_press_that_saves_to_the_site_itself_goes_only_on_the_reviewers_pass(creator_page):
-    # Not passed, carrying nothing of theirs: not sent, and nobody asked (web/opheld.py _cancels).
+    # Not passed, carrying nothing of theirs: not sent, nobody asked, and the press reported as not done
+    # (web/opheld.py _cancels).
     errand = Errand(creator_page.page, tmp=creator_page.tmp)
 
     async def go():
@@ -214,7 +215,8 @@ def test_a_press_that_saves_to_the_site_itself_goes_only_on_the_reviewers_pass(c
         await errand.hands.close()
         return pressed
     pressed = creator_page.run(go())
-    assert "[not sent]" in pressed["line"] and errand.cards == [] and len(errand.reviews) == 1
+    assert pressed["status"] == "not_done" and "[not done]" in pressed["line"]
+    assert errand.cards == [] and len(errand.reviews) == 1
     assert posted("/api/pin") == []
 
 

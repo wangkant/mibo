@@ -38,6 +38,7 @@ from pathlib import Path
 
 from ..storage import atomic_write_text
 from . import confine
+from .acts import CODE_SIGNS
 from .confine import COMMANDS_SID, DWORD, GUARD_SID, LPWSTR, OFFLINE_SID, Unconfined, _api, _done, _ok
 
 RECORD = ("runtime", "desktop", "guards.json")
@@ -663,7 +664,7 @@ ONLINE_KINDS = ("network", "system", "unknown")
 
 def online(acts: list) -> bool:
     """Whether a command read as `acts` runs with the network and network tools' sign-ins (confine.sids)."""
-    return any(a.kind in ONLINE_KINDS for a in acts)
+    return any(a.kind in ONLINE_KINDS and a.what not in CODE_SIGNS for a in acts)
 
 
 def refused_line(err: str, tier: str, online: bool, home: Path) -> str:

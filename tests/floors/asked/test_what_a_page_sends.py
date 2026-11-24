@@ -12,6 +12,7 @@ only what is named in `passes`, and every card is answered no. Nothing past this
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
@@ -120,8 +121,9 @@ def site(tmp_path):
         pytest.skip(f"no headless browser: {missing}")
     page = loop.run_until_complete(browser.new_page())
 
-    def run(mode: str, steps: list[dict], passes=()) -> SimpleNamespace:
-        """The page at #mode, each step done in turn; the cards shown (each answered no) and the reviews asked."""
+    def run(mode: str, steps: list[dict], passes=(), said: str = SAID) -> SimpleNamespace:
+        """The page at #mode, each step done in turn, the person having said `said`; the cards shown (each answered
+        no) and the reviews asked."""
         out = SimpleNamespace(cards=[], reviews=[], results=[])
 
         async def ask(card):
@@ -134,7 +136,7 @@ def site(tmp_path):
             return review.Verdict("go" if any(p in values for p in passes) else "ask", "stand-in", "review")
         from mibo.web.tabs import PlaywrightTab
         hands = operate.Hands(PlaywrightTab(page), ask=ask, allowed=gate.Allowed(tmp_path), attended=lambda: True,
-                              review=judge, said=lambda: SAID)
+                              review=judge, said=lambda: said)
 
         async def go():
             Site.got = []
@@ -165,6 +167,16 @@ def test_no_address_lets_a_press_past_the_reviewer(site):
         run = site(mode, [{"do": "click", "on": ("button", "完成")}])  # copy: voice
         assert received(path) == [], mode
         assert any((r.get("request") or {}).get("address", "").endswith(path) for r in run.reviews), mode
+
+
+def test_a_press_the_review_does_not_pass_did_not_happen_and_one_they_asked_for_is_asked(site):
+    """(2026-11-23 review of 0368fcc: a press whose post the review did not pass was cancelled and reported as done.)"""
+    run = site("log", [{"do": "click", "on": ("button", "完成")}])  # copy: voice
+    assert received("/api/log/transfer") == [] and run.cards == []
+    assert run.results[0]["status"] == "not_done" and "tell them it was not done" in run.results[0]["line"]
+    run = site("log", [{"do": "click", "on": ("button", "完成")}], said="在 127.0.0.1 上点完成")  # copy: voice
+    assert received("/api/log/transfer") == [] and len(run.cards) == 1
+    assert "/api/log/transfer" in json.dumps(run.cards[0], ensure_ascii=False)
 
 
 def test_a_choice_that_changes_a_setting_is_never_free(site):

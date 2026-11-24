@@ -6,9 +6,13 @@ import os
 import re
 from urllib.parse import urlsplit
 
+from .acts import Act
 from .paths import _base, _local_host
 from .psnodes import _bound, _plain_args
 from .pstables import (
+    CODE_NET,
+    CODE_PIECES,
+    CODE_RUN,
     EXE_INSTALL,
     EXE_NET,
     EXE_NEVER,
@@ -32,6 +36,19 @@ SENDING = ("-d", "--data", "-f", "--form", "-t", "--upload-file", "-x", "--reque
 SENDING_PREFIXES = ("--data", "-d", "-f", "-t", "-h", "-u", "-b")
 # The readers among EXE_READ that name files to read.
 FILE_READERS = ("findstr", "tree", "fc", "comp", "more", "sort")
+
+
+def code_acts(code: str) -> list[Act]:
+    """What code given as text (on the command line, or in a script written this turn) shows it does past running:
+    text it fetched or decoded run as code (never done), the network reached (asked every time; it runs online on
+    the person's yes), what it reads or runs built from pieces (asked every time)."""
+    net, pieces = CODE_NET.search(code), CODE_PIECES.search(code)
+    if CODE_RUN.search(code) and (net or pieces):
+        return [Act("hidden", "download_run", "runs code it fetched or decoded as it runs")]
+    host = re.search(r"://([^/\s'\"?#]+)", code)
+    return ([Act("network", "code", "its code reaches the network", host=host.group(1) if host else "?",
+                 sends=True)] if net else []) + (
+        [Act("unknown", "pieces", "its code builds what it reads or runs from pieces")] if pieces else [])
 
 
 class Programs:
@@ -76,10 +93,12 @@ class Programs:
         if args is None:
             self.add("hidden", "hidden", f"runs {base} with arguments computed as it runs")
         elif any(a in INLINE_CODE for a in words):
-            # Code written out on the command line hides nothing: the reader cannot read it, so it is a program run
-            # whose code the reviewer and the question show.
+            # Code written out on the command line hides nothing: the reader cannot read it, so it is a code run
+            # whose code the reviewer and the question show, under a change's limits (acts.tier), with what its
+            # text shows (code_acts).
             self.add("program", "inline", f"runs {base} with this code: {' '.join(args)[:300]}",
                      name=f"{base} {' '.join(args)}"[:160])
+            self.acts += code_acts(" ".join(args))
         elif words[:2] == ["-m", "pip"]:
             self.pip(words[2:], base)
         elif words and words[0] in ("--version", "-v"):

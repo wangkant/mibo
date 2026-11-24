@@ -210,9 +210,11 @@ def held(area: str, action: dict, words, read: dict) -> str:
 
 
 def downloaded(path: str) -> bool:
-    """A program or a script that came from the web: a runnable file whose Mark of the Web names the internet zone
-    (Windows' Zone.Identifier, the browsers' origin attribute elsewhere)."""
-    if os.path.splitext(str(path))[1].lower() not in RUNNABLE:
+    """A program or a script that came from the web: a runnable file, or one that runs code or changes settings when
+    its own program opens it (a macro document, a .reg: pstables.OPEN_RISKY), whose Mark of the Web names the internet
+    zone (Windows' Zone.Identifier, the browsers' origin attribute elsewhere)."""
+    from .shell.pstables import OPEN_RISKY
+    if os.path.splitext(str(path))[1].lower() not in RUNNABLE + OPEN_RISKY:
         return False
     try:
         with open(f"{path}:Zone.Identifier", encoding="utf-8", errors="replace") as mark:

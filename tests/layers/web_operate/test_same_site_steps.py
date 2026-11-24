@@ -187,7 +187,7 @@ def test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called(tran
     async def go():
         await translator.page.goto(translator.address)
         await run.hands.look()
-        # An innocent name whose press orders: the reviewer reads what it sends; not passed, it is not sent.
+        # An innocent name whose press orders: the reviewer reads what it sends; not passed, it is not sent and not done.
         done = await run.hands.act({"do": "click", "id": run.ref("button", "完成")})
         await run.hands.look()
         # A paying name whose request looks like statistics: judged by the control before any press, no reviewer.
@@ -195,7 +195,7 @@ def test_a_costly_act_is_asked_whatever_its_button_or_its_request_is_called(tran
         await run.hands.close()
         return done, paid
     done, paid = translator.run(go())
-    assert "[not sent]" in done["line"] and paid["status"] == "declined"
+    assert done["status"] == "not_done" and "[not done]" in done["line"] and paid["status"] == "declined"
     assert [c["kind"] for c in run.cards] == ["order"]
     assert any((r.get("request") or {}).get("address", "").endswith("/api/order") for r in run.reviews)
     assert posted("/api/order") == [] and not any('"order"' in body for body in posted("/web/statistics"))

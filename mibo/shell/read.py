@@ -27,7 +27,7 @@ from pathlib import Path
 from ..crossing import downloaded
 from . import run as running
 from .acts import ASK_KINDS, COMMAND_MAX, NEVER_KINDS, Act, Reading, download_run, never
-from .grants import RUNS_LATER, Grants, known_folders, norm, under
+from .grants import PROJECT_FILES, RUNS_LATER, Grants, known_folders, norm, under
 from .paths import LIST_MOST, _base, _matches, _walk, _wild
 from .psnodes import _items
 from .pssort import Sorter
@@ -332,7 +332,11 @@ def _system_places(act: Act, places) -> list[Act]:
 
 def _new_runnable(act: Act, path: str) -> Act | None:
     """A new file that runs when it is opened (a script, a batch file), written in an ordinary folder: the
-    reviewer's, on the person's words; asked when it does not pass. It runs only when someone starts it."""
+    reviewer's, on the person's words; asked when it does not pass. It runs only when someone starts it. So is a
+    project's tool file (grants.PROJECT_FILES), new or replaced: its tools run it when the project is built or tested."""
+    if (act.write or path == act.dest) and os.path.basename(path).lower() in PROJECT_FILES:
+        return Act("program", "project_file", f"writes {os.path.basename(path)}, which the project's tools run",
+                   paths=[path], name=os.path.basename(path), write=True)
     if (act.write or path == act.dest) and not os.path.exists(path) and os.path.splitext(path)[1].lower() in RUNS_LATER:
         return Act("program", "new_runnable", f"writes {os.path.basename(path)}, a file that runs when it is opened",
                    paths=[path], name=os.path.basename(path), write=True)

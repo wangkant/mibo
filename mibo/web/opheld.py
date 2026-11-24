@@ -201,6 +201,14 @@ class Holding:
                 and not any(bears(texts, t["text"]) for t in self.typed)
                 and not gate.hands_over("\n".join(leaves_of(request)[2])))
 
+    def _asked_for(self, pressed: dict) -> bool:
+        """The person's own words name this press or choice and its site: what it sends is asked, not cancelled."""
+        from ..crossing import named
+        said = self.said()
+        sites = pressed.get("sites") or {pressed.get("site")}
+        return named(pressed.get("button") or pressed.get("field") or "", said) and any(
+            named(site or "", said, site=True) for site in sites)
+
     def _carries(self, params: dict) -> list[dict]:
         """The typed entries a paused request carries, in its body or address: a GET only when it goes to
         another site than the one the text was typed on (a new tab, a fetch). The person's own words typed on a site
@@ -232,12 +240,18 @@ class Holding:
         """The requests held since the last look, each by its act's one card: {"status", "line", "kind"};
         "declined" when the person said no (that request is dropped), "waiting" when the card waits for an
         answer. The requests one act holds (a press's submission and its retries, what a form saves twice) go as
-        its first card was answered (`kept`); a press confirmed meanwhile never lets out what was held before it."""
-        lines, ended = [], {"status": "ok", "kind": ""}
+        its first card was answered (`kept`); a press confirmed meanwhile never lets out what was held before it.
+        "not_done" when what the press or choice sends was not passed and none of it went; when some of it went,
+        what was not passed (its statistics) was only not sent."""
+        lines, ended, results = [], {"status": "ok", "kind": ""}, []
         while self._holding:
             # It leaves the list only once answered: if this step breaks off, close() still drops it.
-            held = await self._held_card(*self._holding[0])
+            results.append(await self._held_card(*self._holding[0]))
             self._holding.pop(0)
+        went = any(held["status"] == "ok" and held["line"].endswith("and it went") for held in results)
+        for held in results:
+            if held["status"] == "not_done" and went:
+                held = {**held, "status": "ok", "line": held["quiet"]}
             lines.append(held["line"])
             if held["status"] != "ok":
                 ended = {k: held[k] for k in ("status", "kind", "result") if k in held}
@@ -269,12 +283,18 @@ class Holding:
             await self._drop(params, top)
             return {"status": "declined", "kind": card["kind"], "line": f"[declined] {what[1]}; {passed}"}
         answer = kept if kept is not None else {"yes": True} if decision == "go" else None
-        if answer is None and decision == "ask" and passed and self._cancels(card, params.get("request") or {}, top):
+        pressed = next((c for c in carried if c.get("watch") or c.get("choice")), None)
+        if answer is None and decision == "ask" and passed and self._cancels(card, params.get("request") or {}, top)                 and not (pressed and self._asked_for(pressed)):
             # The reviewer did not pass it, and nothing of theirs is in it: not sent, and nobody asked (cardwait.py).
+            # What the model's own press or choice sends is that act: it did not happen, and the person is told.
             await self._drop(params, top)
             path = urlsplit(str((params.get("request") or {}).get("url") or "")).path
-            return {"status": "ok", "kind": card["kind"],
-                    "line": f"[not sent] the review did not pass the page's request to {path}, so it was not sent"}
+            quiet = f"[not sent] the review did not pass the page's request to {path}, so it was not sent"
+            if pressed:
+                return {"status": "not_done", "kind": card["kind"], "quiet": quiet,
+                        "line": f"[not done] {what[1]}, and the review did not pass it, so nothing was sent to "
+                                f"{path} and the change did not take effect; tell them it was not done"}
+            return {"status": "ok", "kind": card["kind"], "line": quiet}
         if answer is None:
             try:
                 card["picture"] = await asyncio.wait_for(self.page.screenshot(), 3)

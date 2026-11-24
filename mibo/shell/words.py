@@ -8,7 +8,7 @@ import shutil
 import sys
 
 from . import office
-from .acts import NEVER_KINDS, Act, Reading
+from .acts import CODE_SIGNS, NEVER_KINDS, Act, Reading
 from .grants import known_folders, norm
 from .read import Verdict
 
@@ -97,6 +97,9 @@ PHRASES = {
     "program": ("运行程序 {n}", "Running {n}", "Ran {n}"),
     "inline": ("运行命令中写出的代码", "Running code written in the command", "Ran code written in the command"),
     "script": ("运行脚本 {n}", "Running the script {n}", "Ran the script {n}"),
+    "written": ("运行本次写入的脚本 {n}", "Running the script {n} written in this task",
+                "Ran the script {n} written in this task"),
+    "code": ("由代码连接 {n}", "Its code reaching {n}", "Its code reached {n}"),
     "stop": ("关闭程序", "Closing a program", "Closed a program"),
     "clipboard": ("读取剪贴板", "Reading the clipboard", "Read the clipboard"),
     "setting": ("更改 Windows 设置", "Changing a Windows setting", "Changed a Windows setting"),
@@ -140,7 +143,7 @@ def phrase(act: Act, lang: str, form: str) -> str:
     if act.dest:
         dest = quote(os.path.basename(act.dest.rstrip("\\/")), lang) if act.what == "rename" else (
             quote(folder_name(act.dest, lang), lang))
-    if act.what in ("net", "share", "browse"):
+    if act.what in ("net", "share", "browse", "code"):
         name = _host(act, lang) or os.path.basename(act.name.split(" ")[0])
     else:
         name = program_name(act) if act.name else ""
@@ -159,7 +162,7 @@ def summary(reading: Reading, lang: str, form: str) -> str:
         return {"ing": "Running a command", "ed": "Ran a command"}.get(
             form, "Run a command whose effect cannot be told first")
     # A part that cannot be read leads, so a card's title never makes a delete look like a lookup.
-    if any(a.kind == "unknown" and not phrase(a, lang, form) for a in reading.acts):
+    if any(a.kind == "unknown" and a.what not in CODE_SIGNS and not phrase(a, lang, form) for a in reading.acts):
         parts.insert(0, "执行无法预先解析的操作" if lang == "zh" else (
             "Did something that could not be read first" if form == "ed" else "Doing something that cannot be read first"))
     if lang == "zh":
@@ -173,6 +176,18 @@ def size(n: int, lang: str) -> str:
         if n >= step:
             return f"{n / step:.1f} {unit}"
     return f"{n} 字节" if lang == "zh" else f"{n} bytes"
+
+
+# What a system change points at, which its question names: a link's or a junction's target, a scheduled task's
+# action, a Run key's command, a hard link's file.
+POINTS = re.compile(r"""(?:-Target|-Execute|-Argument|/tr|/d)\s+("[^"]*"|'[^']*'|[^\s)]+)|"""
+                    r"""\bhardlink\s+create\s+\S+\s+("[^"]*"|\S+)|\bmklink\b.*?\s("[^"]*"|\S+)\s*$|"""
+                    r"""\\run(?:once)?\b.*?-Value\s+("[^"]*"|'[^']*'|[^\s)]+)""", re.I)
+
+
+def points_to(command: str) -> list[str]:
+    """What a command's system change points at (POINTS), as written."""
+    return list(dict.fromkeys(next(g for g in m.groups() if g).strip("'\"") for m in POINTS.finditer(command)))
 
 
 def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
@@ -236,6 +251,9 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
             host = _host(act, lang) or ("网络" if zh else "the network")
             if act.what == "browse":
                 line = f"在浏览器中打开 {host}" if zh else f"Open {host} in your browser"
+            elif act.what == "code":
+                line = f"代码会连接网络（{host}），同意后才可联网运行" if zh else (
+                    f"The code reaches the network ({host}); it runs online only with your yes")
             elif act.sends:
                 line = f"通过网络向 {host} 发送数据" if zh else f"Send data over the network to {host}"
             else:
@@ -250,11 +268,19 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
                     f"Write where it runs or is loaded later by itself: {_places(act, lang)}")
         elif act.what == "system":
             line = f"更改系统：{act.name or act.why}" if zh else f"Change the system: {act.name or act.why}"
+            aims = points_to(reading.command)
+            if aims and line not in lines:
+                lines.append(line)
+                line = ("指向：" + "、".join(aims)) if zh else ("It points to: " + ", ".join(aims))
         elif act.kind == "program":
             if act.what == "new_runnable":
                 line = f"新建可运行的文件：{act.name}" if zh else f"Make a file that runs when opened: {act.name}"
             elif act.what == "inline":
                 line = f"运行命令行中写出的代码：{act.name}" if zh else f"Run the code written in the command: {act.name}"
+            elif act.what == "project_file":
+                line = f"写入项目工具会运行的文件：{act.name}" if zh else f"Write a file the project's tools run: {act.name}"
+            elif act.what == "written":
+                line = f"运行本次任务中写入的脚本：{act.name}" if zh else f"Run a script written in this task: {act.name}"
             elif act.what == "stop":
                 line = f"关闭正在运行的程序：{act.name}" if zh else f"Close a running program: {act.name}"
             elif act.what == "script":
@@ -268,6 +294,12 @@ def card_lines(reading: Reading, verdict: Verdict, lang: str) -> list[str]:
         elif act.what == "unresolved":
             line = "此命令在运行时才确定处理哪些文件，无法预先列出" if zh else (
                 "Which files it works on is decided only as it runs, so it cannot be known first")
+        elif act.what == "pieces":
+            line = "代码由片段拼出要读取或运行的内容，无法预先看清" if zh else (
+                "The code builds what it reads or runs from pieces, so it cannot be seen first")
+        elif act.what == "read_outside":
+            line = "本次任务已读取网页、消息或外部文件，此步骤可能受其内容影响" if zh else (
+                "This task has read a page, a message or an outside file, and this step may follow what it said")
         elif act.what == "from_outside":
             line = "此命令的内容来自本次读取的网页、消息或文件，并非你的消息" if zh else (
                 "This command's text comes from a page, message or file read in this task, not from your messages")

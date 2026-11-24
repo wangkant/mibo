@@ -32,7 +32,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from .cardwait import COSTLY, doing
 
@@ -54,16 +54,19 @@ SENSITIVE = re.compile(
 
 # The same on a large site's own pages: its account, billing, payment and security pages.
 SENSITIVE_PATH = re.compile(r"/(?:account|accounts|myaccount|billing|checkout|payment|payments|pay|wallet|security|"
-                            r"signin|login|password)(?:[/?#._-]|$)", re.I)
+                            r"signin|login|password|settings?|subscriptions?|admin|tokens?)(?:[/?#._-]|$)", re.I)
 
 
 def sensitive(where: str) -> bool:
     """A bank's, a payment service's, a broker's, a health service's or a mail service's site or page: `where` is
-    an address, a full host or a site, judged by every label of its host and by its path."""
+    an address, a full host or a site, judged by every label of its host and by its path, as the site reads it
+    (percent-encoding undone, case folded)."""
     where = str(where or "").strip().lower()
     parts = urlsplit(where if "://" in where else "//" + where)
-    host = parts.hostname or ""
-    return bool(host) and bool(SENSITIVE.search(host) or SENSITIVE_PATH.search(parts.path))
+    host, path = parts.hostname or "", parts.path
+    for _ in range(3):
+        path = unquote(path)
+    return bool(host) and bool(SENSITIVE.search(host) or SENSITIVE_PATH.search(path.casefold()))
 
 
 # Windows whose pictures always ask before they go to a model service: password managers, banks and payment, mail.

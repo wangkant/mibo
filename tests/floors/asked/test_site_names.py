@@ -60,3 +60,17 @@ def test_only_a_whole_span_of_their_words_is_theirs_to_type():
     assert crossing.own_words("你好", said) and crossing.own_words("deepl", said)  # copy: voice
     for typed in ("1", "ok", "然", "e"):  # copy: voice
         assert not crossing.own_words(typed, said), typed
+
+
+def test_a_settings_subscription_admin_or_tokens_page_is_sensitive_however_its_address_is_written():
+    """(2026-11-23 review of 0368fcc: /settings/privacy, /subscription/cancel, github.com/settings/tokens,
+    /admin/users/1/delete and /%61ccount were ordinary pages, and [::1] was the site "[".)"""
+    for page in ("https://example.com/settings/privacy", "https://example.com/subscription/cancel",
+                 "https://github.com/settings/tokens", "https://example.com/admin/users/1/delete",
+                 "https://example.com/%61ccount", "https://example.com/%2561ccount/x", "https://example.com/BILLING",
+                 "https://example.com/user/security"):
+        assert acting.sensitive(page), page
+    assert not acting.sensitive("https://example.com/settlement-report") and not acting.sensitive(
+        "https://example.com/blog/admins-guide")
+    assert [site_of(a) for a in ("[::1]", "[::1]:8080/x", "http://[::1]:8080/x", "fe80::1")] == ["::1", "::1", "::1",
+                                                                                                  "fe80::1"]

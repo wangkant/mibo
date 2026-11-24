@@ -27,15 +27,16 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
-from urllib.parse import unquote
+from urllib.parse import urlsplit
+from urllib.request import url2pathname
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from .. import turnon
 from ..cardwait import Card
-from ..crossing import RUNNABLE, downloaded
-from ..shell.pstables import EXE_INSTALL, EXE_NET, EXE_NEVER, INTERPRETERS
+from ..crossing import downloaded
+from ..shell.pstables import EXE_INSTALL, EXE_NET, EXE_NEVER, INTERPRETERS, OPEN_RISKY
 from ..shell.tool import NAME as SHELL_TOOL
 from . import grants as g
 
@@ -121,23 +122,31 @@ def never_named(program: str) -> tuple[str, str] | None:
     return None
 
 
-def what_runs(app) -> tuple[list[str], str]:
+def what_runs(app) -> tuple[list[str], str, str]:
     """What starting an entry of Start or the Desktop runs: the files (the entry itself, a shortcut's target, a .url's
-    file, the scripts a shortcut gives its program), and the command line when its program is an interpreter or a
-    system tool given arguments, which is a command, not the program the person named ("" otherwise)."""
+    file, the files a shortcut gives its program that run or open in a program of their own), the command line when
+    its program is an interpreter or a system tool given arguments, or Explorer handed an address, which is a
+    command, not the program the person named ("" otherwise), and the web address a .url opens ("" otherwise). A
+    file URL is read as Windows reads it (url2pathname); one naming another computer is that computer's share."""
     from . import win32
-    files, args = [f for f in (app.file, app.target) if f], ""
+    files, args, web = [f for f in (app.file, app.target) if f], "", ""
     if app.file.lower().endswith(".url"):
-        aim = re.search(r"^\s*URL\s*=\s*file:/*(.+?)\s*$", Path(app.file).read_text(encoding="utf-8", errors="replace"),
+        aim = re.search(r"^\s*URL\s*=\s*(.+?)\s*$", Path(app.file).read_text(encoding="utf-8", errors="replace"),
                         re.M | re.I)
-        files += [unquote(aim.group(1))] if aim else []
+        address = urlsplit(aim.group(1) if aim else "")
+        if address.scheme.lower() == "file":
+            host = "" if address.netloc.lower() in ("", "localhost") else "\\\\" + address.netloc
+            files.append(host + url2pathname(address.path))
+        elif address.scheme.lower() in ("http", "https"):
+            web = address.geturl()
     elif app.file.lower().endswith(".lnk"):
         args = win32.link_arguments(app.file).strip()
         files += [w.strip('"') for w in re.findall(r'"[^"]+"|\S+', args)
-                  if os.path.splitext(w.strip('"'))[1].lower() in RUNNABLE]
+                  if os.path.splitext(w.strip('"'))[1].lower() in OPEN_RISKY]
     base = Path(app.target).stem.lower()
-    tool = base in INTERPRETERS or base in EXE_NEVER or base in EXE_INSTALL or base in EXE_NET
-    return files, f"{app.target} {args}" if tool and args else ""
+    tool = base in INTERPRETERS or base in EXE_NEVER or base in EXE_INSTALL or base in EXE_NET or (
+        base == "explorer" and re.search(r"://|url\.dll|^\s*\\\\", args, re.I))
+    return files, f"{app.target} {args}" if tool and args else "", web
 
 
 def said(action: dict, node, status: str, outside: bool, lang: str) -> str:
@@ -346,7 +355,17 @@ class Desk:
             self.grants.log({"do": "use", "program": app.name, "exe": app.target, "status": "refused", "line": why[1]})
             return {"status": "refused", "line": f"[refused] {app.name} is never operated: {why[1]}",
                     "why": {"zh": why[0], "en": why[1]}}
-        files, command = what_runs(app)
+        files, command, web = what_runs(app)
+        if any(f.startswith(("\\\\", "//")) for f in files):
+            # Another computer's share: what it holds is not this computer's to start.
+            self.grants.log({"do": "use", "program": app.name, "exe": app.file or app.target, "status": "refused",
+                             "line": "on another computer"})
+            return {"status": "refused", "line": f"[refused] {app.name} starts a file on another computer, which is "
+                                                 f"never started for them"}
+        if web:
+            # A link to a page: opened in the app's browser as any link is, never by Windows' shell.
+            return {"status": "unfound", "line": f"{app.name} is a link to the page {web}, not a program. If it is "
+                                                 f"what they asked for, open that address in the browser as any link."}
         if any(downloaded(f) for f in files):
             # What came from the web is never started by the character (crossing.py), whatever shortcut names it.
             self.grants.log({"do": "use", "program": app.name, "exe": app.file or app.target, "status": "refused",
