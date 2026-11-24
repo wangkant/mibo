@@ -74,7 +74,7 @@ def test_two_from_a_site_at_most_unless_too_few_sites_have_something_and_never_o
     assert all(a != b for a, b in pairwise(shown)), shown
 
 
-def test_the_round_stops_rather_than_show_one_site_twice_running(shelf):
+def test_the_samples_stop_rather_than_show_one_site_twice_running(shelf):
     for n in range(5):
         shelf.add(f"A story from the kitchen number {n}", site="kitchen.example", text=SUMMARY)
     shelf.add("A story from the pitch", site="pitch.example", text=SUMMARY)
@@ -84,7 +84,7 @@ def test_the_round_stops_rather_than_show_one_site_twice_running(shelf):
     assert len(sites) == 5 and not any(a == b for a, b in pairwise(sites))
 
 
-def test_the_same_library_gives_the_same_round_and_an_empty_one_none(shelf):
+def test_the_same_library_gives_the_same_samples_and_an_empty_one_none(shelf):
     assert first(shelf, ["food"]) == []
     for n in range(4):
         for k, title in enumerate(OTHERS):

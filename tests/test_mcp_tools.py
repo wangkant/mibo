@@ -255,7 +255,7 @@ class _Turn:
         self.workspace = SimpleNamespace(home=home, _chat_lock=asyncio.Lock(), config=dict,
                                          _main=SimpleNamespace(conversation="main", history=[]), _chats={},
                                          question_said=lambda conversation, entry: None,
-                                         answer_said=lambda ident, state, line="": None)
+                                         answer_said=lambda ident, state, line="", pending=False: None)
         self.home = home
 
     async def __aenter__(self):
