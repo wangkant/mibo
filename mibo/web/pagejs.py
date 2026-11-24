@@ -608,7 +608,7 @@ FACTS_JS = r"""function() {
   }
   const money = ((e.innerText || '') + ' ' + (e.parentElement ? e.parentElement.innerText : '')).match(
     /(?:[$€£¥￥₹₩]\s?\d[\d.,]*|\d[\d.,]*\s?(?:USD|EUR|GBP|JPY|CNY|RMB|元|円))/);
-  const testIds = ['data-testid', 'data-test', 'data-qa'].map((a) => e.getAttribute(a) || '').join(' ');
+  const testIds = ['data-testid', 'data-test', 'data-qa', 'data-e2e'].map((a) => e.getAttribute(a) || '').join(' ');
   // Ours: where a link goes, when it goes to another page (not "#", not a script).
   const anchor = e.closest('a[href]');
   const away = anchor && /^https?:/.test(anchor.href) && anchor.href.split('#')[0] !== location.href.split('#')[0] ? anchor.href : '';

@@ -13,7 +13,7 @@ import re
 from typing import Any
 from urllib.parse import urljoin, urlsplit
 
-from . import players
+from . import platforms, players
 from .ingestion import _RESERVED_LOCAL_NAMES, MAX_IMAGE_PIXELS, _is_internal_ip, _resolve_public_target
 from .library import PICTURE_MAX_BYTES, TEXT_MAX
 from .players import player_for
@@ -26,12 +26,14 @@ PICTURE_FETCH_MAX = 8_000_000
 JPEG_PIXELS_MAX = 120_000_000
 DESCRIPTION_MAX = 1000
 _KNOWN_SITES = {"bilibili.com": "Bilibili", "b23.tv": "Bilibili", "youtube.com": "YouTube",
-                "youtu.be": "YouTube"}
+                "youtu.be": "YouTube", "douyin.com": "抖音", "iesdouyin.com": "抖音", "tiktok.com": "TikTok"}
 _VIDEO_TYPES = {"VideoObject"}
 _ARTICLE_TYPES = {"Article", "NewsArticle", "BlogPosting", "ReportageNewsArticle", "TechArticle",
                   "ScholarlyArticle", "AnalysisNewsArticle"}
 _POST_TYPES = {"SocialMediaPosting", "DiscussionForumPosting"}
 _ISO_DURATION = re.compile(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?")
+# A person's own page on a site, where a breadcrumb's step before the page names who posted it.
+_PERSON_PATH = re.compile(r"/(?:user|users|u|people|profile|channel)/[^/]+/?|/@[^/]+/?")
 
 # ---------------------------------------------------------------- addresses
 
@@ -164,6 +166,31 @@ def _embed(data: dict, meta: dict[str, str], main: dict, url: str) -> str:
     return embed
 
 
+def _untailed(title: str, names: list[str]) -> str:
+    """The title without the site's name after it ("… - 抖音", "… | TikTok")."""
+    for name in filter(None, names):
+        cut = re.sub(rf"\s*[-|–—_·]\s*{re.escape(name)}\s*$", "", title)
+        if cut != title and cut.strip():
+            return cut.strip()
+    return title
+
+
+def _crumb_author(objects: list[dict], url: str) -> str:
+    """Who posted the page, by its breadcrumb: the step before the page itself when it is a person's page."""
+    def address(step: Any) -> str:
+        item = step.get("item") if isinstance(step, dict) else None
+        return _text(item.get("@id") or item.get("url") if isinstance(item, dict) else item, 2000)
+
+    here = (players.canonical(url) or urlsplit(url)._replace(query="", fragment="").geturl()).rstrip("/")
+    for crumbs in (o.get("itemListElement") for o in objects if "BreadcrumbList" in _types(o)):
+        steps = [step for step in crumbs if isinstance(step, dict)] if isinstance(crumbs, list) else []
+        if len(steps) >= 2 and address(steps[-1]).rstrip("/") == here:
+            before, item = steps[-2], steps[-2].get("item")
+            if _PERSON_PATH.fullmatch(urlsplit(address(before)).path):
+                return _text(before.get("name") or (item.get("name") if isinstance(item, dict) else ""), 120)
+    return ""
+
+
 def _kind(embed: bool, kinds: set[str], og_type: str, text: str) -> str:
     if embed or kinds & _VIDEO_TYPES or og_type.startswith("video"):
         return "video"
@@ -192,9 +219,11 @@ def facts_from(data: Any, url: str) -> dict:
 
     published = first(main.get("datePublished"), main.get("uploadDate"), meta.get("article:published_time"),
                       meta.get("datepublished"), meta.get("uploaddate"), limit=40)
+    # lark:url:*: the link preview Lark (Feishu) reads, which some pages give instead of Open Graph.
     pictures = [meta.get("og:image:secure_url"), meta.get("og:image"), meta.get("og:image:url"),
                 meta.get("twitter:image"), meta.get("twitter:image:src"), meta.get("thumbnailurl"),
-                _image(main.get("thumbnailUrl")), _image(main.get("image")), meta.get("image")]
+                _image(main.get("thumbnailUrl")), _image(main.get("image")), meta.get("image"),
+                meta.get("lark:url:video_cover_image_url")]
     picture = next((p for p in (_absolute(url, _text(v, 2000)) for v in pictures)
                     if p and len(p) <= 2000), "")
     embed = _embed(data, meta, main, url)
@@ -210,16 +239,26 @@ def facts_from(data: Any, url: str) -> dict:
         # A video page's text is its surroundings; its words are in the description.
         text = ""
     known = site_name(url) if any(_on(host_of(url), d) for d in _KNOWN_SITES) else ""
+    site = first(meta.get("og:site_name"), meta.get("application-name"), limit=80)
+    title = first(meta.get("og:title"), meta.get("twitter:title"), main.get("headline"), main.get("name"),
+                  data.get("title"))
+    author = _person(main.get("author")) or first(meta.get("author"), limit=120)
+    # A page's own description first: a post's or a video's main text is often a banner or a reply.
+    description = first(meta.get("og:description"), meta.get("twitter:description"), meta.get("description"),
+                        main.get("description"), limit=DESCRIPTION_MAX)
+    # "<name> on <site>" in the title's place is a byline (TikTok's video pages): the words are the description's.
+    byline = re.fullmatch(rf"(.+?) on {re.escape(site)}", title) if site else None
+    if byline and description:
+        author, title = author or byline[1], description[:300]
+    platform = platforms.PLATFORMS.get(platforms.of_url(url))
+    title = _untailed(title, [site, known, *((platform.zh, platform.en) if platform else ())])
     return {
-        "title": first(meta.get("og:title"), meta.get("twitter:title"), main.get("headline"), main.get("name"),
-                       data.get("title")),
-        "site": known or first(meta.get("og:site_name"), meta.get("application-name"), limit=80) or site_name(url),
-        "author": _person(main.get("author")) or first(meta.get("author"), limit=120),
+        "title": title,
+        "site": known or site or site_name(url),
+        "author": author or _crumb_author(objects, url),
         "published": published,
         "length": length,
-        # A page's own description first: a post's or a video's main text is often a banner or a reply.
-        "description": first(meta.get("og:description"), meta.get("twitter:description"), meta.get("description"),
-                             main.get("description"), limit=DESCRIPTION_MAX),
+        "description": description,
         "picture": picture,
         "embed": embed,
         "text": text,

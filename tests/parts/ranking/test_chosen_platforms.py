@@ -98,7 +98,7 @@ def test_with_the_agreement_a_chosen_platform_is_read_once_signed_in_now_or_late
     feed.agree(runtime)
     feed.keep_platforms(runtime, ["douyin.com", "weibo.com"])
     assert feed.agreed(runtime) and reading(runtime) == {"douyin.com"}
-    assert signedread.feeds_on(runtime)["douyin.com"]["url"] == "https://www.douyin.com/"
+    assert signedread.feeds_on(runtime)["douyin.com"]["url"] == "https://www.douyin.com/jingxuan"
     signed(runtime, "https://www.weibo.com/home")
     assert reading(runtime) == {"douyin.com", "weibo.com"}
 

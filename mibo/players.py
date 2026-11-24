@@ -49,8 +49,6 @@ _FROM_PAGE = (
     ("rutube.ru", r"/video/([0-9a-f]{32})/?", r"https://rutube.ru/play/embed/\1"),
     ("acfun.cn", r"/v/(ac\d+)/?", r"https://www.acfun.cn/player/\1"),
     ("huya.com", r"/(\d+)/?", r"https://liveshare.huya.com/iframe/\1"),
-    ("tiktok.com", r"/@[\w.-]+/video/(\d+)/?", r"https://www.tiktok.com/player/v1/\1"),
-    ("douyin.com", r"/video/(\d+)/?", r"https://open.douyin.com/player/video?vid=\1&autoplay=0"),
     ("x.com", r"/\w+/status/(\d+)/?", r"https://platform.twitter.com/embed/Tweet.html?id=\1&dnt=true"),
     ("twitter.com", r"/\w+/status/(\d+)/?", r"https://platform.twitter.com/embed/Tweet.html?id=\1&dnt=true"),
     ("threads.com", r"/(@[\w.]+)/post/([\w-]+)/?", r"https://www.threads.com/\1/post/\2/embed"),
@@ -64,6 +62,26 @@ _FROM_PAGE = (
     ("odysee.com", r"/@[^/]+/([^/:]+):([0-9a-f]{40})/?", r"https://odysee.com/$/embed/\1/\2"),
 )
 _FACEBOOK_VIDEO = re.compile(r"/([\w.-]+/videos/(?:[\w-]+/)?\d+|reel/\d+|watch)/?")
+# Douyin's and TikTok's videos and picture notes in every form their links take: (the platform's domain, its path,
+# or "?" and its query, as a pattern whose groups are the user and the id; the one address it is). A short link
+# (v.douyin.com, vm.tiktok.com, vt.tiktok.com, tiktok.com/t/) names no id: it is left as it is, and read where it
+# redirects.
+_SHORT_VIDEO = (
+    ("douyin.com", r"/(?:video|share/video|light)/(\d{6,})/?", "https://www.douyin.com/video/{0}"),
+    ("douyin.com", r"/(?:note|share/note|share/slides)/(\d{6,})/?", "https://www.douyin.com/note/{0}"),
+    # A video opened over a list (精选, a profile, search) keeps the list's address with modal_id.
+    ("douyin.com", r"?(?:.*&)?modal_id=(\d{6,})(?:&.*)?", "https://www.douyin.com/video/{0}"),
+    ("iesdouyin.com", r"/share/video/(\d{6,})/?", "https://www.douyin.com/video/{0}"),
+    ("iesdouyin.com", r"/share/(?:note|slides)/(\d{6,})/?", "https://www.douyin.com/note/{0}"),
+    ("tiktok.com", r"/@([\w.-]*)/video/(\d{6,})/?", "https://www.tiktok.com/@{0}/video/{1}"),
+    ("tiktok.com", r"/@([\w.-]*)/photo/(\d{6,})/?", "https://www.tiktok.com/@{0}/photo/{1}"),
+    # TikTok's own redirect of an address with no user in it goes to /@/video/<id>.
+    ("tiktok.com", r"/v/(\d{6,})\.html", "https://www.tiktok.com/@/video/{0}"),
+    ("tiktok.com", r"/(?:embed/v2|embed|player/v1)/(\d{6,})/?", "https://www.tiktok.com/@/video/{0}"),
+)
+# The platforms whose finds are only their videos and notes: a row of theirs that is neither (a profile, a tag) is
+# not one.
+ITEMS_ONLY = ("douyin.com", "tiktok.com")
 
 
 def _on(host: str, domain: str) -> bool:
@@ -123,8 +141,30 @@ def bilibili_id(url: str) -> str:
     return match.group(1) if match else ""
 
 
+def canonical(url: str) -> str:
+    """The one address of a Douyin or TikTok video or picture note, from any form of its link (a modal, a share
+    page, the mobile site, an embed); "" for any other address."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return ""
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https"):
+        return ""
+    for domain, pattern, one in _SHORT_VIDEO:
+        match = _on(host, domain) and (re.fullmatch(pattern[1:], parts.query) if pattern[0] == "?"
+                                       else re.fullmatch(pattern, parts.path))
+        if match:
+            return one.format(*match.groups())
+    return ""
+
+
 def player_for(url: str) -> str:
     """The official player of a platform's page, made from its address alone, else ""."""
+    video = re.fullmatch(r"https://www\.(douyin|tiktok)\.com/(?:@[\w.-]*/)?video/(\d+)", canonical(url))
+    if video:
+        return (f"https://open.douyin.com/player/video?vid={video[2]}&autoplay=0" if video[1] == "douyin"
+                else f"https://www.tiktok.com/player/v1/{video[2]}")
     ident = youtube_id(url)
     if ident:
         return f"https://www.youtube-nocookie.com/embed/{ident}"

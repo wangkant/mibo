@@ -250,8 +250,8 @@ def hands_over(text: str) -> bool:
 SECRET_WORDS = _words(["password", "passwd", "passcode", "passphrase", "otp", "totp", "credential", "credentials",
                        "apikey", "api key", "private key", "secret key", "client secret", "recovery code"],
                       ["密码", "口令", "密碼", "パスワード", "비밀번호"])
-# A name with no letters in it: a count, a sign, nothing.
-NO_WORDS = re.compile(r"^[\W\d_]*$")
+# A name with no letters in it: a count (with its unit: 1.2万, 11.8K), a sign, nothing.
+NO_WORDS = re.compile(r"^[\W\d_]*(?:\d\s*[万萬亿億千kKmMbBwW]\+?[\W\d_]*)?$")
 # A press or Enter in another site's frame does what nothing here can see: the floor, asked in the chat.
 FRAME_WHY = "a press or Enter in a frame from another site, whose controls the app cannot see"
 

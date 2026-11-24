@@ -1,5 +1,5 @@
 {
- "about": "Where each platform's hot lists and search are, as addresses only, so a first walk needs no discovery. A host's card in <runtime>/sites.json overrides its seed once learning or a check says otherwise. Keys are registrable hosts. hot: lists worth reading signed out (a /feed address is read as a feed); search: an address with {q} for the words; lang and region: whose platform it is; walk false: never visited in the background (no surface without signing in, or its terms object to programs). Addresses from the platform probes of 2026-11-19 (douyin.com's search, which shows results only signed in, added 2026-11-22 from its own address form); a hot or search address ending in .rss, .xml or /rss, or holding /feed, is read as a feed.",
+ "about": "Where each platform's hot lists and search are, as addresses only, so a first walk needs no discovery. A host's card in <runtime>/sites.json overrides its seed once learning or a check says otherwise. Keys are registrable hosts. hot: lists worth reading signed out (a /feed address is read as a feed); search: an address with {q} for the words; lang and region: whose platform it is; walk false: never visited in the background (no surface without signing in, or its terms object to programs). Addresses from the platform probes of 2026-11-19 (douyin.com's search, which shows results only signed in, added 2026-11-22 from its own address form; douyin.com's /hot and tiktok.com's /explore, which a visitor reads, checked 2026-11-23; tiktok.com has no search here: its robots.txt disallows /search? to every program); a hot or search address ending in .rss, .xml or /rss, or holding /feed, is read as a feed.",
  "hosts": {
   "bilibili.com": {"name": "Bilibili", "lang": "zh", "region": "CN", "home": "https://www.bilibili.com/",
    "hot": ["https://www.bilibili.com/v/popular/all"], "search": "https://search.bilibili.com/all?keyword={q}"},
@@ -22,7 +22,7 @@
    "hot": ["https://www.zaobao.com.sg/realtime/world", "https://www.zaobao.com.sg/news/china"]},
   "weibo.com": {"name": "微博", "lang": "zh", "region": "CN", "home": "https://weibo.com/", "walk": false},
   "douyin.com": {"name": "抖音", "lang": "zh", "region": "CN", "home": "https://www.douyin.com/", "walk": false,
-   "search": "https://www.douyin.com/search/{q}"},
+   "hot": ["https://www.douyin.com/hot"], "search": "https://www.douyin.com/search/{q}"},
   "xiaohongshu.com": {"name": "小红书", "lang": "zh", "region": "CN", "home": "https://www.xiaohongshu.com/explore",
    "walk": false},
   "kuaishou.com": {"name": "快手", "lang": "zh", "region": "CN", "home": "https://www.kuaishou.com/new-reco",
@@ -93,7 +93,8 @@
   "reddit.com": {"name": "Reddit", "lang": "en", "region": "", "home": "https://www.reddit.com/",
    "hot": ["https://www.reddit.com/r/popular/"], "walk": false},
   "x.com": {"name": "X", "lang": "", "region": "", "home": "https://x.com/", "walk": false},
-  "tiktok.com": {"name": "TikTok", "lang": "", "region": "", "home": "https://www.tiktok.com/explore", "walk": false},
+  "tiktok.com": {"name": "TikTok", "lang": "", "region": "", "home": "https://www.tiktok.com/explore", "walk": false,
+   "hot": ["https://www.tiktok.com/explore"]},
   "instagram.com": {"name": "Instagram", "lang": "", "region": "", "home": "https://www.instagram.com/",
    "walk": false},
   "threads.com": {"name": "Threads", "lang": "", "region": "", "home": "https://www.threads.com/", "walk": false},

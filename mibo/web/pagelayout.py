@@ -35,6 +35,8 @@ MACHINE_WORD = re.compile(r"\d\D*\d|^[a-z]{1,4}-(?=[a-z]*\d)[a-z0-9]{5,}$|__", r
 # An icon's own state, shown only by its class (a star filled in).
 ON_CLASS = re.compile(r"(^|\s)(on|active|is-active|is-on|liked|starred|selected|checked|pressed|faved)(\s|$)")
 # Where an id's words part: dashes, underscores and a lower letter before a capital.
+# Test ids, which name a control for a page's own tests (data-e2e: ByteDance's sites).
+TEST_IDS = ("data-testid", "data-test", "data-qa", "data-e2e")
 ID_PARTS = re.compile(r"[-_]+|(?<=[a-z])(?=[A-Z])")
 
 
@@ -157,7 +159,7 @@ def layout(snap: dict) -> dict:
         icon = _icons(d, words, kids, said)
         if n == 0:
             _places(d, out)
-        outer = _clickables(d, icon, out)
+        outer = _clickables(d, icon, out, kids)
         _parts(d, outer, words, kids, icon, out)
         if n == 0:
             _drawings(d, kids, said, out)
@@ -239,7 +241,7 @@ def _places(d: _Document, out: dict) -> None:
             out["y"][d.backend[i]] = d.bounds[k][1]
 
 
-def _clickables(d: _Document, icon: dict[int, str], out: dict) -> dict[int, int]:
+def _clickables(d: _Document, icon: dict[int, str], out: dict, kids: dict[int, list[int]]) -> dict[int, int]:
     """Each element drawn: clickable by a pointer cursor, a box that scrolls by itself, a field's type, a text
     area, a frame from another site, a nameless control's words, a knob's size. Gives each element under a pointer
     cursor the outermost element of that cursor it sits in."""
@@ -278,6 +280,13 @@ def _clickables(d: _Document, icon: dict[int, str], out: dict) -> dict[int, int]
         hint = _hint(found, i in icon, icon.get(i, ""))
         if hint:
             out["hint"][backend] = norm(hint)[:40]
+        tests = " ".join(found.get(a, "") for a in TEST_IDS).strip()
+        if tests and _readable(tests):
+            # A control drawn round a part that carries the test id (a like's count and heart in a focusable box, or
+            # under one pointer cursor) goes by it.
+            for top in {outer.get(i, i), d.up(i) if kids.get(d.up(i)) == [i] else i} - {i}:
+                had = out["hint"].get(d.backend[top], "")
+                out["hint"][d.backend[top]] = norm(f"{' '.join(ID_PARTS.split(tests))} {had}")[:40]
         if b[2] <= SMALL and b[3] <= SMALL:
             # Small enough to be a knob or an icon: one with no name is still shown when it can be focused.
             out["small"][backend] = True
@@ -285,13 +294,15 @@ def _clickables(d: _Document, icon: dict[int, str], out: dict) -> dict[int, int]
 
 
 def _hint(found: dict, is_icon: bool, icon: str) -> str:
-    """The words of a control with no name: its tooltip; else what names its icon, then the words of its id and of
-    its class (browser-use shows a control's id and class to the model), each only when it adds a word; with "· on"
-    when only its class says it is on."""
+    """The words of a control with no name: its tooltip; else what names its icon, then the words of its id, its test
+    id and its class (browser-use shows a control's id and class to the model), each only when it adds a word; with
+    "· on" when only its class says it is on."""
     hint = next((found[a] for a in HINT_ATTRS if found.get(a, "").strip()), "")
     if not hint:
         ident = found.get("id", "")
+        tests = " ".join(found.get(a, "") for a in TEST_IDS)
         chunks = [icon, " ".join(ID_PARTS.split(ident)) if _readable(ident) else "",
+                  " ".join(ID_PARTS.split(tests)) if _readable(tests.strip()) else "",
                   *(w for w in re.split(r"\s+", found.get("class", "")) if _readable(w))]
         had: set[str] = set()
         kept = []

@@ -1,0 +1,70 @@
+{
+ "about": "What web/reader.js read off https://www.douyin.com/video/7680171480428890495 as a signed-out visitor's headless Edge drew it on 2026-11-23 (its meta pairs, JSON-LD, title and address): the signed query of picture addresses and the site-verification meta left out.",
+ "url": "https://www.douyin.com/video/7680171480428890495",
+ "data": {
+  "title": "韩国🇰🇷便利店🏪沉浸式体验 #便利店 #冰杯 #韩国美食 #便利店美食 #马克定食 - 抖音",
+  "canonical": "https://www.douyin.com/video/7680171480428890495",
+  "meta": [
+   [
+    "mobile-web-app-capable",
+    "yes"
+   ],
+   [
+    "viewport",
+    "width=device-width,initial-scale=0.5,user-scalable=no,viewport-fit=cover"
+   ],
+   [
+    "keywords",
+    "便利店,冰杯,韩国美食,便利店美食,马克定食,抖音,抖音短视频,抖音官网"
+   ],
+   [
+    "description",
+    "韩国🇰🇷便利店🏪沉浸式体验 #便利店 #冰杯 #韩国美食 #便利店美食 #马克定食 - Jonice111于20260831发布在抖音，已经收获了4.8万个喜欢，来抖音，记录美好生活！"
+   ],
+   [
+    "lark:url:enable",
+    "true"
+   ],
+   [
+    "lark:url:video_icon_url",
+    "https://lf1-cdn-tos.bytegoofy.com/goofy/ies/douyin_web/public/favicon.ico"
+   ],
+   [
+    "lark:url:video_title",
+    "韩国🇰🇷便利店🏪沉浸式体验 #便利店 #冰杯 #韩国美食 #便利店美食 #马克定食 - 抖音"
+   ],
+   [
+    "lark:url:video_cover_image_url",
+    "https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/77e7dc43b9e6419fefea339fba619ee4~tplv-dy-resize-origshort-autoq-75:330.jpeg"
+   ],
+   [
+    "lark:url:video_iframe_url",
+    "https://www.douyin.com/light/7680171480428890495"
+   ],
+   [
+    "lark:url:video_brand_name",
+    "抖音"
+   ],
+   [
+    "applicable-device",
+    "pc"
+   ],
+   [
+    "mobile-agent",
+    "format=[html5]; url=https://m.douyin.com/share/video/7680171480428890495"
+   ],
+   [
+    "google",
+    "notranslate"
+   ],
+   [
+    "theme-color",
+    "#161823"
+   ]
+  ],
+  "ld": [
+   "{\n          \"@context\": \"https://schema.org\",\n          \"@type\": \"BreadcrumbList\",\n          \"itemListElement\": [{\n            \"@type\": \"ListItem\",\n            \"position\": 1,\n            \"name\": \"抖音\",\n            \"item\": \"https://www.douyin.com\"\n          },{\n            \"@type\": \"ListItem\",\n            \"position\": 2,\n            \"name\": \"Jonice111\",\n            \"item\": \"https://www.douyin.com/user/MS4wLjABAAAAYb8S5DE674LydM8ePxUtzolNMRfGa9ZPg6RI4eE-k5I29W3ZxbM_AurKCxfu8Rxt\"\n          },{\n            \"@type\": \"ListItem\",\n            \"position\": 3,\n            \"name\": \"视频作品\",\n            \"item\": \"https://www.douyin.com/video/7680171480428890495\"\n          }]\n        }"
+  ],
+  "text": "韩国🇰🇷便利店🏪沉浸式体验 #便利店 #冰杯 #韩国美食 #便利店美食 #马克定食 - Jonice111于20260831发布在抖音，已经收获了4.8万个喜欢，来抖音，记录美好生活！"
+ }
+}

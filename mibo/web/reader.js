@@ -33,6 +33,8 @@
   // Icon-font glyphs sit in the Private Use Area and mean nothing as text.
   const clean = (s) => String(s == null ? '' : s).replace(/[\uE000-\uF8FF]/g, '').replace(/\s+/g, ' ').trim();
   const abs = (u) => { try { return u ? new URL(u, document.baseURI).href : ''; } catch (e) { return ''; } };
+  // Links: anchors, and the blocks some sites give an href and open by script (a card that is a div).
+  const LINKS = 'a[href],div[href],li[href],article[href],section[href]';
   const realHref = (a) => {
     const raw = a.getAttribute('href') || '';
     if (!raw || raw[0] === '#' || /^(javascript|mailto|tel|data):/i.test(raw)) return '';
@@ -132,7 +134,7 @@
   const allText = textOf(document.body || document.documentElement);
   const bodyText = allText.slice(0, 20000);
   const title = clean(document.title);
-  const VERIFY = /(verify (that )?you are (a )?human|are you a robot|confirm (that )?you.re not a (ro)?bot|just a moment|checking your browser|security (check|verification)|performing security verification|unusual traffic|confirm (that )?you.re (a )?human|checking if the site connection is secure|captcha|人机验证|安全验证|环境异常|滑动.{0,6}验证|拖动.{0,6}滑块|请完成验证|验证码|ロボットではありません|画像認証|보안 문자|자동입력 방지|проверка.{0,10}(робот|браузер)|подтвердите, что вы не робот)/i;
+  const VERIFY = /(verify (that )?you are (a )?human|are you a robot|confirm (that )?you.re not a (ro)?bot|just a moment|checking your browser|security (check|verification)|performing security verification|unusual traffic|confirm (that )?you.re (a )?human|checking if the site connection is secure|captcha|人机验证|安全验证|环境异常|滑动.{0,6}验证|拖动.{0,10}(滑块|拼图)|请完成.{0,4}验证|验证码(?!登录)|ロボットではありません|画像認証|보안 문자|자동입력 방지|проверка.{0,10}(робот|браузер)|подтвердите, что вы не робот)/i;
   const SIGNIN = /(sign in|log in|login|sign up|join now|create (an )?account|continue with (google|apple|email)|登录|登陆|注册|扫码|ログイン|新規登録|로그인|회원가입|войти|вход|регистрац)/i;
   const GATE = /(to (see|view|continue|read|watch)|for (full|more) access|to keep (reading|watching)|后(查看|继续|观看|浏览)|查看更多|継続|続きを|계속|чтобы (продолжить|посмотреть|увидеть))/i;
   // A page that says it is gone marks that one address dead; any other error page is a wall on the site.
@@ -164,8 +166,14 @@
   }
   const pwOutside = [...document.querySelectorAll('input[type=password]')].some(p => shown(p) && !(wall.prompt && overlayEl.contains(p)));
   const firstScreen = bodyText.slice(0, 1500);
-  if (frames.length || (VERIFY.test(title) || (VERIFY.test(firstScreen) && bodyText.length < 3000))) {
-    wall.kind = 'verification'; wall.evidence = frames[0] || (title.match(VERIFY) || firstScreen.match(VERIFY))[0];
+  // A sign-in box's own words are no check: its 验证码 is the code it texts to the phone number typed beside it.
+  const phone = [...document.querySelectorAll('input')].find(i => shown(i) && (i.type === 'tel' ||
+    /手机|電話|phone|mobile|휴대폰|телефон/i.test([i.placeholder, i.name, i.getAttribute('aria-label')].join(' '))));
+  let signBox = overlayEl || phone;
+  for (let k = 0; signBox && signBox !== overlayEl && k < 8 && !SIGNIN.test(textOf(signBox)); k++) signBox = signBox.parentElement;
+  const checked = (signBox ? bodyText.replace(textOf(signBox), ' ') : bodyText).slice(0, 1500);
+  if (frames.length || (VERIFY.test(title) || (VERIFY.test(checked) && bodyText.length < 3000))) {
+    wall.kind = 'verification'; wall.evidence = frames[0] || (title.match(VERIFY) || checked.match(VERIFY))[0];
   } else if (pw && pwOutside && bodyText.length < 4000) {
     wall.kind = 'sign_in'; wall.evidence = 'password field';
   } else if (GONE.test(title) || (bodyText.length < 600 && GONE.test(bodyText))) {
@@ -206,10 +214,10 @@
     return found;
   };
   const firstLink = (el) => {
-    if (el.tagName === 'A' && realHref(el)) return realHref(el);
-    const up = el.closest && el.closest('a[href]');
+    if (el.matches(LINKS) && realHref(el)) return realHref(el);
+    const up = el.closest && el.closest(LINKS);
     if (up && realHref(up)) return realHref(up);
-    for (const a of el.querySelectorAll('a[href]')) { const h = realHref(a); if (h) return h; }
+    for (const a of el.querySelectorAll(LINKS)) { const h = realHref(a); if (h) return h; }
     return '';
   };
   const scoreOf = (c) => {
@@ -283,7 +291,7 @@
   }
 
   // ---------- fields of each block: align leaves across blocks by their relative path ----------
-  const TIME = /(\d+\s*(秒|分钟|分鐘|小时|小時|天|周|週|个月|個月|月|年)前|刚刚|剛剛|昨天|前天|今天|\d+\s*(s|m|min|mins|h|hr|hrs|d|w|mo|y)\b( ago)?|\d+\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?) ago|(just now|yesterday|today)|\d+\s*(秒|分|時間|日|週間|か月|ヶ月|年)前|\d+\s*(초|분|시간|일|주|개월|년)\s*전|\d+\s*(сек|мин|час|дн|нед|мес|год|лет)[а-яё.]*\s*назад|\b\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}|\b\d{1,2}[-/月]\d{1,2}日?\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d{1,2}(, \d{4})?)/i;
+  const TIME = /(\d+\s*(秒|分钟|分鐘|小时|小時|天|周|週|个月|個月|月|年)前|刚刚|剛剛|昨天|前天|今天|(?<![\d.,])\d+\s*(s|m|min|mins|h|hr|hrs|d|w|mo|y)\b( ago)?|\d+\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?) ago|(just now|yesterday|today)|\d+\s*(秒|分|時間|日|週間|か月|ヶ月|年)前|\d+\s*(초|분|시간|일|주|개월|년)\s*전|\d+\s*(сек|мин|час|дн|нед|мес|год|лет)[а-яё.]*\s*назад|\b\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}|\b\d{1,2}[-/月]\d{1,2}日?\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d{1,2}(, \d{4})?)/i;
   const INLINE = /^(A|B|I|EM|STRONG|SPAN|BR|CODE|SMALL|MARK|U|S|SUB|SUP|IMG|ABBR|Q|CITE|WBR|FONT|TIME)$/;
   const DURATION = /^\d{1,2}:\d{2}(:\d{2})?$/;
   const COUNT = /^([\d][\d.,]*)\s*([万萬亿億千kKmMbB]|万\+|w|W)?\+?\s*([^\d\s].{0,8})?$/;
@@ -308,7 +316,7 @@
       const hint = [el.getAttribute('class'), icon, inner, el.getAttribute('itemprop'), el.getAttribute('data-testid'), el.getAttribute('aria-label'), el.getAttribute('title')].filter(Boolean).join(' ');
       // Text cut short on screen (ellipsis, line clamp) is the only case where a title attribute says it better.
       const clipped = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
-      if (tag === 'A' && realHref(el)) out.push({kind: 'a', path: p, clipped, href: realHref(el), text: textOf(el).slice(0, 300), wraps: [...el.querySelectorAll('*')].filter(d => ownText(d)).length >= 2, title: clean(el.getAttribute('title') || el.getAttribute('aria-label')), hint, pic: !!el.querySelector('img,picture,video')});
+      if (el.matches(LINKS) && realHref(el)) out.push({kind: 'a', path: p, clipped, href: realHref(el), text: textOf(el).slice(0, 300), wraps: [...el.querySelectorAll('*')].filter(d => ownText(d)).length >= 2, title: clean(el.getAttribute('title') || el.getAttribute('aria-label')), hint, pic: !!el.querySelector('img,picture,video')});
       if (tag === 'IMG' || tag === 'VIDEO' || (el.style && /url\(/.test(el.style.backgroundImage || ''))) {
         const b = box(el), src = picOf(el);
         if (src && !/^data:/.test(src)) out.push({kind: 'img', path: p, src, alt: clean(el.getAttribute('alt')), area: b.width * b.height, w: b.width, h: b.height});
@@ -327,7 +335,7 @@
     };
     rec(item, '', 0);
     // A block wrapped by its link: treat the wrapper as the block's anchor.
-    const up = item.parentElement && item.parentElement.closest('a[href]');
+    const up = item.parentElement && item.parentElement.closest(LINKS);
     if (up && realHref(up)) out.push({kind: 'a', path: '^a', href: realHref(up), text: textOf(up).slice(0, 300), title: clean(up.getAttribute('title')), hint: '', pic: true});
     return out;
   };
@@ -409,6 +417,11 @@
     });
     const deepest = (i) => per[i].filter(l => l.kind === 'a' && !MEDIA.test(l.href)).sort((x, y) => depth(y.href) - depth(x.href) || y.href.length - x.href.length)[0];
     const linkHref = (i) => link && link.vals[i] ? link.vals[i].href : ((deepest(i) || {}).href || firstLink(listItems[i]));
+    const awayTitle = (i) => {
+      const v = titleCol && titleCol.vals[i];
+      const round = v && (v.href ? v : (stats.find(c => c.kind === 'a' && c.vals[i] && under(c, titleCol)) || {vals: []}).vals[i]);
+      return !!(round && round.href && round.href !== linkHref(i));
+    };
     const timeCol = pick(stats.filter(c => c.kind === 'time' || c.timeFrac >= 0.5), c => c.cover * (c.kind === 'time' && c.vals.some(v => v && v.datetime) ? 3 : 1) * (c.kind === 'time' ? 1 : c.timeFrac + 0.1));
     const clockish = (c) => /date|time|clock|stamp/i.test(c.hint) && !/duration|length/i.test(c.hint);
     const durCol = pick(stats.filter(c => c.kind === 'text' && c.durFrac >= 0.6 && !clockish(c) && !(timeCol && c.path === timeCol.path)), c => c.cover);
@@ -432,6 +445,9 @@
       // Posts without a title: their longest run of words stands in.
       if (!t) { const body = per[i].filter(l => l.kind === 'text' && l.text.length >= 15 && !/^[#＃]/.test(l.text)).sort((a, b) => b.text.length - a.text.length)[0]; if (body) t = body.text; }
       if (!t && pic) t = pic.alt;
+      // A title that is the poster's name, or the words of a link to elsewhere (the poster's page), says nothing of
+      // the thing: the picture's words do, when it has more.
+      if (t && pic && (pic.alt || '').length > t.length && ((authorCol && val(authorCol, i) === t) || awayTitle(i))) t = pic.alt;
       if (!t && !pic) continue;
       if (href && seen.has(href)) continue;
       seen.add(href);
@@ -447,6 +463,10 @@
       if (Object.keys(counts).length) row.counts = counts;
       if (textCol && textCol.vals[i] && textCol.vals[i].text !== t) row.text = textCol.vals[i].text.slice(0, 300);
       rows.push(row);
+    }
+    // A line asking to sign in to see more, under a list a visitor reads, is a prompt and no wall.
+    if (wall.kind === 'sign_in' && wall.evidence !== 'password field' && rows.length >= 5) {
+      wall.prompt = wall.prompt || wall.evidence; wall.kind = ''; wall.evidence = '';
     }
     if (opts.debug) columns_debug = per.slice(0, 2).map(ls => ls.map(l => [l.kind, l.path.split('/').slice(-2).join('/'), (l.text || l.src || l.href || '').slice(0, 60), l.title || '', l.area || l.font || '']));
   }

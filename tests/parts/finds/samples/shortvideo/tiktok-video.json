@@ -1,0 +1,123 @@
+{
+ "about": "What web/reader.js read off https://www.tiktok.com/@homosapienstv/video/7681450201478892807 as a signed-out visitor's headless Edge drew it on 2026-11-23, its login box over the page (its meta pairs, JSON-LD, title and address).",
+ "url": "https://www.tiktok.com/@homosapienstv/video/7681450201478892807",
+ "data": {
+  "title": "Log in | TikTok",
+  "canonical": "https://www.tiktok.com/@homosapienstv/video/7681450201478892807",
+  "meta": [
+   [
+    "viewport",
+    "width=device-width, initial-scale=1.0"
+   ],
+   [
+    "google",
+    "notranslate"
+   ],
+   [
+    "format-detection",
+    "telephone=no"
+   ],
+   [
+    "robots",
+    "index, follow, max-image-preview:large"
+   ],
+   [
+    "applicable-device",
+    "pc, mobile"
+   ],
+   [
+    "al:ios:url",
+    "snssdk1233://aweme/detail/7681450201478892807?undefined"
+   ],
+   [
+    "al:android:url",
+    "snssdk1233://aweme/detail/7681450201478892807?undefined"
+   ],
+   [
+    "al:ios:app_store_id",
+    "835599320"
+   ],
+   [
+    "al:ios:app_name",
+    "musical.ly"
+   ],
+   [
+    "al:android:app_name",
+    "musical.ly"
+   ],
+   [
+    "al:android:package",
+    "com.zhiliaoapp.musically"
+   ],
+   [
+    "og:site_name",
+    "TikTok"
+   ],
+   [
+    "og:type",
+    "website"
+   ],
+   [
+    "og:title",
+    "homosapiens on TikTok"
+   ],
+   [
+    "og:description",
+    "¿Por qué las gallinas comen piedras a veces? 🤔 #SabiasQue #homosapienstv #aprendeentiktok #cienciaentiktok"
+   ],
+   [
+    "fb:app_id",
+    "597615686992125"
+   ],
+   [
+    "twitter:app:id:iphone",
+    "835599320"
+   ],
+   [
+    "twitter:app:id:googleplay",
+    "com.zhiliaoapp.musically"
+   ],
+   [
+    "twitter:card",
+    "summary"
+   ],
+   [
+    "twitter:site",
+    "TikTok"
+   ],
+   [
+    "twitter:title",
+    "homosapiens on TikTok"
+   ],
+   [
+    "twitter:description",
+    "¿Por qué las gallinas comen piedras a veces? 🤔 #SabiasQue #homosapienstv #aprendeentiktok #cienciaentiktok"
+   ],
+   [
+    "og:image:width",
+    "576"
+   ],
+   [
+    "og:image:height",
+    "1024"
+   ],
+   [
+    "og:url",
+    "https://www.tiktok.com/@homosapienstv/video/7681450201478892807"
+   ],
+   [
+    "description",
+    "Log in or sign up for an account on TikTok. Start watching to discover real people and real videos that will make your day."
+   ],
+   [
+    "keywords",
+    "Log in, Log in to TikTok"
+   ]
+  ],
+  "ld": [
+   "{\"@context\":\"https://schema.org/\",\"@type\":\"ItemPage\",\"@id\":\"https://www.tiktok.com/@homosapienstv/video/7681450201478892807\"}",
+   "{\"@context\":\"https://schema.org/\",\"@type\":\"BreadcrumbList\",\"itemListElement\":[{\"@type\":\"ListItem\",\"position\":1,\"item\":{\"@type\":\"Thing\",\"@id\":\"https://www.tiktok.com\",\"name\":\"TikTok\"}},{\"@type\":\"ListItem\",\"position\":2,\"item\":{\"@type\":\"Thing\",\"@id\":\"https://www.tiktok.com/@homosapienstv\",\"name\":\"homosapiens (@homosapienstv) Official | TikTok\"}},{\"@type\":\"ListItem\",\"position\":3,\"item\":{\"@type\":\"Thing\",\"@id\":\"https://www.tiktok.com/@homosapienstv/video/7681450201478892807\",\"name\":\"¿Por qué las gallinas comen piedras a veces? 🤔 #SabiasQue #homosapienstv #aprendeentiktok #cienciaentiktok \"}}]}"
+  ],
+  "text": "¿Por qué las gallinas comen piedras a veces? 🤔 #SabiasQue #homosapienstv #aprendeentiktok #cienciaentiktok"
+ }
+}

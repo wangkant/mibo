@@ -114,14 +114,14 @@ def _scale(value) -> bool:
 def switch_feed(runtime, key: str, on: bool, home: str, chosen: bool = False) -> None:
     """A site's feed read in the background, on or off: the person's switch in Settings or their word to the
     character, or with `chosen` turned on for a platform they chose (feed.read_chosen). Read at the address it has,
-    else `home`. The platform's row keeps whether its choice turned it on (feed_platforms.fed), so the person's own
-    switch takes it over."""
+    else where the site's hint says its feed reads as a list, else `home`. The platform's row keeps whether its
+    choice turned it on (feed_platforms.fed), so the person's own switch takes it over."""
     from .. import db
-    from ..web import sites
+    from ..web import signin, sites
 
     def switch(card: dict) -> None:
         feed = card.setdefault("feed", {})
-        feed.update(on=on, url=feed.get("url") or home)
+        feed.update(on=on, url=feed.get("url") or signin.hint(key).get("feed") or home)
         feed.pop("stopped", None)
     sites._change(runtime, key, switch)
     with db.at(runtime).write() as conn:

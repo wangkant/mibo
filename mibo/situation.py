@@ -69,7 +69,8 @@ COUNTED = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadError)
 # Chromium's words for the same, from a walk's navigation.
 _NAV_FAILED = re.compile(r"net::ERR_(?:CONNECTION_[A-Z_]+|NAME_NOT_RESOLVED|TIMED_OUT|ADDRESS_UNREACHABLE)")
 # Names that stand for one platform: a player or short link counts as the site.
-_SAME = {"youtube-nocookie.com": "youtube.com", "youtu.be": "youtube.com", "b23.tv": "bilibili.com"}
+_SAME = {"youtube-nocookie.com": "youtube.com", "youtu.be": "youtube.com", "b23.tv": "bilibili.com",
+         "iesdouyin.com": "douyin.com"}
 _SECOND_LEVEL = {"com", "net", "org", "co", "ne", "or", "ac", "go", "gov", "edu"}
 # The person's accounts that say which catalogue sources and walk sites are theirs.
 PLATFORMS = {"youtube": (("youtube-",), "YouTube"), "bilibili": (("bili-", "bilibili-"), "Bilibili"),

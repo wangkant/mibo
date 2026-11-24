@@ -44,8 +44,9 @@ STATE_MOST = 20_000
 ID_LINE = re.compile(r"\*?\[\d+\]")
 FIND_MAX = 20
 SECRET_MASK = "•••"
-# A name that says nothing by itself: empty, a count, a sign.
+# A name that says nothing by itself: empty, a count, a sign; and a count with its unit (1.2万, 11.8K).
 NAMELESS = re.compile(r"^[\W\d_]{0,6}$")
+COUNT = re.compile(r"^\d[\d.,]*\s*[万萬亿億千kKmMbBwW]?\+?$")
 # How long a blank page is given to draw.
 BLANK_S = 8.0
 # Frames the person fills in themselves, beside browsed.secret's sign-in and payment addresses: card fields of the
@@ -550,16 +551,16 @@ class _Print:
         said: list[str] = []
         holds = self.words_in(tree, n, said)
         shown = clip(name or norm(" ".join(said)), 40 if holds else 100)
-        # An icon with no words (a trash can, a heart) is named by its tooltip, drawing or class.
-        hint = "" if shown else tree.layout["hint"].get(local, "")
+        # An icon with no words (a trash can, a heart), or only its count, is named by its tooltip, drawing or class.
+        hint = "" if shown and not COUNT.match(shown) else tree.layout["hint"].get(local, "")
         if not (shown or holds or hint):
             return False
         self.flush()
         self.page.near[ident] = self.context()
         self.page.last[ident] = ("clickable", shown)
         self.page.interactive += 1
-        self.lines.append(f"{self.new(ident)}[{ident}] clickable"
-                          + (f' "{shown}"' if shown else f" {{{hint}}}" if hint else ""))
+        self.lines.append(f"{self.new(ident)}[{ident}] clickable" + (f' "{shown}"' if shown else "")
+                          + (f" {{{hint}}}" if hint else ""))
         if holds:
             self.walk_kids(tree, n.get("childIds") or [], fold(f"{inside} {shown}"))
             self.flush()

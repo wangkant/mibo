@@ -69,7 +69,7 @@ CHECK_JS = r"""(hint = {}) => {
   const shown = (e) => { const b = e.getBoundingClientRect(); if (b.width < 2 || b.height < 2) return false;
     const s = getComputedStyle(e); return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05; };
   const textOf = (e) => ((e && e.innerText) || '').replace(/\s+/g, ' ').trim();
-  const VERIFY = /(verify (that )?you are (a )?human|are you a robot|confirm (that )?you.re not a (ro)?bot|just a moment|checking your browser|security (check|verification)|performing security verification|unusual traffic|captcha|人机验证|安全验证|环境异常|滑动.{0,6}验证|拖动.{0,6}滑块|请完成验证|ロボットではありません|画像認証|보안 문자|자동입력 방지|проверка.{0,10}(робот|браузер)|подтвердите, что вы не робот)/i;
+  const VERIFY = /(verify (that )?you are (a )?human|are you a robot|confirm (that )?you.re not a (ro)?bot|just a moment|checking your browser|security (check|verification)|performing security verification|unusual traffic|captcha|人机验证|安全验证|环境异常|滑动.{0,6}验证|拖动.{0,10}(滑块|拼图)|请完成.{0,4}验证|ロボットではありません|画像認証|보안 문자|자동입력 방지|проверка.{0,10}(робот|браузер)|подтвердите, что вы не робот)/i;
   const SIGNIN = /(sign in|log in|login|sign up|continue with (google|apple|email)|登录|登陆|扫码|ログイン|로그인|войти|вход)/i;
   const QR = /(扫码|扫一扫|二维码|scan (the )?(qr|code)|qr code|QRコード|QR 코드)/i;
   const title = document.title || '';

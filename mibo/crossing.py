@@ -111,13 +111,16 @@ def turn_read(workspace) -> dict:
 def _site_names(site: str) -> list[str]:
     """The names a person calls a site by: its address, its own name, and the names the app knows for it (B站 for
     bilibili.com, 微博 for weibo.com)."""
+    from .situation import site_of
     from .web import signin, sites
-    label = _site(site)
-    names = [site, label]
+    # The app's names are its own host's alone (douyin.example is not 抖音); a platform's other domains are the
+    # platform (iesdouyin.com is Douyin's share pages).
+    key = site_of(site) or site
+    names = [site, _site(site)]
     for row in signin.hints():
-        if _site(row["site"]) == label:
+        if row["site"] == key:
             names += [row["name"].get("zh", ""), row["name"].get("en", ""), *row.get("also", [])]
-    names += [seed["name"] for key, seed in sites.SEEDS.items() if _site(key) == label]
+    names += [seed["name"] for host, seed in sites.SEEDS.items() if host == key]
     return [n for n in names if n]
 
 
