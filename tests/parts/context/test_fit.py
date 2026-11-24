@@ -48,6 +48,30 @@ def test_a_result_past_its_share_keeps_its_head_and_tail_and_says_how_much_is_le
     assert str(len(text) - len(head) - len(tail)) in kept
 
 
+def test_a_result_cut_when_it_comes_in_is_kept_whole_in_a_file_its_cut_names():
+    saved: list = []
+
+    def spill(text: str) -> str:
+        saved.append(text)
+        return f"C:\\home\\runtime\\spill\\{len(saved)}.txt"
+
+    fit = context.Fit(PLAN, _count, 1.0, PICTURES, spill)
+    long, short = _han(1, 40_000), _han(2, 3000)
+    convo = [{"role": "user", "content": "读一下"}, *_calls(1, long, short)]
+    assert fit(convo) and fit(convo)
+    # Saved once, whole, however often the request is fitted; a result within its share is not saved.
+    assert saved == [long] and convo[-1]["content"] == short
+    kept = convo[-2]["content"]
+    assert "The whole result is in the file C:\\home\\runtime\\spill\\1.txt: read the part" in kept
+    assert long.startswith(kept.split("\n\n[... ")[0]) and context.text_tokens(kept) <= PLAN.result
+    # Cut small later, as an older result, it still names its file.
+    for n in range(2, 8):
+        convo += _calls(n, *(_han(10 * n + k, 15_000) for k in range(3)))
+        assert fit(convo)
+    older = convo[2]["content"]
+    assert len(older) < len(kept) and "spill\\1.txt" in older and saved.count(long) == 1
+
+
 def test_a_request_under_the_ceiling_is_sent_as_it_came():
     convo = [{"role": "user", "content": "读一下"}, *_calls(1, _han(1, 3000), _han(2, 3000)), *_calls(2, _han(3, 3000))]
     before = [dict(m) for m in convo]

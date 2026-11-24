@@ -22,8 +22,9 @@ verify scripts themselves hold.
 `npx -y @modelcontextprotocol/server-filesystem@2025.12.18 <task folder>`, the version MCPMark Verified pins, with
 Node.js fetched by the app's own runtimes.install. The app runs without a window (`mibo start --no-browser`), at
 below-normal priority, one task at a time. Every card is answered as the person who asked for the task: yes to the
-connector's start, its tools, turning an ability on, and folders and commands inside the task's folder; no to
-anything reaching outside that folder, a program's window or the browser, which a folder task does not need. With
+connector's start, its tools, turning an ability on, and folders and commands inside the task's folder or the
+stand-in computer's own folders; no to anything reaching elsewhere, a program's window or the browser, which a
+folder task does not need. With
 --sample, a part of the suite stratified by category is run (see `draw`). Model calls go through tools/everyday.py's metering pass-through, which refuses calls
 past --budget dollars; no task starts with less than a task's worth left. The key is read from --keys (LLM_API_KEY
 and LLM_BASE_URL lines), never printed, and reaches each scratch home's app only through its environment
@@ -270,24 +271,24 @@ class App:
 ABSOLUTE = re.compile(r"[A-Za-z]:[\\/][^\s'\"“”]*|(?<![^\s'\"“])/[^\s'\"”]+")
 
 
-def inside(path: str, folder: Path) -> bool:
+def inside(path: str, theirs: tuple) -> bool:
     try:
-        return Path(path).resolve().is_relative_to(folder.resolve())
+        return any(Path(path).resolve().is_relative_to(folder.resolve()) for folder in theirs)
     except (OSError, ValueError):
         return False
 
 
-def answer(kind: str, card: dict, folder: Path) -> str:
+def answer(kind: str, card: dict, theirs: tuple) -> str:
     """ANSWERS, except that the person who asked about one folder says no to a folder or a command reaching outside
-    it: a folder card for another folder, or a command naming a path elsewhere or running elsewhere on relative
-    names."""
+    what is theirs here (the task's folder and their stand-in computer's own folders): a folder card for another
+    folder, or a command naming a path elsewhere or running elsewhere on relative names."""
     if kind != "shell" or card.get("type") not in ("folder", "command"):
         return ANSWERS[kind]
     if card["type"] == "folder":
-        return "yes" if inside(card.get("folder") or "", folder) else "no"
+        return "yes" if inside(card.get("folder") or "", theirs) else "no"
     paths = ABSOLUTE.findall(card.get("command") or "")
-    named = all(inside(p, folder) for p in paths)
-    return "yes" if named and (paths or inside(card.get("cwd") or "", folder)) else "no"
+    named = all(inside(p, theirs) for p in paths)
+    return "yes" if named and (paths or inside(card.get("cwd") or "", theirs)) else "no"
 
 
 def press(app: App, card: dict, said: str) -> None:
@@ -303,7 +304,7 @@ def press(app: App, card: dict, said: str) -> None:
         pass
 
 
-def turn(app: App, prompt: str, folder: Path) -> dict:
+def turn(app: App, prompt: str, theirs: tuple) -> dict:
     """One chat turn, each card answered as `answer` says while it runs; the reply's JSON and the cards."""
     sent: dict = {}
     cards: list = []
@@ -321,7 +322,7 @@ def turn(app: App, prompt: str, folder: Path) -> dict:
         for kind, route in CARD_ROUTES.items():
             card = app.api(route).get("card")
             if card and all(card["id"] != c["id"] for c in cards):
-                said = answer(kind, card, folder)
+                said = answer(kind, card, theirs)
                 cards.append({"kind": kind, "id": card["id"], "type": card.get("type", ""),
                               "what": card.get("tool") or card.get("command") or card.get("folder")
                               or card.get("title") or "", "cwd": card.get("cwd", ""), "answer": said})
@@ -353,7 +354,7 @@ def one(task: dict, data: Path, work: Path, shared: Path, model_url: str, model:
         while next(s["state"] for s in app.client.get("/api/mcp").json()["servers"]) != "connected":
             assert time.monotonic() < until, "the filesystem server did not connect"
             time.sleep(0.5)
-        result = turn(app, task["prompt"], folder)
+        result = turn(app, task["prompt"], (folder, scratchhome.pc_of(home)))
         log = app.api("/api/mcp/log?n=200").get("rows", [])
     finally:
         app.close()

@@ -55,6 +55,9 @@ _STATED_INPUT = re.compile(r"(\d[\d,]*) in the messages|messages resulted in (\d
 RESULT_TOKENS, SMALL_TOKENS, HEAD_SHARE = 12_500, 1250, 0.8
 CUT_MARK = ("\n\n[... {n} characters of this result left out to fit the model's window; to read them, ask for a "
             "smaller part, such as a file's lines by offset and limit ...]\n\n")
+# The same cut of a result kept whole in a file (spill.py; dsh spill-policy's notice).
+SPILL_MARK = ("\n\n[... {n} characters of this result left out to fit the model's window. The whole result is in "
+              "the file {path}: read the part you need with read_file, by offset and limit ...]\n\n")
 PICTURE_GONE = "[an older picture, removed to save room; look again if it is still needed]"
 RESULT_GONE = "[an older result, removed to save room; call the tool again if it is still needed]"
 # Past the ceiling T, older results are cut until the request is under this share of it.
@@ -258,10 +261,14 @@ class Fit:
     line (Claude Code's microcompact, opencode's prune), never one that came in at the small size or under it (a
     card said no to, an error the model must keep seeing). `count(convo)` is the request's tokens with `convo` as its
     conversation, `ratio` the endpoint's tokens per estimated one, and a user message whose first words are
-    `pictures` holds pictures a tool returned (the person's own are never cut)."""
+    `pictures` holds pictures a tool returned (the person's own are never cut). With `spill(text)`, which saves a
+    text and gives its file's path, a result cut when it comes in is kept whole in a file its cut names (dsh
+    spill-policy)."""
 
-    def __init__(self, plan: Budget, count, ratio: float, pictures: str) -> None:
+    def __init__(self, plan: Budget, count, ratio: float, pictures: str, spill=None) -> None:
         self.plan, self.count, self.ratio, self.pictures = plan, count, ratio, pictures
+        # The file each result cut when it came in is kept whole in, by identity.
+        self.spill, self.kept = spill, {}
         # The newest round's results as they came in, messages already cut, and messages cleared, by identity.
         self.whole: dict[int, str] = {}
         self.cut: set[int] = set()
@@ -279,11 +286,23 @@ class Fit:
         return (message.get("role") == "user" and isinstance(content, list) and bool(content)
                 and content[0].get("text") == self.pictures)
 
+    def _mark(self, message: dict) -> str:
+        path = self.kept.get(id(message))
+        return SPILL_MARK.replace("{path}", path.replace("{", "{{").replace("}", "}}")) if path else CUT_MARK
+
+    def _held(self, message: dict, tokens: float) -> str:
+        """A newest result within `tokens`: as it came in, or its head and tail, the whole saved the first time it
+        is cut."""
+        whole = self.whole[id(message)]
+        if self.spill and id(message) not in self.kept and text_tokens(whole) > tokens:
+            self.kept[id(message)] = self.spill(whole)
+        return cut(whole, tokens, self._mark(message))
+
     def _shrink(self, message: dict) -> float:
         """Cut one result or one message of returned pictures to its small size; the estimated tokens saved."""
         before = message_tokens(message)
-        message["content"] = (cut(message["content"], self.plan.small / self.ratio) if message.get("role") == "tool"
-                              else self._cleared(message)["content"])
+        message["content"] = (cut(message["content"], self.plan.small / self.ratio, self._mark(message))
+                              if message.get("role") == "tool" else self._cleared(message)["content"])
         self.cut.add(id(message))
         return before - message_tokens(message)
 
@@ -328,7 +347,7 @@ class Fit:
         start, fresh = self._newest(convo)
         share = plan.result / ratio
         for message in fresh:
-            message["content"] = cut(self.whole[id(message)], share)
+            message["content"] = self._held(message, share)
         total = self.count(convo)
         older = [m for m in convo[:start] if m.get("role") == "tool" or self._returned(m)]
         if total > plan.ceiling:
@@ -373,7 +392,7 @@ class Fit:
             # Chinese wiki page counted 1.36 times its estimate on DeepSeek).
             left = FIT_TO * ((plan.ceiling - total) / ratio + sum(text_tokens(m["content"]) for m in fresh))
             for n, message in enumerate(sorted(fresh, key=lambda m: len(m["content"]))):
-                message["content"] = cut(self.whole[id(message)], max(floor, min(share, left / (len(fresh) - n))))
+                message["content"] = self._held(message, max(floor, min(share, left / (len(fresh) - n))))
                 left -= text_tokens(message["content"])
             total = self.count(convo)
         self.partial = self.partial or any(m["content"] != self.whole[id(m)] for m in fresh)
@@ -384,7 +403,7 @@ class Fit:
         what came in, and every other result and returned picture cut small."""
         _, newest = self._newest(convo)
         for message in newest:
-            message["content"] = cut(self.whole[id(message)], self.floor)
+            message["content"] = self._held(message, self.floor)
             self.cut.add(id(message))
         for message in convo:
             if id(message) not in self.cut and (message.get("role") == "tool" or self._returned(message)):

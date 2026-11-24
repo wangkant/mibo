@@ -13,8 +13,9 @@ from mibo.shell import files
 
 ROUNDS = 30
 _WIDE = re.compile("[⺀-鿿]")
-# The cut's count of what it left out, in its own words.
+# The cut's count of what it left out, in its own words, and the file it says holds the whole result.
 _LEFT_OUT = re.compile(r"\[\.\.\. (\d+) characters of this result left out")
+_KEPT_IN = re.compile(r"The whole result is in the file (.+?): read the part you need with read_file")
 
 
 def _han(n: int, chars: int) -> str:
@@ -80,3 +81,24 @@ def test_a_file_larger_than_the_window_arrives_cut_once_saying_what_was_left_out
     # Enough of it to work from, and how to read the rest: the cut names a range, the tail the next lines.
     assert len(_WIDE.findall(head)) >= 600 and "offset" in seen.split("\n\n[... ", 1)[1].split("]", 1)[0]
     assert "more lines: read again with offset" in tail
+
+
+def test_a_result_cut_when_it_comes_in_is_read_back_from_the_file_its_cut_names(app, turn, tmp_path):
+    app.model.window = 16384
+    measured(app, context=16384)
+    big = tmp_path / "big.txt"
+    big.write_text("\n".join(f"{n:06d} " + _han(n, 50) for n in range(1500)), encoding="utf-8")
+    first = turn("读一下这个文件", call("read_file", path=str(big)), say("读了开头和结尾。"))
+    seen = first.result_of(first.calls()[0]["id"])
+    path = _KEPT_IN.search(seen).group(1)
+    with open(path, encoding="utf-8") as f:
+        whole = f.read()
+    # The file holds the result as it came in: what the model saw is its head and its tail.
+    head, tail = seen.split("\n\n[... ", 1)[0], seen.rsplit("...]\n\n", 1)[1]
+    assert whole.startswith(head) and whole.endswith(tail) and len(whole) > 2 * len(seen)
+    # Any part of it is read with the file tool, with no question asked.
+    lines = whole.splitlines()
+    middle = len(lines) // 2
+    again = turn("中间那部分呢", call("read_file", path=path, offset=middle, limit=3), say("读到了。"), cards="no")
+    assert again.cards == []
+    assert _WIDE.findall(lines[middle - 1])[:40] == _WIDE.findall(again.result_of(again.calls()[0]["id"]))[:40]

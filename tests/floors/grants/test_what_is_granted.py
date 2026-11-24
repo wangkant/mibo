@@ -2,7 +2,8 @@
 in a folder on Windows' own drive outside the profile that nobody granted, or in one the person took back or set to
 read only in Settings, asks for the folder first; a folder granted to read is never changed, the one acting mode is
 honoured (off does nothing until they turn it on, read only changes nothing), the app's home and key files are never touched, a run that starts on a
-site nobody named asks first, and the programs on the never list are never operated."""
+site nobody named asks first, and the programs on the never list are never operated. The one part of the home a file
+tool reads is a tool result the app kept whole (spill.py): its file is read, nothing there is written."""
 from __future__ import annotations
 
 import json
@@ -13,7 +14,7 @@ import pytest
 from harness.folders import Profile
 from harness.model import call, say
 
-from mibo import acting
+from mibo import acting, spill
 from mibo.shell import files
 from mibo.shell import read as reading
 from mibo.shell.grants import Grants, norm
@@ -62,6 +63,13 @@ def test_the_acting_mode_holds_off_waits_for_the_person_and_read_only_changes_no
 # File tools on the app's home, a key file and a folder the person took back: {f} the granted folder, {h} the home,
 # {e} a folder taken back in Settings. (tool, its job as panel.py makes it, what the gate must do)
 REACHES = [
+    ("read", {"path": "{h}/runtime/spill/kept.txt"}, "run"),
+    ("read", {"path": "{h}/runtime/spill/../desktop/shell.json"}, "refuse"),
+    ("list", {"path": "{h}/runtime/spill"}, "refuse"),
+    ("write", {"path": "{h}/runtime/spill/kept.txt"}, "refuse"),
+    ("write", {"path": "{h}/runtime/spill/new.txt"}, "refuse"),
+    ("delete", {"paths": ["{h}/runtime/spill/kept.txt"]}, "refuse"),
+    ("move", {"moves": [{"from": "{f}/b.txt", "to": "{h}/runtime/spill/b.txt", "folder": ""}]}, "refuse"),
     ("read", {"path": "{h}/.env"}, "refuse"),
     ("read", {"path": "{f}/../home/.env"}, "refuse"),
     ("read", {"path": "{f}/id_rsa"}, "refuse"),
@@ -95,9 +103,14 @@ def test_no_file_tool_reaches_the_home_a_key_file_or_an_ungranted_folder(tmp_pat
     for name in ("b.txt", "id_rsa", "server.pem"):
         (folder / name).write_text("x", encoding="utf-8")
     (home / ".env").write_text("SECRET=1\n", encoding="utf-8")
+    (home / "runtime" / "desktop" / "shell.json").write_text("{}", encoding="utf-8")
+    spill.save(home, "a result kept whole")
+    next(spill.folder(home).iterdir()).rename(spill.folder(home) / "kept.txt")
     grants = Grants(home / "runtime" / "desktop", home)
     assert grants.add(str(folder)) == ""
     grants.remove(str(elsewhere))
+    # Every drive taken back, as a measuring script's home has it: the kept result is read all the same.
+    grants.remove(home.anchor)
     job = {"op": op, "recursive": False, "copy": False, "kind": "write",
            **filled(job, {"f": str(folder), "h": str(home), "e": str(elsewhere)})}
     job["folder"] = os.path.dirname(job.get("path", ""))

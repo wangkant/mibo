@@ -17,7 +17,7 @@ from pathlib import Path
 
 import openai
 
-from . import catalog, context, crossing, lookup_need, mcp_offer, review, surface, today
+from . import catalog, context, crossing, lookup_need, mcp_offer, review, spill, surface, today
 from .endpoints import model_problem
 from .llm import FROM_BUDGET, purpose
 from .shell import written as _written
@@ -315,7 +315,7 @@ class ToolLoop:
                 return self._budget(url, model, self._reply_effort(url, model),
                                     fixed=round(ratio * context.estimate({"messages": lead, "tools": tools})))
         fit = context.Fit(planned(), lambda c: context.count(self, url, model, {"messages": lead + c, "tools": tools}),
-                          ratio, TOOL_PICTURES)
+                          ratio, TOOL_PICTURES, lambda text: spill.save(today.runtime_of(self).parent, text))
 
         async def fitted() -> bool:
             # The fit ladder: results held and cut (context.Fit), then the history compacted now (dm.py).

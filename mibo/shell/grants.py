@@ -6,7 +6,8 @@ keys' file, the settings and the browser pane's profile). Whether commands run
 at all is the one acting mode (acting.py). A fresh home is granted the person's
 own folders (Desktop, Documents, Downloads, Pictures, Music, Videos), and the
 rest of the profile and the other drives are open too (`open`), less the
-protected places; folders elsewhere on the system drive are granted from a
+protected places, and so are the files of tool results the app keeps whole
+(spill.py), to reads; folders elsewhere on the system drive are granted from a
 question in the chat or in Settings. Any is set to read only or taken back in
 Settings, the person's own folders too, and that holds until they grant it again.
 """
@@ -20,6 +21,7 @@ import threading
 import time
 from pathlib import Path
 
+from .. import spill
 from ..storage import atomic_write_text
 from .pstables import OPEN_RISKY
 
@@ -268,6 +270,8 @@ class Places:
         # Skills' folders, the person's and the built-in ones: read and run from (asking, as outside any granted
         # folder), never written (skills/).
         self.skills = [norm(Path(home) / "skills"), norm(Path(self.package) / "skills" / "builtin")]
+        # Tool results kept whole for the model to read back (spill.py): its files are read, never written.
+        self.spill = norm(spill.folder(home))
         # The folders programs are looked up in: what is written there runs in place of a program of the same name.
         self.path_dirs = {norm(p) for p in env.get("PATH", "").split(os.pathsep) if p.strip()}
 
@@ -278,7 +282,7 @@ class Places:
         "look" at one place, "shallow" or "deep" for a listing of a folder or of all below it) are free in the program
         places Start reads (FINDABLE); a look, two levels into AppData (whether a program is installed there), at
         anything but a file. Nothing of a secret's place is free, not even whether it is there."""
-        if not write and any(under(path, own) and path != own for own in self.skills):
+        if not write and any(under(path, own) and path != own for own in (*self.skills, self.spill)):
             return ""
         if any(under(path, own) for own in (self.home, self.package, self.python)):
             return "app"
@@ -423,6 +427,8 @@ class Grants:
         if any(under(path, r) for r in self.roots(write)):
             return True
         places = self.places
+        if not write and under(path, places.spill) and path != places.spill:
+            return True
         return (under(path, places.profile) or not under(path, places.drive)) and not self.held_back(path, write)
 
     def root_of(self, path: str) -> str:
