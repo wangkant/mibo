@@ -42,6 +42,8 @@ ANSWER_CHARS = 50 * 1024
 LIST_ROWS = 300
 SEARCH_ROWS = 250
 WALK_MOST = 50000
+# How a read, a listing and a search say they found nothing (`nothing` reads them back).
+MISSING, EMPTY, NO_HITS = "There is no ", "(empty)", ": 0 files hold it"
 # Files larger than this are not searched, nor read whole for an edit.
 TEXT_MAX = 10 * 1024 * 1024
 # Lines of a difference shown on a card and in the list of a turn's changes.
@@ -348,7 +350,7 @@ def read(path: str, offset: int = 1, limit: int = READ_LINES) -> str:
     if os.path.isdir(path):
         return f"{path} is a folder, not a file: list it with list_files."
     if not os.path.isfile(path):
-        return f"There is no file {path}. List the folder with list_files to see what is there."
+        return f"{MISSING}file {path}. List the folder with list_files to see what is there."
     stat = os.stat(path)
     pdf = os.path.splitext(path)[1].lower() == ".pdf"
     lines = pdf_lines(path) if pdf else document_lines(path)
@@ -422,7 +424,7 @@ def _folder_total(path: str, places, most: int) -> tuple[int, int, bool]:
 def listing(path: str, places, pattern: str = "", recursive: bool = False, sort: str = "name") -> str:
     """Files and folders under `path` with sizes and dates; a folder's own total when not recursive."""
     if not os.path.isdir(path):
-        return f"There is no folder {path}." if not os.path.exists(path) else f"{path} is a file: read it with read_file."
+        return f"{MISSING}folder {path}." if not os.path.exists(path) else f"{path} is a file: read it with read_file."
     rows, cut, budget = [], False, WALK_MOST
     for entry, link in _walk(path, places, recursive):
         if entry is None:
@@ -461,13 +463,18 @@ def listing(path: str, places, pattern: str = "", recursive: bool = False, sort:
         lines.append(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(mtime))}  {shown:>9}  {rel}"
                      + (f"  [{what}]" if what else ""))
     more = f"\n[{len(rows) - LIST_ROWS} more not shown]" if len(rows) > LIST_ROWS else ""
-    return head + "\n" + ("\n".join(lines) or "(empty)") + more
+    return head + "\n" + ("\n".join(lines) or EMPTY) + more
+
+
+def nothing(out: str) -> bool:
+    """A read, a listing or a search whose answer `out` is that nothing by that name, or nothing at all, is there."""
+    return out.startswith(MISSING) or out.endswith(("\n" + EMPTY, NO_HITS))
 
 
 def search(path: str, text: str, places, pattern: str = "") -> str:
     """Lines holding `text` (any case) in the text files under `path`, in every common encoding."""
     if not os.path.isdir(path):
-        return f"There is no folder {path}."
+        return f"{MISSING}folder {path}."
     found, files, hits = [], 0, set()
     needle = text.lower()
     for entry, link in _walk(path, places, True):
