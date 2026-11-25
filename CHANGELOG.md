@@ -7,9 +7,22 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+The character's instructions put getting a task done first. Changes below follow runs of Harness-Bench and AgentDojo with one model held fixed, set beside Claude Code and AgentDojo's own pipeline on the same tasks.
+
+### Tasks
+
+- The instructions the character works by now say how a task is worked through: read what it names first, work sums and comparisons out with tools, go on until it is done without asking for what a tool can find, keep to the names and formats given, and check the result before saying it is done. The rules for small talk are shorter.
+
 ### Connectors
 
 - When a page cannot be read from this computer or a web search finds nothing, the answer names your connectors, as a file tool's does when it finds nothing, and names those of their tools that take an address or a path.
+- A connector tool's optional number, yes/no or list parameter is offered to the model with its own type. It was offered as text, and servers refused the text sent for it.
+
+### Files and commands
+
+- A file tool that writes, edits, moves or deletes takes its folder or full paths. A name given alone used the folder of an earlier step and could land elsewhere.
+- A command that gives a program a path through a variable set to a fixed value in the same command (`$dir = 'D:\work'; python "$dir\make.py"`) is read and judged as if the path were written out. It was refused.
+- A step in the folder above one you granted is pointed back to the granted folder once; when the task does need the folder above, you are asked for it. It could not be asked for before.
 
 ### Fixes
 
