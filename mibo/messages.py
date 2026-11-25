@@ -21,6 +21,8 @@ class MessageParsing:
         """One message as the text the model reads. `parts`, in order:
         {"type": "text", "text"}: their own words;
         {"type": "quote", "text"}: something the character said or shared that they answer;
+        {"type": "aside", "text", "at"}: a find the character brought on its own since they last spoke, at "at"
+        (HH:MM), not part of what they were talking about;
         {"type": "picture", "b64"}: a picture they attached;
         {"type": "file", "name", "text"}: a text file they attached.
         What they did not type is fenced: read as material, it can run no command."""
@@ -48,6 +50,10 @@ class MessageParsing:
             elif kind == "quote":
                 quoted = " ".join(_clean_prompt_source(part.get("text")).split())
                 out.append(fence(f"[reply {self.persona_name}: {quoted}]") if quoted else "[reply]")
+            elif kind == "aside":
+                quoted = " ".join(_clean_prompt_source(part.get("text")).split())
+                out.append(fence(f"[aside {part['at']}: {self.persona_name} brought this on its own, apart from "
+                                 f"what you were talking about: {quoted}]"))
             elif kind == "picture":
                 source = "base64://" + str(part.get("b64") or "")
                 shown = turn_pictures.get()

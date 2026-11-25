@@ -489,8 +489,8 @@ def chat_shown(runtime, conversation: str, now: float) -> list[tuple[str, list]]
 
 def chat_finds(runtime, conversation: str, now: float, lang: str, name: str) -> str:
     """The finds this chat showed lately (`chat_shown`), each with what the person did with it and why it was shown
-    (the reason its showing kept, in `lang`; `name` is the character's): what "this" or a quoted card means to the
-    reply model, and its answer to "why this one". "" when there are none."""
+    (the reason its showing kept, in `lang`; `name` is the character's): what a card they answer or a find brought
+    as an aside is to the reply model, and its answer to "why this one". "" when there are none."""
     from .panels import feed
     shown = chat_shown(runtime, conversation, now)
     if not shown:
@@ -519,8 +519,12 @@ def chat_finds(runtime, conversation: str, now: float, lang: str, name: str) -> 
     if not lines:
         return ""
     return ("<finds_in_this_chat>\nThe finds you showed in this chat lately, newest first, with why each was shown: "
-            "asked why you brought one, that is the answer. \"This\" or a quoted card is one of these. Bring one up "
-            "only if they do.\n" + fence_pages("\n".join(lines)) + "\n</finds_in_this_chat>")
+            "asked why you brought one, that is the answer. A card their message answers ([reply …]) is one of "
+            "these. One marked [aside …] you brought on your own between their words: their message after it goes "
+            "on with what you were talking about before it ('上面的结果', '刚才那个', 'that result', '继续', '存成文件' "
+            "mean your last answer to their request) unless their words plainly speak of the find (its subject, "
+            "'这个视频', '你推荐的那个'); when you truly cannot tell, ask in one short line. Bring one up only if "
+            "they do.\n" + fence_pages("\n".join(lines)) + "\n</finds_in_this_chat>")
 
 
 def matching(runtime, wish: str, avoid: list[dict], kind: str, length: str, now: float) -> list[tuple]:

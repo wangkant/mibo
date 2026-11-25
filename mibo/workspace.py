@@ -96,6 +96,12 @@ def _quote(message: dict) -> dict:
             "text": " ".join(v for v in (message.get("text"), f"[{facts}]", card.get("excerpt")) if v)}
 
 
+def _aside(message: dict) -> dict:
+    """A find the share step brought on its own, as the character reads it in the person's next message: an aside
+    at its time (HH:MM), apart from what they were talking about."""
+    return {**_quote(message), "type": "aside", "at": message["at"][11:16]}
+
+
 def _quotes(room: PageChat) -> list[dict]:
     """What the character shared in this chat since the person last spoke, as
     the quoted messages of theirs that it reads: its sentence, then the card."""
@@ -104,7 +110,7 @@ def _quotes(room: PageChat) -> list[dict]:
         if message.get("role") == "user" and not message.get("failed"):
             break
         if (message.get("card") or {}).get("id"):
-            shared.append(_quote(message))
+            shared.append(_aside(message) if message.get("unasked") else _quote(message))
         elif (message.get("task") or {}).get("quote"):
             # A reminder or a failure line the page said for a scheduled task (panels/schedule.py).
             shared.append({"type": "quote", "of": message["seq"],
@@ -623,7 +629,8 @@ class Workspace(ChatFinds):
         quotes = _quotes(room)
         asked = {"role": "user", "text": text, **({"attachments": records} if records else {}),
                  **({"choices": picked} if picked else {})}
-        # The thing answered is quoted last, nearest the words about it, and shown in the message.
+        # The thing answered is quoted last, nearest the words about it, and shown in the message: what they reply
+        # to, an aside no longer.
         answered = next((m for m in reversed(room.history)
                          if reply_to and (m.get("card") or {}).get("id") == reply_to), None)
         if answered:

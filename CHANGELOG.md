@@ -54,6 +54,10 @@ The character's instructions put getting a task done first. Changes below follow
 
 - A message you send while a reply is on its way is queued: it waits in a row above the box, with its attachments, and is sent when the reply ends. Several are sent in the order you typed them. 立即发送 on a row stops the reply and sends that message at once; the cross takes it away and puts its words back in an empty box. Before, the reply had to end or be stopped first.
 - After a reply you stopped or one that failed, the queue waits: the next message you send goes first, and the queue follows its reply.
+### Finds in the chat
+
+- A find the character brings into the chat on its own waits while you are talking with it: until ten minutes after your last message and its last reply, and while a question waits on you. It comes at the next good moment after.
+- Such a find is read as an aside. Your next message goes on with what you were talking about ("上面的结果" is the answer to your request) unless it names the find or replies to its card; when that cannot be told, the character asks. It was taken as the find, being the latest message.
 
 ### Fixes
 

@@ -258,7 +258,7 @@ class PromptBuilder:
             f"{memory_blocks}{not_kept}\n\n"
             f"{past}"
             f"{day}\n\n"
-            # What "this" means when they talk about a find the chat brought.
+            # The finds the chat brought, and how their words after one brought as an aside are read.
             f"{finds}"
             f"{blind_note}"
             f"{choices}"
