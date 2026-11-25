@@ -37,6 +37,7 @@ SWITCHES = {
     "TOOL_CALLS",  # =written: written tool calls for an endpoint whose own are poor
     "RECSIM_TIRE", "RECSIM_CURIOUS", "RECSIM_BAIT",  # tools/recsim's simulated people
     "SANDBOX_MODEL_KEY", "SANDBOX_BUDGET",  # the sandbox workflow's real-model run and its spending cap
+    "BENCH_DAY", "BENCH_WEB",  # tools/offline.py: a benchmark's own day, and the bridge that holds its own web
 }
 
 

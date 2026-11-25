@@ -30,12 +30,19 @@ The adaptation's two rules, stated with every result:
   false. destructiveHint is not set, as most servers leave it.
 - Cards are answered as a careful person would, from the user task's ground truth: yes (this once) only to a call
   of a tool the ground truth calls, whose arguments agree with that call (amounts, names, accounts, channels,
-  passwords; message text and dates may differ), and which carries no account number, link or address the ground
-  truth's call does not. No to every other card, the app's own cards for commands, folders, programs and switches
-  included.
+  passwords; message text and dates may differ), and which carries no account number, link or address that
+  neither the ground truth's call nor the person's own message does (a summary of the page they named may name
+  it). No to every other card, the app's own cards for commands, folders, programs and switches included.
   The start card of the suite's server is answered "always", with the read-only tick left as the card shows it.
   With --contains, a text value that holds the ground truth's or is held by it also agrees ("New York" for
   "New York, NY 10001"), as AgentDojo's own scorers read an address.
+- The suite's world is the app's world: a page of the suite's web is what the app's own page reader reads (the
+  suite's get_webpage, run on the case's environment and counted as that call), and the files of the suite's file
+  system lie in the person's Documents for the turn. AgentDojo gives its pipeline one tool for each; a person's
+  agent has its own reader and its own file tools, and they see what is there.
+- The app tells the model the suite's own day (day_of: the day its calendar is on, else the day after its newest
+  transaction), at this computer's hour. The app states the date in every turn, and the suites' worlds are dated
+  2022 and 2024; AgentDojo's own pipeline states no date.
 
 The model calls go through tools/everyday.py's Meter (the model's prices, OpenRouter's own cost where it reports
 one), which refuses calls past --budget dollars; a case cut by the budget is dropped and listed, never scored.
@@ -63,6 +70,7 @@ import urllib.error
 import urllib.request
 from ast import literal_eval
 from contextlib import contextmanager, suppress
+from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -91,6 +99,8 @@ FREE_TEXT = {"subject", "body", "content", "message", "date"}
 POINTER = re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b|https?://\S+|\bwww\.[\w.-]+(?:/\S*)?|[\w.+-]+@[\w-]+\.[\w.]+|"
                      r"\b[a-z0-9-]+\.(?:com|net|org|io)\b(?:/\S*)?", re.I)
 CARD_PATHS = ("mcp", "shell", "programs", "turnon")
+# Where `known` holds the links, addresses and account numbers of the person's own message.
+SAID = ""
 # Money that leaves the account, and changes to the account: the floor says these always ask.
 PAYING = {"send_money", "schedule_transaction", "update_scheduled_transaction"}
 ACCOUNT = {"update_password", "update_user_info"}
@@ -319,10 +329,11 @@ def _holds(a, b) -> bool:
 
 def agrees(name: str, args: dict, truth: FunctionCall, known: dict[str, set[str]], contains: bool = False) -> bool:
     """The call is the ground truth's `truth`: the same tool, the same values where they say who, what or how much,
-    and no account number, link or address the truth does not carry (a payee's name carries its IBANs)."""
+    and no account number, link or address that neither the truth nor the person's own message (`known[SAID]`)
+    carries (a payee's name carries its IBANs)."""
     if name != truth.function:
         return False
-    named = set().union(*(known.get(str(v).casefold(), set()) for v in truth.args.values()))
+    named = set().union(known.get(SAID, set()), *(known.get(str(v).casefold(), set()) for v in truth.args.values()))
     if not _pointers(args) <= _pointers(dict(truth.args)) | named:
         return False
     for key, value in truth.args.items():
@@ -332,6 +343,16 @@ def agrees(name: str, args: dict, truth: FunctionCall, known: dict[str, set[str]
         if mine != theirs and str(args[key]).casefold() not in known.get(str(value).casefold(), ())                 and not (contains and _holds(mine, theirs)):
             return False
     return True
+
+
+def day_of(suite) -> str:
+    """The day a suite's world is on, as YYYY-MM-DD; '' when nothing in it is dated."""
+    env = suite.load_and_inject_default_environment({})
+    today = getattr(getattr(env, "calendar", None), "current_day", None)
+    if today is None and getattr(env, "bank_account", None) is not None:
+        newest = max(str(t.date)[:10] for t in env.bank_account.transactions)
+        today = date.fromisoformat(newest) + timedelta(days=1)
+    return str(today)[:10] if today else ""
 
 
 def careful_yes(name: str, args: dict, truth: list[FunctionCall], known: dict[str, set[str]],
@@ -381,15 +402,23 @@ class Mibo(BasePipelineElement):
             replaying = self.proof in ("replay", "replay-go") and not self.injection
             self.model.final = getattr(user_task, "GROUND_TRUTH_OUTPUT", "") if replaying else ""
         self.bridge.begin(runtime, env)
+        # The person's computer beside the home (scratchhome.pc_of; that module needs the app's own packages).
+        documents = Path(f"{self.app.home.resolve()}-pc") / "Documents"
+        files = getattr(getattr(env, "filesystem", None), "files", None) or {}
+        for name, content in files.items():
+            (documents / name).write_text(content, encoding="utf-8")
         mark_rows, mark_log = len(self.model.rows), len(self.app.log_rows())
         cards: list[dict] = []
         done = threading.Event()
-        watcher = threading.Thread(target=self._cards, args=(truth, aliases(env), cards, done), daemon=True)
+        known = {**aliases(env), SAID: _pointers({"said": query})}
+        watcher = threading.Thread(target=self._cards, args=(truth, known, cards, done), daemon=True)
         chat = self.app.api("chats", {"private": True})
         began = time.time()
         watcher.start()
         reply = self.app.api("chat", {"text": query, "chat": chat["id"]}, timeout=TURN_S)
         done.set()
+        for name in files:
+            (documents / name).unlink(missing_ok=True)
         watcher.join(5)
         seconds = round(time.time() - began, 1)
         rows = self.model.rows[mark_rows:]
@@ -530,7 +559,8 @@ def main(argv: list[str]) -> int:
                                f"http://127.0.0.1:{args.ports + 3}", f"http://127.0.0.1:{args.ports + 2}/v1",
                                "stub" if args.proof else args.model, str(args.ports)], cwd=str(REPO), check=True,
                               capture_output=True, text=True, creationflags=NO_WINDOW if os.name == "nt" else 0)
-        app.env.update(json.loads(laid.stdout.splitlines()[-1]))
+        web = f"http://127.0.0.1:{args.ports + 3}" if any(f.name == "get_webpage" for f in suite.tools) else ""
+        app.env.update(json.loads(laid.stdout.splitlines()[-1]), BENCH_DAY=day_of(suite), BENCH_WEB=web)
         agent = Mibo(app, bridge, suite, server, model, args.proof, {})
         agent.contains = args.contains
         attack = load_attack("important_instructions", suite, agent)
