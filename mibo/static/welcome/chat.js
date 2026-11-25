@@ -51,8 +51,14 @@ window.paChat = (() => {
       question = null,
       // The person's answers drawn before the chat kept them, by the question's id.
       answers = new Map(),
-      // Their words that were not a yes, to be answered as a message once the reply has ended: {text, node, seq}.
-      queued = null,
+      // Messages waiting for the reply on its way to end, in order: {text, quote, files, choices} typed meanwhile, each
+      // a row above the box; or their words under a question that were not a yes, drawn already as `node` (with the
+      // chat's `seq`), which go first and have no row.
+      queue = [],
+      // The last reply was stopped or failed: the rows wait for the person, and a message they send goes first.
+      paused = false,
+      // 立即发送 stopped the reply: the stop does not hold the queue, and the stopped words stay out of the box.
+      jumping = false,
       polling = false,
       pollTimer = null,
       loaded = false,
@@ -135,6 +141,10 @@ window.paChat = (() => {
     parts.refused = el("div", "chat-refused");
     parts.refused.setAttribute("role", "alert");
     parts.refused.hidden = true;
+    // What waits for the reply on its way, a row each.
+    parts.queue = el("div", "chat-queue");
+    parts.queue.setAttribute("role", "list");
+    parts.queue.hidden = true;
     parts.form = el("form", "chat-composer");
     parts.quote = el("div", "chat-composer-quote");
     parts.quote.hidden = true;
@@ -193,7 +203,7 @@ window.paChat = (() => {
     tools.append(parts.plus, bar.node, plus.chips, parts.picker, parts.send);
     parts.form.append(parts.quote, parts.tray, parts.input, tools);
     parts.hint = el("p", "chat-hint");
-    parts.compose.append(parts.banner, parts.refused, parts.form, parts.hint);
+    parts.compose.append(parts.banner, parts.refused, parts.queue, parts.form, parts.hint);
     // A click on the box's padding still puts the caret in the text.
     parts.form.addEventListener("mousedown", (event) => {
       if (event.target === parts.form || event.target === tools) {
@@ -263,11 +273,11 @@ window.paChat = (() => {
         setReply(null);
       }
     });
-    // Enter sends from the box itself: a submit here is the button, which stops a reply on its way, or answers the
-    // question waiting on the person when they typed something.
+    // Enter sends from the box itself: a submit here is the button, which stops a reply on its way when the box is
+    // empty, and otherwise sends, queues or answers as Enter does.
     parts.form.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (sending && !(question && parts.input.value.trim())) stopReply("stopped");
+      if (stops()) stopReply("stopped");
       else submit();
     });
     // The page's own listeners, taken off again when the chat is deleted.
@@ -322,8 +332,9 @@ window.paChat = (() => {
       );
       paintPlaceholder(!parts.empty.hidden);
       parts.input.setAttribute("aria-label", say("send"));
-      parts.send.setAttribute("aria-label", say(sending ? "stop" : "send"));
-      parts.send.title = say(sending ? "stop" : "send");
+      parts.queue.setAttribute("aria-label", say("queuedList"));
+      syncSend();
+      paintQueue();
       plus.render();
       bar.render();
       parts.dropZone.textContent = say("dropHere");
@@ -393,18 +404,20 @@ window.paChat = (() => {
     function paintPlaceholder(empty) {
       parts.input.placeholder = question ? say("confirmAsk") : held || say(empty ? "placeholderEmpty" : "placeholder");
     }
-    // While a reply is on its way the send button is the stop button, unless a question waits on the person and
-    // they have typed their answer.
+    // While a reply is on its way the send button is the stop button with nothing in the box; with a message in it,
+    // it queues the message, or sends the answer to a question waiting on the person.
+    const typed = () => Boolean(parts.input.value.trim() || attached.count);
+    const stops = () => sending && !(question ? parts.input.value.trim() : typed());
     function syncSend() {
-      const stops = sending && !(question && parts.input.value.trim());
-      if (parts.send.classList.contains("stopping") !== stops || !parts.send.firstChild) {
-        parts.send.classList.toggle("stopping", stops);
-        parts.send.replaceChildren(svg(stops ? I.stop : I.up));
-        parts.send.setAttribute("aria-label", say(stops ? "stop" : "send"));
-        parts.send.title = say(stops ? "stop" : "send");
+      const stopping = stops();
+      if (parts.send.classList.contains("stopping") !== stopping || !parts.send.firstChild) {
+        parts.send.classList.toggle("stopping", stopping);
+        parts.send.replaceChildren(svg(stopping ? I.stop : I.up));
       }
-      parts.send.disabled = !sending && (!state?.configured || !(parts.input.value.trim() || attached.count) ||
-        !attached.ready());
+      const label = say(stopping ? "stop" : sending && !question ? "queue" : "send");
+      parts.send.setAttribute("aria-label", label);
+      parts.send.title = label;
+      parts.send.disabled = !stopping && !question && (!state?.configured || !typed() || !attached.ready());
     }
     function grow() {
       parts.input.style.height = "auto";
@@ -547,11 +560,6 @@ window.paChat = (() => {
         answer(parts.input.value);
         return;
       }
-      if (sending) {
-        // The text stays in the box: say why Enter did nothing.
-        flash(say("wait"));
-        return;
-      }
       const text = parts.input.value;
       // A subject for its next walk goes there, not into the chat.
       if (plus.wonder(text)) {
@@ -559,15 +567,62 @@ window.paChat = (() => {
         grow();
         return;
       }
-      if (!(text.trim() || attached.count) || !state?.configured || !attached.ready()) return;
+      if (!typed() || !state?.configured || !attached.ready()) return;
       if (!bar.allow(submit)) return;
-      const quote = replying;
-      const files = attached.take();
+      // Beside a page in the app's browser, the page it is about goes with it (browse.js).
+      const message = { text, quote: replying, files: attached.take(),
+        choices: [...plus.take(), ...(window.paBeside?.take() || [])] };
       parts.input.value = "";
       setReply(null);
       grow();
-      // Beside a page in the app's browser, the page it is about goes with it (browse.js).
-      send(text, null, quote, files, [...plus.take(), ...(window.paBeside?.take() || [])]);
+      // While a reply is on its way it waits in a row above the box.
+      if (sending) {
+        queue.push(message);
+        paintQueue();
+        parts.queue.scrollTop = parts.queue.scrollHeight;
+      } else send(message.text, null, message.quote, message.files, message.choices);
+    }
+    // Their queued messages, a row each: the words on one line, how many attachments go with them, 立即发送 and 移除.
+    function paintQueue() {
+      const rows = queue.filter((entry) => !entry.node);
+      parts.queue.hidden = !rows.length;
+      parts.queue.replaceChildren(...rows.map((entry) => {
+        const row = el("div", "chat-queue-row");
+        row.setAttribute("role", "listitem");
+        row.append(el("span", "chat-queue-mark", say("queued")),
+          el("span", "chat-queue-text", entry.text.replace(/\s+/g, " ").trim()));
+        if (entry.files.length) {
+          const files = el("span", "chat-queue-files");
+          files.append(svg(I.file), el("span", "", say("queuedFiles").replace("{n}", entry.files.length)));
+          row.append(files);
+        }
+        row.append(button("pa-btn pa-btn-ghost pa-btn-sm chat-queue-now", say("sendNow"), () => sendNow(entry)),
+          iconButton("chat-quote-x", I.x, say("unqueue"), () => unqueue(entry)));
+        return row;
+      }));
+    }
+    // 立即发送: the reply on its way stops as the stop button stops it, and this message goes next, the rest behind it.
+    function sendNow(entry) {
+      queue = [entry, ...queue.filter((other) => other !== entry)];
+      parts.input.focus();
+      if (sending) {
+        jumping = true;
+        stopReply("stopped");
+      } else {
+        paused = false;
+        sendQueued();
+      }
+    }
+    // A row taken away: its words go back to an empty box, its pictures are let go.
+    function unqueue(entry) {
+      queue = queue.filter((other) => other !== entry);
+      for (const item of entry.files) if (item.url && item.kind !== "page") URL.revokeObjectURL(item.url);
+      if (!parts.input.value) {
+        parts.input.value = entry.text;
+        grow();
+      }
+      paintQueue();
+      parts.input.focus();
     }
     // `held`: words drawn already, {node}; with `seq`, an answer that was not a yes, answered where it stands
     // (workspace.chat `answering`).
@@ -586,12 +641,15 @@ window.paChat = (() => {
       // The first message of a plain chat names it: shown at once, and as kept once the list is read again.
       const naming = text.trim() || files.find((item) => item.kind === "file")?.file || "";
       if (!main && !title && naming) hooks.changed(id, Array.from(naming.replace(/\s+/g, " ")).slice(0, TITLE_CLIP).join(""));
+      // The reply came: only then does the queue go on by itself.
+      let ended = false;
       try {
         // A message sent again after a reload has only its stored attachments: the chat sends those again.
         const attachments = files.filter((item) => item.data).map(({ kind, file, data, url }) =>
           kind === "page" ? { kind, url, title: file } : { kind, name: file, data });
         const value = await ctx.api("chat", { text, after: seen, retry: retrySeq, chat: id, reply_to: quote?.id || "", attachments, choices,
           ...(held.seq ? { answering: held.seq } : {}) }, { signal: cut.signal });
+        ended = true;
         for (const item of files) if (item.url) URL.revokeObjectURL(item.url);
         // The chat as recorded: anything sent meanwhile, this message and the reply. Words the chat numbered
         // already stay where they are.
@@ -609,7 +667,7 @@ window.paChat = (() => {
         // The service marks the message stopped once its reply has ended; a page process that hangs is not waited for.
         if (why) await Promise.race([stopping, new Promise((done) => setTimeout(done, 5000))]);
         // Stopped: the words go back in the box, to edit and send again.
-        if (why === "stopped" && !parts.input.value && !held.seq) {
+        if (why === "stopped" && !parts.input.value && !held.seq && !jumping) {
           parts.input.value = text;
           grow();
         }
@@ -637,6 +695,8 @@ window.paChat = (() => {
         hooks.doing("");
         sending = false;
         waiting = mine = null;
+        paused = !ended && !jumping;
+        jumping = false;
         syncSend();
         if (visible()) parts.input.focus();
         if (!main) hooks.changed();
@@ -645,12 +705,15 @@ window.paChat = (() => {
         sendQueued();
       }
     }
-    // What they said under a question that was not a yes, answered as the message it is once the reply has ended.
+    // Once a reply has ended: words under its question that were not a yes, answered as the message they are; else,
+    // unless the reply was stopped or failed, the first queued message.
     function sendQueued() {
-      if (!queued || sending) return;
-      const next = queued;
-      queued = null;
-      send(next.text, null, null, [], next.choices || [], next);
+      if (sending) return;
+      const next = queue.find((entry) => entry.node) || (!paused && queue[0]);
+      if (!next) return;
+      queue = queue.filter((entry) => entry !== next);
+      paintQueue();
+      send(next.text, null, next.quote, next.files, next.choices, next);
     }
 
     // ---- Answering the question a step waits on (cardwait.py): the person's own words typed in the box, or on a
@@ -686,13 +749,13 @@ window.paChat = (() => {
         // Typed words that were not a yes are a message of their own; a press of 不执行 is only the answer.
         // Beside a page, the page it is about goes with it, as with any message.
         if (!told.yes && !choice)
-          queued = { text: words, node: said, seq: told.seq, choices: [...plus.take(), ...(window.paBeside?.take() || [])] };
+          queue.unshift({ text: words, node: said, seq: told.seq, choices: [...plus.take(), ...(window.paBeside?.take() || [])] });
       } else {
         // The question no longer waits: typed words are the ordinary message they are; a press goes.
         answers.delete(asking.id);
         asked({ ...asking, state: "unanswered" });
         if (choice) said.remove();
-        else queued = { text: words, node: said, choices: [...plus.take(), ...(window.paBeside?.take() || [])] };
+        else queue.unshift({ text: words, node: said, choices: [...plus.take(), ...(window.paBeside?.take() || [])] });
       }
       sendQueued();
     }
@@ -919,6 +982,8 @@ window.paChat = (() => {
         root.remove();
         for (const url of blobs.values()) url.then((value) => URL.revokeObjectURL(value)).catch(() => {});
         attached.drop();
+        // Queued messages go with the view, unsent.
+        for (const entry of queue) for (const item of entry.files || []) if (item.url) URL.revokeObjectURL(item.url);
       },
     };
   }

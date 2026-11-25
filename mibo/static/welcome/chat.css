@@ -1439,6 +1439,59 @@ button.find-why:hover,
   flex: 1;
   min-width: 0;
 }
+/* Messages typed while a reply is on its way, a quiet row each above the box until they are sent. */
+.chat-queue {
+  max-height: 124px;
+  margin-bottom: 10px;
+  overflow-y: auto;
+  border: 1px solid var(--pa-line-strong);
+  border-radius: var(--pa-r-md);
+  background: var(--pa-surface);
+}
+.chat-queue[hidden] {
+  display: none;
+}
+.chat-queue-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pa-s2);
+  min-height: 40px;
+  padding: 4px 8px 4px 14px;
+  font-size: var(--pa-fs-sm);
+}
+.chat-queue-row + .chat-queue-row {
+  border-top: 1px solid var(--pa-line);
+}
+.chat-queue-mark {
+  flex: none;
+  color: var(--pa-faint);
+  font-size: var(--pa-fs-xs);
+}
+.chat-queue-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--pa-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-queue-files {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  color: var(--pa-muted);
+  font-size: var(--pa-fs-xs);
+}
+.chat-queue-files .i {
+  width: 14px;
+  height: 14px;
+}
+.chat .chat-queue-now {
+  flex: none;
+  height: 28px;
+  padding: 0 10px;
+}
 /* Files dragged over the chat. */
 .chat {
   position: relative;

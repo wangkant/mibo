@@ -136,7 +136,7 @@ window.paCompact = (() => {
       input.value = input.value.trim() ? `${input.value}\n${words}` : words;
       input.dispatchEvent(new Event("input"));
     }
-    // Sent as Enter in the box sends: the form's own submit would stop a reply on its way instead.
+    // Sent as Enter in the box sends, queued behind a reply on its way (chat.js).
     if (given.send)
       return input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     if (given.wonder) {
