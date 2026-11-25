@@ -5,7 +5,8 @@
 // time range at /api/browser/clear), the site permissions decided there (camera, microphone, location ...: listed
 // and taken back at /api/browser/permissions), and per site what it may
 // do there (/api/browser/sites, /api/browser/allowed): kinds let through without asking, the person's feed
-// read in the background, the ways kept from confirmed tasks.
+// read in the background, the ways kept from confirmed tasks; and the standing rules the person said in the chat,
+// which the automatic review reads (/api/standing, each taken out with {remove}: mibo/standing.py).
 (() => {
   // As many programs as the server keeps.
   const IGNORE_MAX = 50;
@@ -20,10 +21,11 @@
     const history = { next: null, day: "", turn: 0 };
     const places = {};
     const permits = {};
+    const standing = {};
     const node = kit.section("privacy");
     const box = kit.card();
     box.classList.add("setup-options");
-    box.append(buildRemarks(), buildQuiet(), ...buildBrowsing(), buildPermits(), buildSites());
+    box.append(buildRemarks(), buildQuiet(), ...buildBrowsing(), buildPermits(), buildSites(), buildStanding());
     node.append(box);
 
     // ---- Remarks on what is in front, and the programs it never looks at.
@@ -454,6 +456,43 @@
       loadSites();
     }
 
+    // ---- The standing rules: each one the person's own sentence from the chat, with its day, taken out with its
+    // cross (the steps it covered ask again). Added only in the chat.
+    function buildStanding() {
+      const fold = kit.fold(t.standingTitle);
+      kit.item("standing", fold.node);
+      const list = el("div", "setup-shell-list");
+      const error = kit.errorLine();
+      fold.body.append(el("p", "setup-help", t.standingText), list, error);
+      Object.assign(standing, { list, error });
+      return fold.node;
+    }
+
+    function renderStanding(rules) {
+      if (!rules.length) return standing.list.replaceChildren(el("p", "setup-help", t.standingNone));
+      standing.list.replaceChildren(...rules.map((rule) => {
+        const item = el("div", "setup-shell-row");
+        const words = el("div", "setup-option-words");
+        words.append(el("p", "setup-option-name", rule.text),
+          el("p", "setup-option-text", new Date(rule.at * 1000).toLocaleDateString(paI18n.locale)));
+        const end = el("div", "setup-shell-row-end");
+        end.append(kit.iconButton("setup-word-off", "cross", paI18n.t("setup_privacy.standingRemove", { text: rule.text }),
+          () => changeStanding({ remove: rule.id })));
+        item.append(words, end);
+        return item;
+      }));
+    }
+
+    // The rules as they stand, after taking one out when `change` names it.
+    async function changeStanding(change) {
+      standing.error.hidden = true;
+      try {
+        renderStanding((await ctx.api("standing", change)).rules);
+      } catch (error) {
+        kit.failed(standing.error, error, t);
+      }
+    }
+
     renderRemarks();
 
     function show() {
@@ -461,6 +500,7 @@
       loadQuiet();
       loadBrowsing().then(loadSites);
       if (permits.fold.node.open) changePermits();
+      changeStanding();
     }
 
     return { node, show };

@@ -939,7 +939,8 @@
     "ask": "Set “{name}” to {value}?",
     "widens": "This change lets the character do more; it takes effect only after your yes in the chat.",
     "on": "on",
-    "off": "off"
+    "off": "off",
+    "keep": "Keep this as a standing rule? “{value}”"
   },
   "setup": {
     "title": "Settings",
@@ -1483,7 +1484,11 @@
     "permitStates": {
       "allow": "Always allowed",
       "deny": "Not allowed"
-    }
+    },
+    "standingTitle": "Standing rules",
+    "standingText": "When you say in the chat that a kind of step need not ask you from now on, that sentence is kept here as a rule for the automatic review. Paying, deleting for good, your accounts and passwords still ask every time. Removing a rule brings the question back.",
+    "standingNone": "No rules yet.",
+    "standingRemove": "Remove rule: {text}"
   },
   "setup_programs": {
     "hint": "Let the character look at or operate the windows of programs you allow, when you ask in the chat: writing in Notepad, working out a sum in Calculator.",

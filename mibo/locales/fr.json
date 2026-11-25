@@ -940,7 +940,8 @@
     "ask": "Régler « {name} » sur {value} ?",
     "widens": "Ce changement élargit ce que le personnage peut faire ; il s'applique après votre confirmation dans le chat.",
     "on": "activé",
-    "off": "désactivé"
+    "off": "désactivé",
+    "keep": "Conserver ceci comme règle permanente ? « {value} »"
   },
   "setup": {
     "title": "Paramètres",
@@ -1486,7 +1487,11 @@
     "permitStates": {
       "allow": "Toujours autorisé",
       "deny": "Non autorisé"
-    }
+    },
+    "standingTitle": "Règles permanentes",
+    "standingText": "Lorsque vous dites dans le chat qu’un type d’action n’a plus besoin de votre confirmation, la phrase est conservée ici comme règle pour la vérification automatique. Les paiements, les suppressions définitives, vos comptes et mots de passe demandent toujours une confirmation. Retirer une règle rétablit la question.",
+    "standingNone": "Aucune règle pour l’instant.",
+    "standingRemove": "Retirer la règle : {text}"
   },
   "setup_programs": {
     "hint": "Laissez le personnage consulter ou piloter les fenêtres des programmes que vous autorisez, quand vous le demandez dans la discussion : écrire dans le Bloc-notes, faire un calcul dans la Calculatrice.",

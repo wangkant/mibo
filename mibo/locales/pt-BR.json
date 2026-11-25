@@ -940,7 +940,8 @@
     "ask": "Definir “{name}” como {value}?",
     "widens": "Esta mudança amplia o que o personagem pode fazer; ela vale somente após a sua confirmação no chat.",
     "on": "ativado",
-    "off": "desativado"
+    "off": "desativado",
+    "keep": "Guardar isto como regra permanente? “{value}”"
   },
   "setup": {
     "title": "Configurações",
@@ -1486,7 +1487,11 @@
     "permitStates": {
       "allow": "Sempre permitido",
       "deny": "Não permitido"
-    }
+    },
+    "standingTitle": "Regras permanentes",
+    "standingText": "Quando você diz no chat que um tipo de ação não precisa mais da sua confirmação, essa frase fica guardada aqui como regra para a revisão automática. Pagamentos, exclusões definitivas, suas contas e senhas continuam pedindo confirmação toda vez. Ao remover uma regra, a pergunta volta.",
+    "standingNone": "Nenhuma regra ainda.",
+    "standingRemove": "Remover regra: {text}"
   },
   "setup_programs": {
     "hint": "Deixe o personagem ver ou operar as janelas dos programas que você permitir, quando pedir na conversa: escrever no Bloco de Notas, fazer uma conta na Calculadora.",

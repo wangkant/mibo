@@ -940,7 +940,8 @@
     "ask": "¿Cambiar «{name}» a {value}?",
     "widens": "Este cambio amplía lo que el personaje puede hacer; se aplica tras su confirmación en el chat.",
     "on": "activado",
-    "off": "desactivado"
+    "off": "desactivado",
+    "keep": "¿Guardar esto como regla permanente? «{value}»"
   },
   "setup": {
     "title": "Configuración",
@@ -1486,7 +1487,11 @@
     "permitStates": {
       "allow": "Siempre permitido",
       "deny": "No permitido"
-    }
+    },
+    "standingTitle": "Reglas permanentes",
+    "standingText": "Cuando dice en el chat que un tipo de paso ya no necesita su confirmación, esa frase se guarda aquí como regla para la revisión automática. Los pagos, los borrados definitivos, sus cuentas y contraseñas se siguen confirmando cada vez. Al quitar una regla, vuelve la pregunta.",
+    "standingNone": "Aún no hay reglas.",
+    "standingRemove": "Quitar regla: {text}"
   },
   "setup_programs": {
     "hint": "Permita que el personaje consulte o maneje las ventanas de los programas que autorice, cuando se lo pida en el chat: escribir en el Bloc de notas, hacer una cuenta en la Calculadora.",

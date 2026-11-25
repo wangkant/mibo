@@ -939,7 +939,8 @@
     "ask": "„{name}“ auf {value} setzen?",
     "widens": "Diese Änderung erweitert, was die Figur tun darf; sie gilt erst nach Ihrer Bestätigung im Chat.",
     "on": "an",
-    "off": "aus"
+    "off": "aus",
+    "keep": "Als dauerhafte Regel speichern? „{value}“"
   },
   "setup": {
     "title": "Einstellungen",
@@ -1485,7 +1486,11 @@
     "permitStates": {
       "allow": "Immer erlaubt",
       "deny": "Nicht erlaubt"
-    }
+    },
+    "standingTitle": "Dauerhafte Regeln",
+    "standingText": "Wenn Sie im Chat sagen, dass eine Art von Schritt künftig keine Bestätigung braucht, wird dieser Satz hier als Regel für die automatische Prüfung gespeichert. Zahlungen, endgültiges Löschen, Ihre Konten und Passwörter werden weiterhin jedes Mal bestätigt. Wenn Sie eine Regel entfernen, wird wieder nachgefragt.",
+    "standingNone": "Noch keine Regeln.",
+    "standingRemove": "Regel entfernen: {text}"
   },
   "setup_programs": {
     "hint": "Die Figur darf auf Ihre Bitte im Chat die Fenster erlaubter Programme ansehen oder bedienen: im Editor schreiben, im Rechner etwas ausrechnen.",
