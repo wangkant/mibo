@@ -89,8 +89,8 @@ class OperatedPane:
     def cdp(self, method: str, params: dict | None = None, timeout: float = CDP_S, session: str = "",
             tab: int = 0) -> dict:
         """One DevTools protocol call in the page open now (with `tab`, in that tab's), or with `session` in one of
-        its frames."""
-        return call_devtools(self.ui, lambda: self.core_of(tab), method, params or {}, timeout, session)
+        its frames; a page at rest wakes for it (browser.Pane.in_use)."""
+        return call_devtools(self.ui, lambda: self.in_use(tab), method, params or {}, timeout, session)
 
     def listen(self, name: str, handler: Callable[..., None], session: bool = False, tab: int = 0) -> None:
         """`handler(params)` on each DevTools event `name` of the page open now (with `tab`, of that tab's); with

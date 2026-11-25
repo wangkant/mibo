@@ -17,7 +17,9 @@ The pane has tabs (the strip is browsetabs.js): one WebView2 each, on the same
 folder and so the same browser processes. A site's new tab or popup opens as a
 tab of its own that the site keeps hold of (window.opener), so a sign-in popup
 hands its answer back and closes; the bar's private button opens an InPrivate
-tab beside the others. Only the tab in front is shown, timed and operated.
+tab beside the others. Only the tab in front is shown, timed and operated. A tab
+out of the front for a few minutes, and the tabs while the app window is away,
+rest: suspended with little memory until shown or called (`rests`).
 
 `Pane` is made of parts, each in a module of its own: where its WebView lies and
 how big the window is (paneplace.py), the reading timed (panereading.py), what
@@ -67,6 +69,10 @@ KEPT = "kept.json"
 # A page the character opens out of sight: laid out at this size behind the app's own page, where nothing of it
 # shows.
 ASIDE = (1280, 800)
+# A tab out of the front and not called by code this long rests (`rests`), as Chromium freezes a tab left in the
+# background; looked for this often.
+IDLE_S = 5 * 60
+REST_LOOK_MS = 60_000
 
 
 def _dark() -> bool:
@@ -86,8 +92,9 @@ class _Tab:
     """One tab of the pane: its WebView (made once it has a page to show), its core once that is ready, whether it
     is private (an InPrivate profile: no sign-in of the person's, nothing kept), the address on its way, the
     site's request a popup waits on (with its deferral), the tab that opened it, what the strip shows, what its page
-    asks of the person (the strip under the bar shows the first, while the tab is in front) and the permissions
-    allowed this time, for its page as it is now ({origin: kinds})."""
+    asks of the person (the strip under the bar shows the first, while the tab is in front), the permissions
+    allowed this time, for its page as it is now ({origin: kinds}), since when it is out of the front and when
+    code last called its page (monotonic), which `rests` goes by, and whether it rests."""
 
     def __init__(self, ident: int, private: bool, opener: _Tab | None = None):
         self.id, self.private, self.opener = ident, private, opener
@@ -101,6 +108,21 @@ class _Tab:
         self.aside = False
         self.notices: list[dict] = []
         self.once: dict[str, set] = {}
+        self.left = time.monotonic()
+        self.used = float("-inf")
+        self.resting = False
+
+
+def rests(tab: _Tab, front: bool, worked: bool, away: bool, quiet: bool, now: float) -> bool:
+    """Whether a tab's page rests: hidden, kept to little memory and suspended (Pane._settle). Every page while quiet.
+    Else none that plays sound, none while the character's run is under way in the pane (`worked`), none that code
+    called within IDLE_S; of the others, each while the app window is away (in the notification area or minimized),
+    except a page the character opened out of sight, and any out of the front for IDLE_S."""
+    if quiet:
+        return True
+    if tab.sound or worked or now - tab.used < IDLE_S:
+        return False
+    return (away and not tab.aside) or (not front and now - tab.left >= IDLE_S)
 
 
 class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
@@ -146,10 +168,12 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
         # Hidden: the person minimized the pane or went to Settings, and the page goes on behind the chip that
         # brings it back.
         self._hidden = False
-        self._timer = None
+        # The app window is out of sight (AppWindow._settle): the pages rest as `rests` says.
+        self._out = False
+        self._timer = self._rest_timer = None
         # .NET holds no reference to these.
         self._handlers = (lambda s, a: self._count(), lambda s, a: self._pause(), self._resized, self._tick,
-                          self._resize_end)
+                          self._resize_end, lambda s, a: self._settle())
         # While the character operates the page: the task, the step it is on, why it must stop ("stopped",
         # "paused" when the person moved in the pane), and the input watch that finds the person's own moves
         # (the run's own clicks go through DevTools, not Windows).
@@ -293,7 +317,7 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
 
     def _watch_form(self) -> None:
         from System.Windows.Forms import Timer
-        activated, deactivated, resized, tick, resize_end = self._handlers
+        activated, deactivated, resized, tick, resize_end, look = self._handlers
         self.form.Activated += activated
         self.form.Deactivate += deactivated
         self.form.Resize += resized
@@ -301,6 +325,11 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
         self._timer = Timer()
         self._timer.Interval = TICK_MS
         self._timer.Tick += tick
+        # Tabs left idle come to rest.
+        self._rest_timer = Timer()
+        self._rest_timer.Interval = REST_LOOK_MS
+        self._rest_timer.Tick += look
+        self._rest_timer.Start()
 
     def _open(self, address: str, here: bool = False) -> None:
         """`address` in the tab in front when `here` or when it is still empty (and not private), else in a new
@@ -337,7 +366,7 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
         from System.Drawing import Rectangle
         self._made += 1
         tab = _Tab(self._made, False)
-        tab.aside, tab.url, tab.pending = True, address, address
+        tab.aside, tab.url, tab.pending, tab.used = True, address, address, time.monotonic()
         self._tabs.append(tab)
         self._make(tab, Rectangle(0, 0, *ASIDE))
         self.tell(self._strip())
@@ -353,6 +382,7 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
         before = self._tab
         if before is not None:
             self._send(self._finish())
+            before.left = time.monotonic()
             if before.view is not None:
                 before.view.Visible = False
         self._tab = tab
@@ -368,6 +398,8 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
             tab.view.BringToFront()
             self._zoom_told = ()
             self._zoom()
+        # A page that rested while out of the front wakes as it shows.
+        self._settle()
         if tab.core is not None and browsed.web(str(tab.core.Source)):
             self._begin(str(tab.core.Source))
             self._reading["begun"] = True
@@ -744,19 +776,47 @@ class Pane(PlacedPane, ReadingPane, AskingPane, MenuPane, OperatedPane):
 
     def _quiet(self, on: bool) -> None:
         """Quiet hides the pane with the pet and suspends every tab's page; they come back as they were."""
-        from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
         if on == self._quieted:
             return
         self._quieted = on
         if on:
             self._pause()
-        for tab in self._tabs:
-            if tab.view is not None:
-                tab.view.Visible = not on and (tab.aside or (tab is self._tab and not self._hidden))
-            if tab.core is not None:
-                tab.core.MemoryUsageTargetLevel = (CoreWebView2MemoryUsageTargetLevel.Low if on
-                                                   else CoreWebView2MemoryUsageTargetLevel.Normal)
-                if on:
-                    tab.core.TrySuspendAsync()
+        self._settle()
         if not on:
             self._count()
+
+    def away(self, on: bool) -> None:
+        """The app window went out of sight or came back (AppWindow._settle): the pages rest or wake as `rests`
+        says."""
+        self._out = on
+        if self._tabs:
+            self.ui(self._settle)
+
+    def in_use(self, ident: int = 0):
+        """The page of tab `ident` (the one in front with 0) for code that calls it, which keeps it from resting
+        for IDLE_S; None when it is not there. On the form's thread."""
+        tab = next((t for t in self._tabs if t.id == ident), None) if ident else self._tab
+        if tab is None:
+            return None
+        tab.used = time.monotonic()
+        if tab.resting:
+            self._settle()
+        return tab.core
+
+    def _settle(self) -> None:
+        """Each tab's page as `rests` says: resting, out of sight with little memory and suspended; else shown if it is
+        in front or opened out of sight, with its memory as before. A page at rest wakes when it shows (WebView2
+        resumes it) or when code calls it (webview2.call_devtools)."""
+        from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
+        now, worked = time.monotonic(), self.op is not None
+        for tab in self._tabs:
+            still = rests(tab, tab is self._tab, worked, self._out, self._quieted, now)
+            # Only a change: what else hides a tab (a video of the app's page full screen, paneplace.cover) holds.
+            if tab.core is None or still == tab.resting:
+                continue
+            tab.resting = still
+            tab.view.Visible = not still and (tab.aside or (tab is self._tab and not self._hidden))
+            tab.core.MemoryUsageTargetLevel = (CoreWebView2MemoryUsageTargetLevel.Low if still
+                                               else CoreWebView2MemoryUsageTargetLevel.Normal)
+            if still:
+                tab.core.TrySuspendAsync()
