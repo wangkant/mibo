@@ -59,11 +59,36 @@ def _one_type(schema: dict) -> str:
     return "string"
 
 
-def offer_schema(schema, depth: int = 0) -> dict | None:
+def _plain(schema: dict, defs: dict) -> dict:
+    """A schema in its one plain shape: a local $ref followed, and an anyOf or oneOf with no type of its own taken
+    as its first branch that is not null, under the schema's own description. Pydantic, which most servers are
+    written with, writes an optional number as anyOf [number, null] and a nested model as a $ref; read as "no
+    type", either was offered as a string, and the server then refused the string the model sent (measured on
+    AgentDojo's banking tools, 2026-11-24: an amount sent as "1200" in three spellings)."""
+    for _ in range(4):
+        ref = schema.get("$ref")
+        branches = next((schema[k] for k in ("anyOf", "oneOf") if isinstance(schema.get(k), list)), None)
+        if isinstance(ref, str) and ref.startswith("#/") and isinstance(defs.get(ref.rsplit("/", 1)[-1]), dict):
+            inner = defs[ref.rsplit("/", 1)[-1]]
+        elif "type" not in schema and branches:
+            inner = next((b for b in branches if isinstance(b, dict) and b.get("type") != "null"), None)
+        else:
+            inner = None
+        if inner is None:
+            break
+        schema = {**inner, **{k: v for k, v in schema.items() if k not in ("$ref", "anyOf", "oneOf")}}
+    return schema
+
+
+def offer_schema(schema, depth: int = 0, defs: dict | None = None) -> dict | None:
     """The parts of an input schema a model needs, in the plain form every vendor accepts (one type, arrays
     with items, string enums), bounded and with descriptions cut and scrubbed; None when a required
     property cannot be offered."""
     schema = schema if isinstance(schema, dict) else {}
+    if defs is None:
+        named = schema.get("$defs") or schema.get("definitions")
+        defs = named if isinstance(named, dict) else {}
+    schema = _plain(schema, defs)
     kind = "object" if depth == 0 else _one_type(schema)
     out: dict = {"type": kind}
     if isinstance(schema.get("description"), str) and schema["description"].strip():
@@ -78,14 +103,14 @@ def offer_schema(schema, depth: int = 0) -> dict | None:
             if isinstance(schema.get(bound), (int, float)) and not isinstance(schema.get(bound), bool):
                 out[bound] = schema[bound]
     if kind == "array":
-        items = offer_schema(schema.get("items"), depth + 1) if depth < 3 else None
+        items = offer_schema(schema.get("items"), depth + 1, defs) if depth < 3 else None
         out["items"] = items if items else {"type": "string"}
     if kind == "object":
         properties = schema.get("properties") if depth < 3 else None
         kept = {}
         for key, item in list((properties or {}).items())[:30]:
             if isinstance(key, str) and _PROPERTY_RE.fullmatch(key):
-                offered = offer_schema(item, depth + 1)
+                offered = offer_schema(item, depth + 1, defs)
                 if offered is not None:
                     kept[key] = offered
         required = [k for k in (schema.get("required") if isinstance(properties, dict) else None) or ()
