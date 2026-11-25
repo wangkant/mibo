@@ -104,6 +104,23 @@ def test_a_typed_yes_is_the_persons_message_after_the_question_and_the_reply_fol
     assert page.errors == [] and page.refused == []
 
 
+def test_words_typed_while_a_question_waits_answer_it_and_are_not_queued(app, model, browser, desktop):
+    model.script(call("list_files", path=str(desktop)), say("Here is what I found."))
+    page = _chat(browser, app)
+    _type(page, "What is on my desktop?")
+    page.page.locator(".chat-messages .line[data-ask]").wait_for()
+    box = page.page.locator(".chat-input:visible")
+    box.fill("确定")
+    assert page.page.locator(".chat-send").get_attribute("aria-label") == "Send"
+    box.press("Enter")
+    page.page.locator(".chat-messages .me").get_by_text("确定").wait_for()
+    assert page.page.locator(".chat-queue").is_hidden()
+    page.page.get_by_text("Here is what I found.").wait_for()
+    _ended(page)
+    assert _listed(model) and len(model.asked()) == 2
+    assert page.errors == [] and page.refused == []
+
+
 def test_anything_else_typed_shows_as_their_message_leaves_the_step_undone_and_is_answered(app, model, browser,
                                                                                          desktop):
     # The turn's reply after the declined step, then the reply to their words as a message of their own.
