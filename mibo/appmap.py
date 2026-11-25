@@ -10,7 +10,8 @@ Everything runs in the page's process (/api/settings): a value is read, and a ch
 routes the page itself calls, so there is one way to each setting. A change the character may make goes ahead when
 the person asks for it; one that widens its permissions (acting on this computer, reading what is in front, going
 out on its own, reading a site's own feed...) first passes crossing.widening, which asks in the chat with the risk
-"widen" after outside material, or when the person's own words do not name it. A standing rule (standing.py) is
+"widen" after outside material, or when the person's own words do not name it; general background browsing and
+automatic sign-in are asked every time they are turned on (`Item.always`). A standing rule (standing.py) is
 taken only as the person's own message of the turn as they typed it, whole, or one whole sentence of it, which is
 asked (crossing.said_in), and is then such a widening change. A key or a token is never read: an item says only
 whether one is set.
@@ -206,6 +207,9 @@ class Item:
     words: Callable[[Any], str | None] | None = None
     # The locale key of the question's title.
     question: str = "appmap.ask"
+    # A widening asked every time, whatever their words name: one that acts with their account on sites unasked,
+    # which a mention of it ("千万别给我开自动登录") must not turn on.
+    always: bool = False
 
     @property
     def id(self) -> str:
@@ -308,11 +312,11 @@ ITEMS = (
          "Every signed-in site without its own choice, banks, payment, mail and accounts aside: browsing it with "
          "their account now and then for finds", field("/api/signins", "general", "background"),
          "/api/signins/general", lambda v, now: {"name": "background", "on": v}, _switch, _turned_on,
-         warn="setup_privacy.feedWarn"),
+         warn="setup_privacy.feedWarn", always=True),
     Item("connect", "sites-auto", "sites.choices.auto.name",
          "Every signed-in site without its own choice, banks, payment, mail and accounts aside: pressing its sign-in "
          "button once the browser filled a saved password", field("/api/signins", "general", "auto"),
-         "/api/signins/general", lambda v, now: {"name": "auto", "on": v}, _switch, _turned_on),
+         "/api/signins/general", lambda v, now: {"name": "auto", "on": v}, _switch, _turned_on, always=True),
     Item("language", "display", "setup_language.display", "The language of the app's screens",
          _ui_lang, "/api/look/ui", lambda v, now: {"lang": v}, _one_of("zh", "zh-TW", "en", "ja", "ko", "es", "fr",
                                                                      "de", "pt-BR", "ru")),
@@ -501,7 +505,7 @@ def mount(app, workspace, body, token: str) -> None:
         if said is not None and not stands:
             return {"status": "not_said", "now": shown(was)}
         names = item.named(value, was) if item.named else [i18n.t(item.label, code, count=0) for code in CODES]
-        if item.widening(value, was) and (stands == crossing.SENTENCE
+        if item.widening(value, was) and (item.always or stands == crossing.SENTENCE
                                           or crossing.widening_in(workspace, {"names": names})):
             card = {"type": "setting", **{code: {
                 "title": i18n.t(item.question, code, name=i18n.t(item.label, code, count=0),
