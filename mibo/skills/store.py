@@ -5,7 +5,8 @@ compatibility, metadata, allowed-tools, and Claude Code's disable-model-invocati
 `---` lines, then the instructions. Built-in skills ship in
 builtin/; the person's own are the folders of <home>/skills, one level deep, as other agents keep them. Mibo's
 own records (which are off, where each came from, Chinese titles) are in runtime/skills.json, never in a skill's
-folder, so the folder stays as its author wrote it. A skill that does not read is listed with what is wrong and
+folder, so the folder stays as its author wrote it. A built-in skill marked mibo-required in its metadata is part of
+the app: it is always on and is neither switched nor listed on the page. A skill that does not read is listed with what is wrong and
 never offered to the model. Nothing in a skill's folder is run when it is added.
 """
 from __future__ import annotations
@@ -65,14 +66,22 @@ class Skill:
     origin: str = ""
     source: str = ""
     added: float = 0.0
-    # The Chinese title and description Settings shows: the built-in ones' own, or made when added.
+    # The titles and descriptions Settings shows: the built-in ones' own in Chinese and English, in Chinese also
+    # made when a skill is added.
     title_zh: str = ""
     description_zh: str = ""
+    title_en: str = ""
+    description_en: str = ""
     digest: str = ""
 
     @property
     def usable(self) -> bool:
         return self.on and not self.problems
+
+    @property
+    def required(self) -> bool:
+        # Part of the app: only a built-in skill's own mark counts.
+        return self.builtin and self.meta.get("mibo-required") == "true"
 
     @property
     def model_invocable(self) -> bool:
@@ -226,7 +235,7 @@ def all_skills(home: Path) -> list[Skill]:
             if skill.name in seen:
                 skill.problems.append("replaced" if builtin else "duplicate")
             seen.add(skill.name)
-            skill.on = skill.name not in off
+            skill.on = skill.required or skill.name not in off
             row = sources.get(folder.name) if not builtin else None
             if isinstance(row, dict):
                 skill.origin, skill.source = str(row.get("origin") or ""), str(row.get("source") or "")
@@ -240,6 +249,9 @@ def all_skills(home: Path) -> list[Skill]:
                 made = {}
             skill.title_zh = skill.meta.get("mibo-title-zh", "") or str(made.get("title_zh") or "")
             skill.description_zh = skill.meta.get("mibo-description-zh", "") or str(made.get("description_zh") or "")
+            if builtin:
+                skill.title_en = skill.meta.get("mibo-title-en", "")
+                skill.description_en = skill.meta.get("mibo-description-en", "")
             found.append(skill)
     return found
 
@@ -256,7 +268,16 @@ def get(home: Path, name: str) -> tuple[Skill, str] | None:
     return None
 
 
+def part_of_app(name: str) -> bool:
+    """Whether `name` is a built-in skill that is part of the app."""
+    folder = BUILTIN / name
+    return folder.is_dir() and read(folder, True)[0].required
+
+
 def set_on(home: Path, name: str, on: bool) -> None:
+    """Switches a skill; ValueError when it is part of the app, which is always on."""
+    if not on and part_of_app(name):
+        raise ValueError("skill_builtin")
     data = records(home)
     off = [n for n in data.get("off") or [] if n != name]
     data["off"] = off if on else [*off, name]
@@ -414,7 +435,10 @@ def _under(path: PurePosixPath, root: PurePosixPath) -> bool:
 
 
 def remove(home: Path, folder_name: str) -> None:
-    """Deletes one of the person's own skills; built-in ones are switched off instead, never removed."""
+    """Deletes one of the person's own skills; built-in ones are never removed, and the optional ones are switched
+    off instead."""
+    if part_of_app(folder_name):
+        raise ValueError("skill_builtin")
     root = skills_dir(home)
     there = root / folder_name
     if not folder_name or folder_name.startswith(".") or there.parent != root or not there.is_dir() \

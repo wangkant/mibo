@@ -2112,6 +2112,7 @@
       "skill_bad_address": "Enter the address of a repository or folder on GitHub, GitLab, Codeberg or Gitee.",
       "skill_fetch_failed": "The address could not be downloaded. Check it and the network, then try again.",
       "skill_gone": "That skill is no longer there.",
+      "skill_builtin": "That skill is part of the app; it is always on and cannot be switched off or removed.",
       "skill_folder_empty": "The folder chosen holds no files.",
       "market_fetch_failed": "It could not be downloaded from its source. Check the network and try again.",
       "market_hash_mismatch": "What arrived does not match the version the catalog recorded, so it was not installed.",

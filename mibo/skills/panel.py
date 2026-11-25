@@ -39,7 +39,8 @@ def _row(skill: store.Skill, sources: dict) -> dict:
     kept = sources.get(skill.folder.name) if not skill.builtin and isinstance(sources.get(skill.folder.name),
                                                                                dict) else {}
     return {"name": skill.name, "folder": skill.folder.name, "description": skill.description,
-            "title_zh": skill.title_zh, "description_zh": skill.description_zh, "on": skill.on,
+            "title_zh": skill.title_zh, "description_zh": skill.description_zh, "title_en": skill.title_en,
+            "description_en": skill.description_en, "on": skill.on,
             "builtin": skill.builtin, "origin": skill.origin, "source": skill.source, "added": skill.added,
             "ref": str(kept.get("ref") or ""), "market": str((kept.get("market") or {}).get("id") or ""),
             "problems": skill.problems, "warnings": skill.warnings}
@@ -77,7 +78,8 @@ def mount(app, workspace, body) -> None:
 
     def view() -> dict:
         sources = store.records(home).get("sources") or {}
-        return {"skills": [_row(s, sources) for s in store.all_skills(home)], "folder": str(store.skills_dir(home))}
+        return {"skills": [_row(s, sources) for s in store.all_skills(home) if not s.required],
+                "folder": str(store.skills_dir(home))}
 
     tried: set[str] = set()
 
@@ -106,18 +108,18 @@ def mount(app, workspace, body) -> None:
     async def skills_change(request: Request):
         """A switch, a removal, or opening the folder."""
         payload = await body(request)
-        if isinstance(payload.get("name"), str) and isinstance(payload.get("on"), bool):
-            await asyncio.to_thread(store.set_on, home, payload["name"], payload["on"])
-        elif isinstance(payload.get("remove"), str):
-            try:
+        try:
+            if isinstance(payload.get("name"), str) and isinstance(payload.get("on"), bool):
+                await asyncio.to_thread(store.set_on, home, payload["name"], payload["on"])
+            elif isinstance(payload.get("remove"), str):
                 await asyncio.to_thread(store.remove, home, payload["remove"])
-            except ValueError as e:
-                return _error(str(e))
-        elif payload.get("open") is True:
-            store.skills_dir(home).mkdir(parents=True, exist_ok=True)
-            await asyncio.to_thread(open_path, store.skills_dir(home))
-        else:
-            return _error("generic")
+            elif payload.get("open") is True:
+                store.skills_dir(home).mkdir(parents=True, exist_ok=True)
+                await asyncio.to_thread(open_path, store.skills_dir(home))
+            else:
+                return _error("generic")
+        except ValueError as e:
+            return _error(str(e))
         return await asyncio.to_thread(view)
 
     @app.post("/api/skills/upload")

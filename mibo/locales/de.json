@@ -2117,6 +2117,7 @@
       "skill_bad_address": "Geben Sie die Adresse eines Repositorys oder Ordners auf GitHub, GitLab, Codeberg oder Gitee ein.",
       "skill_fetch_failed": "Die Adresse konnte nicht heruntergeladen werden. Prüfen Sie sie und das Netzwerk, und versuchen Sie es dann erneut.",
       "skill_gone": "Dieser Skill ist nicht mehr vorhanden.",
+      "skill_builtin": "Dieser Skill gehört zur App; er ist immer an und lässt sich weder ausschalten noch entfernen.",
       "skill_folder_empty": "Der gewählte Ordner enthält keine Dateien.",
       "market_fetch_failed": "Der Download von der Quelle ist fehlgeschlagen. Prüfen Sie das Netzwerk und versuchen Sie es erneut.",
       "market_hash_mismatch": "Das Empfangene stimmt nicht mit der im Katalog verzeichneten Version überein; daher wurde nichts installiert.",

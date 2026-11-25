@@ -2101,6 +2101,7 @@
       "skill_bad_address": "GitHub, GitLab, Codeberg 또는 Gitee의 저장소나 폴더 주소를 입력하세요.",
       "skill_fetch_failed": "그 주소에서 다운로드할 수 없습니다. 주소와 네트워크를 확인한 후 다시 시도하세요.",
       "skill_gone": "그 스킬은 더 이상 없습니다.",
+      "skill_builtin": "그 스킬은 앱의 일부여서 항상 켜져 있으며 끄거나 제거할 수 없습니다.",
       "skill_folder_empty": "선택한 폴더에 파일이 없습니다.",
       "market_fetch_failed": "출처에서 다운로드할 수 없습니다. 네트워크를 확인하고 다시 시도하세요.",
       "market_hash_mismatch": "받은 내용이 카탈로그에 기록된 버전과 일치하지 않아 설치하지 않았습니다.",

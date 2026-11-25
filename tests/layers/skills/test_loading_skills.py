@@ -13,7 +13,7 @@ from pathlib import Path
 
 from harness.model import call, say
 
-from mibo.skills import store
+from mibo.skills import panel, store
 
 
 def _home() -> Path:
@@ -125,3 +125,50 @@ def test_every_built_in_skill_loads_under_its_folders_name_and_its_description_r
     listed = tool.listing(skills, 131072)
     for s in skills:
         assert f"- {s.name} (version " in listed and tool._line(s.description, tool.DESCRIBED) in listed
+
+
+APP_SKILLS = {"word-document", "excel-workbook", "powerpoint-deck", "summarize-document", "translate-document",
+              "compare-options"}
+TITLES = {"draft-in-their-voice": "消息代拟", "fill-web-form": "网页表单填写", "free-up-disk-space": "磁盘清理",
+          "invoices-to-sheet": "票据汇总", "meeting-minutes": "会议纪要", "message-digest": "消息汇总",
+          "photos-by-date": "照片归档", "rename-files": "批量重命名", "research-brief": "调研简报",
+          "scheduled-briefing": "定时简报", "study-notes": "学习笔记", "tidy-downloads": "下载整理",
+          "trip-plan": "行程规划", "weekly-reading-digest": "阅读周报"}
+
+
+def test_the_skills_that_are_part_of_the_app_are_on_and_offered_whatever_was_stored_while_the_others_obey_their_switch(turn):
+    store._save(_home(), {"off": [*APP_SKILLS, "tidy-downloads"]})
+    done = turn("hello", say("Hi."))
+    listed = set(_listed(done.asked()[0]))
+    assert listed >= APP_SKILLS and "tidy-downloads" not in listed
+    assert {s.name for s in store.all_skills(_home()) if s.required} == APP_SKILLS
+    assert all(s.on for s in store.all_skills(_home()) if s.name in APP_SKILLS)
+
+
+def test_the_page_lists_only_the_optional_built_in_skills_each_with_its_written_titles(app):
+    rows = {row["name"]: row for row in app.get("/api/skills").json()["skills"]}
+    assert set(rows) == set(TITLES)
+    assert {name: row["title_zh"] for name, row in rows.items()} == TITLES
+    assert all(row["description_zh"] and row["title_en"] and row["description_en"] and row["on"] for row in rows.values())
+    assert rows["rename-files"]["title_en"] == "Batch rename"
+
+
+def test_a_skill_that_is_part_of_the_app_cannot_be_switched_off_or_removed_through_the_routes(app):
+    for name in sorted(APP_SKILLS):
+        off = app.post("/api/skills", {"name": name, "on": False})
+        gone = app.post("/api/skills", {"remove": name})
+        assert off.status_code == gone.status_code == 400
+        assert off.json()["error"] == gone.json()["error"] == "skill_builtin"
+    assert not store.records(_home()).get("off")
+    assert app.post("/api/skills", {"name": "tidy-downloads", "on": False}).status_code == 200
+
+
+def test_a_skill_of_the_persons_own_carrying_the_apps_mark_is_still_listed_and_can_be_switched_off(app, monkeypatch):
+    # No model is asked for a Chinese title.
+    async def no_titles(*args):
+        return None
+
+    monkeypatch.setattr(panel, "_title", no_titles)
+    _add("packing-list", "1. List clothes.", "metadata:\n  mibo-required: \"true\"\n")
+    assert "packing-list" in {row["name"] for row in app.get("/api/skills").json()["skills"]}
+    assert app.post("/api/skills", {"name": "packing-list", "on": False}).status_code == 200

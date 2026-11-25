@@ -2118,6 +2118,7 @@
       "skill_bad_address": "Escriba la dirección de un repositorio o una carpeta en GitHub, GitLab, Codeberg o Gitee.",
       "skill_fetch_failed": "No se pudo descargar la dirección. Compruébela junto con la red y vuelva a intentarlo.",
       "skill_gone": "Esa habilidad ya no está.",
+      "skill_builtin": "Esa habilidad forma parte de la app: está siempre activa y no se puede desactivar ni quitar.",
       "skill_folder_empty": "La carpeta elegida no contiene archivos.",
       "market_fetch_failed": "No se pudo descargar desde su origen. Compruebe la red y vuelva a intentarlo.",
       "market_hash_mismatch": "Lo recibido no coincide con la versión registrada en el catálogo, por lo que no se instaló.",

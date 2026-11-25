@@ -2101,6 +2101,7 @@
       "skill_bad_address": "請輸入 GitHub、GitLab、Codeberg 或 Gitee 上的儲存庫或資料夾位址。",
       "skill_fetch_failed": "無法下載此位址的內容。請檢查位址和網路後重試。",
       "skill_gone": "此技能已不存在。",
+      "skill_builtin": "此技能是應用程式的一部分，始終開啟，無法關閉或移除。",
       "skill_folder_empty": "所選資料夾為空。",
       "market_fetch_failed": "無法從來源下載。請檢查網路後重試。",
       "market_hash_mismatch": "下載的內容與目錄記錄的版本不一致，已停止安裝。",
