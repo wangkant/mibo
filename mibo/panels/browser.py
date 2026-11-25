@@ -266,7 +266,7 @@ class Operating:
     async def review(self, action: dict):
         """The reviewer on one action: the person's own messages of the turn under way, never the page. In a scheduled
         run of a standing request, its stored scope decides in the reviewer's place (schedule_tool.standing)."""
-        from .. import acting, review
+        from .. import acting, review, standing
         from ..crossing import turn_read
         board = self.workspace.schedule
         if board is not None and board.running:
@@ -275,7 +275,8 @@ class Operating:
                 return verdict
         request = await asyncio.to_thread(acting.asked, self.workspace)
         return await review.decide("browser", request, action, ask=acting.reviewer(self.workspace),
-                                   attended=self.window.attended(), lang=self.lang, read=turn_read(self.workspace))
+                                   attended=self.window.attended(), lang=self.lang, read=turn_read(self.workspace),
+                                   rules=await asyncio.to_thread(standing.rules, self.workspace))
 
     async def ask(self, card: dict, tab: int) -> dict | None:
         """The act is said in the chat and shown beside the page, its control ringed on the page, until the person

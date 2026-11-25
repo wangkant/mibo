@@ -508,13 +508,13 @@ class Desk:
     def review(self, action: dict):
         """Auto mode's reviewer on one action, on the worker thread: the person's own messages of the turn under
         way, never the window."""
-        from .. import acting, review
+        from .. import acting, review, standing
         from ..crossing import turn_read
         window = getattr(self.app.state, "window", None)
         return asyncio.run(review.decide("programs", acting.asked(self.workspace), action,
                                          ask=acting.reviewer(self.workspace),
                                          attended=window is not None and window.attended(), lang=self.lang,
-                                         read=turn_read(self.workspace)))
+                                         read=turn_read(self.workspace), rules=standing.rules(self.workspace)))
 
     def _pictures(self, hands, look: bool) -> dict:
         """On the worker thread, before the first picture of a task goes to the model service the person chose: the

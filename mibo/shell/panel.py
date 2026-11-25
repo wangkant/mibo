@@ -402,14 +402,14 @@ class Shell:
             # A program run, a step outside the granted folders, a delete to the Recycle Bin, a page opened for them
             # or a request that only fetches: the reviewer first, on the person's own words of this turn. A costly
             # step (cardwait.COSTLY) and a command from material the turn read are asked each time.
-            from .. import acting, review
+            from .. import acting, review, standing
             from ..crossing import turn_read
             passed = await review.decide("commands", await asyncio.to_thread(acting.asked, self.workspace), {
                 "kind": "command", "where": cwd, "text": command, "effects": [a.why for a in verdict.reasons][:6],
                 "only_reads": all(a.kind == "read" and not a.write for a in read_.acts), "undo": True,
                 **({"content": shown} if shown else {})},
                 ask=acting.reviewer(self.workspace), attended=True, lang=self.workspace.config().get("AGENT_LANG", "zh"),
-                read=turn_read(self.workspace))
+                read=turn_read(self.workspace), rules=await asyncio.to_thread(standing.rules, self.workspace))
             # The reviewer's decision and reason go with the log row, so a question that came can be read from it.
             context["review"] = {"decision": passed.decision, "by": passed.by, "reason": passed.reason}
             if passed.decision == "go":
