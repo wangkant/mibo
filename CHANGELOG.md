@@ -38,7 +38,8 @@ The character's instructions put getting a task done first. Changes below follow
 ### Scheduled tasks
 
 - A task you asked for a few messages back is made once you agree to the details ("以后每天发一篇", then "随便几点"). When you leave the time open, the character chooses one, says it, and you can change it. It was refused until one message said the time, and the character asked you to type a sentence word for word.
-- A task you did not ask for in your recent messages, or one made after the character read a page or a downloaded file in that reply, is kept off until you press Make it on its card, which now shows what each run does. It was refused.
+- A task you did not ask for in your recent messages, or one made in a reply that took in something you did not type (a page, a downloaded file, an attachment, a quoted card, a skill that is not built in, a command's output), is kept off until you press Make it on its card, which now shows what each run does. It was refused.
+- Your ask names a time, a rhythm or a condition the app reads; "提醒" or "每个" alone is not one. Each ask makes one task: after it, your next message ("好的谢谢") makes none on its own.
 - When the site, the recipient or the fixed words of a task's act each time are not in your own recent messages, the task is made without that act, and each run's post or message waits for your press under the result. It was refused.
 
 ### Memory

@@ -347,17 +347,25 @@ class Board:
                            + "\n".join(self._line(t, now, tz) for t in tasks)
                            + f"\n(Limits: {sd.ACTIVE_MAX} on at once, every {sd.FLOOR_MIN} minutes at the shortest.)"}
         # Their own messages from the app's chat record, never the model's words.
-        words = recent(acting.asked(self.ws), now)
+        said = acting.asked(self.ws)
+        words = recent(said, now)
         chose = payload.get("chose") is True
         if name == "schedule_edit" and not (chose or asked(words[-1] if words else "")):
             return {"say": _TOLD["schedule_not_asked"]}
         try:
             if name == "schedule_create":
+                # An ask is used once: their messages up to a task made or offered from the chat ask for no other.
+                used = self._store().data.get("used", 0.0)
+                words = recent(said, now, used)
                 read = crossing.turn_read(self.ws)
-                # Not asked for in their recent messages, or made after the turn read outside material: it waits for
+                # Not asked for in their recent messages, or made after the turn took in what they did not type
+                # (outside material, an attachment, a quote, a skill of theirs, a command's output): it waits for
                 # their press, so text that is not theirs never turns a task on.
-                waits = not (chose or wants(words)) or bool(read.get(crossing.OUTSIDE) or read.get(crossing.CAME_IN))
+                waits = not (chose or wants(words, now, tz)) or any(
+                    read.get(mark) for mark in (crossing.OUTSIDE, crossing.CAME_IN, crossing.UNTYPED))
                 task = self.make(args, "chat", now, words, waits)
+                self._store().data["used"] = max((m["at"] for m in said), default=used)
+                self._save()
                 self.before[task["id"]] = None
                 self._note(task, "offer" if task["offer"] else "made", now)
                 rhythm = sd.describe(task["rule"], tz, self.lang())

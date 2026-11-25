@@ -493,6 +493,9 @@ class ToolLoop:
             material = crossing.MATERIAL.get(name) or (crossing.OUTSIDE if module.mark == "mcp" else "")
             if material and not result.startswith("Error:"):
                 lookups.crossing.saw(material, _line(name, args), result)
+                if name == "use_computer":
+                    # A command's output is not their typing either (crossing.UNTYPED).
+                    lookups.crossing.untyped.append(_line(name, args))
             result += _REPEATED.get(made[key], "")
         lookups.note({"place": "", "mark": module.mark if module else "", "line": _line(name, args),
                       "status": "error" if result.startswith("Error:") else "ok", "thumb": ""})

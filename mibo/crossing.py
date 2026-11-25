@@ -52,6 +52,11 @@ WEB_ZONES = ("3", "4")
 # The turn record's marks of outside material that only code is asked for (`code_outside`): files read on this
 # computer that came from the web or a mail (`came_in`), and outside material read in an earlier turn of the chat.
 CAME_IN, EARLIER = "came_in", "earlier"
+# The turn record's mark of what reached the turn that the person did not type and the gates above do not ask for:
+# attachments, quoted cards and asides in their message (dm.py), a skill not built into the app (skills/tool.py) and
+# a command's output (loop.py). Only a new scheduled task reads it, which waits on its card after any
+# (panels/schedule.py); for the other gates it would ask about an ordinary attachment's every next step.
+UNTYPED = "untyped"
 # Where, under the person's profile, browsers save downloads and mail programs and messengers save what they receive.
 CAME_IN_PLACES = re.compile(r"^/downloads(?:/|$)|/inetcache/content\.outlook/|/olk/attachments/|"
                             r"/microsoft/windows/temporary internet files/|/(?:wechat files|xwechat_files)/.+/(?:filestorage|"
@@ -73,13 +78,15 @@ def _squeeze(text: str) -> str:
 class Read:
     """The material one turn has read: where outside and local material came from, its text for the verbatim check,
     and the scripts written from it; the files on this computer it read that came from the web or a mail
-    (`came_in`), and whether an earlier turn of the chat read outside material (`earlier`)."""
+    (`came_in`), whether an earlier turn of the chat read outside material (`earlier`), and what else reached it
+    that the person did not type (`untyped`, UNTYPED)."""
     outside: list[str] = field(default_factory=list)
     local: list[str] = field(default_factory=list)
     texts: list[str] = field(default_factory=list)
     scripts: set[str] = field(default_factory=set)
     came_in: list[str] = field(default_factory=list)
     earlier: bool = False
+    untyped: list[str] = field(default_factory=list)
 
     def saw(self, material: str, where: str = "", text: str = "") -> None:
         """One read of `material` (OUTSIDE or LOCAL) from `where`, with the text it brought."""
@@ -94,7 +101,8 @@ class Read:
         """What the turn record carries to the gates: the places each kind of material came from."""
         return {OUTSIDE: list(dict.fromkeys(self.outside))[-20:], LOCAL: list(dict.fromkeys(self.local))[-20:],
                 **({CAME_IN: list(dict.fromkeys(self.came_in))[-20:]} if self.came_in else {}),
-                **({EARLIER: True} if self.earlier else {})}
+                **({EARLIER: True} if self.earlier else {}),
+                **({UNTYPED: list(dict.fromkeys(self.untyped))[-20:]} if self.untyped else {})}
 
     def verbatim(self, text: str, words: str = "") -> bool:
         """`text` (a command, a script), whole or one of its lines, is found in material read this turn and not in

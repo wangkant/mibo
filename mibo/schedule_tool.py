@@ -2,10 +2,12 @@
 
 In the person's chat: schedule_create, schedule_list and schedule_edit, each handed to the page
 (panels/schedule.py), which keeps the store and decides from the app's chat record, never from the model, whether
-the person asked. A task is made on when their own recent messages ask for it (`recent`, `wants`), the hour the
-character's when theirs give none; one they did not ask for, or one made after the turn read outside material, is
-kept off until they press yes on its card. A task is changed only when their own message of the turn asks for it.
-Text from a page, file, quote or tool never asks.
+the person asked. A task is made on when their own recent messages ask for it at a time, on a rhythm or when a
+condition holds (`recent`, `wants`), the hour the character's when theirs give none, and each ask makes one task;
+one they did not ask for, or one made after the turn took in what they did not type (outside material, an
+attachment, a quote, a skill of theirs, a command's output: crossing.UNTYPED), is kept off until they press yes on
+its card. A task is changed only when their own message of the turn asks for it. Text from a page, file, quote or
+tool never asks.
 
 In a run (the page's event carries `schedule`, set on the sink by turns.py) nobody is watching: the
 run reads (search, pages, files in granted folders, signed-in sites and their new messages where
@@ -116,6 +118,8 @@ _TIMED = re.compile(
     r"\bremind|\bschedul|\bevery\s+(?:day|morning|evening|night|week|month|year|hour|other|\d)|\bdaily\b|\bweekly\b|"
     r"\bmonthly\b|\bweekdays?\b|\bin\s+(?:\d+|an?|half\s+an?)\s+(?:minutes?|hours?)|"
     r"\btomorrow\s+(?:at|morning|afternoon|evening|night)\b", re.IGNORECASE)
+# Today named alone, which gives no time of its own.
+_TODAY = re.compile(r"今天|\btoday\b", re.IGNORECASE)
 # Their own words changing a task.
 _CHANGE = re.compile(r"改到|改成|推迟|提前到|取消|暂停|恢复|停掉|删掉|"
                      r"\b(?:cancel|pause|resume|move)\b.{0,30}\b(?:reminder|task)", re.IGNORECASE)
@@ -140,15 +144,19 @@ def _own(said: str) -> str:
     return _strip_web_desc(str(said or ""))
 
 
-def recent(messages: list[dict], now: float) -> list[str]:
+def recent(messages: list[dict], now: float, used: float = 0.0) -> list[str]:
     """Their own words in `messages` (acting.asked) a new task may be asked for in, attached and quoted text cut out:
-    the last RECENT_MESSAGES, none older than RECENT_S, the latest last."""
-    return [_own(m["text"]) for m in messages[-RECENT_MESSAGES:] if now - m["at"] <= RECENT_S]
+    the last RECENT_MESSAGES, none older than RECENT_S, the latest last. With `used`, the time of their latest
+    message when a task was last made or offered from the chat, only the messages after it: an ask is used once."""
+    return [_own(m["text"]) for m in messages[-RECENT_MESSAGES:] if now - m["at"] <= RECENT_S and m["at"] > used]
 
 
-def wants(words: list[str]) -> bool:
-    """One of their own messages asks for something at a time, on a rhythm or when a condition holds."""
-    return any(_TIMED.search(w) or WATCH.search(w) for w in words)
+def wants(words: list[str], now: float, tz) -> bool:
+    """One of their own messages asks for something at a time or on a rhythm the app reads (schedule.parse_when), or
+    when a condition holds. A bare "提醒", "每个…" ("每个条款都翻译一下") or "今天" ("今天发什么好", which the parser
+    reads as today at its default hour) asks for nothing."""
+    from .schedule import parse_when
+    return any(WATCH.search(w) or parse_when(_TODAY.sub(" ", w), now, tz) for w in words)
 
 
 def asked(said: str) -> bool:

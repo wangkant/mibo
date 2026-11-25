@@ -113,7 +113,7 @@ def _quotes(room: PageChat) -> list[dict]:
             shared.append(_aside(message) if message.get("unasked") else _quote(message))
         elif (message.get("task") or {}).get("quote"):
             # A reminder or a failure line the page said for a scheduled task (panels/schedule.py).
-            shared.append({"type": "quote", "of": message["seq"],
+            shared.append({"type": "quote", "of": message["seq"], "task": True,
                            "text": f"[{message['task']['title']}] {message.get('text', '')}"})
     return shared[:SHARE_QUOTED][::-1]
 

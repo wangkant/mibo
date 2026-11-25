@@ -13,7 +13,7 @@ from . import abilities, catalog, channels, context, db, memgate, person, secret
 from .decision import PASS, SEND
 from .llm import FROM_BUDGET, ProviderError, answer_text, purpose
 from .loop import ANSWER_NOW, ChatLookups, stopped_reply
-from .messages import turn_pictures
+from .messages import UNTYPED_PARTS, turn_pictures
 from .pastchats import NAME as PAST_CHATS
 from .prompt import history_messages
 from .schedule_tool import run_of
@@ -206,7 +206,9 @@ class DirectMessages:
         self._dm_unanswered.setdefault(user_id, []).append(text)
         if pictures:
             self.__dict__.setdefault("_dm_pictures", {}).setdefault(user_id, []).extend(pictures)
-        await self._dm_turn(user_id, pkey, text)
+        # What came with their words that they did not type: a card quoted, an aside, a picture or a file.
+        untyped = [str(part["type"]) for part in parts if part.get("type") in UNTYPED_PARTS and not part.get("task")]
+        await self._dm_turn(user_id, pkey, text, untyped)
 
     @staticmethod
     def _say(text: str, *, by_line: bool = False) -> list[dict]:
@@ -401,9 +403,10 @@ class DirectMessages:
         _write_page_mark(runtime, conversation, {"text": head["content"], "from": head["t"], "at": time.time(),
                                                  **({"floor": floor} if floor else {})})
 
-    async def _dm_turn(self, user_id: str, pkey: str, text: str) -> None:
+    async def _dm_turn(self, user_id: str, pkey: str, text: str, untyped: list[str]) -> None:
         """One turn of the model: the call under the turn's time budget, the
-        reply said, the history committed."""
+        reply said, the history committed. `untyped`: the parts of the message
+        they did not type (crossing.UNTYPED)."""
         # The person's words this turn; kept for their next turn unless committed.
         said: list[str] = []
         committed = False
@@ -412,6 +415,7 @@ class DirectMessages:
         # Outside material an earlier turn of the chat read still counts for code (crossing.code_outside).
         read_outside = vars(self).setdefault("_read_outside", set())
         lookups.crossing.earlier = conversation in read_outside
+        lookups.crossing.untyped += untyped
         context = chat_lookups.set(lookups)
         # Where the stop button finds this turn (`stop_turn`).
         vars(self).setdefault("_page_turns", {})[conversation] = lookups

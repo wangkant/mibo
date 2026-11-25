@@ -245,6 +245,9 @@ def _used(lookups, home: Path, skill, how: str) -> None:
         # Shown to the person by its Chinese title where it has one and the interface is in Chinese.
         shown = next((s.title_zh for s in store.all_skills(home) if s.name == skill.name), "")
         lookups.trace.append({"tool": "skill", "what": shown if shown and lang().startswith("zh") else skill.name})
+        if not skill.builtin:
+            # A skill from the market or added by them is a file they did not type (crossing.UNTYPED).
+            lookups.crossing.untyped.append(f"use_skill: {skill.name}")
         logger.info("[Agent] skill %s used (%s)", skill.name, how)
 
 

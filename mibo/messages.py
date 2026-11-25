@@ -14,6 +14,9 @@ from .textproc import (
 # Set by a turn whose model is shown pictures itself: an attached picture is
 # kept here, not captioned, and goes to the reply call (dm.py).
 turn_pictures: ContextVar[list | None] = ContextVar("turn_pictures", default=None)
+# The parts of a message the person did not type (crossing.UNTYPED); a scheduled task's own line quoted ("task") is
+# the app's.
+UNTYPED_PARTS = ("quote", "aside", "picture", "file")
 
 
 class MessageParsing:
