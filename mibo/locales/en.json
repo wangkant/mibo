@@ -1140,18 +1140,18 @@
   "setup_memory": {
     "groups": [
       "About you",
-      "Likes",
+      "Preferences",
       "Dislikes",
       "Lately",
-      "Plans",
-      "How you like to be treated"
+      "Plans"
     ],
     "deleted": "Deleted",
     "deletedHint": "What a newer version replaced, what stopped being true and what you rewrote stays here for 30 days to bring back. What you forget is not here and cannot come back.",
     "why": {
       "replaced": "Replaced by a newer version",
       "ended": "No longer true",
-      "edited": "Before your rewrite"
+      "edited": "Before your rewrite",
+      "crowded": "Preferences full; least mentioned"
     },
     "none": "Nothing about you is kept yet. As you chat, the character notes what you tell it.",
     "edit": "Rewrite",

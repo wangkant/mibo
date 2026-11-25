@@ -1140,18 +1140,18 @@
   "setup_memory": {
     "groups": [
       "Über Sie",
-      "Mag",
+      "Vorlieben",
       "Mag nicht",
       "In letzter Zeit",
-      "Pläne",
-      "Wie Sie behandelt werden möchten"
+      "Pläne"
     ],
     "deleted": "Gelöscht",
     "deletedHint": "Was eine neuere Fassung ersetzt hat, was nicht mehr zutrifft und was Sie umgeschrieben haben, bleibt 30 Tage hier und lässt sich zurückholen. Was Sie vergessen lassen, steht nicht hier und kommt nicht zurück.",
     "why": {
       "replaced": "Durch eine neuere Fassung ersetzt",
       "ended": "Trifft nicht mehr zu",
-      "edited": "Vor Ihrer Überarbeitung"
+      "edited": "Vor Ihrer Überarbeitung",
+      "crowded": "Vorlieben voll; am seltensten erwähnt"
     },
     "none": "Über Sie ist noch nichts gespeichert. Beim Chatten notiert die Figur, was Sie ihr erzählen.",
     "edit": "Umschreiben",

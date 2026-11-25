@@ -1141,18 +1141,18 @@
   "setup_memory": {
     "groups": [
       "Sobre você",
-      "Gosta",
+      "Preferências",
       "Não gosta",
       "Ultimamente",
-      "Planos",
-      "Como prefere ser tratado"
+      "Planos"
     ],
     "deleted": "Excluídos",
     "deletedHint": "O que uma versão mais nova substituiu, o que deixou de ser verdade e o que você reescreveu fica aqui por 30 dias para ser recuperado. O que você esquece não fica aqui e não pode voltar.",
     "why": {
       "replaced": "Substituído por uma versão mais nova",
       "ended": "Não é mais verdade",
-      "edited": "Antes da sua reescrita"
+      "edited": "Antes da sua reescrita",
+      "crowded": "Preferências cheias; a menos mencionada"
     },
     "none": "Nada sobre você foi guardado ainda. Conforme vocês conversam, o personagem anota o que você conta.",
     "edit": "Reescrever",

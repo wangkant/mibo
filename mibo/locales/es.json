@@ -1141,18 +1141,18 @@
   "setup_memory": {
     "groups": [
       "Sobre usted",
-      "Le gusta",
+      "Preferencias",
       "No le gusta",
       "Últimamente",
-      "Planes",
-      "Cómo prefiere que lo traten"
+      "Planes"
     ],
     "deleted": "Eliminado",
     "deletedHint": "Lo que sustituyó una versión más reciente, lo que dejó de ser cierto y lo que usted reescribió se queda aquí 30 días para poder recuperarlo. Lo que olvida no está aquí y no se puede recuperar.",
     "why": {
       "replaced": "Sustituido por una versión más reciente",
       "ended": "Ya no es cierto",
-      "edited": "Antes de su reescritura"
+      "edited": "Antes de su reescritura",
+      "crowded": "Preferencias completas; la menos mencionada"
     },
     "none": "Aún no se guarda nada sobre usted. A medida que chatee, el personaje anotará lo que le cuente.",
     "edit": "Reescribir",

@@ -1,8 +1,8 @@
 """The one person the app's chat is with (runtime/person.json), read by every
 chat on the page: short facts with a slot each, plans whose day code works out
 from the words they were said in, the gist of the talk, how they want to be
-treated, hashes of what they asked to have forgotten, and a trash for what they
-rewrote themselves.
+treated, preferences seen once that wait to come up again, hashes of what they
+asked to have forgotten, and a trash for what they rewrote themselves.
 
 Nothing is overwritten: a new value in a slot leaves the old fact as past with
 its `until` day, and day words are written as dates when a fact is kept
@@ -47,6 +47,21 @@ LIFE_DAYS = 30
 #: Kinds that stay true until changed, dated or not: who someone in their life is outlasts the day it was
 #: said with ("室友小雅…11-24跟她吵了一架").
 LASTING_KINDS = ("who", "manner", "like", "dislike", "form", "people")
+#: Kinds that say what they want: what they like and do not, the form things come in, how to treat them.
+PREFERENCE_KINDS = ("like", "dislike", "form", "manner")
+#: Where a fact is the person's own words: Settings' add, rewrite and import, and a 记住 in the chat. A fold never
+#: rewrites or ends a preference of theirs.
+OWN_SRCS = ("page", "edit", "import", "command")
+#: Settings › 记忆's preference groups (偏好: likes, form and manner; 不喜欢), each kept to PREFERENCES_MAX
+#: active facts so it stays readable and every reply prompt can carry its manner and form: past that, the fold's
+#: least used and oldest go to the trash, never one of the person's own.
+PREFERENCE_GROUPS = (("like", "form", "manner"), ("dislike",))
+PREFERENCES_MAX = 20
+#: A preference the fold saw once in passing waits as a hint, shown nowhere, until it comes up again in another
+#: chat or SEEN_APART_S after it was first seen; a hint not seen again for SEEN_DAYS goes, and at most SEEN_MAX wait.
+SEEN_APART_S = 8 * 3600
+SEEN_DAYS = 60
+SEEN_MAX = 40
 FACTS_MAX = 200
 #: Past facts kept for "where did they live before" and for restore.
 PAST_MAX = 200
@@ -244,6 +259,8 @@ def grounded(text: str, sources: str) -> bool:
 
 
 _ELLIPSIS = re.compile(r"\.{3,}|…+")
+# What parts a fact's words into clauses: a preference with one clause names the thing and no more.
+_CLAUSE = re.compile(r"[，,、；;:：]")
 
 
 def _plain(text: str) -> str:
@@ -296,6 +313,11 @@ def _clip(text) -> str:
 
 def _day(t: float, tz) -> date:
     return datetime.fromtimestamp(t, tz).date()
+
+
+def own(f: dict) -> bool:
+    """A preference the person wrote themselves."""
+    return f.get("kind") in PREFERENCE_KINDS and f.get("src") in OWN_SRCS
 
 
 def _lapses(f: dict, tz) -> float:
@@ -367,6 +389,10 @@ class Person:
     def facts(self, active: bool = True) -> list[dict]:
         return [f for f in self.data["facts"] if not active or f.get("status", "active") == "active"]
 
+    def hints(self) -> list[dict]:
+        """The preferences seen once, waiting to come up again."""
+        return [f for f in self.data["facts"] if f.get("status") == "seen"]
+
     def plans(self, *status: str) -> list[dict]:
         return [p for p in self.data["plans"] if not status or p.get("status", "open") in status]
 
@@ -427,17 +453,22 @@ class Person:
             elif slot in ("name", "name.full", "name.real"):
                 self.data["name"]["name"] = value
 
-    def put_fact(self, kind: str, slot: str, text: str, now: float, *, src: str = "fold",
-                 conv: str = "", refs: Iterable[int] = (), imp: int = 3, day: str = "") -> tuple[dict, list[dict]]:
+    def put_fact(self, kind: str, slot: str, text: str, now: float, *, src: str = "fold", conv: str = "",
+                 refs: Iterable[int] = (), imp: int = 3, day: str = "", once: bool = False,
+                 revises: dict | None = None) -> tuple[dict, list[dict]]:
         """Keep one fact: (its row, the facts it ended). A fact in a slot ends the active one of its kind
         there, or one inside it in much the same words; one without a slot ends an older one whose words
-        it carries. An ended fact stays as past with its `until`. `day`: the one day the fact is of."""
+        it carries. An ended fact stays as past with its `until`. `day`: the one day the fact is of.
+        `revises`: the kept fact these words are a new version of, which they are not held the same as.
+        A fold's preference seen `once` waits as a hint until it comes up again (SEEN_APART_S); a hint said again
+        is taken into the fact, and a fold never ends a preference the person wrote themselves."""
         kind = kind if kind in KINDS else "other"
         kind = "dislike" if kind == "like" and _DISLIKE.search(text) else kind
         # Kept without the first person that opens it; the name is read from the words as said.
         said, slot, text = _clip(text), slot_key(slot), _clip(neutral(text))
+        facts = [f for f in self.facts() if f is not revises]
         # The same words, or fewer of them in the same slot ("研二" beside "华东师大研二"): nothing new.
-        same = next((f for f in self.facts() if f["text"] == text or (slot and text in f["text"]
+        same = next((f for f in self.facts() if f["text"] == text or (f is not revises and slot and text in f["text"]
                      and _same_slot(slot_key(f.get("slot")), slot))), None)
         if same is not None:
             same["at"] = now
@@ -445,32 +476,61 @@ class Person:
                 same["slot"] = slot
             return same, []
         # Its words already kept as the same kind in another slot ("橘猫" beside "年糕，家里养的橘猫"): nothing new.
-        held = next((f for f in self.facts() if f.get("kind") == kind and _share(text, f["text"]) >= SAME_FACT
+        held = next((f for f in facts if f.get("kind") == kind and _share(text, f["text"]) >= SAME_FACT
                      and not (slot and _same_slot(slot_key(f.get("slot")), slot))
                      and timewords.has_negation(text) == timewords.has_negation(f["text"])), None)
         if held is not None:
             held["at"] = now
             return held, []
+        hint = None
+        if src == "fold" and kind in PREFERENCE_KINDS:
+            hint = revises if revises is not None and revises.get("status") == "seen" else next(
+                (f for f in self.hints() if f.get("kind") == kind
+                 and ((slot and slot_key(f.get("slot")) == slot) or _share(text, f["text"]) >= SAME_FACT)), None)
+            # Seen again in the chat it was first seen in, soon after: still one sighting.
+            if once and (hint is None or (hint.get("conv") == conv and now - _num(hint.get("born")) < SEEN_APART_S)):
+                return self._hint(hint, kind, slot, text, now, conv, refs), []
+            if hint is not None:
+                self.data["facts"].remove(hint)
         if slot:
             # "cat" and "cat.health" are one thing only in much the same words, and never for what happened
             # on one day ("mother" and "mother.visit"). A reply's fact of another kind in the slot is the
             # fold's to file again.
+            # A bare preference ("音乐") in the slot or above it is sharpened by one with its qualifier.
             old = [f for f in self.facts() if (f.get("kind") in (kind, "other") or f.get("src") == "turn") and (
                 slot_key(f.get("slot")) == slot or (_same_slot(slot_key(f.get("slot")), slot)
-                and not (day or f.get("day")) and _share(f["text"], text) >= 0.3))]
+                and not (day or f.get("day")) and _share(f["text"], text) >= 0.3)
+                or (kind in PREFERENCE_KINDS and f.get("kind") == kind and slot.startswith(slot_key(f.get("slot")) + ".")
+                    and not _CLAUSE.search(f["text"])))]
         else:
             old = [f for f in self.facts() if not f.get("slot") and f.get("kind") in (kind, "other")
                    and _tokens(f["text"]) and _share(f["text"], text) >= SAME_FACT]
+        old = [f for f in old if not (src == "fold" and own(f))]
         for f in old:
             self.end_fact(f, now, "replaced")
         row = {"id": memstore.new_id("f", self._ids()), "kind": kind, "slot": slot, "text": text,
-               "at": now, "born": now, "src": src, "imp": imp, "uses": 0, "used": 0.0,
-               "status": "active", "conv": conv, "refs": list(refs)[-REFS_MAX:], **({"day": day} if day else {})}
+               "at": now, "born": _num(hint.get("born")) if hint else now, "src": src, "imp": imp, "uses": 0,
+               "used": 0.0, "status": "active", "conv": conv, "refs": list(refs)[-REFS_MAX:],
+               **({"day": day} if day else {})}
         self.data["facts"].append(row)
         if kind in ("who", "manner"):
             self._set_name(slot, said)
         self._cap(now)
         return row, old
+
+    def _hint(self, hint: dict | None, kind: str, slot: str, text: str, now: float, conv: str,
+              refs: Iterable[int]) -> dict:
+        """A preference seen once, kept as a hint (`hint`, in the newer words, when it was seen before)."""
+        if hint is not None:
+            hint.update(text=text, slot=slot or hint.get("slot", ""), at=now)
+            return hint
+        row = {"id": memstore.new_id("f", self._ids()), "kind": kind, "slot": slot, "text": text, "at": now,
+               "born": now, "src": "fold", "imp": 3, "uses": 0, "used": 0.0, "status": "seen", "conv": conv,
+               "refs": list(refs)[-REFS_MAX:]}
+        self.data["facts"].append(row)
+        for gone in sorted(self.hints(), key=lambda f: _num(f.get("at")))[:-SEEN_MAX]:
+            self.data["facts"].remove(gone)
+        return row
 
     def end_fact(self, row: dict, now: float, why: str = "ended") -> None:
         """No longer true from `now`: kept as past, with why ("replaced" by a newer value, else "ended")."""
@@ -508,10 +568,16 @@ class Person:
         row["status"], row["asked_at"] = "asked", now
 
     def _cap(self, now: float) -> None:
+        def kept(f: dict) -> float:
+            return ranking.retention(f.get("imp"), f.get("uses"), max(_num(f.get("at")), _num(f.get("used"))), now)
+        for group in PREFERENCE_GROUPS:
+            rows = [f for f in self.facts() if f.get("kind") in group]
+            folded = [f for f in rows if not own(f)]
+            for f in sorted(folded, key=kept)[:max(0, len(rows) - PREFERENCES_MAX)]:
+                self.end_fact(f, now, "crowded")
         facts = self.facts()
         while len(facts) > FACTS_MAX:
-            worst = min(facts, key=lambda f: ranking.retention(
-                f.get("imp"), f.get("uses"), max(_num(f.get("at")), _num(f.get("used"))), now))
+            worst = min(facts, key=kept)
             self.data["facts"].remove(worst)
             facts.remove(worst)
         past = sorted((f for f in self.data["facts"] if f.get("status") == "past"), key=lambda f: _num(f.get("until")))
@@ -610,7 +676,7 @@ class Person:
     def tidy(self, now: float, tz: tzinfo | None = None) -> bool:
         """Plans long past are done, birthdays come round again, a fact of a day
         long gone and what they were going through and no longer say are past,
-        old topics and trash go. Whether anything changed."""
+        old topics and trash and hints not seen again go. Whether anything changed."""
         today = _day(now, tz)
         changed = False
         for f in self.facts():
@@ -633,6 +699,10 @@ class Person:
                 plan.update(due=due.isoformat(), until="", status="open", asked_at=0.0)
             else:
                 plan["status"] = "done"
+        hints = [f for f in self.hints() if now - _num(f.get("at")) >= SEEN_DAYS * 86400]
+        for f in hints:
+            self.data["facts"].remove(f)
+        changed = changed or bool(hints)
         cutoff = (today - timedelta(days=TOPICS_DAYS)).isoformat()
         topics = self.data["talk"]["topics"]
         kept = [t for t in topics if str(t.get("day") or "") >= cutoff][-TOPICS_MAX:]

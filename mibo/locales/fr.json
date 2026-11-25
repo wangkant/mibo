@@ -1141,18 +1141,18 @@
   "setup_memory": {
     "groups": [
       "À propos de vous",
-      "Aime",
+      "Préférences",
       "N'aime pas",
       "Ces temps-ci",
-      "Projets",
-      "Comment vous aimez être traité"
+      "Projets"
     ],
     "deleted": "Supprimés",
     "deletedHint": "Ce qu'une version plus récente a remplacé, ce qui n'est plus vrai et ce que vous avez réécrit reste ici 30 jours pour pouvoir être récupéré. Ce que vous oubliez n'est pas ici et ne peut pas revenir.",
     "why": {
       "replaced": "Remplacé par une version plus récente",
       "ended": "N'est plus vrai",
-      "edited": "Avant votre réécriture"
+      "edited": "Avant votre réécriture",
+      "crowded": "Préférences pleines ; la moins mentionnée"
     },
     "none": "Rien n'est encore conservé sur vous. Au fil des discussions, le personnage note ce que vous lui dites.",
     "edit": "Réécrire",

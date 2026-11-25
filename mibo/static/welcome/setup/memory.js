@@ -5,8 +5,9 @@
 // and kept item by item once ticked, and forget all (GET /api/person, POST /api/person/<action>,
 // GET /api/person/said/<id>, /api/person/export).
 (() => {
-  // A fact's kind to its group, as person.py's listing heads them; plans are group 4.
-  const GROUP = { who: 0, people: 0, health: 0, like: 1, dislike: 2, life: 3, other: 3, manner: 5, form: 5 };
+  // A fact's kind to its group; what they like, the form they want things in and how to treat them are one group,
+  // their preferences (person.PREFERENCE_GROUPS); plans are group 4.
+  const GROUP = { who: 0, people: 0, health: 0, like: 1, manner: 1, form: 1, dislike: 2, life: 3, other: 3 };
   const PLANS = 4;
   // An item takes at most what the store keeps of one (person.TEXT_MAX); a pasted list what the page reads.
   const TEXT_MAX = 60;
