@@ -99,6 +99,11 @@ COMMANDS = [
     # A place a loop changes is known only as it runs: asked as such, nothing runs it first to see.
     ("$p = 'n.txt'; foreach ($i in 1, 2) { Set-Content $p 'x'; $p = '..\\elsewhere\\v.txt' }", "ask"),
     ("$p = 'n.txt'; Set-Variable -Name p -Value '..\\elsewhere\\v.txt'; Set-Content $p 'x'", "ask"),
+    # A constant inside a quoted argument is read as its value, and the place judged as if written out; a
+    # subexpression in the string is not followed.
+    ("$d = '临时'; Get-ChildItem \"$d\\子\"", "run"),
+    ("$d = '..\\home'; Get-Content \"$d\\.env\"", "refuse"),
+    ("$d = '临时'; Get-ChildItem \"$($d)\\子\"", "ask"),
     ("Format-Hex -Path ..\\home\\.env", "refuse"),
     ("[IO.File]::ReadAllText('..\\home\\.env')", "refuse"),
     ("Select-String -Path ..\\home\\* -Pattern KEY", "refuse"),

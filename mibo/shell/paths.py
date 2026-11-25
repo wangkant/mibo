@@ -16,6 +16,8 @@ from .pstables import LOOPBACK
 
 # More items than this are not listed first: what they are is known only as the command runs.
 LIST_MOST = 5000
+# A variable as a double-quoted string names it: $name or ${name}.
+_NAMED = re.compile(r"^\$(?:(\w+)|\{(\w+)\})$")
 
 
 class Paths:
@@ -44,7 +46,26 @@ class Paths:
             return out
         if el.get("k") == "v" and str(el.get("v") or "").lower() in self.consts:
             return self.strings(self.consts[str(el["v"]).lower()])
+        if el.get("k") == "o":
+            return self._expanded(el)
         return None
+
+    def _expanded(self, el: dict) -> list[str] | None:
+        """A double-quoted string whose every variable is a constant holding one literal string, with the values
+        written in ($base = 'D:\\work'; python "$base\\make.py"). None for anything else in it: a subexpression, a
+        property, an escape, a doubled quote, a here-string."""
+        text = str(el.get("t") or "")
+        if len(text) < 2 or text[0] != '"' or text[-1] != '"' or "`" in text or '""' in text[1:-1]:
+            return None
+        out, rest = "", text[1:-1]
+        for var in map(str, _items(el.get("vars"))):
+            name = _NAMED.match(var)
+            got = self.strings({"k": "v", "v": name.group(1) or name.group(2)}) if name else None
+            if got is None or len(got) != 1 or var not in rest:
+                return None
+            before, rest = rest.split(var, 1)
+            out += before + got[0]
+        return [out + rest]
 
     def place(self, raw: str) -> tuple[str, str]:
         """(provider, absolute path) of one path as PowerShell would take it."""
