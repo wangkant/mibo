@@ -94,7 +94,7 @@ from everyday import PRICE, Meter  # noqa: E402
 
 VERSION = "v1.2.2"
 NO_ENV = EmptyEnv()
-SERVERS = {"banking": "banking", "slack": "slack"}
+SERVERS = {"banking": "banking", "slack": "slack", "travel": "travel", "workspace": "workspace"}
 READ_PREFIXES = ("get_", "read_", "search_", "list_")
 # Arguments a careful person reads as the message's own words, not as who or how much.
 FREE_TEXT = {"subject", "body", "content", "message", "date"}
