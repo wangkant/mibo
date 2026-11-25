@@ -5,8 +5,9 @@ already kept, once the talk has gone quiet for a few minutes (or after many
 lines, or once a day), and answers with what to add, update or end (mem0's
 operations against the kept entries), the plans, the summary and the topics.
 Nothing is overwritten: a new value leaves the old fact as past, and a
-preference the person wrote themselves is never changed. The request is in the language most of their letters are in (none
-named for a language outside the ten), its examples too, and asks for the words
+preference the person wrote themselves is never changed. The request is in
+the language most of their letters are in (none named for a language outside
+the ten), its examples too, and asks for the words
 of theirs each fact comes from; an answer in another language is asked for once
 more in theirs while the day's calls allow, and the first answer stays wherever
 the second is not said. Each operation is checked on its own
