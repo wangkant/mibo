@@ -319,9 +319,12 @@ class Shell:
                     return {"status": "read_mode", "shown": READ_MODE}, {}
             inside = [f for f in self.grants.folders()
                       if under(norm(f), norm(folder_to_grant)) and norm(f) != norm(folder_to_grant)]
-            if inside:
-                # A badly built path in the folder above one they granted: never a question for it, the model
-                # is told which folder to use.
+            if inside and ("steered", norm(folder_to_grant)) not in no:
+                # A badly built path in the folder above one they granted: the model is told once which folder
+                # to use, with no question. Named again in the same turn, the folder above is what the task
+                # needs, and they are asked for it (on a Harness-Bench task a first grant of <task>\docs left
+                # <task> itself, where the task's files were, out of reach for the whole turn).
+                no.add(("steered", norm(folder_to_grant)))
                 self.log(command, cwd, read_, None, "use_granted")
                 return {"status": "use_granted", "folder": folder_to_grant, "folders": inside}, {}
             if norm(folder_to_grant) in asked_for:

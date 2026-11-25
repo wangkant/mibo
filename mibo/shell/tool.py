@@ -277,7 +277,9 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
         inside = "; ".join(outcome.get("folders") or [])
         reason = (f"Not done: {outcome.get('folder')} is not one of their folders, but it holds the ones they granted: "
                   f"{inside}. What they mean is in one of those: call again with folder set to it and the path "
-                  "relative to it (list_files there shows the exact names). Do not ask them for the folder above.")
+                  "relative to it (list_files there shows the exact names). When what they asked for is in "
+                  f"{outcome.get('folder')} itself and in none of those, call again as you did: they are then asked "
+                  "for it.")
         shown = ""
     elif status == "invalid":
         reason += " " + "; ".join(outcome.get("errors") or [])
