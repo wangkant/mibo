@@ -50,6 +50,10 @@ The character's instructions put getting a task done first. Changes below follow
 - The app window's page rests while the window is in the notification area, hidden behind the pet or minimized: it keeps little memory and is suspended until the window shows again (Windows). What it was told meanwhile reaches it as it wakes. Scheduled tasks, background reading and the pet go on as before.
 - The pet's compact chat rests while it is put away, and wakes as it comes out.
 - In the built-in browser, a tab left out of the front for five minutes rests, and every tab rests while the app window is away. A tab that plays sound or that the character used in the last five minutes, and every tab while the character's run is under way, stay awake; a resting tab wakes when shown or when the character reads it.
+### Chat
+
+- A message you send while a reply is on its way is queued: it waits in a row above the box, with its attachments, and is sent when the reply ends. Several are sent in the order you typed them. 立即发送 on a row stops the reply and sends that message at once; the cross takes it away and puts its words back in an empty box. Before, the reply had to end or be stopped first.
+- After a reply you stopped or one that failed, the queue waits: the next message you send goes first, and the queue follows its reply.
 
 ### Fixes
 
