@@ -33,11 +33,13 @@ The character's instructions put getting a task done first. Changes below follow
 - Settings › Connections has general switches for every signed-in site: read the page while you browse it, read it during a task, browse it in the background for picks, and sign in automatically. A site signed in from now on takes them, and one line says it is signed in; its panel no longer opens by itself for each account. A site's own panel still sets a choice for that site alone, shows which choices follow the general switches, and puts a choice back to them.
 - The general switches start as the sites worked before: reading while you browse and during a task on, background browsing and automatic sign-in off. Choices you made for a site stay its own. Bank, payment, mail and account sites never take background browsing or automatic sign-in from the general switches. Turning background browsing on for every site shows the sites' terms first, as for one site. The character can change the general switches when you ask; turning one on goes through the same question in the chat as its other changes that let it do more.
 - The signed-in sites and the sign-ins kept on this computer are one list: a site signed out with a saved password is listed with its tag. Below the list stay the count of other sites that keep cookies and the two ways to clear everything.
+
 ### Scheduled tasks
 
 - A task you asked for a few messages back is made once you agree to the details ("以后每天发一篇", then "随便几点"). When you leave the time open, the character chooses one, says it, and you can change it. It was refused until one message said the time, and the character asked you to type a sentence word for word.
 - A task you did not ask for in your recent messages, or one made after the character read a page or a downloaded file in that reply, is kept off until you press Make it on its card, which now shows what each run does. It was refused.
 - When the site, the recipient or the fixed words of a task's act each time are not in your own recent messages, the task is made without that act, and each run's post or message waits for your press under the result. It was refused.
+
 ### Memory
 
 - Settings › 记忆 shows what you like and how you want to be treated as one group, 偏好; 不喜欢 stays apart.
@@ -51,15 +53,17 @@ The character's instructions put getting a task done first. Changes below follow
 - A command that gives a program a path through a variable set to a fixed value in the same command (`$dir = 'D:\work'; python "$dir\make.py"`) is read and judged as if the path were written out. It was refused.
 - A step in the folder above one you granted is pointed back to the granted folder once; when the task does need the folder above, you are asked for it. It could not be asked for before.
 
-### Memory
+### Memory use
 
 - The app window's page rests while the window is in the notification area, hidden behind the pet or minimized: it keeps little memory and is suspended until the window shows again (Windows). What it was told meanwhile reaches it as it wakes. Scheduled tasks, background reading and the pet go on as before.
 - The pet's compact chat rests while it is put away, and wakes as it comes out.
 - In the built-in browser, a tab left out of the front for five minutes rests, and every tab rests while the app window is away. A tab that plays sound or that the character used in the last five minutes, and every tab while the character's run is under way, stay awake; a resting tab wakes when shown or when the character reads it.
+
 ### Chat
 
 - A message you send while a reply is on its way is queued: it waits in a row above the box, with its attachments, and is sent when the reply ends. Several are sent in the order you typed them. 立即发送 on a row stops the reply and sends that message at once; the cross takes it away and puts its words back in an empty box. Before, the reply had to end or be stopped first.
 - After a reply you stopped or one that failed, the queue waits: the next message you send goes first, and the queue follows its reply.
+
 ### Finds in the chat
 
 - A find the character brings into the chat on its own waits while you are talking with it: until ten minutes after your last message and its last reply, and while a question waits on you. It comes at the next good moment after.
