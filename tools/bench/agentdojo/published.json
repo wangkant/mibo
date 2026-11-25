@@ -1,0 +1,30 @@
+{
+ "source": "https://agentdojo.spylab.ai/results/ (rows whose attack is important_instructions), fetched 2026-11-24. The page says it is not a leaderboard; its rows are sorted by date.",
+ "note": "Percent: utility on the user tasks alone, utility with an attack planted, and targeted attack success. The published runs use AgentDojo's own tool-calling pipeline over every user task with every injection task; this repository's runs take every user task and a fixed sample of the attacks (--sample 7:4) on v1.2.2.",
+ "rows": [
+  {"model": "claude-3-7-sonnet-20250219", "defense": "None", "utility": 88.66, "under_attack": 77.27, "asr": 7.31, "date": "2025-02-24"},
+  {"model": "gemini-2.0-flash-001", "defense": "None", "utility": 43.30, "under_attack": 39.75, "asr": 20.83, "date": "2025-01-30"},
+  {"model": "gemini-2.0-flash-exp", "defense": "None", "utility": 46.39, "under_attack": 39.90, "asr": 17.01, "date": "2024-12-11"},
+  {"model": "claude-3-5-sonnet-20241022", "defense": "None", "utility": 79.38, "under_attack": 72.50, "asr": 1.11, "date": "2024-11-15"},
+  {"model": "gemini-1.5-flash-002", "defense": "None", "utility": 38.14, "under_attack": 32.43, "asr": 3.50, "date": "2024-11-05"},
+  {"model": "gemini-1.5-pro-002", "defense": "None", "utility": 61.86, "under_attack": 47.06, "asr": 17.01, "date": "2024-11-04"},
+  {"model": "gpt-4o-mini-2024-07-18", "defense": "None", "utility": 68.04, "under_attack": 49.92, "asr": 27.19, "date": "2024-07-19"},
+  {"model": "claude-3-5-sonnet-20240620", "defense": "None", "utility": 79.38, "under_attack": 51.19, "asr": 33.86, "date": "2024-06-20"},
+  {"model": "gpt-4o-2024-05-13", "defense": "transformers_pi_detector", "utility": 41.24, "under_attack": 21.14, "asr": 7.95, "date": "2024-06-05"},
+  {"model": "gpt-4o-2024-05-13", "defense": "tool_filter", "utility": 72.16, "under_attack": 56.28, "asr": 6.84, "date": "2024-06-05"},
+  {"model": "gpt-4o-2024-05-13", "defense": "spotlighting_with_delimiting", "utility": 72.16, "under_attack": 55.64, "asr": 41.65, "date": "2024-06-05"},
+  {"model": "gpt-4o-2024-05-13", "defense": "repeat_user_prompt", "utility": 84.54, "under_attack": 67.25, "asr": 27.82, "date": "2024-06-05"},
+  {"model": "gpt-4o-2024-05-13", "defense": "None", "utility": 69.07, "under_attack": 50.08, "asr": 47.69, "date": "2024-06-05"},
+  {"model": "gpt-4-turbo-2024-04-09", "defense": "None", "utility": 64.95, "under_attack": 54.05, "asr": 28.62, "date": "2024-06-05"},
+  {"model": "gpt-4-0125-preview", "defense": "None", "utility": 65.98, "under_attack": 40.70, "asr": 56.28, "date": "2024-06-05"},
+  {"model": "gpt-3.5-turbo-0125", "defense": "None", "utility": 35.05, "under_attack": 34.66, "asr": 10.33, "date": "2024-06-05"},
+  {"model": "gemini-1.5-pro-001", "defense": "None", "utility": 46.39, "under_attack": 28.93, "asr": 28.62, "date": "2024-06-05"},
+  {"model": "gemini-1.5-flash-001", "defense": "None", "utility": 38.14, "under_attack": 34.18, "asr": 12.24, "date": "2024-06-05"},
+  {"model": "command-r-plus", "defense": "None", "utility": 24.74, "under_attack": 25.12, "asr": 4.45, "date": "2024-06-05"},
+  {"model": "command-r", "defense": "None", "utility": 26.80, "under_attack": 30.84, "asr": 3.34, "date": "2024-06-05"},
+  {"model": "claude-3-sonnet-20240229", "defense": "None", "utility": 53.61, "under_attack": 33.23, "asr": 26.71, "date": "2024-06-05"},
+  {"model": "claude-3-opus-20240229", "defense": "None", "utility": 68.04, "under_attack": 52.46, "asr": 11.29, "date": "2024-06-05"},
+  {"model": "claude-3-haiku-20240307", "defense": "None", "utility": 39.18, "under_attack": 33.39, "asr": 9.06, "date": "2024-06-05"},
+  {"model": "meta-llama/Llama-3-70b-chat-hf", "defense": "None", "utility": 34.02, "under_attack": 18.28, "asr": 25.60, "date": "2021-09-05"}
+ ]
+}

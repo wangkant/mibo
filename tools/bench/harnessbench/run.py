@@ -62,7 +62,7 @@ SUITE = "catalog/standard274.yaml"
 # not fork, which Windows has not.
 PYTHON_ONLY = {"python", "python3", "json", "sqlite3", "sha256", "datetime", "re", "tarfile", "zoneinfo", "subprocess",
                "json_state_machine", "PyYAML", "pytest", "lxml", "python-docx", "python-slugify", "typing_extensions"}
-# Haiku 4.5, dollars per million tokens: input, cached input, output. Used when an answer carries no cost.
+# A small model's list price, dollars per million tokens: input, cached input, output. Used when an answer carries no cost.
 PRICE = (1.0, 0.1, 5.0)
 GRADE_S = 600
 # How long a run waits before trying a task again after the model service refused a call.
