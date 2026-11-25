@@ -4,7 +4,8 @@ change to the chat shows there too. A window of its own rather than the pet's: t
 framed, and the pet's window takes no focus, which a box to type in needs.
 
 One click on the figure brings it out on the side with room; Esc, a click anywhere else or another click
-on the figure puts it away. Hidden, never closed, it keeps its scroll place and an unsent draft."""
+on the figure puts it away. Hidden, never closed, it keeps its scroll place and an unsent draft, its page at
+rest meanwhile."""
 from __future__ import annotations
 
 import ctypes
@@ -142,6 +143,8 @@ class Compact:
         return x, y, wide, high, side
 
     def show(self) -> None:
+        from . import window as w
+
         owner = self.owner
         if owner._pet is None or owner._attached or owner._hushed:
             return
@@ -156,6 +159,8 @@ class Compact:
             spot = {}
 
             def place() -> None:
+                # Its page rested while it was put away (away): it wakes before its window shows.
+                w.winforms.wake(form.browser.webview)
                 x, y, wide, high, side = self._spot()
                 slide = round(SLIDE * owner._pet_scale) * side if moving else 0
                 spot.update(x=x, y=y, slide=slide)
@@ -203,7 +208,7 @@ class Compact:
                 for i in range(STEPS - 2, -1, -2):
                     self.owner._on_pet(lambda share=i / STEPS: setattr(form, "Opacity", share))
                     time.sleep(STEP_S)
-            self.owner._on_pet(form.Hide)
+            self.owner._on_pet(lambda: _rest(form))
             self.owner._tell(self.owner._pet, "window.petChat && petChat(false)")
 
     def full(self, place: dict) -> None:
@@ -218,13 +223,24 @@ class Compact:
             owner._tell(owner._window, f"window.paCompact && paCompact.arrive({json.dumps(keep)})")
 
 
+def _rest(form) -> None:
+    """On the pet's thread: out of sight, its page rests (winforms.rest) and its window hides. Hidden, it still
+    holds its scroll place and its draft, and wakes as it comes out (show)."""
+    from .window import winforms
+    winforms.rest(form.browser.webview)
+    form.Hide()
+
+
 def warm(owner) -> None:
-    """Made out of sight a while after the start: made on the first click, it would take seconds to come."""
+    """Made out of sight a while after the start: made on the first click, it would take seconds to come. It rests
+    until then."""
     def make() -> None:
         chat = of(owner)
         with chat._lock:
             if chat.window is None and not owner._leaving:
                 chat._make()
+                if not owner._leaving:
+                    owner._on_pet(lambda: _rest(chat.window.native))
 
     timer = threading.Timer(WARM_S, make)
     timer.daemon = True

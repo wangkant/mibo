@@ -29,6 +29,12 @@ The character's instructions put getting a task done first. Changes below follow
 - A command that gives a program a path through a variable set to a fixed value in the same command (`$dir = 'D:\work'; python "$dir\make.py"`) is read and judged as if the path were written out. It was refused.
 - A step in the folder above one you granted is pointed back to the granted folder once; when the task does need the folder above, you are asked for it. It could not be asked for before.
 
+### Memory
+
+- The app window's page rests while the window is in the notification area, hidden behind the pet or minimized: it keeps little memory and is suspended until the window shows again (Windows). What it was told meanwhile reaches it as it wakes. Scheduled tasks, background reading and the pet go on as before.
+- The pet's compact chat rests while it is put away, and wakes as it comes out.
+- In the built-in browser, a tab left out of the front for five minutes rests, and every tab rests while the app window is away. A tab that plays sound or that the character used in the last five minutes, and every tab while the character's run is under way, stay awake; a resting tab wakes when shown or when the character reads it.
+
 ### Fixes
 
 - Closing Mibo just as a page read was starting the installed browser could leave it running with no window (Windows). The browser's start is now finished and stopped before the app exits.

@@ -1,6 +1,6 @@
 """The WinForms form and the WebView2 of a pywebview window on Windows: work done on the form's own thread,
-the page's right-click menus, and the window kept on mibo's own pages. pywebview loads pythonnet, which these
-import when called."""
+the page's right-click menus, the window kept on mibo's own pages, and its page at rest while out of sight.
+pywebview loads pythonnet, which these import when called."""
 from __future__ import annotations
 
 import contextlib
@@ -41,6 +41,29 @@ def text_menus(window) -> bool:
 
     on_thread(form, enable)
     return found["regions"]
+
+
+def rest(view) -> None:
+    """On the form's thread, before its window goes out of sight: the WebView hidden first (hidden after its
+    window, it would never learn it is out of sight, and only a WebView that knows suspends), then kept to little
+    memory and its page suspended, which runs no script until it wakes."""
+    view.Visible = False
+    # An older WebView2 runtime has neither.
+    with contextlib.suppress(Exception):
+        from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
+        view.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low
+        view.CoreWebView2.TrySuspendAsync()
+
+
+def wake(view) -> None:
+    """On the form's thread: the WebView's memory as before and its page resumed, then shown."""
+    with contextlib.suppress(Exception):
+        from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
+        core = view.CoreWebView2
+        core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal
+        if core.IsSuspended:
+            core.Resume()
+    view.Visible = True
 
 
 def own_pages(window, origin: str, open_link: Callable[[str], None]) -> None:

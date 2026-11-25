@@ -109,7 +109,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
     closing it hides it again. The pet's menu quits, and chooses the figure
     among `figures` ([(key, label)]) through `choose`; `figure` says which it
     is. While the window shows, the pet peeks over its top edge and goes
-    wherever the window goes."""
+    wherever the window goes. Hidden or minimized, its page rests (_settle)."""
 
     def __init__(self, url: str, *, storage: Path, background: Callable[[], bool] = lambda: False,
                  words: Callable[[], dict] = dict, start_hidden: bool = False,
@@ -159,6 +159,12 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         # The frameless window's message handler and how to undo it; .NET holds no reference.
         self._frame = None
         self._frame_seen = threading.Event()
+        # The window is out of sight (hidden or minimized), and its page rests for it (_settle): little memory,
+        # suspended, and what it is told meanwhile held in order until it wakes.
+        self._out = False
+        self._rested = False
+        self._owed: list[str] = []
+        self._owing = threading.Lock()
         # Only the page inside this window knows it: a browser tab on the same
         # address neither draws the window's bar nor presses its buttons.
         self.frame_key = secrets.token_urlsafe(16)
@@ -180,11 +186,10 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
                 threading.Thread(target=self._go_in, name="mibo-pet", daemon=True).start()
             return True
         try:
+            self._away(False)
             # Only out of the taskbar: restoring a maximized window would shrink it.
             if self._minimized:
                 self._window.restore()
-            if self.hidden:
-                self._page_seen(True)
             self._window.show()
             self.hidden = False
         except Exception:
@@ -202,7 +207,7 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
             self._tray.ShowBalloonTip(5000, TITLE, words["still"], self._tray_info)
 
         try:
-            self._page_seen(False)
+            self._away(True)
             self._window.hide()
             self.hidden = True
             if not self._told and words["still"]:
@@ -228,15 +233,58 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
 
     def _tell(self, view, script: str) -> None:
         """Run `script` in a window's page, on a thread of its own: whoever
-        tells it, the page's server among them, never waits for the page."""
+        tells it, the page's server among them, never waits for the page.
+        The app window's page at rest runs no script: it hears it when it wakes,
+        each script once, where it was told last (each sets a state or asks the
+        page to look again, so the last time is the one that counts)."""
+        if view is self._window:
+            with self._owing:
+                if self._rested:
+                    if script in self._owed:
+                        self._owed.remove(script)
+                    self._owed.append(script)
+                    return
         threading.Thread(target=lambda: view.evaluate_js(script), name="mibo-tell", daemon=True).start()
 
-    def _page_seen(self, seen: bool) -> None:
-        """The app window's WebView told it shows or is hidden in the
-        notification area, before the window itself goes (as in _put_away):
-        its page then knows it is hidden (document.hidden) and stops asking."""
+    # The app window's page at rest while the window is out of sight.
+
+    def _resting(self) -> bool:
+        """Whether its page should rest now: the window is out of sight and the page came up (it asked for the
+        frame), so it rests with its bar drawn and never before it loaded."""
+        return self._out and self._frame_seen.is_set()
+
+    def _away(self, out: bool) -> None:
+        """The window went out of sight (to the notification area, hidden behind the pet, minimized) or is
+        coming back: before it shows, its page wakes. Its page, and the browser's pages with it, rest or wake
+        to match (_settle)."""
+        with self._owing:
+            self._out = out
+        self._match()
+
+    def _match(self) -> None:
+        """The page made to rest or wake on the window's thread, when it is not as `_resting` says."""
+        with self._owing:
+            due = self._resting() != self._rested
+        if due:
+            self._on_ui(self._settle)
+
+    def _settle(self) -> None:
+        """On the window's thread: the page rests (winforms.rest), so it knows it is hidden (document.hidden),
+        stops asking and is suspended; or it wakes and hears in order what it was told meanwhile. The browser
+        pane rests its own pages too (browser.Pane.away)."""
+        with self._owing:
+            rest = self._resting()
+            if rest == self._rested:
+                return
+            self._rested = rest
+            owed, self._owed = ([], self._owed) if rest else (self._owed, [])
         view = self._window.native.browser.webview
-        self._on_ui(lambda: setattr(view, "Visible", seen))
+        (winforms.rest if rest else winforms.wake)(view)
+        if self._browser is not None:
+            self._browser.away(rest)
+        if owed:
+            threading.Thread(target=lambda: [self._window.evaluate_js(script) for script in owed], name="mibo-tell",
+                             daemon=True).start()
 
     def _frame_changed(self) -> None:
         if self.opened:
@@ -494,6 +542,8 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
     def _sized(self, minimized: bool, maximized: bool | None = None) -> Callable[[], None]:
         def note() -> None:
             self._minimized = minimized
+            # In the taskbar its page rests too; out of it, shown again, it wakes.
+            self._away(minimized)
             if maximized is not None:
                 self.maximized = maximized
                 # Its page draws the bar for it (app.js).
@@ -540,8 +590,11 @@ class AppWindow(PetWindow, PetMoves, FullScreen):
         return hmac.compare_digest(str(key or ""), self.frame_key)
 
     def frame_seen(self) -> None:
-        """The page asked how the window stands, so it draws the bar and the buttons."""
+        """The page asked how the window stands, so it draws the bar and the buttons. A window already out of
+        sight lets its page rest from now (_match); never on the caller's thread, the page's server."""
         self._frame_seen.set()
+        if self._out:
+            threading.Thread(target=self._match, name="mibo-rest", daemon=True).start()
 
     def _framed_again(self) -> None:
         """The window gets its own title bar back."""

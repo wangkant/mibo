@@ -4,7 +4,6 @@ AppWindow takes these methods from `PetWindow`; how it walks, is dragged and gro
 petmoves.py, its menu in petmenu.py."""
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import threading
@@ -256,6 +255,8 @@ class PetWindow:
         """Once the app window is up: the pet stands on the taskbar and follows the app window from now on;
         `within` seconds for each of its window's events."""
         self.hidden = True
+        # Hidden behind the pet from the start, the app window's page rests once it came up.
+        self._away(True)
         self._pet.events.shown.wait(within)
         self._user32 = native.user32()
         self._place_pet()
@@ -338,11 +339,10 @@ class PetWindow:
             self._set_pose("leaving")
             self._on_pet(self._leave_ground)
             time.sleep(DUCK_S)
+            self._away(False)
             if self._user32.IsIconic(self._main_hwnd):
                 # Back from the taskbar as it was, maximized or not.
                 self._user32.ShowWindow(self._main_hwnd, SW_RESTORE)
-            if self.hidden:
-                self._page_seen(True)
             if self._shown():
                 self._window.show()
             else:
@@ -418,7 +418,7 @@ class PetWindow:
         for i in range(FADE_STEPS - 1, -1, -1):
             self._on_ui(lambda share=i / FADE_STEPS: setattr(form, "Opacity", share))
             time.sleep(FADE_STEP_S)
-        self._page_seen(False)
+        self._away(True)
         self._window.hide()
         self._on_ui(lambda: setattr(form, "Opacity", 1.0))
 
@@ -619,30 +619,18 @@ class PetWindow:
     def _put_away(self) -> None:
         """On the pet's thread, which is the app window's too: _attach, _land,
         _reshape and _fit_card show the pet's window unless it is hushed.
-        The WebView is hidden first: hidden after its window, it would never
-        learn it is out of sight, and only a WebView that knows suspends.
-        Then it keeps little memory and stops its page."""
+        Its page rests before the window hides (winforms.rest)."""
         self._hushed = True
-        view = self._pet.native.browser.webview
-        view.Visible = False
+        winforms.rest(self._pet.native.browser.webview)
         self._user32.ShowWindow(self._pet_hwnd, SW_HIDE)
-        # An older WebView2 runtime has neither.
-        with contextlib.suppress(Exception):
-            from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
-            view.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low
-            view.CoreWebView2.TrySuspendAsync()
 
     def _bring_back(self) -> None:
         """On the pet's thread: the window first, then the WebView, which wakes
-        its page by showing (see _put_away). Nothing white shows between: the
-        window alone is see-through, and the page last drew the figure ducked."""
+        its page (winforms.wake). Nothing white shows between: the window alone
+        is see-through, and the page last drew the figure ducked."""
         self._hushed = False
-        view = self._pet.native.browser.webview
-        with contextlib.suppress(Exception):
-            from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel
-            view.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal
         self._user32.ShowWindow(self._pet_hwnd, SW_SHOWNOACTIVATE)
-        view.Visible = True
+        winforms.wake(self._pet.native.browser.webview)
 
     def _watch_cursor(self) -> None:
         """Tell the pet where the cursor is while it is near (its eyes follow
