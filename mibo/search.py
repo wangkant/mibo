@@ -14,7 +14,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 from keyring.errors import KeyringError
 
-from . import lookup_need, paths, schedule_tool, secretstore, today
+from . import lookup_need, mcp_offer, paths, schedule_tool, secretstore, today
 from .textproc import _fence_search_results
 
 # Connecting a site they name: its sign-in in the app's browser, as the Connections page's 登录 (web/connect.py).
@@ -336,14 +336,16 @@ class WebSearch:
             return _fence_search_results(
                 f"Results for: {query}\n" + ("\n".join(f"- {r['title']} ({r['url']})\n  {r['snippet']}"
                                                          for r in rows) or "(nothing found)")) + lookup_need.after_search(
-                bool(rows), tried)
+                bool(rows), tried) + ("" if rows else mcp_offer.elsewhere("Nothing was found on the web."))
         if name == "read_page":
             url = str(args.get("url") or "").strip()
             lookups.doing("read", site_name(url) if url.startswith(("http://", "https://")) else url[:80])
             page = await self._read_for_chat(url, lookups.said)
             if page is None:
                 logger.info("[Agent] read_page %s -> not read", site_name(url))
-                return fence_pages(f"{url[:300]}\n(this page could not be read from here)") + lookup_need.UNREAD
+                return (fence_pages(f"{url[:300]}\n(this page could not be read from here)") + lookup_need.UNREAD
+                        + mcp_offer.elsewhere("This page could not be read from this computer.", mcp_offer.ADDRESS,
+                                              "an address"))
             title, text, final = page
             logger.info("[Agent] read_page %s -> %d chars", site_name(final), len(text))
             lookups.source(title or site_name(final), final, read=True)

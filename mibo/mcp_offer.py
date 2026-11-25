@@ -118,6 +118,33 @@ def servers() -> list[str]:
     return list(current().get("names") or [])
 
 
+# The parameter names that mark a server's tool as taking an address, or a path.
+ADDRESS, PATH = ("url", "uri", "link"), ("path", "file_path", "filepath", "filename", "file")
+
+
+def elsewhere(missed: str, takes: tuple = (), what: str = "") -> str:
+    """After one of the app's own lookups came back with nothing (`missed` says which: a file not on this computer,
+    a page that could not be read, a search with no results): the person's MCP servers, which may be what holds
+    it, and those of their tools that take `what` (a parameter named as `takes` lists). A design of this app's own, kept for what no coding harness has: tools of the app's and a server's for the
+    same job side by side, with nothing to say which a task means. Measured with Haiku (2026-11-24): on MCPMark's
+    filesystem tasks, in 3 of 21 the app's file tools found nothing and the model asked the person where the files
+    were; on AgentDojo's slack tasks a page the app could not reach was asked of the person the same way. In both
+    the server that held it was never called. With the servers named alone, the slack tasks' page tool was called
+    in 6 of 21 tasks (1 before); the tools are named for that. Not in a scheduled run, whose servers are fixed when
+    it is made."""
+    from . import mcp_schema, schedule_tool
+    names = [] if schedule_tool.run_of() is not None else servers()
+    if not names:
+        return ""
+    fitting = [qualified(row["name"], tool["tool"]) for row in current().get("servers") or []
+               for tool in row.get("shown") or [] if set(takes) & set(tool["parameters"].get("properties") or {})]
+    return (f"\n{missed} A server they connected may hold it, and its tools are yours to call "
+            "(mcp__<server>__<tool> in your list, or loaded with find_tools server=<name>): "
+            + mcp_schema.fence("their_mcp_servers", ", ".join(names))
+            + (f"\nOf their tools, these take {what}; try one before telling them it could not be had: "
+               + mcp_schema.fence("their_mcp_tools", ", ".join(fitting[:6])) if fitting else ""))
+
+
 def having(tool: str) -> list[str]:
     """The connected servers that have a tool of this name."""
     return [row["name"] for row in current().get("servers") or [] if tool in (row.get("tool_names") or ())]

@@ -7,6 +7,10 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+### Connectors
+
+- When a page cannot be read from this computer or a web search finds nothing, the answer names your connectors, as a file tool's does when it finds nothing, and names those of their tools that take an address or a path.
+
 ### Fixes
 
 - Closing Mibo just as a page read was starting the installed browser could leave it running with no window (Windows). The browser's start is now finished and stopped before the app exits.

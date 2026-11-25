@@ -214,3 +214,20 @@ def test_a_file_tool_that_found_nothing_on_the_computer_names_the_servers_that_m
         assert "A server they connected may hold it" in after and "[their_mcp_servers]\nnotes\n" in after
     # A listing or a search that found something says nothing more.
     assert "server they connected" not in listed and "server they connected" not in found
+
+
+def test_a_page_that_could_not_be_read_names_the_servers_that_may_hold_it(app, turn, web, tmp_path):
+    # A site that answers 404: the plain fetch has nothing to give.
+    url = web.name("gone.example", "93.184.216.34") + "/minutes"
+    alone = turn(f"What does {url} say?", call("read_page", url=url), say("I could not read it."), cards="no")
+    assert "server they connected" not in alone.result_of(alone.calls()[0]["id"])
+    fetch = {"name": "fetch_page", "description": "Read a page.", "annotations": {"readOnlyHint": True},
+             "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}}}
+    add_server(app, tmp_path, tools=[*TOOLS, fetch], always=True)
+    connected(app, "notes")
+    done = turn(f"What does {url} say?", call("read_page", url=url), say("It may be in notes."), cards="no")
+    said = done.result_of(done.calls()[0]["id"])
+    assert "(this page could not be read from here)" in said
+    assert "A server they connected may hold it" in said and "[their_mcp_servers]\nnotes\n" in said
+    # The one tool of theirs that takes an address is named, and no other.
+    assert "these take an address" in said and "[their_mcp_tools]\nmcp__notes__fetch_page\n" in said
