@@ -136,7 +136,7 @@ def test_a_failed_summary_cuts_at_once_when_the_next_request_would_pass_the_ceil
     assert after and pastchats.NAME in _checkpoints(after[0]["body"])[0]
 
 
-def test_the_chat_comes_back_from_the_pages_checkpoint_after_a_restart(app, turn, model, tmp_path):
+def test_the_chat_comes_back_from_the_pages_checkpoint_after_a_restart(app, turn, model):
     _setup(app)
     app.model.script(*[_summary(n) for n in range(10)], purpose="compact")
     for n in range(10):
@@ -146,8 +146,7 @@ def test_the_chat_comes_back_from_the_pages_checkpoint_after_a_restart(app, turn
     app.close()
     for found in app.home.rglob("recent.json"):
         found.unlink()
-    again = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                LLM_MAX_RETRIES="0").open()
+    again = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
     try:
         # Before its first answer the app counts by characters alone: a request it undercounts is refused,
         # fitted to the window the refusal states and sent once more.
@@ -200,9 +199,8 @@ def _until(done, what: str, wait: float = 15.0) -> None:
     raise AssertionError(what)
 
 
-def _again(model, tmp_path) -> App:
-    return App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-               LLM_MAX_RETRIES="0").open()
+def _again(model) -> App:
+    return App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
 
 
 MANGO = "Threads:\n- 他对芒果过敏，吃了会起疹子\n- 公园散步与银杏\nMood: 轻松"
@@ -298,8 +296,7 @@ def test_a_cut_message_that_gets_no_words_waits_to_be_sent_again(app, turn):
     assert done.status != 200 and theirs[-1].get("failed") and theirs[-1].get("cut")
 
 
-def test_a_chat_read_before_its_first_turn_after_a_restart_keeps_every_turn_in_its_record(app, turn, model,
-                                                                                         tmp_path):
+def test_a_chat_read_before_its_first_turn_after_a_restart_keeps_every_turn_in_its_record(app, turn, model):
     # A long chat at a small window: it comes back from the page with fewer turns than its record holds.
     _setup(app)
     app.model.script(*[_summary(n) for n in range(10)], purpose="compact")
@@ -309,7 +306,7 @@ def test_a_chat_read_before_its_first_turn_after_a_restart_keeps_every_turn_in_i
     app.close()
     for found in app.home.rglob("recent.json"):
         found.unlink()
-    again = _again(model, tmp_path)
+    again = _again(model)
     try:
         # The model menu reads the chat's context before anything is sent.
         assert again.get("/api/chat/context").json()["held"]

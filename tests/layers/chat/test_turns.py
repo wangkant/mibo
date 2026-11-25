@@ -118,7 +118,7 @@ def test_an_answer_with_no_words_is_asked_again_without_tools_and_the_turn_ends_
 
 
 @pytest.fixture
-def hurried(model, monkeypatch, tmp_path):
+def hurried(model, monkeypatch):
     """The app with one second for a model answer and the least tool time two rounds need, where schedule_edit
     stands in for a command that runs past the turn's whole time."""
     quiet_start(monkeypatch)
@@ -131,8 +131,7 @@ def hurried(model, monkeypatch, tmp_path):
         return await real(agent, called, lookups)
 
     monkeypatch.setattr(schedule_tool, "use", use)
-    served = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                 LLM_MAX_RETRIES="0", LLM_TIMEOUT_S="1").open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0", LLM_TIMEOUT_S="1").open()
     yield served
     served.close()
 

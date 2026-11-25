@@ -24,13 +24,12 @@ STANDARD = {"accept", "accept-encoding", "connection", "content-length", "conten
 
 
 @pytest.fixture
-def opened(model, monkeypatch, tmp_path):
+def opened(model, monkeypatch):
     apps: list[App] = []
 
     def open_app(**settings) -> App:
         quiet_start(monkeypatch)
-        apps.append(App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                        LLM_MAX_RETRIES="0", **settings).open())
+        apps.append(App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0", **settings).open())
         return apps[-1]
     yield open_app
     for app in apps:

@@ -18,12 +18,11 @@ NOW = 1_800_000_000
 
 
 @pytest.fixture
-def page(model, monkeypatch, tmp_path):
+def page(model, monkeypatch):
     """The app with no model behind it, and the shelf of its home."""
     quiet_start(monkeypatch)
     clock = Clock(monkeypatch, NOW)
-    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MODEL="",
-                 PERSONA_BROWSER_PATH=str(tmp_path / "no-browser")).open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MODEL="").open()
     shelf = Shelf(served.home / "runtime", clock, monkeypatch)
     for n in range(3):
         shelf.add(f"Braised pork recipe {n}", site=f"kitchen{n}.example", text="Slow cooking at home.")

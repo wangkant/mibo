@@ -31,14 +31,12 @@ def reviewed(model, *rounds, json_mode: bool = False, times: int = 1) -> list[re
     return asyncio.run(run())
 
 
-def test_the_startup_probe_learns_that_a_service_refuses_thinking_and_replies_go_without_it(model, monkeypatch,
-                                                                                          tmp_path):
+def test_the_startup_probe_learns_that_a_service_refuses_thinking_and_replies_go_without_it(model, monkeypatch):
     # The probe at start is answered first by a refusal of the switch, then without it.
     model.script(fail(400, {"error": {"message": "Unrecognized request argument supplied: thinking"}}),
                  text("ok"), purpose="probe")
     quiet_start(monkeypatch)
-    served = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                 LLM_MAX_RETRIES="0").open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
     try:
         waited = time.monotonic() + 10
         while len(model.asked("probe")) < 2 and time.monotonic() < waited:

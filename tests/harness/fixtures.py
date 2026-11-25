@@ -37,12 +37,11 @@ def model(scripted_model_server):
 
 
 @pytest.fixture
-def app(model, monkeypatch, tmp_path):
-    """No browser is found (a test that wants one says so), the first start probes no public site, and a failed
-    model call is not retried, so a failure shows at once."""
+def app(model, monkeypatch):
+    """The app as quiet_start leaves it (no probe of public sites, no browser found), and a failed model call is
+    not retried, so a failure shows at once."""
     quiet_start(monkeypatch)
-    served = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                 LLM_MAX_RETRIES="0").open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
     yield served
     served.close()
 

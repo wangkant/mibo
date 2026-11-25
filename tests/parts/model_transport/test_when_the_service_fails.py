@@ -20,7 +20,7 @@ RATE_LIMITED = {"error": {"message": "Rate limit reached for requests", "type": 
 
 
 @pytest.fixture
-def opened(model, monkeypatch, tmp_path):
+def opened(model, monkeypatch):
     """open(**settings) -> the app on this test's home with the scripted model behind it; the one opened before
     is stopped first."""
     apps: list[App] = []
@@ -29,8 +29,7 @@ def opened(model, monkeypatch, tmp_path):
         while apps:
             apps.pop().close()
         quiet_start(monkeypatch)
-        apps.append(App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                        **settings).open())
+        apps.append(App(Path(os.environ["AGENT_HOME"]), model, **settings).open())
         return apps[-1]
     yield open_app
     while apps:

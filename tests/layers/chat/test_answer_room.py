@@ -58,11 +58,10 @@ def test_the_window_an_overflow_error_states_is_the_models_from_then_on(app, tur
 
 
 @pytest.fixture
-def set_window(model, monkeypatch, tmp_path):
+def set_window(model, monkeypatch):
     """The app with the person's CONTEXT_WINDOW set to 16384."""
     quiet_start(monkeypatch)
-    served = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                 LLM_MAX_RETRIES="0", CONTEXT_WINDOW="16384").open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0", CONTEXT_WINDOW="16384").open()
     yield served
     served.close()
 

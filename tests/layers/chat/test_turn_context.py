@@ -125,8 +125,7 @@ def test_compact_now_makes_the_older_turns_one_checkpoint_that_the_next_request_
     assert "第一句话" not in sent and f"第0句：{ZH}" not in sent and f"第3句：{ZH}" in sent
 
 
-def test_clearing_the_context_leaves_the_model_no_earlier_turns_and_the_page_and_memory_keep_them(app, turn, model,
-                                                                                                  tmp_path):
+def test_clearing_the_context_leaves_the_model_no_earlier_turns_and_the_page_and_memory_keep_them(app, turn, model):
     _setup(app, 65536)
     app.post("/api/person/add", {"text": "养了一只叫年糕的橘猫"})
     for n in range(3):
@@ -145,8 +144,7 @@ def test_clearing_the_context_leaves_the_model_no_earlier_turns_and_the_page_and
     app.close()
     for found in app.home.rglob("recent.json"):
         found.unlink()
-    again = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                LLM_MAX_RETRIES="0").open()
+    again = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
     try:
         (body,) = run_turn(again, "继续", say("好。")).asked()
         sent = json.dumps(body["messages"], ensure_ascii=False)
@@ -168,13 +166,12 @@ def test_the_memory_block_takes_no_more_than_the_tokens_it_is_given(tmp_path, bu
     assert bool(placed) == (budget >= 300) and all(kept[ident] in block for ident in placed)
 
 
-def _restart(app, model, tmp_path) -> App:
+def _restart(app, model) -> App:
     """The app opened again on the same home, without its recent window."""
     app.close()
     for found in app.home.rglob("recent.json"):
         found.unlink()
-    return App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-               LLM_MAX_RETRIES="0").open()
+    return App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0").open()
 
 
 def test_a_chat_with_no_question_after_its_checkpoint_has_nothing_to_condense(app, turn):
@@ -189,7 +186,7 @@ def test_a_chat_with_no_question_after_its_checkpoint_has_nothing_to_condense(ap
     assert (pressed.status_code, pressed.json()) == (200, {"compacted": False})
 
 
-def test_a_compaction_after_a_clear_keeps_the_turns_before_the_clear_out_after_a_restart(app, turn, model, tmp_path):
+def test_a_compaction_after_a_clear_keeps_the_turns_before_the_clear_out_after_a_restart(app, turn, model):
     _setup(app, 65536)
     for n in range(3):
         turn(f"清空前{n}：{ZH}", say(f"回答{n}"))
@@ -198,7 +195,7 @@ def test_a_compaction_after_a_clear_keeps_the_turns_before_the_clear_out_after_a
     for n in range(2):
         turn(f"清空后{n}：{ZH}", say(f"后来{n}"))
     assert app.post("/api/chat/compact").json()["compacted"]
-    again = _restart(app, model, tmp_path)
+    again = _restart(app, model)
     try:
         (body,) = run_turn(again, "继续", say("好。")).asked()
         assert "清空前" not in json.dumps(body["messages"], ensure_ascii=False)

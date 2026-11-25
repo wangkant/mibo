@@ -24,13 +24,12 @@ READING = "Receipt, Harbour Cafe. " + " ".join(f"Line {n}: oat latte 4.50" for n
 
 
 @pytest.fixture
-def reader(model, monkeypatch, tmp_path):
+def reader(model, monkeypatch):
     """The app with a vision model at the scripted model's address; tries again with no wait between."""
     quiet_start(monkeypatch)
     monkeypatch.setattr(transport, "WAIT_SCALE", 0)
-    served = App(Path(os.environ["AGENT_HOME"]), model, PERSONA_BROWSER_PATH=str(tmp_path / "no-browser"),
-                 LLM_MAX_RETRIES="0", VISION_MODEL="scripted-vision", VISION_API_KEY=VISION_KEY,
-                 VISION_BASE_URL=model.url).open()
+    served = App(Path(os.environ["AGENT_HOME"]), model, LLM_MAX_RETRIES="0", VISION_MODEL="scripted-vision",
+                 VISION_API_KEY=VISION_KEY, VISION_BASE_URL=model.url).open()
     yield served
     served.close()
 

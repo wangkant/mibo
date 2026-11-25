@@ -14,7 +14,7 @@ import traceback
 import httpx
 import uvicorn
 
-from mibo import paths, settingsfile, situation, welcome
+from mibo import installed_browser, paths, roam, settingsfile, situation, welcome
 from mibo.panels import modelbar
 from mibo.sources import catalog
 from mibo.storage import atomic_write_text
@@ -92,8 +92,10 @@ async def _no_probe(runtime, lang: str = "") -> None:
 def quiet_start(monkeypatch) -> None:
     """What every app in a test leaves out: the first start's probe of public sites, the sources' round that
     starts by itself (twenty seconds in it would read public sites and take a scripted answer for its judgement; a
-    test that wants a round asks for one), and the start's measure of the model (a test that wants it scripts it
-    and calls modelbar.check_at_start)."""
+    test that wants a round asks for one), the start's measure of the model (a test that wants it scripts it
+    and calls modelbar.check_at_start), and the browser installed on this computer, which a thin page would
+    start for a rendered read (the tests of walks and rendered reads build their own walker)."""
     monkeypatch.setattr(situation, "probe", _no_probe)
     monkeypatch.setattr(catalog, "FIRST_ROUND_S", 24 * 3600)
     monkeypatch.setattr(modelbar, "check_at_start", lambda workspace: None)
+    monkeypatch.setattr(roam.Roam, "available", lambda self: installed_browser.NO_BROWSER)
