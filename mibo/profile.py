@@ -280,6 +280,27 @@ def manner(runtime: Path, text: str, now: float) -> None:
     _said(runtime, state, now)
 
 
+def unsay(runtime: Path, words: list[str]) -> None:
+    """Take out what the person's words `words` put here (a like, a rule, the form wish, a manner line) once the
+    fact they were kept as is past: a later word replaced it, or they took it back."""
+    said = {_clip(w) for w in words}
+    state = _state(runtime)
+
+    def theirs(row, field: str) -> bool:
+        return isinstance(row, dict) and _clip(row.get(field)) in said
+    gone = [row for row in state.get("likes") or [] if theirs(row, "words")] + [
+        row for row in state.get("rules") or [] if theirs(row, "words")] + [
+        row for row in state.get("pinned") or [] if theirs(row, "text") and row.get("field") == "manner"]
+    form = theirs(state.get("form"), "words")
+    if not (gone or form):
+        return
+    for key in ("likes", "rules", "pinned"):
+        state[key] = [row for row in state.get(key) or [] if not any(row is g for g in gone)]
+    if form:
+        state.pop("form")
+    _said(runtime, state, time.time())
+
+
 def manner_lines(runtime: Path) -> list[str]:
     """How the person asked to be treated, oldest first."""
     return [str(p["text"]) for p in load(runtime, False)["pinned"] if p.get("field") == "manner"]

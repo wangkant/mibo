@@ -413,6 +413,14 @@ class Memory:
             except (OSError, ValueError) as e:
                 logger.warning("[Agent] profile not told (%s): %s", kind, e)
 
+    def _untell_profile(self, rows: list[dict]) -> None:
+        """Preferences that are past leave the profile too: a replaced manner line no longer reaches a reply."""
+        from . import profile
+        try:
+            profile.unsay(today_runtime(self), [row["text"] for row in rows])
+        except (OSError, ValueError) as e:
+            logger.warning("[Agent] profile not told: %s", e)
+
     def _person_turn(self, conv: str, said: str, reply: str) -> None:
         """After a sent reply: the plans it asked about (person.apply_turn); a turn they asked not to keep
         leaves its words only as hashes. What they said of themselves is the fold's. A number or a code said in
