@@ -24,7 +24,10 @@ dicts, so a made-up day can be replayed against it:
 - the pace the person set in Settings or asked for in the chat (profile.py
   "pace"): at "less" every gap is FEWER times as long and the day's caps are
   divided by it, and the reason says "fewer"; at "more" the other way round;
-- never in the quiet hours they set (profile.py "quiet_hours", local time).
+- never in the quiet hours they set (profile.py "quiet_hours", local time);
+- the share step never in the middle of an exchange in the main chat: while a message of theirs waits for its
+  answer or a question waits on them, nor within TALK_S of the last word between them there
+  (chatfinds.ChatFinds.exchange), so their next words still follow what they were talking about.
 
 `seen` is what is in front as `see` follows it, kept in memory only (activity.py
 never writes it down). With the "角色会留意你在做什么" switch off (remarks)
@@ -66,6 +69,9 @@ STILL_S = 90
 STRETCH_S, SWITCH_S = 20 * 60, 60
 # The other surface brought something this recently: not now.
 SPACING_S = 10 * 60
+# The person and the character spoke in the main chat this recently: an exchange may be under way, and the share
+# step waits as long as one surface waits for the other.
+TALK_S = SPACING_S
 AT_MOMENT = 0.6
 DAY_MAX, DAY_FLOOR, FLOOR_GAP_S = 10, 2, 2 * 3600
 # Asked for fewer: gaps this many times as long, the day's caps divided by it; asked for more, the reverse.
@@ -156,9 +162,10 @@ def hushed(quiet: tuple | None, now: float) -> bool:
 
 
 def decide(pace: dict, seen: dict, now: float, watch: bool) -> tuple[bool, str]:
-    """(whether to bring something now, why). `pace`: {last, other, scale, count, slow, quiet} for this
+    """(whether to bring something now, why). `pace`: {last, other, scale, count, slow, quiet, talk, held} for this
     surface, `other` being when another surface last brought something, `slow` the SLOW of the pace the person
-    set and `quiet` their quiet hours or None; `seen` as `see` keeps it."""
+    set, `quiet` their quiet hours or None, `talk` when the person and the character last spoke where it brings
+    things and `held` whether an answer or a question waits there; `seen` as `see` keeps it."""
     kind = seen["kind"] if watch else ""
     slow = pace["slow"]
     fewer = " (fewer)" if slow > 1 else ""
@@ -172,6 +179,10 @@ def decide(pace: dict, seen: dict, now: float, watch: bool) -> tuple[bool, str]:
         return False, "away"
     if typing(seen, now, watch):
         return False, "typing"
+    if pace["held"]:
+        return False, "waiting on them"
+    if now - pace["talk"] < TALK_S:
+        return False, "talking"
     if pace["count"] >= DAY_MAX // slow:
         return False, "day cap" + fewer
     if now - pace["other"] < SPACING_S:
@@ -222,10 +233,11 @@ def wants(runtime: Path) -> dict:
     return {"slow": SLOW[known["pace"]], "quiet": hours and (minutes(hours["from"]), minutes(hours["to"]))}
 
 
-def view(rows: dict, surface: str, slow: float = 1, quiet: tuple | None = None) -> dict:
+def view(rows: dict, surface: str, slow: float = 1, quiet: tuple | None = None, talk: float = 0.0,
+         held: bool = False) -> dict:
     row = rows[surface]
     return {"last": row["last"], "scale": row["scale"], "count": row["count"], "slow": slow, "quiet": quiet,
-            "other": max((r["last"] for s, r in rows.items() if s != surface), default=0.0)}
+            "talk": talk, "held": held, "other": max((r["last"] for s, r in rows.items() if s != surface), default=0.0)}
 
 
 # ------------------------------------------------------------------- the app --
@@ -268,13 +280,16 @@ class Pacer:
         if got is None:
             got = activity.sense(state["ignore"]) if watch else activity.Sample("", activity.idle(), False)
         q = quiet.state()
+        # The share step brings its finds into the main chat: the talk there counts for it alone.
+        talk = {"chat": self.ws.exchange()}
         with self._lock:
             see(self.seen, now, got.activity if watch else "", got.idle_s, q["quiet"], q["video_front"],
                 now - quiet.typed_ago())
             rows = self._rows(now)
             if now < self.snoozed:
                 return dict.fromkeys(SURFACES, (False, "snoozed"))
-            return {surface: decide(view(rows, surface, **wanted), self.seen, now, watch) for surface in SURFACES}
+            return {surface: decide(view(rows, surface, **wanted, **talk.get(surface, {})), self.seen, now, watch)
+                    for surface in SURFACES}
 
     def snooze(self, on: bool) -> float:
         """Do not disturb for SNOOZE_S from now, or no longer; when it ends (0 when off)."""

@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import re
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 from . import life, quiet
@@ -98,18 +99,20 @@ class ChatFinds:
         if cards:
             self._save_chat()
 
-    async def _say(self, items: list, served: dict | None = None) -> dict:
+    async def _say(self, items: list, served: dict | None = None, unasked: bool = False) -> dict:
         """Bring things it saw into the main chat as its own messages, each with
         its card; each is then seen in the feed and told, so neither the pet's
         card nor this chat brings it again. `served`: the choice's fields by id: the
         character's line, said as the message, and the ranking's slot; its rank is its
-        place in the batch. Without it, a find the pet's card showed keeps what the card was handed."""
+        place in the batch. Without it, a find the pet's card showed keeps what the card was handed.
+        `unasked`: the share step brought them on its own, so the person's next message reads them as an aside
+        (workspace._quotes)."""
         from .panels import feed
 
         served = (feed.on_card if served is None else served) or {}
         since = self._main.seq
         if items:
-            messages = [life.said(item) for item in items]
+            messages = [life.said(item) | ({"unasked": True} if unasked else {}) for item in items]
             for rank, (item, message) in enumerate(zip(items, messages)):
                 shaped = served.get(item.id, {})
                 if shaped.get("line"):
@@ -134,6 +137,19 @@ class ChatFinds:
             return False
         return await self.pace.due("chat")
 
+    def exchange(self) -> dict:
+        """The main chat as the share step's pacing reads it (pacing.decide): `talk`, when the person or the
+        character last spoke there, other than in a find the share step brought; `held`, whether a message of theirs
+        waits for its answer or a question waits on them. Both are no older than their last message."""
+        talk, held = 0.0, False
+        for message in reversed(self._main.history):
+            held = held or bool(message.get("pending")) or (message.get("ask") or {}).get("state") == "waiting"
+            if not talk and not message.get("unasked"):
+                talk = datetime.fromisoformat(message["at"]).timestamp()
+            if message.get("role") == "user":
+                break
+        return {"talk": talk, "held": held}
+
     async def share(self) -> int:
         """The share step: the character's choice comes into the main chat as its
         own message, once one is ready (the chooser wakes this step then). One at a
@@ -148,7 +164,7 @@ class ChatFinds:
                 return 0
             shaped, item = chosen
             await asyncio.to_thread(self.pace.shown, "chat", item.id)
-            await self._say([item], {item.id: shaped})
+            await self._say([item], {item.id: shaped}, unasked=True)
             return 1
 
     async def share_loop(self) -> None:
