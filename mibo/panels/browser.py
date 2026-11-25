@@ -642,9 +642,10 @@ def mount(app, workspace, body) -> None:
         return {"sites": await asyncio.to_thread(allowed.set, site, kind, False)}
 
     def site_rows() -> list[dict]:
-        """Per site, what Settings shows: the kinds let through, its feed read in the background; the sites read
-        lately come first, so a feed can be turned on for one of them."""
-        from ..web import gate, sites
+        """Per site, what Settings shows: the kinds let through, its feed read in the background (its own switch,
+        else the general one: signin.background); the sites read lately come first, so a feed can be turned on for
+        one of them."""
+        from ..web import gate, signin, sites
         runtime = desktop.parent
         cards = sites.load(runtime)
         allowed: dict[str, list] = {}
@@ -660,7 +661,7 @@ def mount(app, workspace, body) -> None:
             card = cards.get(key) if isinstance(cards.get(key), dict) else {}
             feed = card.get("feed") or {}
             rows.append({"site": key, "allowed": allowed.get(key, []),
-                         "feed": {"on": bool(feed.get("on")), "stopped": feed.get("stopped", "")},
+                         "feed": {"on": signin.background(desktop, f"https://{key}/"), "stopped": feed.get("stopped", "")},
                          "learned": bool(card.get("search"))})
         return rows
 

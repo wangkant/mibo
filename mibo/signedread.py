@@ -74,10 +74,11 @@ class Reader:
 
 
 class Feeds:
-    """The person's own feed on a site, read in the background, only where they turned it on in Settings
-    (the card's "feed": {on, url, day, n, at, stopped}): at most every FEED_EVERY_S and FEED_DAY_MAX a day a
-    site, through the Reader (its pace, robots.txt honoured), read only. A check or a sign-in wall turns the
-    site's reading off until the person turns it on again. The rows go to the library as finds."""
+    """The person's own feed on a site, read in the background, only where they turned it on in Settings, for the
+    site or by the general switch (the card's "feed": {on, url, day, n, at, stopped}): at most every FEED_EVERY_S
+    and FEED_DAY_MAX a day a site, through the Reader (its pace, robots.txt honoured), read only. A check or a
+    sign-in wall turns the site's reading off until the person turns it on again. The rows go to the library as
+    finds."""
 
     def __init__(self, reader: Reader, runtime: Path, *, shared: Callable[[], bool]):
         self.reader = reader
@@ -118,11 +119,21 @@ class Feeds:
 
 
 def feeds_on(runtime: Path) -> dict:
-    """{site key: its feed} for the sites whose background reading the person turned on."""
-    from .web import sites
-    return {key: card["feed"] for key, card in sites.load(runtime).items()
-            if isinstance(card, dict) and isinstance(card.get("feed"), dict) and card["feed"].get("on")
-            and browsed.web(card["feed"].get("url", ""))}
+    """{site key: its feed} for the sites browsed in the background (signin.background): those whose own switch is
+    on, and while the general switch is on the signed-in sites with none of their own, read where the site's hint
+    says its feed reads as a list, else at its home."""
+    from .web import signin, sites
+    desktop = Path(runtime) / "desktop"
+    feeds = {key: card["feed"] for key, card in sites.load(runtime).items()
+             if isinstance(card, dict) and isinstance(card.get("feed"), dict)}
+    out = {key: feed for key, feed in feeds.items() if feed.get("on")}
+    if signin.general(desktop)["background"]:
+        for site, entry in signin.load(desktop).items():
+            home = entry.get("home") or f"https://{signin.bare(site)}/"
+            feed = feeds.get(sites.key_of(home), {})
+            if "on" not in feed and signin.background(desktop, home):
+                out[sites.key_of(home)] = {**feed, "url": feed.get("url") or signin.hint(site).get("feed") or home}
+    return {key: feed for key, feed in out.items() if browsed.web(feed.get("url", ""))}
 
 
 def keep_finds(runtime: Path, key: str, rows: list) -> int:

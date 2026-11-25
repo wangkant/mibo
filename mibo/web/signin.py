@@ -29,7 +29,10 @@ whether it is signed in, since when and on what evidence, the names of the
 cookies its session showed, when it was last used, whether the browser filled
 a saved password there, the person's choices (read while they are on it, read
 on the character's own request during a task) and their answer on 自动登录. The
-background choice is the site card's feed (web/sites.py).
+background choice is the site card's feed (web/sites.py). A site with no choice
+of its own follows the general switch for it (GENERAL_FILE), except that a
+guarded site (banks, payment, health, mail, accounts) takes neither background
+browsing nor automatic sign-in from one.
 """
 from __future__ import annotations
 
@@ -56,8 +59,12 @@ SIGNED_WITHIN_S = 1800.0
 # Hints about the big platforms' sign-ins (data), and their marks for Settings' picker.
 SITES = Path(__file__).with_name("signin_sites.json")
 MARKS = Path(__file__).with_name("marks")
-CHOICES = {"here": True, "task": True}
 AUTO = ("always", "never")
+# The general switches, as a home with none set has them: read the page while they browse it, open and read the
+# site during a task, browse its own feed in the background, press its sign-in button once the browser filled a
+# saved password.
+GENERAL_FILE = "signin_general.json"
+GENERAL = {"here": True, "task": True, "background": False, "auto": False}
 
 # What the page asks for, read off it: a check, a sign-in, a sign-in layer in front of a page with nothing else on
 # it, or nothing; a sign-in box over a page whose content is still there is a `prompt` instead. `form`: a way to
@@ -308,16 +315,65 @@ def forget(desktop: Path, site: str) -> None:
             atomic_write_text(_path(desktop), json.dumps(saved, ensure_ascii=False, indent=1))
 
 
+def general(desktop: Path) -> dict:
+    """The general switches: {name: on} for each of GENERAL, its default where the person set none."""
+    try:
+        saved = json.loads((Path(desktop) / GENERAL_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        saved = {}
+    return {name: saved[name] if isinstance(saved, dict) and isinstance(saved.get(name), bool) else on
+            for name, on in GENERAL.items()}
+
+
+def set_general(desktop: Path, name: str, on: bool) -> dict:
+    """One general switch set; the switches as written."""
+    with _lock:
+        switches = {**general(desktop), name: on}
+        Path(desktop).mkdir(parents=True, exist_ok=True)
+        atomic_write_text(Path(desktop) / GENERAL_FILE, json.dumps(switches))
+        return switches
+
+
+def guarded(site: str, entry: dict) -> bool:
+    """A site that no general switch turns background browsing or automatic sign-in on for: one acting.sensitive
+    names by its key or its home (banks, payment, health, mail, accounts), or one a mailbox's hint shares (Gmail's
+    google.com, QQ Mail's qq.com)."""
+    from ..acting import sensitive
+    return sensitive(site) or sensitive(str(entry.get("home") or "")) or any(
+        row.get("mail") for row in hints() if row["site"] == bare(site))
+
+
+def _choice(entry: dict, name: str, switches: dict) -> bool:
+    return entry[name] is not False if name in entry else switches[name]
+
+
 def chose(desktop: Path, url: str, name: str) -> bool:
-    """The person's choice `name` ("here", "task") for the site of `url`."""
-    entry = load(desktop).get(key(url)) or {}
-    return entry.get(name, CHOICES[name]) is not False
+    """The choice `name` ("here", "task") for the site of `url`: the site's own, else the general switch."""
+    return _choice(load(desktop).get(key(url)) or {}, name, general(desktop))
 
 
 def auto(desktop: Path, url: str) -> str:
-    """Their answer on 自动登录 for the site of `url`: "always", "never" or "" (not asked yet)."""
-    value = (load(desktop).get(key(url)) or {}).get("auto", "")
-    return value if value in AUTO else ""
+    """Their answer on 自动登录 for the site of `url`: "always", "never", or "" (asked on the card); a site with no
+    answer of its own is "always" while the general switch is on, unless it is guarded."""
+    site = key(url)
+    entry = load(desktop).get(site) or {}
+    value = entry.get("auto", "")
+    if value in AUTO:
+        return value
+    return "always" if general(desktop)["auto"] and not guarded(site, entry) else ""
+
+
+def background(desktop: Path, url: str) -> bool:
+    """Whether the site of `url` has its own feed browsed in the background: its card's own switch (web/sites.py;
+    a wall's stop is an off), else, while it is signed in, the general switch, unless it is guarded."""
+    from . import sites
+    feed = (sites.load(Path(desktop).parent).get(sites.key_of(url)) or {}).get("feed")
+    if isinstance(feed, dict) and "on" in feed:
+        return bool(feed["on"])
+    site = key(url)
+    entry = load(desktop).get(site) or {}
+    return (entry.get("state") == "in" and not entry.get("gone") and general(desktop)["background"]
+            and not guarded(site, entry))
 
 
 def signed_in(desktop: Path, url: str) -> bool:
@@ -329,9 +385,9 @@ def connected(desktop: Path, lang: str = "en") -> list[dict]:
     """The sites signed in to here that the character may read on its own (their "task" choice), each as
     `platform` gives it. Hint rows that share a site (Google and Gmail): the one the person connected, by its home
     or its name, else the first that says where messages are."""
-    out = []
+    out, switches = [], general(desktop)
     for site, entry in load(desktop).items():
-        if entry.get("state") != "in" or entry.get("gone") or entry.get("task") is False:
+        if entry.get("state") != "in" or entry.get("gone") or not _choice(entry, "task", switches):
             continue
         rows = [row for row in hints() if row["site"] == bare(site)]
         host = urlsplit(str(entry.get("home") or "")).hostname
@@ -351,13 +407,9 @@ def platform(site: str, entry: dict, row: dict, lang: str = "en") -> dict:
 
 
 def kept_out(desktop: Path, url: str) -> bool:
-    """A page of a signed-in site whose background choice is off: the person's own, never kept in the library
-    or the browsing record."""
-    if not signed_in(desktop, url):
-        return False
-    from . import sites
-    card = sites.load(Path(desktop).parent).get(sites.key_of(url)) or {}
-    return not (isinstance(card.get("feed"), dict) and card["feed"].get("on"))
+    """A page of a signed-in site not browsed in the background: the person's own, never kept in the library or
+    the browsing record."""
+    return signed_in(desktop, url) and not background(desktop, url)
 
 
 def home_of(url: str) -> str:
@@ -378,7 +430,7 @@ def became(desktop: Path, url: str, how: str, marks: list[str] | None = None, hi
         if entry.get("state") != "in" or entry.get("gone"):
             fresh.append(True)
             entry.update(at=now)
-            # The first time it is signed in here, Settings opens its choices once.
+            # The first time it is signed in here, Settings says so in one line, once.
             if not entry.get("told"):
                 entry["fresh"] = True
         entry.update(state="in", how=how, used=now)
