@@ -275,8 +275,9 @@ def part_of_app(name: str) -> bool:
 
 
 def set_on(home: Path, name: str, on: bool) -> None:
-    """Switches a skill; ValueError when it is part of the app, which is always on."""
-    if not on and part_of_app(name):
+    """Switches a skill; ValueError when it is a built-in skill that is part of the app, which is always on. A skill
+    of the person's own that takes such a skill's name is theirs, and is switched like any other."""
+    if not on and part_of_app(name) and not any(s.name == name and not s.builtin for s in all_skills(home)):
         raise ValueError("skill_builtin")
     data = records(home)
     off = [n for n in data.get("off") or [] if n != name]
@@ -435,12 +436,12 @@ def _under(path: PurePosixPath, root: PurePosixPath) -> bool:
 
 
 def remove(home: Path, folder_name: str) -> None:
-    """Deletes one of the person's own skills; built-in ones are never removed, and the optional ones are switched
-    off instead."""
-    if part_of_app(folder_name):
-        raise ValueError("skill_builtin")
+    """Deletes one of the person's own skills, one that takes a built-in skill's name among them; built-in ones are
+    never removed, and the optional ones are switched off instead."""
     root = skills_dir(home)
     there = root / folder_name
+    if part_of_app(folder_name) and not there.is_dir():
+        raise ValueError("skill_builtin")
     if not folder_name or folder_name.startswith(".") or there.parent != root or not there.is_dir() \
             or there.is_symlink():
         raise ValueError("skill_gone")

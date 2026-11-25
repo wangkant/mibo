@@ -163,6 +163,19 @@ def test_a_skill_that_is_part_of_the_app_cannot_be_switched_off_or_removed_throu
     assert app.post("/api/skills", {"name": "tidy-downloads", "on": False}).status_code == 200
 
 
+def test_a_skill_of_the_persons_own_named_as_a_required_one_is_theirs_to_switch_off_and_remove(app):
+    mine = _add("word-document", "1. Write it my way.")
+    assert {s.builtin for s in store.all_skills(_home()) if s.name == "word-document" and s.usable} == {False}
+    assert app.post("/api/skills", {"name": "word-document", "on": False}).status_code == 200
+    assert app.post("/api/skills", {"remove": "word-document"}).status_code == 200 and not mine.exists()
+    # Without it the app's own is back, always on.
+    (skill,) = [s for s in store.all_skills(_home()) if s.name == "word-document"]
+    assert skill.builtin and skill.usable
+    # The app's own is still neither switched off nor removed.
+    assert app.post("/api/skills", {"name": "word-document", "on": False}).json()["error"] == "skill_builtin"
+    assert app.post("/api/skills", {"remove": "word-document"}).json()["error"] == "skill_builtin"
+
+
 def test_a_skill_of_the_persons_own_carrying_the_apps_mark_is_still_listed_and_can_be_switched_off(app, monkeypatch):
     # No model is asked for a Chinese title.
     async def no_titles(*args):
