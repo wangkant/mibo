@@ -329,8 +329,9 @@ class PaneTab(_BlockingTab):
 class HiddenTab(_BlockingTab):
     """A hidden WebView2 on the pane's profile (signedread.Reader), for reading with the person's session out of
     sight. Read only by construction: it goes to addresses of the one site it was opened for, its page may
-    send only GET requests to that site, and of DevTools it has only what reading needs (no clicks, no keys;
-    a wheel to scroll). It never reads cookies or storage."""
+    send only GET requests to that site, and of DevTools it has only what reading needs (no clicks, no keys, no
+    wheel: a view out of sight never answers one, so its page is scrolled by script). It never reads cookies or
+    storage."""
 
     READS = frozenset({"Runtime.evaluate", "Page.getLayoutMetrics", "Page.getFrameTree", "Accessibility.getFullAXTree",
                        "DOM.getDocument", "DOM.querySelectorAll", "DOM.describeNode", "Page.enable"})
@@ -344,10 +345,12 @@ class HiddenTab(_BlockingTab):
         return self.view.address()
 
     def _call(self, method: str, params: dict, session: str) -> dict:
-        if method not in self.READS and not (method == "Input.dispatchMouseEvent"
-                                             and params.get("type") == "mouseWheel"):
+        if method not in self.READS:
             raise TabError(f"{method} is not for reading")
         return self.view.cdp(method, params)
+
+    async def scroll(self, screens: float = 1.0) -> None:
+        await self.evaluate("(screens) => scrollBy(0, innerHeight * screens)", screens)
 
     async def goto(self, url: str, *, referer: str = "", timeout_s: float = OPEN_S) -> Answer:
         final = await asyncio.to_thread(self.view.goto, url, timeout_s)

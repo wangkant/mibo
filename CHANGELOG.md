@@ -32,6 +32,7 @@ The character's instructions put getting a task done first. Changes below follow
 ### Fixes
 
 - Closing Mibo just as a page read was starting the installed browser could leave it running with no window (Windows). The browser's start is now finished and stopped before the app exits.
+- Reading a signed-in site's feed in the background stopped for the rest of the session once a page out of sight did not answer a scroll. Such a page is now scrolled by script, a page that stops answering ends the read with what was seen, and one site's failed read no longer stops the others.
 - A Douyin video played on a card drew as a phone page in the corner of its frame, with a scroll bar. Douyin's player is now laid out at its desktop width and drawn at the card's.
 
 ## [0.2.0] - 2026-11-24

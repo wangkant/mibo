@@ -221,11 +221,15 @@ async def _read(tab: Tab, url: str, *, screens: int, here: bool, item: bool, unt
     if status >= 400 and kind not in ("verification", "sign_in"):
         return Page(tab.url, wall="error", evidence=f"http {status}", status=status)
     if kind == "empty" and left(SETTLE_S):
-        # An empty shell gets one more chance to draw: a longer settle and a screen.
+        # An empty shell gets one more chance to draw: a longer settle and a screen. A tab that stops answering
+        # there leaves the shell as it was read.
         await settle(tab, left(SETTLE_S))
-        await tab.scroll(1)
-        await settle(tab, left(AFTER_SCROLL_S))
-        data = await run_reader(tab, opts)
+        try:
+            await tab.scroll(1)
+            await settle(tab, left(AFTER_SCROLL_S))
+            data = await run_reader(tab, opts)
+        except Exception:
+            pass
         kind, evidence = _wall(data)
     rows: dict = {}
     merge(rows, data.get("rows") or [])
@@ -262,14 +266,15 @@ async def _open(tab: Tab, url: str) -> tuple[int, Page | None]:
 
 async def _scroll(tab: Tab, rows: dict, screens: int, left: Callable[[float], float]) -> tuple[str, str] | None:
     """`screens` more screens of a list scrolled, their rows merged into `rows`, each wait cut by `left`; the wall
-    (kind, evidence) that came up while scrolling, which ends the reading with what was seen before it."""
+    (kind, evidence) that came up while scrolling, which ends the reading with what was seen before it, as a tab
+    that stops answering does."""
     for _ in range(screens):
         if not left(SCROLL_PAUSE_S):
             break
-        await tab.scroll(1)
-        await asyncio.sleep(left(SCROLL_PAUSE_S))
-        await settle(tab, left(AFTER_SCROLL_S))
         try:
+            await tab.scroll(1)
+            await asyncio.sleep(left(SCROLL_PAUSE_S))
+            await settle(tab, left(AFTER_SCROLL_S))
             more = await run_reader(tab)
         except Exception:
             break

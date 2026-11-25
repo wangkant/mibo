@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -90,7 +91,11 @@ class Feeds:
             for key, feed in feeds_on(self.runtime).items():
                 if self.stop.is_set() or not self.shared():
                     break
-                self._read(key, feed)
+                # One site's read that fails is written to the log; the others, and the next look, go on.
+                try:
+                    self._read(key, feed)
+                except Exception:
+                    traceback.print_exc()
 
     def _read(self, key: str, feed: dict) -> None:
         """One site's feed, when it is due: read, noted on the site's card, and its rows kept as finds."""
