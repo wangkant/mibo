@@ -7,6 +7,10 @@ It is kept in English; the README describes the app in all ten interface languag
 
 ## [Unreleased]
 
+### Fixes
+
+- Closing Mibo just as a page read was starting the installed browser could leave it running with no window (Windows). The browser's start is now finished and stopped before the app exits.
+
 ## [0.2.0] - 2026-11-24
 
 The character asks in the chat instead of on cards, and asks less. It makes Word, Excel and PowerPoint files as files, reads the sites you are signed in to, and knows the app's own settings. Attached below are the same downloads as for 0.1.0.

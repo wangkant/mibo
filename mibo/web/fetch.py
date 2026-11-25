@@ -51,7 +51,6 @@ _LINK = re.compile(r"<a\b[^>]*>(.*?)</a>", re.S | re.I)
 _TAG = re.compile(r"<[^>]+>")
 _HEADING = re.compile(r"^#{1,6} ", re.M)
 _RULE = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$", re.M)
-_warming: set[asyncio.Task] = set()
 
 
 class _Head(HTMLParser):
@@ -244,10 +243,7 @@ async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str,
     roam = getattr(agent, "roam", None)
     usable = roam is not None and not roam.available()
     if usable and roam.visitor.context is None:
-        # Held until done: the loop keeps only a weak reference to a task.
-        task = asyncio.create_task(_warm(roam))
-        _warming.add(task)
-        task.add_done_callback(_warming.discard)
+        agent._spawn(_warm(roam))
     fetched = await plain(agent, url, wants_list)
     if fetched is not None and reading.wall_at(fetched.url):
         # Sent to a sign-in or a check: a browser is sent there too, and a wall is not got around.

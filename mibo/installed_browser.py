@@ -147,7 +147,16 @@ class Browser:
                      "--disable-background-timer-throttling"]
         arguments.append("--headless=new" if self.headless else "--start-minimized")
         try:
-            self._driver = await async_playwright().start()
+            starting = asyncio.ensure_future(async_playwright().start())
+            try:
+                self._driver = await asyncio.shield(starting)
+            except asyncio.CancelledError:
+                # A start cut off while the driver's process is being made never ends on Windows (Python 3.12
+                # and later), and neither does the loop that closes on it, so the app would not exit: the driver
+                # is waited for, and stopped below.
+                await asyncio.wait({starting})
+                self._driver = None if starting.exception() else starting.result()
+                raise
             try:
                 self.context = await self._driver.chromium.launch_persistent_context(
                     str(self.profile), executable_path=str(program), headless=self.headless, no_viewport=True,
