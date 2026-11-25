@@ -563,7 +563,7 @@ def new_id() -> str:
 
 class Store:
     """runtime/desktop/schedule.json: the tasks, the zone the times were worked out in, which notices were
-    shown, and the time of the person's latest message when a task was last made in the chat ("used",
+    shown, and, by chat, the number of the person's latest message when a task was last made there ("used",
     schedule_tool.recent). Only the page process writes it, and every change is written at once."""
 
     def __init__(self, runtime: Path) -> None:

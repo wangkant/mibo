@@ -28,9 +28,11 @@ def board(tmp_path) -> Board:
 
 
 def messages(*texts: str, apart: float = 60.0) -> list[dict]:
-    """Their own messages as acting.asked gives them, the latest just now and each earlier `apart` seconds before."""
+    """Their own messages of one chat as acting.asked gives them, numbered from its start, the latest just now and
+    each earlier `apart` seconds before."""
     now = life.clock()
-    return [{"text": text, "at": now - apart * (len(texts) - 1 - n)} for n, text in enumerate(texts)]
+    return [{"text": text, "at": now - apart * (len(texts) - 1 - n), "chat": "c1", "seq": n + 1}
+            for n, text in enumerate(texts)]
 
 
 def create(made: Board, monkeypatch, said: list[dict], args: dict = POSTING, read: dict | None = None) -> str:

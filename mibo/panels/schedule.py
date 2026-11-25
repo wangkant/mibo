@@ -42,6 +42,8 @@ ERRORS: frozenset[str] = frozenset({
 TICK_S = 30
 # Seconds a run may take: a task may read several pages.
 RUN_S = 600
+# The chats whose used ask the store keeps (`tool`), the latest.
+USED_CHATS = 20
 _PROBLEMS = {"past": "schedule_past", "too_often": "schedule_too_often", "none": "schedule_no_time"}
 # What the character's tool hears for each refusal: why, and what it may offer instead.
 _TOLD = {
@@ -355,7 +357,7 @@ class Board:
         try:
             if name == "schedule_create":
                 # An ask is used once: their messages up to a task made or offered from the chat ask for no other.
-                used = self._store().data.get("used", 0.0)
+                used = self._store().data.get("used") or {}
                 words = recent(said, now, used)
                 read = crossing.turn_read(self.ws)
                 # Not asked for in their recent messages, or made after the turn took in what they did not type
@@ -364,7 +366,11 @@ class Board:
                 waits = not (chose or wants(words, now, tz)) or any(
                     read.get(mark) for mark in (crossing.OUTSIDE, crossing.CAME_IN, crossing.UNTYPED))
                 task = self.make(args, "chat", now, words, waits)
-                self._store().data["used"] = max((m["at"] for m in said), default=used)
+                if said:
+                    # By the message's number in its chat: two messages can share a second.
+                    used.pop(said[-1]["chat"], None)
+                    used[said[-1]["chat"]] = said[-1]["seq"]
+                    self._store().data["used"] = dict(list(used.items())[-USED_CHATS:])
                 self._save()
                 self.before[task["id"]] = None
                 self._note(task, "offer" if task["offer"] else "made", now)

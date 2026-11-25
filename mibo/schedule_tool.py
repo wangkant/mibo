@@ -144,11 +144,14 @@ def _own(said: str) -> str:
     return _strip_web_desc(str(said or ""))
 
 
-def recent(messages: list[dict], now: float, used: float = 0.0) -> list[str]:
+def recent(messages: list[dict], now: float, used: dict | None = None) -> list[str]:
     """Their own words in `messages` (acting.asked) a new task may be asked for in, attached and quoted text cut out:
-    the last RECENT_MESSAGES, none older than RECENT_S, the latest last. With `used`, the time of their latest
-    message when a task was last made or offered from the chat, only the messages after it: an ask is used once."""
-    return [_own(m["text"]) for m in messages[-RECENT_MESSAGES:] if now - m["at"] <= RECENT_S and m["at"] > used]
+    the last RECENT_MESSAGES, none older than RECENT_S, the latest last. With `used`, {conversation: the number of
+    their latest message when a task was last made or offered from it}, only the messages after it: an ask is used
+    once."""
+    used = used or {}
+    return [_own(m["text"]) for m in messages[-RECENT_MESSAGES:]
+            if now - m["at"] <= RECENT_S and m["seq"] > used.get(m["chat"], 0)]
 
 
 def wants(words: list[str], now: float, tz) -> bool:
