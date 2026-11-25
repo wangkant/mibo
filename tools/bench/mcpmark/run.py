@@ -80,6 +80,8 @@ TASK_RESERVE = 0.03
 # How each kind of card is answered by the person who asked for a folder task.
 ANSWERS = {"shell": "yes", "mcp": "yes", "turnon": "yes", "desk": "no", "operate": "no"}
 TURN_S = 1200
+# How long a run waits before trying a task again after the model service refused a call.
+WAIT_S = 900
 # Scorers a correct answer cannot pass on Windows, with the line that shows it.
 UNTRUSTED_ON_WINDOWS = {
     "folder_structure/structure_mirror":
@@ -577,11 +579,17 @@ def run(args) -> int:
             left.append(task["id"])
             continue
         print(f"{task['id']} ...", flush=True)
-        try:
-            record = one(task, args.data, work, shared, f"http://127.0.0.1:{METER_PORT}/v1", args.model,
-                         keys["LLM_API_KEY"], meter)
-        except Exception as error:
-            record = {"task": task["id"], "pass": False, "error": f"{type(error).__name__}: {str(error)[:300]}"}
+        while True:
+            try:
+                record = one(task, args.data, work, shared, f"http://127.0.0.1:{METER_PORT}/v1", args.model,
+                             keys["LLM_API_KEY"], meter)
+            except Exception as error:
+                record = {"task": task["id"], "pass": False, "error": f"{type(error).__name__}: {str(error)[:300]}"}
+            if not record.get("refused_by_meter") or meter.spent > args.budget - TASK_RESERVE:
+                break
+            # The model service's own limit, not this run's budget: the task is run again after a wait.
+            print(f"  the model service refused a call: waiting {WAIT_S} s", flush=True)
+            time.sleep(WAIT_S)
         results.append(record)
         lenient = record.get("pass_with_backslashes_read_as_slashes") and not record["pass"]
         print(f"  {'PASS' if record['pass'] else 'fail'}{' (passes with backslashes read as slashes)' if lenient else ''} "
