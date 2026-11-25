@@ -3,8 +3,11 @@ name: compare-options
 description: Compare a few options before the person decides - products, places, courses, plans - on the points that matter to them, from current sources, ending with a plain recommendation. Use when they ask which one to choose, to compare things, or whether something is worth it.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 比较几个选项
-  mibo-description-zh: 依据最新来源比较几个选项（商品、地点、课程、方案），列出关键差异并给出明确建议；不代为购买。
+  mibo-title-zh: 选项比较
+  mibo-description-zh: 依据最新来源比较若干选项（商品、地点、课程、方案），列出关键差异并给出明确建议；不代为购买。
+  mibo-title-en: Option comparison
+  mibo-description-en: Compares a few options (products, places, courses, plans) from current sources, lists the key differences and ends with a clear recommendation; nothing is bought.
+  mibo-required: "true"
 ---
 
 # Comparing options

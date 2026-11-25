@@ -3,8 +3,10 @@ name: rename-files
 description: Rename a batch of files by one rule - number them, add a date or prefix, replace a word, unify case. Use when they ask to rename many files ("批量改名", "把这些文件按日期重命名", "rename these files"); one file is just move_files, sorting into folders is tidy-downloads or photos-by-date.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 批量重命名文件
-  mibo-description-zh: 按统一规则批量重命名文件（编号、添加日期或前缀、替换字词、统一大小写），先列出新旧名称对照，经你确认后执行，不覆盖已有文件。
+  mibo-title-zh: 批量重命名
+  mibo-description-zh: 按统一规则批量重命名文件（编号、添加日期或前缀、替换字词、统一大小写），事先列出新旧名称对照，确认后执行；不覆盖已有文件。
+  mibo-title-en: Batch rename
+  mibo-description-en: Renames many files by one rule (numbering, a date or prefix, replaced words, unified case), listing old and new names first and acting only after approval; existing files are never overwritten.
 ---
 
 # Renaming a batch of files

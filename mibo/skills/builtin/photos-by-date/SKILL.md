@@ -3,8 +3,10 @@ name: photos-by-date
 description: Sort photos and videos into year and month folders by the date they were taken. Use when they ask to arrange photos by month, year or the dates of a trip ("把照片按月份整理", "照片按日期分类"); a mixed folder sorted by kind is tidy-downloads, space problems are free-up-disk-space, renaming is rename-files.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 按日期整理照片
-  mibo-description-zh: 将照片和视频按年份、月份归入子文件夹，先说明分组方案和日期来源，经你确认后移动；不删除任何文件。
+  mibo-title-zh: 照片归档
+  mibo-description-zh: 将照片和视频按年份、月份归入子文件夹，事先说明分组方案和日期来源，确认后再移动；不删除任何文件。
+  mibo-title-en: Photo filing
+  mibo-description-en: Sorts photos and videos into year and month folders by the date taken, explaining the grouping and the source of each date first and moving files only after approval; nothing is deleted.
 ---
 
 # Sorting photos by date

@@ -3,8 +3,11 @@ name: translate-document
 description: Translate a whole file - Word, PowerPoint, Excel, PDF or text - into another language as a new file beside the original. Use when they ask to translate a document ("把这份文档翻译成英文", "translate this PDF"); a sentence in the chat is translated directly, a summary in another language is summarize-document.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 翻译文档
-  mibo-description-zh: 将整份 Word、PowerPoint、Excel、PDF 或文本文件译为另一种语言，另存为新文件并保留原有结构；不覆盖原文件。
+  mibo-title-zh: 文档翻译
+  mibo-description-zh: 将整份 Word、PowerPoint、Excel、PDF 或文本文件译为另一种语言，保留原有结构并另存为新文件；不覆盖原文件。
+  mibo-title-en: Document translation
+  mibo-description-en: Translates a whole Word, PowerPoint, Excel, PDF or text file into another language as a new file with the original structure; the original is never overwritten.
+  mibo-required: "true"
 ---
 
 # Translating a document

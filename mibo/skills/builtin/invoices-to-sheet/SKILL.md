@@ -3,8 +3,10 @@ name: invoices-to-sheet
 description: Collect invoices, receipts, order confirmations or bills into one table, one row each, with totals. Use when they ask to gather them for reimbursement or a budget ("把这些发票整理成表", "报销单汇总"). Figures they typed are excel-workbook alone.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 发票收据汇总表
-  mibo-description-zh: 读取文件夹中的发票、收据与账单，只摘录票面所载内容，汇总为每张一行、含合计公式的 Excel 表格，并列出需要核对之处。
+  mibo-title-zh: 票据汇总
+  mibo-description-zh: 读取文件夹中的发票、收据与账单，仅摘录票面内容，汇总为每张一行并含合计公式的 Excel 表格，同时列出需核对之处。
+  mibo-title-en: Invoice summary
+  mibo-description-en: Reads the invoices, receipts and bills in a folder, takes only what is printed on them, and collects them into an Excel table with one row each and total formulas, listing what needs checking.
 ---
 
 # Collecting invoices into a table

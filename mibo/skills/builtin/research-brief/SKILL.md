@@ -3,8 +3,10 @@ name: research-brief
 description: Look into a topic across sources and give a short brief with links and dates. Use when they ask to research or for the latest on something ("调研一下", "brief me on…"); a one-line fact is web_search alone, named options are compare-options, a trip is trip-plan, a file summarize-document.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 主题调研简报
-  mibo-description-zh: 就某一主题或问题检索多方来源，撰写先给结论、附来源与日期的简短简报，并说明分歧之处与尚不清楚的部分。
+  mibo-title-zh: 调研简报
+  mibo-description-zh: 就某一主题检索多方来源，撰写先给结论、附来源与日期的简短简报，并说明分歧之处与尚不明确的部分。
+  mibo-title-en: Research brief
+  mibo-description-en: Searches several sources on a topic and writes a short brief that gives the conclusion first, with sources and dates, and notes where they disagree and what is still unclear.
 ---
 
 # Writing a research brief

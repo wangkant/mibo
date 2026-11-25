@@ -3,8 +3,10 @@ name: trip-plan
 description: Plan a trip or a day out as a day-by-day itinerary with times, costs and sources. Use when they ask to plan a trip or route ("帮我做个三天的东京行程", "周末去杭州怎么安排", "plan a trip to…"). Choosing between two hotels or destinations is compare-options; a reminder at a set time is schedule_create alone.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 制定出行计划
+  mibo-title-zh: 行程规划
   mibo-description-zh: 依据官方页面核实开放时间、票价与交通，编排逐日行程并估算费用；不代为预订或付款，可另存为表格或文档。
+  mibo-title-en: Trip planning
+  mibo-description-en: Checks opening hours, prices and transport on official pages and builds a day-by-day itinerary with estimated costs; nothing is booked or paid, and the plan can be saved as a sheet or document.
 ---
 
 # Planning a trip

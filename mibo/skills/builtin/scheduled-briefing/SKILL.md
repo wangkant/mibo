@@ -4,7 +4,9 @@ description: Set up a briefing or round-up that runs on its own at a set time or
 license: Apache-2.0
 metadata:
   mibo-title-zh: 定时简报
-  mibo-description-zh: 按设定的时间和频率生成新闻、消息或文件简报；运行时只读取并在对话中汇报，不写文件，不发送。
+  mibo-description-zh: 按设定的时间和频率生成新闻、消息或文件简报；运行时仅读取并在对话中汇报，不写入文件，不发送。
+  mibo-title-en: Scheduled briefing
+  mibo-description-en: Produces a news, message or file briefing at a set time and rhythm; each run only reads and reports in the chat, writing no files and sending nothing.
 ---
 
 # A briefing on a schedule

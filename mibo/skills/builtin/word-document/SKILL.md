@@ -3,8 +3,11 @@ name: word-document
 description: Write a Word document someone will hand in, send or print - a report, a summary, a plan, a notice, a letter - as a finished .docx file, or change one they have. Use when they ask for a document or for something made into Word ("做成 Word", "写一份报告"); the content of minutes is meeting-minutes.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 撰写 Word 文档
-  mibo-description-zh: 将报告、总结、方案、通知、会议纪要等内容生成排版规范的 Word 文档（.docx），可直接提交、发送或打印；也可修改已有文档中的文字并保留原有格式。
+  mibo-title-zh: Word 文档撰写
+  mibo-description-zh: 将报告、总结、方案、通知等内容生成排版规范的 Word 文档（.docx），可直接提交、发送或打印；也可修改已有文档的文字并保留原有格式。
+  mibo-title-en: Word documents
+  mibo-description-en: Writes a report, summary, plan, notice or letter as a finished Word document (.docx) ready to hand in, send or print, or changes the text of an existing one while keeping its formatting.
+  mibo-required: "true"
 ---
 
 # Writing a Word document

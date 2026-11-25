@@ -146,8 +146,8 @@
 
     function skillTile(row) {
       const usable = !row.problems.length;
-      const name = (zh && row.title_zh) || row.name;
-      const what = (zh && row.description_zh) || row.description;
+      const name = (zh ? row.title_zh : row.title_en) || row.name;
+      const what = (zh ? row.description_zh : row.description_en) || row.description;
       const line = kit.switchRow(`skill-${row.folder}`, name, what, (box) => change({ name: row.name, on: box.checked }));
       line.box.checked = row.on && usable;
       line.box.disabled = !usable;

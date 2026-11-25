@@ -3,8 +3,10 @@ name: weekly-reading-digest
 description: Put together a short digest of what the person read and watched in the app's browser over the past week, grouped into a few themes, with one page worth going back to. Use when they ask what they read this week, or for a weekly review or summary of their reading.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 每周阅读回顾
-  mibo-description-zh: 将过去一周在应用内浏览器中阅读和观看的内容归纳为几个主题，并挑出一篇值得重读的内容。
+  mibo-title-zh: 阅读周报
+  mibo-description-zh: 将过去一周在应用内浏览器中阅读及播放的内容归纳为若干主题，并挑出一篇值得重读的内容。
+  mibo-title-en: Weekly reading digest
+  mibo-description-en: Groups what was read and watched in the app's browser over the past week into a few themes and picks one page worth returning to.
 ---
 
 # A week of reading

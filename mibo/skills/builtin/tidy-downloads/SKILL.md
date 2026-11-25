@@ -3,8 +3,10 @@ name: tidy-downloads
 description: Tidy a cluttered folder such as Downloads or the Desktop - sort its files into subfolders by kind and point out duplicates and large old files, leaving every deletion to the person. Use when they ask to tidy or sort a folder; lack of space is free-up-disk-space, photos by date is photos-by-date.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 整理下载文件夹
-  mibo-description-zh: 将下载文件夹、桌面等杂乱的文件夹按类型归入子文件夹，并列出重复文件和占用空间较大的旧文件；是否删除由你决定。
+  mibo-title-zh: 下载整理
+  mibo-description-zh: 将下载文件夹、桌面等杂乱的文件夹按类型归入子文件夹，并列出重复文件和占用空间较大的旧文件；删除与否由使用者决定。
+  mibo-title-en: Downloads tidy-up
+  mibo-description-en: Sorts the files of a cluttered folder such as Downloads or the Desktop into subfolders by kind and points out duplicates and large old files; every deletion is left to the person.
 ---
 
 # Tidying a folder

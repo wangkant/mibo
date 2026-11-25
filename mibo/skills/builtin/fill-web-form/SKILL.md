@@ -3,8 +3,10 @@ name: fill-web-form
 description: Fill in an online form, application or registration on a web page from the person's own file or details, and stop before submitting. Use when they ask "用我的简历填这个申请表" or "fill this form from my document"; signing in is sign_in_to_site, reading a page is read_page or look.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 根据文档填写网页表单
-  mibo-description-zh: 依据你提供的文档或资料填写网页上的申请表、登记表；文档中没有的项留空并列出，密码、验证码和支付信息由你本人填写，提交前在对话中征得你的同意。
+  mibo-title-zh: 网页表单填写
+  mibo-description-zh: 依据提供的文档或资料填写网页上的申请表、登记表；文档中没有的项留空并列出，密码、验证码和支付信息由本人填写，提交前须经同意。
+  mibo-title-en: Web form filling
+  mibo-description-en: Fills in an application or registration form on a web page from the person's own documents; items missing from them are left blank and listed, passwords, codes and payment details are entered by the person, and nothing is submitted without approval.
 ---
 
 # Filling a web form

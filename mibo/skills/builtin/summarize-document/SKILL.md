@@ -4,7 +4,10 @@ description: Summarise a long file or page - a PDF, Word file, slides, report or
 license: Apache-2.0
 metadata:
   mibo-title-zh: 长文档摘要
-  mibo-description-zh: 通读 PDF、Word 文档、幻灯片、报告或文章链接，给出概要和要点，并注明页码或章节以便核对；不添加文档以外的内容。
+  mibo-description-zh: 通读 PDF、Word 文档、幻灯片、报告或文章链接，给出概要和要点并注明页码或章节；不添加文档以外的内容。
+  mibo-title-en: Document summaries
+  mibo-description-en: Reads a PDF, Word file, slides, report or article link and gives its gist and key points with page numbers or sections; nothing is added from outside the document.
+  mibo-required: "true"
 ---
 
 # Summarising a long document

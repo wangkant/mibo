@@ -3,8 +3,10 @@ name: draft-in-their-voice
 description: Draft a message, reply or short post the way the person themselves writes - their length, tone and words - from what you remember of them and from this conversation. Use when they ask you to draft, write or reply to a message for them. Drafting only; nothing is sent.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 按你的口吻起草消息
-  mibo-description-zh: 根据记忆中你的写作习惯（篇幅、语气、用词）起草消息、回复或短帖；仅起草，不发送。
+  mibo-title-zh: 消息代拟
+  mibo-description-zh: 依据记忆中的个人写作习惯（篇幅、语气、用词）起草消息、回复或短帖；仅起草，不发送。
+  mibo-title-en: Message drafting
+  mibo-description-en: Drafts a message, reply or short post in the person's own length, tone and wording; drafts only, nothing is sent.
 ---
 
 # Drafting in their voice

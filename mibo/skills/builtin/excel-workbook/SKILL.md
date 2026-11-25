@@ -3,8 +3,11 @@ name: excel-workbook
 description: Put figures, lists or records (a budget, a schedule, a sign-up list) into an Excel workbook (.xlsx), one table per sheet with live formulas, or change cells of one they have. Use when they ask for a spreadsheet or a table file ("整理成表格", "做个 Excel", "导出成 xlsx").
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 制作 Excel 表格
-  mibo-description-zh: 将数据、清单或记录整理为 Excel 工作簿（.xlsx）：每个工作表一张表，含表头、规范数值与可自动计算的公式；也可修改已有表格中的单元格。
+  mibo-title-zh: Excel 表格制作
+  mibo-description-zh: 将数据、清单或记录整理为 Excel 工作簿（.xlsx），每个工作表一张表，含表头、规范数值与自动计算的公式；也可修改已有表格中的单元格。
+  mibo-title-en: Excel workbooks
+  mibo-description-en: Puts figures, lists or records into an Excel workbook (.xlsx), one table per sheet with headers, clean values and live formulas, or changes cells of an existing one.
+  mibo-required: "true"
 ---
 
 # Making an Excel workbook

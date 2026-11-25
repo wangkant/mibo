@@ -3,8 +3,11 @@ name: powerpoint-deck
 description: Make a PowerPoint deck (.pptx) for a talk, a report, a class or a pitch, one point per slide with speaker notes, or change the text of one they have. Use when they ask for slides or a presentation ("做个 PPT", "做成幻灯片", "演示文稿").
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 制作 PPT 演示文稿
-  mibo-description-zh: 为汇报、讲课或路演生成 PowerPoint 演示文稿（.pptx）：封面、每页一个要点、需要时附表格与演讲者备注；也可修改已有演示文稿中的文字。
+  mibo-title-zh: PPT 演示文稿制作
+  mibo-description-zh: 为汇报、讲课或路演生成 PowerPoint 演示文稿（.pptx），含封面、每页一个要点，必要时附表格与演讲者备注；也可修改已有演示文稿的文字。
+  mibo-title-en: PowerPoint decks
+  mibo-description-en: Makes a PowerPoint deck (.pptx) for a talk, class or pitch with a title slide, one point per slide, and tables and speaker notes where needed, or changes the text of an existing one.
+  mibo-required: "true"
 ---
 
 # Making a PowerPoint deck

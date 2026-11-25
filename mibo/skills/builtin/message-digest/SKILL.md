@@ -3,8 +3,10 @@ name: message-digest
 description: Sum up, now, the new messages on the sites and mail they are signed in to, with who awaits a reply first. Use when they ask "我有什么新消息" or "anything I need to reply to?"; reading history is weekly-reading-digest, a reply is draft-in-their-voice, a digest at a set time is scheduled-briefing.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 新消息汇总
-  mibo-description-zh: 汇总已登录网站和邮箱中的新消息，先列出等待你回复的人和事；只读取，不回复、不删除、不标记。
+  mibo-title-zh: 消息汇总
+  mibo-description-zh: 汇总已登录网站和邮箱中的新消息，优先列出等待回复的对象和事项；仅读取，不回复、不删除、不标记。
+  mibo-title-en: Message digest
+  mibo-description-en: Sums up the new messages on signed-in sites and mail, listing who awaits a reply first; messages are only read, never answered, deleted or marked.
 ---
 
 # A digest of new messages

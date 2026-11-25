@@ -3,8 +3,10 @@ name: study-notes
 description: Turn a text, chapter, PDF, slides or page into study notes, key terms, flashcards or practice questions. Use when they want to learn or revise from it ("帮我出几道题考考我", "把这一章整理成复习笔记", "quiz me on this"); a plain summary is summarize-document.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 学习笔记与自测题
-  mibo-description-zh: 将教材章节、PDF、课件或网页整理为复习笔记、关键术语和自测题，并可逐题测验；笔记与卡片可另存为文件。
+  mibo-title-zh: 学习笔记
+  mibo-description-zh: 将教材章节、PDF、课件或网页整理为复习笔记、关键术语和自测题，可逐题测验；笔记与卡片可另存为文件。
+  mibo-title-en: Study notes
+  mibo-description-en: Turns a chapter, PDF, slides or web page into revision notes, key terms and practice questions, with a question-by-question quiz; notes and cards can be saved as files.
 ---
 
 # Study notes and questions

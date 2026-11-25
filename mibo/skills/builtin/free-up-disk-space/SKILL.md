@@ -3,8 +3,10 @@ name: free-up-disk-space
 description: Find the largest folders and files in the person's own folders and free space only by what they pick. Use when they say a drive is full, ask what takes up space, or want space back ("C 盘满了", "清理一下 C 盘", "什么占了这么多空间"); sorting one folder into subfolders is tidy-downloads.
 license: Apache-2.0
 metadata:
-  mibo-title-zh: 清理磁盘空间
-  mibo-description-zh: 找出你个人文件夹中占用空间最大的文件夹和文件，列出可清理的候选项及其大小；只删除你指定的项目，不清理系统文件，不卸载程序。
+  mibo-title-zh: 磁盘清理
+  mibo-description-zh: 找出个人文件夹中占用空间最大的文件夹和文件，列出可清理的候选项及其大小；仅删除指定项目，不清理系统文件，不卸载程序。
+  mibo-title-en: Disk cleanup
+  mibo-description-en: Finds the largest folders and files among the person's own folders and lists candidates to clear with their sizes; only the items chosen are deleted, and system files and programs are left alone.
 ---
 
 # Finding what fills the disk
