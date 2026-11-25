@@ -894,6 +894,8 @@
     "undone": "已復原",
     "undoGone": "已無法復原，可在「設定 › 排程任務」中變更。",
     "offerTitle": "建立排程任務：{title}",
+    "offerRequest": "執行內容",
+    "offerLine": "提醒內容",
     "offerRhythm": "時間",
     "offerRuns": "每天執行",
     "offerRunsText": "最多 {n} 次，每次執行均產生模型用量",

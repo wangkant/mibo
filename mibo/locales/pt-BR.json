@@ -904,6 +904,8 @@
     "undone": "Desfeito",
     "undoGone": "Isso não pode mais ser desfeito; altere em Configurações › Tarefas agendadas.",
     "offerTitle": "Criar uma tarefa agendada: {title}",
+    "offerRequest": "O que faz",
+    "offerLine": "Texto do lembrete",
     "offerRhythm": "Quando",
     "offerRuns": "Execuções por dia",
     "offerRunsText": "Até {n}; cada execução usa o modelo",

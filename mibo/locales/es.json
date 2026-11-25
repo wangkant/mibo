@@ -904,6 +904,8 @@
     "undone": "Deshecho",
     "undoGone": "Ya no se puede deshacer; puede cambiarlo en Configuración › Tareas programadas.",
     "offerTitle": "Crear una tarea programada: {title}",
+    "offerRequest": "Qué hace",
+    "offerLine": "Texto del recordatorio",
     "offerRhythm": "Cuándo",
     "offerRuns": "Ejecuciones al día",
     "offerRunsText": "Hasta {n}; cada ejecución usa el modelo",

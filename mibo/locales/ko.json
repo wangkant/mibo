@@ -894,6 +894,8 @@
     "undone": "실행 취소함",
     "undoGone": "더 이상 실행 취소할 수 없습니다. 설정 › 예약 작업에서 변경하세요.",
     "offerTitle": "예약 작업 만들기: {title}",
+    "offerRequest": "실행 내용",
+    "offerLine": "알림 내용",
     "offerRhythm": "시간",
     "offerRuns": "하루 실행 횟수",
     "offerRunsText": "최대 {n}회, 실행할 때마다 모델을 사용합니다",

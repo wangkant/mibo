@@ -9,7 +9,6 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-import pytest
 from harness.model import call, say, text
 
 from mibo import acting, browsed, crossing, life, review, schedule_tool
@@ -30,7 +29,7 @@ def board(tmp_path) -> Board:
 def standing_task(tmp_path, scope: dict = SCOPE, said: str = SAID) -> tuple[Board, dict]:
     made = board(tmp_path)
     task = made.make({"title": "微博早安", "kind": "task", "request": "在微博发早安", "when": "每天早上八点",
-                      "scope": scope}, "chat", life.clock(), said)
+                      "scope": scope}, "chat", life.clock(), [said])
     made.running = task["id"]
     return made, task
 
@@ -64,9 +63,10 @@ def test_a_standing_request_keeps_only_the_scope_their_own_words_give(tmp_path):
                   {"site": "微博", "act": "send", "text": "早安"},              # a message with no recipient
                   {"site": "微博", "act": "send", "to": "老王", "text": "早安"},  # a recipient they never named
                   {"site": "微博", "act": "post"}):                            # nothing to say
-        with pytest.raises(ValueError, match="schedule_scope"):
-            made.make({"title": "x", "kind": "task", "request": "x", "when": "每天早上八点", "scope": scope},
-                      "chat", life.clock(), SAID)
+        # Made with no scope: each run's outward act goes to them.
+        task = made.make({"title": "x", "kind": "task", "request": "x", "when": "每天早上八点", "scope": scope},
+                         "chat", life.clock(), [SAID])
+        assert "scope" not in task and task["acts"] == [], scope
     # A scope from Settings or for a reminder is never kept.
     assert "scope" not in made.make({"title": "y", "kind": "task", "request": "y", "when": "每天早上九点",
                                      "scope": SCOPE}, "settings", life.clock())

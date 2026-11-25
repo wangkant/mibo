@@ -44,8 +44,8 @@ _CHOICE_NOTES = {
                "on the page in this reply; the page in front comes looked at.",
     "search_off": "They switched web search off for it: answer from what you already know, and do not say you "
                   "searched.",
-    "schedule": "They chose \"scheduled task\" for it: make it with schedule_create in this reply, asking only "
-                "when the time is missing.",
+    "schedule": "They chose \"scheduled task\" for it: make it with schedule_create in this reply; when they gave "
+                "no time, choose one and say it.",
 }
 
 

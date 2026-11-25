@@ -904,6 +904,8 @@
     "undone": "Annulé",
     "undoGone": "Il n'est plus possible d'annuler ; modifiable dans Paramètres › Tâches planifiées.",
     "offerTitle": "Créer une tâche planifiée : {title}",
+    "offerRequest": "Ce qu'elle fait",
+    "offerLine": "Texte du rappel",
     "offerRhythm": "Quand",
     "offerRuns": "Exécutions par jour",
     "offerRunsText": "Jusqu'à {n} ; chaque exécution utilise le modèle",

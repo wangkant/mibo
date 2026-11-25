@@ -903,6 +903,8 @@
     "undone": "Undone",
     "undoGone": "This can no longer be undone; Settings › Scheduled tasks changes it.",
     "offerTitle": "Make a scheduled task: {title}",
+    "offerRequest": "What it does",
+    "offerLine": "Reminder text",
     "offerRhythm": "When",
     "offerRuns": "Runs a day",
     "offerRunsText": "Up to {n}; each run uses the model",

@@ -1,19 +1,19 @@
 "use strict";
 // Scheduled tasks in the chat (panels/schedule.py). Over a message a task's run brought: a small clock mark with the
 // task's name, and when it came late, when it was due. Under a reply that made or changed tasks: one line each with
-// its rhythm and next time and a button that takes it back, or, for a task that may act or runs often, the card it
-// waits on (POST /api/schedule/offer). Under a run's result: what the run did not do because nobody was watching,
+// its rhythm and next time and a button that takes it back, or, for a task that may act, runs often or was not asked
+// for in their own recent messages, the card it waits on (POST /api/schedule/offer). Under a run's result: what the run did not do because nobody was watching,
 // each with a button that asks for it now in the chat, where the usual questions apply.
 window.paScheduleChat = (() => {
-  const { el, svg, fill } = window.paKit;
+  const { el, svg, fill, pressHeaders } = window.paKit;
   const CLOCK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
   const clock = (className = "i") => svg(CLOCK, className);
+  // A press from the app's own page: an offer's answer is taken from it alone.
   async function post(path, body) {
     const response = await fetch(`/api/${path}`, {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json",
-        "X-Mibo-Setup-Token": sessionStorage.getItem("mibo-setup-token") || "" },
+      headers: pressHeaders(),
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new Error("failed");
@@ -76,13 +76,15 @@ window.paScheduleChat = (() => {
     return line;
   }
 
-  // A task that may act or runs often: the card it waits on, a standing permission and so worth a press (chat.css
-  // .ask-card): what it makes, its facts, and its two buttons.
+  // A task that may act, runs often or was not asked for: the card it waits on, a standing permission and so worth a
+  // press (chat.css .ask-card): what it makes, its facts, and its two buttons.
   function offerCard(note, t) {
     const node = el("div", "ask-card task-offer");
     node.append(el("p", "ask-card-text", fill(t.offerTitle, note)), el("p", "ask-card-meta", t.kinds[note.kind] || ""));
     const facts = el("dl", "ask-card-facts");
     const fact = (name, value) => facts.append(el("dt", "", name), el("dd", "", value));
+    // What each run does, as it will be done: a task may come from the character's idea, so the press is on its words.
+    if (note.request) fact(note.kind === "remind" ? t.offerLine : t.offerRequest, note.request);
     fact(t.offerRhythm, [note.rhythm, note.next && fill(t.next, note)].filter(Boolean).join(" · "));
     if (note.perDay) fact(t.offerRuns, fill(t.offerRunsText, { n: note.perDay }));
     const scope = note.scope || {};

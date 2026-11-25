@@ -903,6 +903,8 @@
     "undone": "Rückgängig gemacht",
     "undoGone": "Das lässt sich nicht mehr rückgängig machen; änderbar unter Einstellungen › Geplante Aufgaben.",
     "offerTitle": "Geplante Aufgabe erstellen: {title}",
+    "offerRequest": "Was sie tut",
+    "offerLine": "Text der Erinnerung",
     "offerRhythm": "Wann",
     "offerRuns": "Läufe pro Tag",
     "offerRunsText": "Bis zu {n}; jeder Lauf nutzt das Modell",

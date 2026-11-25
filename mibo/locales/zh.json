@@ -912,6 +912,8 @@
     "undone": "已撤销",
     "undoGone": "已无法撤销，可在「设置 › 定时任务」中更改。",
     "offerTitle": "创建定时任务：{title}",
+    "offerRequest": "执行内容",
+    "offerLine": "提醒内容",
     "offerRhythm": "时间",
     "offerRuns": "每天运行",
     "offerRunsText": "最多 {n} 次，每次运行均产生模型用量",

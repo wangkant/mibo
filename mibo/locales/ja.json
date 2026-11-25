@@ -894,6 +894,8 @@
     "undone": "元に戻しました",
     "undoGone": "元に戻せなくなりました。「設定 › スケジュールタスク」で変更できます。",
     "offerTitle": "スケジュールタスクを作成：{title}",
+    "offerRequest": "実行内容",
+    "offerLine": "リマインダーの内容",
     "offerRhythm": "日時",
     "offerRuns": "1 日の実行回数",
     "offerRunsText": "最大 {n} 回。実行のたびにモデルを使います",
