@@ -422,10 +422,13 @@ class _FoldAnswer:
         if put.get("status") == "seen":
             self.done["once"] += 1
             return
-        # The fact it is a new version of, and the kept preferences of its group its words also say, are past.
+        # The fact it is a new version of, and the kept preferences of its group its words also say, are past: a merged
+        # one only when the new words say much the same of it (the store's measure for one thing, SAME_FACT), so one
+        # that shares a word with them stays.
         group = next((g for g in person.PREFERENCE_GROUPS if put.get("kind") in g), ())
         merged = [self.facts.get(str(i)) for i in op.get("merges") or [] if isinstance(i, str)]
-        merged = [f for f in merged if f is not None and f.get("kind") in group and person._share(f["text"], text) > 0]
+        merged = [f for f in merged if f is not None and f.get("kind") in group
+                  and person._share(f["text"], text) >= person.SAME_FACT]
         for f in [changed, *merged]:
             if f is not None and f is not put and f.get("status", "active") == "active" and not person.own(f):
                 store.end_fact(f, now, "replaced")

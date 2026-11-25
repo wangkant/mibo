@@ -126,6 +126,19 @@ def test_an_update_sharpens_a_kept_preference_and_folds_another_into_it(app, tur
         ("Britpop", "replaced"), ("Music", "replaced")]
 
 
+def test_an_update_folds_in_only_a_preference_its_words_say_again_not_one_that_shares_a_word(app, turn, monkeypatch):
+    _talk(app, turn, monkeypatch, ["I like music a lot.", "Britpop is my favourite.", "Jazz piano helps me work."],
+          _fold([{"op": "add", "kind": "like", "text": "Music", "quote": "I like music", "from": ["L1"]},
+                 {"op": "add", "kind": "like", "text": "Britpop", "quote": "Britpop is my favourite", "from": ["L3"]},
+                 {"op": "add", "kind": "like", "text": "Jazz piano for work", "quote": "Jazz piano helps me work",
+                  "from": ["L5"]}]))
+    monkeypatch.setattr(consolidate, "time", _Ahead)
+    facts = _talk(app, turn, monkeypatch, ["Mostly 90s Britpop, Blur and Pulp, at work."], _fold([
+        {"op": "update", "id": "F1", "text": "Music: 90s Britpop, Blur and Pulp, at work",
+         "quote": "Mostly 90s Britpop, Blur and Pulp, at work", "from": ["L1"], "merges": ["F2", "F3"]}]))
+    assert sorted(f["text"] for f in facts) == ["Jazz piano for work", "Music: 90s Britpop, Blur and Pulp, at work"]
+
+
 def test_the_fold_cannot_change_or_end_what_the_person_wrote(app, turn, monkeypatch):
     assert app.post("/api/person/add", {"text": "我喜欢吃辣的川菜"}).status_code == 200
     facts = _talk(app, turn, monkeypatch, ["最近胃不太舒服，辣的先不吃了。"], _fold([
