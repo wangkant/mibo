@@ -29,6 +29,8 @@ const LINE_TRIES = 15;
 // How long the chip says what a press on it did (ms).
 const LEANED_MS = 1800;
 const YOUTUBE = ["www.youtube-nocookie.com", "www.youtube.com", "youtube.com", "youtube-nocookie.com"];
+// A player its site draws as a phone page in a narrow frame (findcard.js LAID): the width it is laid out at.
+const LAID = { "open.douyin.com": 768 };
 // Lucide-style strokes.
 const CARD_ICONS = {
   heart:
@@ -190,6 +192,13 @@ function makeCard(api) {
       // The player's own clicks open the site in the browser; on the card only the
       // play button plays, a click anywhere else opens the thing in the app.
       media.replaceChildren(frame, el("div", "card-shield"));
+      const laid = LAID[src.hostname];
+      if (laid) {
+        // Drawn at the card's width: its video fills the box and its own bar falls under it.
+        const scale = media.clientWidth / laid;
+        Object.assign(frame.style, { width: `${laid}px`, height: `${media.clientHeight / scale}px`,
+          transformOrigin: "0 0", transform: `scale(${scale})` });
+      }
       // It stays while it plays; watching it is opening it.
       clearTimeout(timer);
       opened = true;

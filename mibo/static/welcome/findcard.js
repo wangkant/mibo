@@ -6,6 +6,9 @@
 window.paFindCard = (() => {
   const { I, el, button, svg, iconButton, anchor, hostOf, motion } = window.paKit;
   const YOUTUBE = ["www.youtube-nocookie.com", "www.youtube.com", "youtube.com", "youtube-nocookie.com"];
+  // A player its site draws as a phone page in a frame narrower than its own desktop one (Douyin's, under 768 px):
+  // [the width it is laid out at, its height there]. Its frame is that size, drawn at the card's width.
+  const LAID = { "open.douyin.com": [768, 467] };
   const PLAY = '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/>';
 
   // Seconds a player has run: from YouTube's own state changes once it sends them
@@ -252,6 +255,14 @@ window.paFindCard = (() => {
         node.querySelector(".play, .find-play")?.focus();
       });
       close.append(svg(I.shrink), el("span", "", say("collapse")));
+      const laid = LAID[src.hostname];
+      if (laid) {
+        player.style.aspectRatio = `${laid[0]} / ${laid[1]}`;
+        Object.assign(frame.style, { width: `${laid[0]}px`, height: `${laid[1]}px`, transformOrigin: "0 0" });
+        new ResizeObserver(([box]) => {
+          frame.style.transform = `scale(${box.contentRect.width / laid[0]})`;
+        }).observe(player);
+      }
       player.append(frame);
       node.prepend(player);
       node.querySelector(".find-top").append(close);
