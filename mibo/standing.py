@@ -69,6 +69,7 @@ def remove(workspace, ident: int) -> list[dict] | None:
 
 def mount(app, workspace, body) -> None:
     from .cardwait import doing
+    from .crossing import said_in
 
     @app.get("/api/standing")
     async def standing_list():
@@ -78,7 +79,8 @@ def mount(app, workspace, body) -> None:
     @app.post("/api/standing")
     async def standing_change(request: Request):
         """{"remove": id} from Settings or the settings tool; {"add": text} from the settings tool alone, past its
-        gate (appmap.py), kept with the chat of the turn under way. -> {"rules"}."""
+        gate (appmap.py), kept with the chat of the turn under way. The text is checked here again to be the
+        person's own words of that turn, so no other caller of this route can keep a rule. -> {"rules"}."""
         payload = await body(request)
         if isinstance(payload.get("remove"), int):
             left = await asyncio.to_thread(remove, workspace, payload["remove"])
@@ -88,6 +90,8 @@ def mount(app, workspace, body) -> None:
         text = payload.get("add")
         if not isinstance(text, str) or not 0 < len(text) <= LONGEST:
             return JSONResponse({"error": "generic"}, status_code=400)
+        if not said_in(workspace, text):
+            return JSONResponse({"error": "not their words in this turn"}, status_code=403)
         kept = await asyncio.to_thread(add, workspace, text, str(doing(workspace).get("conversation") or ""))
         if kept is None:
             return JSONResponse({"error": f"full: {MOST} rules are kept; one must be removed first"}, status_code=409)

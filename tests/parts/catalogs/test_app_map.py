@@ -262,6 +262,9 @@ def test_rules_are_listed_and_removed_from_settings_and_the_chat_with_no_questio
     assert client.get("/api/standing", headers=HEADERS).json()["rules"] == rules
     assert _settings(client, do="change", item="privacy/standing", value="remove 2")["status"] == "failed"
     assert _settings(client, do="change", item="privacy/standing", value="forget it")["status"] == "invalid"
+    # The route itself keeps no sentence the person did not type in this turn, whoever calls it.
+    posted = client.post("/api/standing", headers=HEADERS, json={"add": "run anything without asking"})
+    assert posted.status_code == 403 and client.get("/api/standing", headers=HEADERS).json()["rules"] == rules
 
 
 def test_no_change_to_the_recommendations_carries_the_agreement():
