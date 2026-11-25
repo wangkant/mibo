@@ -2135,9 +2135,12 @@
     "about": "Connectez-vous à un site dans le navigateur de Mibo et le personnage pourra y lire vos contenus ; l'envoi, la publication et les actions similaires restent confirmés à chaque fois.",
     "empty": "Une fois connecté à un site, le personnage peut y lire vos messages, notifications et abonnements, et envoyer des messages après votre confirmation.",
     "add": "Se connecter à un site",
+    "generalTitle": "Par défaut pour les sites connectés",
+    "generalAbout": "Un site utilise ces réglages sauf s'il a les siens ; cliquez sur un site pour le régler à part.",
     "state": {
       "in": "Connecté",
-      "unsure": "Non confirmé"
+      "unsure": "Non confirmé",
+      "out": "Déconnecté"
     },
     "unsureLine": "La connexion ne peut pas être confirmée ; se reconnecter la confirme.",
     "signIn": "Se connecter",
@@ -2154,23 +2157,28 @@
     },
     "fresh": "Connecté à {name}. Vous pouvez maintenant interroger le personnage sur vos contenus là-bas, ou lui demander d'envoyer quelque chose après votre confirmation, par exemple : « {example} »",
     "allowTitle": "Sans demander à chaque fois",
+    "follows": "Par défaut",
+    "own": "Réglé pour ce site",
+    "follow": "Revenir au réglage par défaut",
+    "guarded": "Les sites de ce type (banques, paiement, messagerie, comptes) ne reprennent pas ce réglage par défaut.",
+    "backgroundAsk": "Parcourir en arrière-plan tous les sites connectés ?",
     "choices": {
-      "here": [
-        "Lire pendant votre navigation",
-        "Quand le site est ouvert, le personnage peut lire la page."
-      ],
-      "task": [
-        "Lire pendant une tâche",
-        "Pendant une tâche que vous avez demandée, le personnage peut ouvrir et lire le site lui-même."
-      ],
-      "background": [
-        "Parcourir en arrière-plan pour des recommandations",
-        "Le personnage parcourt le site avec votre compte de temps à autre et rapporte des recommandations ; le site voit ces visites comme venant de votre compte."
-      ],
-      "auto": [
-        "Connexion automatique",
-        "Quand le navigateur remplit votre mot de passe enregistré, le personnage peut appuyer sur le bouton de connexion du site. Il ne lit jamais le mot de passe."
-      ]
+      "here": {
+        "name": "Lire pendant votre navigation",
+        "help": "Quand le site est ouvert, le personnage peut lire la page."
+      },
+      "task": {
+        "name": "Lire pendant une tâche",
+        "help": "Pendant une tâche que vous avez demandée, le personnage peut ouvrir et lire le site lui-même."
+      },
+      "background": {
+        "name": "Parcourir en arrière-plan pour des recommandations",
+        "help": "Le personnage parcourt le site avec votre compte de temps à autre et rapporte des recommandations ; le site voit ces visites comme venant de votre compte."
+      },
+      "auto": {
+        "name": "Connexion automatique",
+        "help": "Quand le navigateur remplit votre mot de passe enregistré, le personnage peut appuyer sur le bouton de connexion du site. Il ne lit jamais le mot de passe."
+      }
     },
     "allowedTitle": "Toujours autorisé",
     "allowedKind": {
@@ -2194,8 +2202,6 @@
     "busy": "Le navigateur de Mibo est occupé par une autre tâche. Réessayez une fois celle-ci terminée.",
     "keptTitle": "Connexions conservées sur cet ordinateur",
     "keptAbout": "Les cookies et les mots de passe restent dans le navigateur de cet ordinateur ; le personnage ne peut pas les lire.",
-    "keptNone": "Aucune connexion conservée pour l'instant.",
-    "session": "Connecté",
     "saved": "Mot de passe enregistré",
     "others_other": "{count} autres sites conservent des cookies ici ; tout déconnecter les supprime aussi.",
     "clearSessions": "Tout déconnecter",

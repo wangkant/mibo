@@ -10,10 +10,12 @@ pause the run, and if the browser filled a saved password the site's own
 sign-in button is pressed, once allowed on the 自动登录 card.
 
 /api/signins is Settings': the sites signed in to (from the profile's cookie
-names and the evidence kept, nothing loaded from the site), each with when it
-was last used and the person's choices; the well-known sites to sign in to;
+names and the evidence kept, nothing loaded from the site) and those signed out
+with a saved password, each with when it was last used and its choices, which
+are its own or the general switches'; the well-known sites to sign in to;
 signing in from there; signing out of one; and clearing every session or every
-saved password. Changes come from the app window's own page alone."""
+saved password. Changes come from the app window's own page alone, and so does
+turning a general switch on (/api/signins/general)."""
 from __future__ import annotations
 
 import asyncio
@@ -400,8 +402,9 @@ def mount(app, workspace, body) -> None:
         return {"ok": await asyncio.to_thread(waiting.answer, window.pane, ident, said)}
 
     def rows(window) -> dict:
-        """The sites signed in to (or that the app cannot tell of), the well-known sites to sign in to, and the
-        sessions and saved passwords the profile holds."""
+        """The sites signed in to (or that the app cannot tell of) and those signed out with a saved password, each
+        with its choices as they hold now and which of them are its own; the general switches; the well-known sites
+        to sign in to; and how many other sites the profile holds cookies for."""
         from ..signwatch import icon_path
         lang = _lang(app)
         held = names(window)
@@ -414,32 +417,34 @@ def mount(app, workspace, body) -> None:
                 keys.append(row["site"])
         cards = sites.load(runtime)
         allowed = gate.Allowed(desktop).all()
-        out, kept = [], []
+        out = []
         for key in keys:
             entry, place = saved.get(key) or {}, signin.hint(key)
             state = signin.status(entry, None if held is None else held.get(signin.bare(key), set()), key)
-            name = entry.get("name") or (place.get("name") or {}).get(lang) or (place.get("name") or {}).get("en") or key
-            if state == "in" or entry.get("saved"):
-                kept.append({"site": key, "name": name, "session": state == "in", "saved": bool(entry.get("saved"))})
-            if state == "out":
+            if state == "out" and not entry.get("saved"):
                 continue
+            name = entry.get("name") or (place.get("name") or {}).get(lang) or (place.get("name") or {}).get("en") or key
             home = entry.get("home") or place.get("home") or f"https://{key}/"
             feed = (cards.get(sites.key_of(home)) or {}).get("feed") or {}
+            own = [n for n, mine in (("here", "here" in entry), ("task", "task" in entry),
+                                     ("background", "on" in feed), ("auto", entry.get("auto") in signin.AUTO)) if mine]
             icon = icon_path(desktop / "browser", key) if window is not None else None
             out.append({"site": key, "name": name, "home": home, "state": state,
                         "at": entry.get("at", 0), "used": entry.get("used", 0), "saved": bool(entry.get("saved")),
-                        "auto": entry.get("auto", ""), "here": entry.get("here", True) is not False,
-                        "task": entry.get("task", True) is not False, "background": bool(feed.get("on")),
+                        "auto": signin.auto(desktop, key), "here": signin.chose(desktop, key, "here"),
+                        "task": signin.chose(desktop, key, "task"), "background": signin.background(desktop, home),
+                        "own": own, "guarded": signin.guarded(key, entry),
                         "stopped": feed.get("stopped", ""), "fresh": bool(entry.get("fresh")),
                         "example": signin.example(key, lang), "allowed": allowed.get(key, []),
                         "icon": ("data:image/png;base64," + base64.b64encode(icon.read_bytes()).decode())
                         if icon is not None and icon.exists() else signin.mark(place.get("id", ""))})
-        listed = {signin.bare(r["site"]) for r in kept}
+        listed = {signin.bare(r["site"]) for r in out}
         others = sum(1 for site in (held or {}) if site not in listed)
         # Signed-in sites first, the most recently used first.
         out.sort(key=lambda row: (row["state"] != "in", -(row["used"] or row["at"] or 0)))
         wait = waiting.state
-        return {"sites": out, "kept": kept, "others": others, "window": window is not None, "picks": signin.picks(lang),
+        return {"sites": out, "general": signin.general(desktop), "others": others, "window": window is not None,
+                "picks": signin.picks(lang),
                 "waiting": wait["site"] if wait and wait["own"] and wait["own"] != "read" else ""}
 
     @app.get("/api/signins")
@@ -447,10 +452,26 @@ def mount(app, workspace, body) -> None:
         window = getattr(app.state, "window", None)
         return await asyncio.to_thread(rows, window if window is not None and window.pane is not None else None)
 
+    @app.post("/api/signins/general")
+    async def signins_general(request: Request):
+        """Settings: a general switch on or off. Off needs no more than this computer; on, which widens what the
+        character does on every site with no choice of its own, needs the app's own page (the character's settings
+        tool passes crossing.widening first, appmap.py)."""
+        payload = await body(request)
+        name, on = payload.get("name"), payload.get("on")
+        if name not in signin.GENERAL or not isinstance(on, bool):
+            raise ValueError("signin_invalid")
+        window = getattr(app.state, "window", None)
+        if on and window is not None and not window.is_own_page(request.headers.get(WINDOW_HEADER, "")):
+            raise ValueError("signin_window")
+        signin.set_general(desktop, name, on)
+        return await signins_view()
+
     @app.post("/api/signins")
     async def signins_change(request: Request):
-        """Settings: sign in to a site (a well-known one or any address), a choice for one, sign out of one,
-        mark its first panel seen, clear every session or every saved password."""
+        """Settings: sign in to a site (a well-known one or any address), a choice of its own for one or back to
+        the general switch, sign out of one, mark its first sign-in told, clear every session or every saved
+        password."""
         from ..signwatch import Profile
         window = own_window(request)
         payload = await body(request)
@@ -482,7 +503,7 @@ def mount(app, workspace, body) -> None:
                     signin.change(desktop, key, lambda entry: entry.pop("saved", None))
             return await asyncio.to_thread(rows, window)
         listing = await asyncio.to_thread(rows, window)
-        row = next((r for r in listing["sites"] + listing["kept"] if r["site"] == site), None)
+        row = next((r for r in listing["sites"] if r["site"] == site), None)
         if not isinstance(site, str) or row is None:
             raise ValueError("signin_invalid")
         if op == "seen":
@@ -495,6 +516,16 @@ def mount(app, workspace, body) -> None:
             else:
                 value = ("always" if on else "never") if name == "auto" else on
                 signin.change(desktop, site, lambda entry: entry.update({name: value}))
+        elif op == "follow" and payload.get("name") in signin.GENERAL:
+            name = payload["name"]
+            if name == "background":
+                def follow(card: dict) -> None:
+                    # A wall's stop goes with the site's own off: the general switch holds for it again.
+                    for part in ("on", "stopped"):
+                        card.get("feed", {}).pop(part, None)
+                sites._change(runtime, sites.key_of(row["home"]), follow)
+            else:
+                signin.change(desktop, site, lambda entry: entry.pop(name, None))
         elif op == "signout":
             await asyncio.to_thread(Profile(window.pane).sign_out, site)
             signin.signed_out(desktop, site)

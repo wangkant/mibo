@@ -1,10 +1,11 @@
 // Settings › 连接: the sites signed in to in Mibo's own browser, one way for every site, mail too
-// (panels/signins.py). Only the sites signed in to are rows: each is the site's icon and name, when it was last
-// used, and 退出登录; the row opens the site's choices, and the first time a site is signed in they open by
-// themselves with one line of what can now be asked there. 登录网站 opens a picker of the well-known sites and a
-// field for any other address; the row comes once the person has signed in, in the pane, however long it took.
-// Below, what the browser keeps on this computer. The app never reads a cookie or a password; setup/connect.js
-// mounts this inside its own root.
+// (panels/signins.py). On top, the general switches every signed-in site follows unless it has a choice of its
+// own. The rows are the sites signed in to and those signed out with a saved password: each is the site's icon and
+// name, when it was last used, its state and whether a password is saved, and 退出登录 or 登录; the row opens the
+// site's own choices. The first time a site is signed in, one line says what can now be asked there. 登录网站 opens
+// a picker of the well-known sites and a field for any other address; the row comes once the person has signed in,
+// in the pane, however long it took. Below, how many other sites keep cookies here and the two ways to clear all.
+// The app never reads a cookie or a password; setup/connect.js mounts this inside its own root, with its kit.
 (() => {
   "use strict";
 
@@ -12,14 +13,18 @@
   const CROSS = ["M7 7l10 10", "M17 7L7 17"];
   const PLUS = ["M12 5v14", "M5 12h14"];
   const GLOBE = ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M2 12h20", "M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"];
-  const LOCK = ["M5 11h14v10H5z", "M8 11V7a4 4 0 0 1 8 0v4"];
   // While a sign-in waits in the pane, the list is asked again this often, for at most this long.
   const POLL_MS = 2000;
   const POLL_MAX_MS = 11 * 60 * 1000;
+  // Background browsing and automatic sign-in: a guarded site (banks, payment, mail, accounts) takes neither from
+  // the general switch.
+  const GUARDED = ["background", "auto"];
 
-  let ctx, t, list, kept, said, waitLine;
+  let kit, ctx, t, list, kept, said, waitLine, freshLine, general;
   let data = null;
   let polling = null;
+  // The site whose first sign-in the line above the list tells of.
+  let told = null;
   const token = () => sessionStorage.getItem("mibo-setup-token") || "";
   const frame = () => sessionStorage.getItem("mibo-frame") || "";
 
@@ -122,26 +127,22 @@
   // ---- the list
   function paint() {
     if (!data) return;
+    for (const [name, item] of Object.entries(general)) item.querySelector(".places-switch").checked = data.general[name];
     list.replaceChildren(...data.sites.map(rowOf));
     if (!data.sites.length) list.append(empty("sites-empty", GLOBE, t.empty));
     const name = data.waiting && (data.picks.find((p) => p.site === data.waiting)?.name || data.waiting);
     waitLine.hidden = !data.waiting;
     waitLine.textContent = data.waiting ? paI18n.t("sites.waiting", { name }) : "";
+    // The first time a site is signed in, it takes the general switches and one line says so, once.
+    for (const row of data.sites.filter((one) => one.fresh && one.state === "in")) {
+      told = row;
+      row.fresh = false;
+      call("signins", { op: "seen", site: row.site }).catch(() => {});
+    }
+    freshLine.hidden = !told;
+    freshLine.textContent = told ? paI18n.t("sites.fresh", { name: told.name, example: told.example }) : "";
     paintKept();
     if (sheet.site) sheet.draw();
-    // The first time a site is signed in, its choices open by themselves, once.
-    // Not while the page is still open over Settings: the sheet waits for it to close.
-    const fresh = freshRow();
-    if (fresh && !sheet.site && !picker.dialog?.open && !paneOpen()) {
-      sheet.open(fresh.site, true);
-      call("signins", { op: "seen", site: fresh.site }).catch(() => {});
-    }
-  }
-  function freshRow() {
-    return data?.sites.find((row) => row.fresh && row.state === "in");
-  }
-  function paneOpen() {
-    return document.querySelector("section.browse")?.hidden === false;
   }
   function rowOf(row) {
     const node = el("div", "places-service sites-row");
@@ -150,8 +151,9 @@
     main.type = "button";
     const words = el("span", "places-service-words");
     words.append(el("span", "places-service-name", row.name), el("span", "places-service-line", line(row)));
-    const pill = el("span", "places-pill", t.state[row.state]);
-    main.append(mark(row), words, pill);
+    main.append(mark(row), words);
+    if (row.saved) main.append(el("span", "places-pill sites-saved", t.saved));
+    main.append(el("span", "places-pill", t.state[row.state]));
     main.addEventListener("click", () => sheet.open(row.site));
     const action = row.state === "in"
       ? button("places-btn-secondary places-btn-quiet places-btn-sm", t.signOut, () => signOut(row, action))
@@ -178,7 +180,7 @@
     polling = setInterval(async () => {
       await load();
       // Two more looks after the wait ends, then stop.
-      quiet = data?.waiting || (freshRow() && paneOpen()) ? 0 : quiet + 1;
+      quiet = data?.waiting ? 0 : quiet + 1;
       if (quiet > 2 || Date.now() - began > POLL_MAX_MS) clearInterval(polling);
     }, POLL_MS);
   }
@@ -192,8 +194,8 @@
       paint();
     }
   }
-  async function change(body, node) {
-    const next = node ? await busy(node, () => call("signins", body)) : await call("signins", body).catch((error) => {
+  async function change(body, node, path = "signins") {
+    const next = node ? await busy(node, () => call(path, body)) : await call(path, body).catch((error) => {
       say(error.message === "signin_window" ? t.noWindow : t.failed);
       return null;
     });
@@ -204,27 +206,12 @@
     return next;
   }
 
-  // ---- what the browser keeps on this computer
+  // ---- what the browser keeps on this computer besides the sites listed above
   function paintKept() {
     kept.replaceChildren();
     const head = el("div", "sites-kept-head");
     head.append(el("h3", "sites-title", t.keptTitle), el("p", "sites-about", t.keptAbout));
     kept.append(head);
-    const rows = el("div", "places-services sites-kept-list");
-    for (const row of data.kept) {
-      const node = el("div", "places-service sites-kept-row");
-      const words = el("div", "places-service-words sites-kept-words");
-      const tags = [row.session ? t.session : "", row.saved ? t.saved : ""].filter(Boolean).join(" · ");
-      words.append(el("span", "places-service-name", row.name), el("span", "places-service-line", tags));
-      node.append(words);
-      if (row.session) {
-        const out = button("places-btn-secondary places-btn-quiet places-btn-sm", t.signOut, () => signOut(row, out));
-        node.append(out);
-      }
-      rows.append(node);
-    }
-    if (data.kept.length) kept.append(rows);
-    else kept.append(empty("sites-kept-none", LOCK, t.keptNone));
     if (data.others) kept.append(el("p", "sites-faint", paI18n.t("sites.others", { count: data.others })));
     const all = button("places-btn-secondary places-btn-sm", t.clearSessions, async () => {
       if (await ctx.confirm(t.sureSessions)) change({ op: "clear", what: "sessions" }, all);
@@ -312,15 +299,50 @@
     },
   };
 
-  // ---- one site's choices
+  // One choice in `item`: its name, what it does and any `more` lines under them, and its switch, `changed` with it.
+  function choice(item, name, on, changed, more = []) {
+    const words = el("span", "sites-choice-words");
+    words.append(el("span", "sites-choice-name", t.choices[name].name), el("span", "sites-choice-help", t.choices[name].help), ...more);
+    const box = el("input", "places-switch");
+    box.type = "checkbox";
+    box.setAttribute("role", "switch");
+    box.checked = on;
+    box.addEventListener("change", () => changed(box));
+    item.append(words, box);
+    return item;
+  }
+
+  // ---- the general switches, each an item of the character's catalogue of Settings (appmap.py)
+  function generalSwitches() {
+    const items = {
+      here: kit.item("sites-here", el("label", "sites-choice")),
+      task: kit.item("sites-task", el("label", "sites-choice")),
+      background: kit.item("sites-background", el("label", "sites-choice")),
+      auto: kit.item("sites-auto", el("label", "sites-choice")),
+    };
+    for (const [name, item] of Object.entries(items)) choice(item, name, false, (box) => setGeneral(name, box));
+    return items;
+  }
+  // Turning background browsing on for every site says the sites' terms first, as a site's own switch does in
+  // Settings › Privacy.
+  async function setGeneral(name, box) {
+    const on = box.checked;
+    if (on && name === "background") {
+      box.checked = false;
+      const sure = await ctx.confirm({ title: t.backgroundAsk, text: paI18n.t("setup_privacy.feedWarn"), ok: paI18n.t("setup_privacy.feedYes") });
+      if (!sure) return;
+      box.checked = true;
+    }
+    if (!(await change({ name, on }, null, "signins/general"))) box.checked = !on;
+  }
+
+  // ---- one site's choices: each its own, or the general switch's
   const sheet = {
     site: "",
-    fresh: false,
-    open(site, fresh = false) {
+    open(site) {
       if (!this.dialog) Object.assign(this, panel("sites-sheet", () => this.close()));
       this.body.classList.add("sites-sheet-body");
       this.site = site;
-      this.fresh = fresh;
       this.draw();
       if (!this.dialog.open) this.dialog.showModal();
     },
@@ -332,28 +354,33 @@
       const nodes = [];
       const state = el("div", "sites-sheet-state");
       state.dataset.state = row.state;
-      state.append(el("span", "places-pill", t.state[row.state]), el("span", "sites-faint", line(row)));
+      state.append(el("span", "places-pill", t.state[row.state]));
+      if (row.saved) state.append(el("span", "places-pill sites-saved", t.saved));
+      state.append(el("span", "sites-faint", line(row)));
       nodes.push(state);
-      if (this.fresh) nodes.push(el("p", "sites-fresh", paI18n.t("sites.fresh", { name: row.name, example: row.example })));
       const group = el("div", "sites-choices");
       group.append(el("p", "sites-choices-title", t.allowTitle));
       for (const name of ["here", "task", "background", "auto"]) {
-        const [label, help] = t.choices[name];
         const on = name === "auto" ? row.auto === "always" : row[name];
-        const item = el("label", "sites-choice");
-        const words = el("span", "sites-choice-words");
-        words.append(el("span", "sites-choice-name", label), el("span", "sites-choice-help", help));
-        if (name === "background" && row.stopped) words.append(el("span", "sites-choice-help sites-choice-warn", t.stopped));
-        const box = el("input", "places-switch");
-        box.type = "checkbox";
-        box.setAttribute("role", "switch");
-        box.checked = on;
-        box.addEventListener("change", async () => {
-          const next = await change({ op: "choose", site: row.site, name, on: box.checked });
-          if (!next) box.checked = !box.checked;
-        });
-        item.append(words, box);
-        group.append(item);
+        const more = [];
+        if (name === "background" && row.stopped) more.push(el("span", "sites-choice-help sites-choice-warn", t.stopped));
+        const source = el("span", "sites-choice-help sites-choice-source");
+        if (row.own.includes(name)) {
+          const back = el("button", "sites-follow", t.follow);
+          back.type = "button";
+          // Not the label's switch: the choice goes back to the general one.
+          back.addEventListener("click", (event) => {
+            event.preventDefault();
+            change({ op: "follow", site: row.site, name });
+          });
+          source.append(el("span", "", t.own), back);
+        } else {
+          source.textContent = row.guarded && GUARDED.includes(name) ? t.guarded : t.follows;
+        }
+        more.push(source);
+        group.append(choice(el("label", "sites-choice"), name, on, async (box) => {
+          if (!(await change({ op: "choose", site: row.site, name, on: box.checked }))) box.checked = !box.checked;
+        }, more));
       }
       nodes.push(group);
       // What the person chose 始终允许 for on this site, each taken back here.
@@ -384,7 +411,6 @@
     },
     close() {
       this.site = "";
-      this.fresh = false;
       if (this.dialog?.open) this.dialog.close();
     },
   };
@@ -399,8 +425,9 @@
     }
   }
 
-  function mount(root, context) {
-    ctx = context;
+  function mount(root, setupKit) {
+    kit = setupKit;
+    ctx = kit.ctx;
     t = paI18n.words("sites");
     const box = el("section", "sites");
     const head = el("div", "sites-head");
@@ -411,11 +438,16 @@
     said = el("div", "places-alert");
     said.setAttribute("role", "alert");
     said.hidden = true;
+    general = generalSwitches();
+    const switches = el("div", "sites-choices");
+    switches.append(el("p", "sites-choices-title", t.generalTitle), ...Object.values(general));
+    freshLine = el("p", "sites-fresh");
+    freshLine.hidden = true;
     waitLine = el("p", "sites-wait");
     waitLine.hidden = true;
     list = el("div", "places-services sites-list");
     kept = el("div", "sites-kept");
-    box.append(head, said, waitLine, list, kept);
+    box.append(head, said, switches, el("p", "sites-faint", t.generalAbout), freshLine, waitLine, list, kept);
     root.append(box);
     // Back to the window after signing in elsewhere in it: the list as it is now.
     document.addEventListener("visibilitychange", () => !document.hidden && data && load());

@@ -2128,9 +2128,12 @@
     "about": "Sign in to a site in Mibo's browser and the character can read your things there; sending, posting and the like are still confirmed each time.",
     "empty": "Once you sign in to a site, the character can read your messages, notifications and follows there, and send messages once you confirm.",
     "add": "Sign in to a site",
+    "generalTitle": "Defaults for signed-in sites",
+    "generalAbout": "A site uses these unless it has its own setting; click a site to set it on its own.",
     "state": {
       "in": "Signed in",
-      "unsure": "Not confirmed"
+      "unsure": "Not confirmed",
+      "out": "Signed out"
     },
     "unsureLine": "The sign-in cannot be confirmed; signing in again confirms it.",
     "signIn": "Sign in",
@@ -2147,23 +2150,28 @@
     },
     "fresh": "Signed in to {name}. You can now ask the character about your things there, or to send something once you confirm, for example: “{example}”",
     "allowTitle": "Without asking each time",
+    "follows": "Uses the default",
+    "own": "Set for this site",
+    "follow": "Use the default",
+    "guarded": "Sites of this kind (banks, payment, mail, accounts) do not take this from the defaults.",
+    "backgroundAsk": "Browse every signed-in site in the background?",
     "choices": {
-      "here": [
-        "Read while you browse it",
-        "When you have the site open, the character may read the page."
-      ],
-      "task": [
-        "Read during a task",
-        "While doing something you asked, the character may open and read the site itself."
-      ],
-      "background": [
-        "Browse it in the background for picks",
-        "The character browses the site with your account now and then and brings back picks; the site sees these visits from your account."
-      ],
-      "auto": [
-        "Sign in automatically",
-        "When the browser fills in your saved password, the character may press the site's sign-in button. It never reads the password."
-      ]
+      "here": {
+        "name": "Read while you browse it",
+        "help": "When you have the site open, the character may read the page."
+      },
+      "task": {
+        "name": "Read during a task",
+        "help": "While doing something you asked, the character may open and read the site itself."
+      },
+      "background": {
+        "name": "Browse it in the background for picks",
+        "help": "The character browses the site with your account now and then and brings back picks; the site sees these visits from your account."
+      },
+      "auto": {
+        "name": "Sign in automatically",
+        "help": "When the browser fills in your saved password, the character may press the site's sign-in button. It never reads the password."
+      }
     },
     "allowedTitle": "Always allowed",
     "allowedKind": {
@@ -2187,8 +2195,6 @@
     "busy": "Mibo's browser is busy with another task. Try again once it is done.",
     "keptTitle": "Sign-ins kept on this computer",
     "keptAbout": "Cookies and passwords stay in the browser on this computer; the character cannot read them.",
-    "keptNone": "No sign-ins kept yet.",
-    "session": "Signed in",
     "saved": "Password saved",
     "others_other": "{count} more sites keep cookies here; signing out of all removes them too.",
     "clearSessions": "Sign out of all",

@@ -43,6 +43,8 @@ def _pages() -> dict[str, set[str]]:
                 pages[page] |= set(re.findall(r'"([\w-]+)"', listed))
     # Skills and connectors are the abilities page's two tabs (setup.js).
     pages["abilities"] = set(re.findall(r'\["(\w+)", t\.names\.\1\]', shell))
+    # The connect page's body is sites.js, mounted with the page's kit (setup/connect.js).
+    pages["connect"] |= set(MARK.findall((welcome.ASSETS / "sites.js").read_text(encoding="utf-8")))
     return pages
 
 
@@ -175,6 +177,21 @@ def test_the_character_turns_a_sites_feed_off_with_no_question_and_on_only_asked
     assert question["risk"] == "widen" and "douyin.com" in question["card"]["zh"]["title"]
     assert signedread.feeds_on(runtime) == {}
     assert _settings(client, do="change", item="privacy/sites", value="douyin.com")["status"] == "invalid"
+
+
+def test_the_character_turns_a_general_site_switch_off_with_no_question_and_on_only_asked(client, workspace, asked):
+    desktop = workspace.home / "runtime" / "desktop"
+    listed = {row["id"]: row for row in _settings(client, do="list", item="connect")["items"]}
+    assert [listed[f"connect/sites-{name}"]["now"] for name in signin.GENERAL] == ["on", "on", "off", "off"]
+    assert all(listed[f"connect/sites-{name}"]["change"] == "asks" for name in signin.GENERAL)
+    assert _settings(client, do="change", item="connect/sites-task", value="off")["status"] == "changed"
+    assert asked == [] and signin.general(desktop)["task"] is False
+    for name in ("task", "background", "auto"):
+        assert _settings(client, do="change", item=f"connect/sites-{name}", value="on")["status"] == "declined"
+    assert [row["risk"] for row in asked] == ["widen"] * 3
+    # Browsing every site in the background carries the sites' terms beside the question, as one site's does.
+    assert i18n.t("setup_privacy.feedWarn", "en") in asked[1]["card"]["en"]["lines"]
+    assert signin.general(desktop) == {**signin.GENERAL, "task": False}
 
 
 def test_the_character_changes_the_platforms_asking_only_for_a_new_one_read_signed_in(client, workspace, asked):

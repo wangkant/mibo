@@ -2135,9 +2135,12 @@
     "about": "Inicie sesión en un sitio en el navegador de Mibo y el personaje podrá leer sus cosas allí; enviar, publicar y similares se siguen confirmando cada vez.",
     "empty": "Cuando inicie sesión en un sitio, el personaje podrá leer allí sus mensajes, notificaciones y seguidos, y enviar mensajes cuando usted lo confirme.",
     "add": "Iniciar sesión en un sitio",
+    "generalTitle": "Valores predeterminados de los sitios con sesión",
+    "generalAbout": "Un sitio usa estos valores salvo que tenga los suyos; haga clic en un sitio para configurarlo por separado.",
     "state": {
       "in": "Sesión iniciada",
-      "unsure": "Sin confirmar"
+      "unsure": "Sin confirmar",
+      "out": "Sesión cerrada"
     },
     "unsureLine": "No se puede confirmar la sesión; al volver a iniciar sesión se confirma.",
     "signIn": "Iniciar sesión",
@@ -2154,23 +2157,28 @@
     },
     "fresh": "Sesión iniciada en {name}. Ahora puede preguntar al personaje por sus cosas allí, o pedirle que envíe algo cuando usted lo confirme, por ejemplo: «{example}»",
     "allowTitle": "Sin preguntar cada vez",
+    "follows": "Usa el predeterminado",
+    "own": "Configurado para este sitio",
+    "follow": "Usar el predeterminado",
+    "guarded": "Los sitios de este tipo (bancos, pagos, correo, cuentas) no toman esto de los valores predeterminados.",
+    "backgroundAsk": "¿Navegar en segundo plano por todos los sitios con sesión iniciada?",
     "choices": {
-      "here": [
-        "Leer mientras navega",
-        "Cuando tenga el sitio abierto, el personaje puede leer la página."
-      ],
-      "task": [
-        "Leer durante una tarea",
-        "Mientras hace algo que usted pidió, el personaje puede abrir y leer el sitio por su cuenta."
-      ],
-      "background": [
-        "Navegar en segundo plano para recomendaciones",
-        "El personaje navega por el sitio con su cuenta de vez en cuando y trae recomendaciones; el sitio ve estas visitas como de su cuenta."
-      ],
-      "auto": [
-        "Iniciar sesión automáticamente",
-        "Cuando el navegador rellene su contraseña guardada, el personaje puede pulsar el botón de inicio de sesión del sitio. Nunca lee la contraseña."
-      ]
+      "here": {
+        "name": "Leer mientras navega",
+        "help": "Cuando tenga el sitio abierto, el personaje puede leer la página."
+      },
+      "task": {
+        "name": "Leer durante una tarea",
+        "help": "Mientras hace algo que usted pidió, el personaje puede abrir y leer el sitio por su cuenta."
+      },
+      "background": {
+        "name": "Navegar en segundo plano para recomendaciones",
+        "help": "El personaje navega por el sitio con su cuenta de vez en cuando y trae recomendaciones; el sitio ve estas visitas como de su cuenta."
+      },
+      "auto": {
+        "name": "Iniciar sesión automáticamente",
+        "help": "Cuando el navegador rellene su contraseña guardada, el personaje puede pulsar el botón de inicio de sesión del sitio. Nunca lee la contraseña."
+      }
     },
     "allowedTitle": "Siempre permitido",
     "allowedKind": {
@@ -2194,8 +2202,6 @@
     "busy": "El navegador de Mibo está ocupado con otra tarea. Vuelva a intentarlo cuando termine.",
     "keptTitle": "Sesiones guardadas en este equipo",
     "keptAbout": "Las cookies y las contraseñas permanecen en el navegador de este equipo; el personaje no puede leerlas.",
-    "keptNone": "Aún no hay sesiones guardadas.",
-    "session": "Sesión iniciada",
     "saved": "Contraseña guardada",
     "others_other": "Otros {count} sitios guardan cookies aquí; al cerrar todas las sesiones también se eliminan.",
     "clearSessions": "Cerrar todas las sesiones",

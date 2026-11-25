@@ -1,5 +1,5 @@
-"""The look of "nothing here yet": Settings › Connect with nothing signed in shows its two empty lists as filled
-panels, and no stylesheet draws a box with a dashed or dotted outline."""
+"""The look of "nothing here yet": Settings › Connect with nothing signed in shows its empty list as a filled
+panel, and no stylesheet draws a box with a dashed or dotted outline."""
 from __future__ import annotations
 
 import re
@@ -23,7 +23,7 @@ BOXES = """
 """
 
 
-def test_the_two_empty_lists_in_connect_are_filled_panels_with_no_dashed_border(app, browser):
+def test_the_empty_list_in_connect_is_a_filled_panel_with_no_dashed_border(app, browser):
     app.post("/api/look/toured")
     measured(app)
     page = browser.open(app, lang="zh")
@@ -31,9 +31,8 @@ def test_the_two_empty_lists_in_connect_are_filled_panels_with_no_dashed_border(
     p.locator("#side-settings").click()
     p.locator(".setup-nav-item[data-part=connect]").click()
     p.locator(".sites-empty:visible").wait_for()
-    p.locator(".sites-kept-none:visible").wait_for()
     boxes = p.evaluate(BOXES)
-    assert [box["text"] for box in boxes if box["text"]] and len(boxes) == 2
+    assert [box["text"] for box in boxes if box["text"]] and len(boxes) == 1
     for box in boxes:
         assert box["style"] == "solid" and box["fill"] != "rgba(0, 0, 0, 0)" and box["icon"], box
     assert page.errors == []

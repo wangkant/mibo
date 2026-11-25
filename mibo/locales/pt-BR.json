@@ -2135,9 +2135,12 @@
     "about": "Entre em um site no navegador do Mibo e o personagem poderá ler suas coisas lá; enviar, publicar e afins continuam sendo confirmados a cada vez.",
     "empty": "Depois que você entrar em um site, o personagem poderá ler lá suas mensagens, notificações e quem você segue, e enviar mensagens depois que você confirmar.",
     "add": "Entrar em um site",
+    "generalTitle": "Padrão para sites conectados",
+    "generalAbout": "Um site usa estas opções, a menos que tenha as suas; clique em um site para configurá-lo à parte.",
     "state": {
       "in": "Conectado",
-      "unsure": "Não confirmado"
+      "unsure": "Não confirmado",
+      "out": "Desconectado"
     },
     "unsureLine": "Não é possível confirmar o login; entrar de novo confirma.",
     "signIn": "Entrar",
@@ -2154,23 +2157,28 @@
     },
     "fresh": "Conectado a {name}. Agora você pode perguntar ao personagem sobre suas coisas lá, ou pedir que ele envie algo depois que você confirmar, por exemplo: “{example}”",
     "allowTitle": "Sem perguntar a cada vez",
+    "follows": "Usa o padrão",
+    "own": "Definido para este site",
+    "follow": "Usar o padrão",
+    "guarded": "Sites deste tipo (bancos, pagamentos, e-mail, contas) não recebem isto do padrão.",
+    "backgroundAsk": "Navegar em segundo plano em todos os sites conectados?",
     "choices": {
-      "here": [
-        "Ler enquanto você navega",
-        "Quando você estiver com o site aberto, o personagem pode ler a página."
-      ],
-      "task": [
-        "Ler durante uma tarefa",
-        "Enquanto faz algo que você pediu, o personagem pode abrir e ler o site sozinho."
-      ],
-      "background": [
-        "Navegar em segundo plano em busca de recomendações",
-        "O personagem navega pelo site com sua conta de vez em quando e traz recomendações; o site vê essas visitas como vindas da sua conta."
-      ],
-      "auto": [
-        "Entrar automaticamente",
-        "Quando o navegador preencher sua senha salva, o personagem pode pressionar o botão de login do site. Ele nunca lê a senha."
-      ]
+      "here": {
+        "name": "Ler enquanto você navega",
+        "help": "Quando você estiver com o site aberto, o personagem pode ler a página."
+      },
+      "task": {
+        "name": "Ler durante uma tarefa",
+        "help": "Enquanto faz algo que você pediu, o personagem pode abrir e ler o site sozinho."
+      },
+      "background": {
+        "name": "Navegar em segundo plano em busca de recomendações",
+        "help": "O personagem navega pelo site com sua conta de vez em quando e traz recomendações; o site vê essas visitas como vindas da sua conta."
+      },
+      "auto": {
+        "name": "Entrar automaticamente",
+        "help": "Quando o navegador preencher sua senha salva, o personagem pode pressionar o botão de login do site. Ele nunca lê a senha."
+      }
     },
     "allowedTitle": "Sempre permitido",
     "allowedKind": {
@@ -2194,8 +2202,6 @@
     "busy": "O navegador do Mibo está ocupado com outra tarefa. Tente novamente quando ela terminar.",
     "keptTitle": "Logins guardados neste computador",
     "keptAbout": "Cookies e senhas ficam no navegador deste computador; o personagem não consegue lê-los.",
-    "keptNone": "Nenhum login guardado ainda.",
-    "session": "Conectado",
     "saved": "Senha salva",
     "others_other": "Mais {count} sites guardam cookies aqui; sair de todos também os remove.",
     "clearSessions": "Sair de todos",

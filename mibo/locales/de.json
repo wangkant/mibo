@@ -2134,9 +2134,12 @@
     "about": "Melden Sie sich im Browser von Mibo bei einer Website an, dann kann die Figur Ihre Inhalte dort lesen; Senden, Posten und Ähnliches wird weiterhin jedes Mal bestätigt.",
     "empty": "Sobald Sie bei einer Website angemeldet sind, kann die Figur dort Ihre Nachrichten, Benachrichtigungen und Abos lesen und nach Ihrer Bestätigung Nachrichten senden.",
     "add": "Bei einer Website anmelden",
+    "generalTitle": "Standard für angemeldete Websites",
+    "generalAbout": "Eine Website nutzt diese Einstellungen, sofern sie keine eigenen hat; klicken Sie auf eine Website, um sie einzeln einzustellen.",
     "state": {
       "in": "Angemeldet",
-      "unsure": "Nicht bestätigt"
+      "unsure": "Nicht bestätigt",
+      "out": "Abgemeldet"
     },
     "unsureLine": "Die Anmeldung lässt sich nicht bestätigen; eine erneute Anmeldung bestätigt sie.",
     "signIn": "Anmelden",
@@ -2153,23 +2156,28 @@
     },
     "fresh": "Bei {name} angemeldet. Sie können die Figur jetzt nach Ihren Inhalten dort fragen oder sie nach Ihrer Bestätigung etwas senden lassen, zum Beispiel: „{example}“",
     "allowTitle": "Ohne jedes Mal zu fragen",
+    "follows": "Standard",
+    "own": "Für diese Website eingestellt",
+    "follow": "Standard verwenden",
+    "guarded": "Websites dieser Art (Banken, Zahlungen, E-Mail, Konten) übernehmen dies nicht vom Standard.",
+    "backgroundAsk": "Alle angemeldeten Websites im Hintergrund durchstöbern?",
     "choices": {
-      "here": [
-        "Beim Surfen lesen",
-        "Wenn Sie die Website geöffnet haben, darf die Figur die Seite lesen."
-      ],
-      "task": [
-        "Während einer Aufgabe lesen",
-        "Während einer Aufgabe, um die Sie gebeten haben, darf die Figur die Website selbst öffnen und lesen."
-      ],
-      "background": [
-        "Im Hintergrund nach Empfehlungen stöbern",
-        "Die Figur besucht die Website ab und zu mit Ihrem Konto und bringt Empfehlungen mit; die Website sieht diese Besuche als Besuche Ihres Kontos."
-      ],
-      "auto": [
-        "Automatisch anmelden",
-        "Wenn der Browser Ihr gespeichertes Passwort einträgt, darf die Figur die Anmeldeschaltfläche der Website drücken. Sie liest das Passwort nie."
-      ]
+      "here": {
+        "name": "Beim Surfen lesen",
+        "help": "Wenn Sie die Website geöffnet haben, darf die Figur die Seite lesen."
+      },
+      "task": {
+        "name": "Während einer Aufgabe lesen",
+        "help": "Während einer Aufgabe, um die Sie gebeten haben, darf die Figur die Website selbst öffnen und lesen."
+      },
+      "background": {
+        "name": "Im Hintergrund nach Empfehlungen stöbern",
+        "help": "Die Figur besucht die Website ab und zu mit Ihrem Konto und bringt Empfehlungen mit; die Website sieht diese Besuche als Besuche Ihres Kontos."
+      },
+      "auto": {
+        "name": "Automatisch anmelden",
+        "help": "Wenn der Browser Ihr gespeichertes Passwort einträgt, darf die Figur die Anmeldeschaltfläche der Website drücken. Sie liest das Passwort nie."
+      }
     },
     "allowedTitle": "Immer erlaubt",
     "allowedKind": {
@@ -2193,8 +2201,6 @@
     "busy": "Der Browser von Mibo ist mit einer anderen Aufgabe beschäftigt. Versuchen Sie es erneut, wenn diese erledigt ist.",
     "keptTitle": "Auf diesem Computer gespeicherte Anmeldungen",
     "keptAbout": "Cookies und Passwörter bleiben im Browser auf diesem Computer; die Figur kann sie nicht lesen.",
-    "keptNone": "Noch keine Anmeldungen gespeichert.",
-    "session": "Angemeldet",
     "saved": "Passwort gespeichert",
     "others_other": "{count} weitere Websites speichern hier Cookies; „Überall abmelden“ entfernt auch diese.",
     "clearSessions": "Überall abmelden",

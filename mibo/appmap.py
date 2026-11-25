@@ -292,7 +292,25 @@ ITEMS = (
     Item("model", "more", "setup_model.more", "A backup model, the model for short calls, time limits"),
     Item("connect", "sites", "setup.names.connect",
          "Sites they signed in to in the app's own browser, which you read and act on with their sign-in; they "
-         "sign in themselves"),
+         "sign in themselves, and set a site's own choices there"),
+    # The general switches: what every signed-in site with no choice of its own does (web/signin.py GENERAL).
+    Item("connect", "sites-here", "sites.choices.here.name",
+         "Every signed-in site without its own choice: reading the page while they browse it",
+         field("/api/signins", "general", "here"), "/api/signins/general", lambda v, now: {"name": "here", "on": v},
+         _switch, _turned_on),
+    Item("connect", "sites-task", "sites.choices.task.name",
+         "Every signed-in site without its own choice: opening and reading it yourself during a task they gave",
+         field("/api/signins", "general", "task"), "/api/signins/general", lambda v, now: {"name": "task", "on": v},
+         _switch, _turned_on),
+    Item("connect", "sites-background", "sites.choices.background.name",
+         "Every signed-in site without its own choice, banks, payment, mail and accounts aside: browsing it with "
+         "their account now and then for finds", field("/api/signins", "general", "background"),
+         "/api/signins/general", lambda v, now: {"name": "background", "on": v}, _switch, _turned_on,
+         warn="setup_privacy.feedWarn"),
+    Item("connect", "sites-auto", "sites.choices.auto.name",
+         "Every signed-in site without its own choice, banks, payment, mail and accounts aside: pressing its sign-in "
+         "button once the browser filled a saved password", field("/api/signins", "general", "auto"),
+         "/api/signins/general", lambda v, now: {"name": "auto", "on": v}, _switch, _turned_on),
     Item("language", "display", "setup_language.display", "The language of the app's screens",
          _ui_lang, "/api/look/ui", lambda v, now: {"lang": v}, _one_of("zh", "zh-TW", "en", "ja", "ko", "es", "fr",
                                                                      "de", "pt-BR", "ru")),

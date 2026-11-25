@@ -465,16 +465,10 @@
   gap: var(--pa-s3);
   margin-top: var(--pa-s4);
 }
-.sites-kept-row {
-  padding: 12px var(--pa-s4);
-}
 .sites-kept-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--pa-s2);
-}
-.sites-kept-none {
-  margin: 0;
 }
 
 /* One site's panel: its state, then the choices, each a line of words and a switch. */
@@ -494,6 +488,11 @@
 .sites-sheet-state[data-state="in"] .places-pill {
   background: var(--places-ok-soft);
   color: var(--places-ok);
+}
+/* 已保存密码 beside the state: a plain tag, not the state's colour. */
+.sites-sheet-state .places-pill.sites-saved {
+  background: var(--pa-n50);
+  color: var(--pa-muted);
 }
 .sites-choices {
   display: grid;
@@ -532,6 +531,25 @@
 }
 .sites-choice-warn {
   color: var(--pa-amber700);
+}
+/* Whether a choice is the site's own or the general switch's, with the way back to the general one. */
+.sites-choice-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--pa-s2);
+  color: var(--pa-faint);
+}
+.sites-follow {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pa-a600);
+  font: inherit;
+  cursor: pointer;
+}
+.sites-follow:hover {
+  text-decoration: underline;
 }
 
 /* The head: the title and its line, with 登录网站 beside them. */
