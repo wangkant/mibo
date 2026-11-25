@@ -49,7 +49,9 @@ SENSITIVE = re.compile(
     r"accounts|myaccount|console|login|signin|passport|id|gov|tax|"
     r"icbc|ccb|abchina|boc|bankcomm|cmbchina|psbc|spdb|cib|citicbank|cebbank|cmbc|pingan|webank|mybank|95516|"
     r"unionpay|chase|wellsfargo|citi|hsbc|barclays|schwab|fidelity|vanguard|robinhood|coinbase|binance|okx|gmail|"
-    r"proton)\.", re.I)
+    r"proton|bankofamerica|capitalone|americanexpress|usbank|wise|revolut|cash|fastmail|aol|zoho)\.", re.I)
+# A registrable host whose name holds this is a bank's (usbank.com, bankofamerica.com).
+BANK = "bank"
 
 
 # The same on a large site's own pages: its account, billing, payment and security pages.
@@ -59,14 +61,16 @@ SENSITIVE_PATH = re.compile(r"/(?:account|accounts|myaccount|billing|checkout|pa
 
 def sensitive(where: str) -> bool:
     """A bank's, a payment service's, a broker's, a health service's or a mail service's site or page: `where` is
-    an address, a full host or a site, judged by every label of its host and by its path, as the site reads it
-    (percent-encoding undone, case folded)."""
+    an address, a full host or a site, judged by every label of its host, by its registrable name holding BANK, and
+    by its path, as the site reads it (percent-encoding undone, case folded)."""
+    from .situation import site_of
     where = str(where or "").strip().lower()
     parts = urlsplit(where if "://" in where else "//" + where)
     host, path = parts.hostname or "", parts.path
     for _ in range(3):
         path = unquote(path)
-    return bool(host) and bool(SENSITIVE.search(host) or SENSITIVE_PATH.search(path.casefold()))
+    return bool(host) and bool(SENSITIVE.search(host) or BANK in site_of(host).split(".")[0]
+                               or SENSITIVE_PATH.search(path.casefold()))
 
 
 # Windows whose pictures always ask before they go to a model service: password managers, banks and payment, mail.

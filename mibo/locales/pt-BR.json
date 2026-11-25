@@ -2143,7 +2143,7 @@
     "empty": "Depois que você entrar em um site, o personagem poderá ler lá suas mensagens, notificações e quem você segue, e enviar mensagens depois que você confirmar.",
     "add": "Entrar em um site",
     "generalTitle": "Padrão para sites conectados",
-    "generalAbout": "Um site usa estas opções, a menos que tenha as suas; clique em um site para configurá-lo à parte.",
+    "generalAbout": "Um site usa estas opções, a menos que tenha as suas; clique em um site para configurá-lo à parte. A navegação em segundo plano e a entrada automática valem apenas para plataformas de vídeo, redes sociais e outros conteúdos.",
     "state": {
       "in": "Conectado",
       "unsure": "Não confirmado",
@@ -2167,8 +2167,8 @@
     "follows": "Usa o padrão",
     "own": "Definido para este site",
     "follow": "Usar o padrão",
-    "guarded": "Sites deste tipo (bancos, pagamentos, e-mail, contas) não recebem isto do padrão.",
-    "backgroundAsk": "Navegar em segundo plano em todos os sites conectados?",
+    "guarded": "O padrão disto vale apenas para plataformas de vídeo, redes sociais e outros conteúdos, não para este site.",
+    "backgroundAsk": "Navegar em segundo plano nas plataformas de conteúdo conectadas?",
     "choices": {
       "here": {
         "name": "Ler enquanto você navega",

@@ -16,8 +16,8 @@
   // While a sign-in waits in the pane, the list is asked again this often, for at most this long.
   const POLL_MS = 2000;
   const POLL_MAX_MS = 11 * 60 * 1000;
-  // Background browsing and automatic sign-in: a guarded site (banks, payment, mail, accounts) takes neither from
-  // the general switch.
+  // Background browsing and automatic sign-in: a guarded site (any but the content platforms the app knows, and
+  // among those a mailbox or a sensitive site) takes neither from the general switch.
   const GUARDED = ["background", "auto"];
 
   let kit, ctx, t, list, kept, said, waitLine, freshLine, general;

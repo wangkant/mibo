@@ -1,5 +1,6 @@
 """Settings › Connections' signed-in sites (panels/signins.py, web/signin.py): every signed-in site follows the general
-switches unless it has a choice of its own, a site signed in for the first time takes them with one line and no
+switches unless it has a choice of its own (background browsing and automatic sign-in reach only the content
+platforms the app knows), a site signed in for the first time takes them with one line and no
 panel, and the one list shows each site signed in or signed out with a saved password, with the cookies of the
 rest counted below it."""
 from __future__ import annotations
@@ -17,6 +18,9 @@ from mibo.web import signin, sites
 HEADERS = {welcome.TOKEN_HEADER: TOKEN}
 NEWS = "https://news.example/"
 SHOP = "https://shop.example/"
+# A content platform the app knows, which background browsing and automatic sign-in reach from the general
+# switches.
+PLATFORM = "https://medium.com/"
 
 
 @pytest.fixture
@@ -59,40 +63,40 @@ def test_a_site_signed_in_for_the_first_time_takes_the_general_switches(client, 
     for name in ("background", "auto"):
         client.post("/api/signins/general", headers=HEADERS, json={"name": name, "on": True})
     client.post("/api/signins/general", headers=HEADERS, json={"name": "task", "on": False})
-    signin.became(desktop, NEWS, "signin")
-    row = _row(client, "news.example")
+    signin.became(desktop, PLATFORM, "signin")
+    row = _row(client, "medium.com")
     assert row["fresh"] and row["own"] == []
     assert (row["here"], row["task"], row["background"], row["auto"]) == (True, False, True, "always")
-    assert signin.connected(desktop) == [] and not signin.kept_out(desktop, NEWS)
-    assert signedread.feeds_on(workspace.home / "runtime")["news.example"]["url"] == NEWS
+    assert signin.connected(desktop) == [] and not signin.kept_out(desktop, PLATFORM)
+    assert signedread.feeds_on(workspace.home / "runtime")["medium.com"]["url"] == PLATFORM
     # The page tells it once: no panel waits on it.
-    client.post("/api/signins", headers=HEADERS, json={"op": "seen", "site": "news.example"})
-    assert not _row(client, "news.example")["fresh"]
+    client.post("/api/signins", headers=HEADERS, json={"op": "seen", "site": "medium.com"})
+    assert not _row(client, "medium.com")["fresh"]
 
 
 def test_a_sites_own_choice_wins_over_the_general_switch_until_it_follows_again(client, workspace):
     desktop, runtime = _desktop(workspace), workspace.home / "runtime"
-    signin.became(desktop, NEWS, "signin")
+    signin.became(desktop, PLATFORM, "signin")
     client.post("/api/signins/general", headers=HEADERS, json={"name": "background", "on": True})
     for name in ("here", "background", "auto"):
-        client.post("/api/signins", headers=HEADERS, json={"op": "choose", "site": "news.example", "name": name,
+        client.post("/api/signins", headers=HEADERS, json={"op": "choose", "site": "medium.com", "name": name,
                                                            "on": False})
-    row = _row(client, "news.example")
+    row = _row(client, "medium.com")
     assert row["own"] == ["here", "background", "auto"]
     assert (row["here"], row["background"], row["auto"]) == (False, False, "never")
-    assert signedread.feeds_on(runtime) == {} and signin.kept_out(desktop, NEWS)
+    assert signedread.feeds_on(runtime) == {} and signin.kept_out(desktop, PLATFORM)
     # Back to the general switch, a wall's stop with it.
-    sites._change(runtime, "news.example", lambda card: card["feed"].update(stopped="verification"))
+    sites._change(runtime, "medium.com", lambda card: card["feed"].update(stopped="verification"))
     for name in ("here", "background"):
-        client.post("/api/signins", headers=HEADERS, json={"op": "follow", "site": "news.example", "name": name})
-    row = _row(client, "news.example")
+        client.post("/api/signins", headers=HEADERS, json={"op": "follow", "site": "medium.com", "name": name})
+    row = _row(client, "medium.com")
     assert row["own"] == ["auto"] and row["here"] and row["background"] and row["stopped"] == ""
-    assert set(signedread.feeds_on(runtime)) == {"news.example"}
+    assert set(signedread.feeds_on(runtime)) == {"medium.com"}
     # Turning the general switch off leaves a site's own on as it is.
-    client.post("/api/signins", headers=HEADERS, json={"op": "choose", "site": "news.example", "name": "task",
+    client.post("/api/signins", headers=HEADERS, json={"op": "choose", "site": "medium.com", "name": "task",
                                                        "on": True})
     client.post("/api/signins/general", headers=HEADERS, json={"name": "task", "on": False})
-    assert signin.chose(desktop, NEWS, "task")
+    assert signin.chose(desktop, PLATFORM, "task")
 
 
 def test_one_list_shows_signed_in_sites_and_saved_passwords_and_counts_the_other_cookies(client, workspace):

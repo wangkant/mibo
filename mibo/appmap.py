@@ -309,13 +309,15 @@ ITEMS = (
          field("/api/signins", "general", "task"), "/api/signins/general", lambda v, now: {"name": "task", "on": v},
          _switch, _turned_on),
     Item("connect", "sites-background", "sites.choices.background.name",
-         "Every signed-in site without its own choice, banks, payment, mail and accounts aside: browsing it with "
-         "their account now and then for finds", field("/api/signins", "general", "background"),
+         "Every signed-in content platform the app knows (video, social, communities) without its own choice, mail "
+         "aside: browsing it with their account now and then for finds; other sites only by their own choice",
+         field("/api/signins", "general", "background"),
          "/api/signins/general", lambda v, now: {"name": "background", "on": v}, _switch, _turned_on,
          warn="setup_privacy.feedWarn", always=True),
     Item("connect", "sites-auto", "sites.choices.auto.name",
-         "Every signed-in site without its own choice, banks, payment, mail and accounts aside: pressing its sign-in "
-         "button once the browser filled a saved password", field("/api/signins", "general", "auto"),
+         "Every signed-in content platform the app knows (video, social, communities) without its own choice, mail "
+         "aside: pressing its sign-in button once the browser filled a saved password; other sites ask on their "
+         "sign-in card", field("/api/signins", "general", "auto"),
          "/api/signins/general", lambda v, now: {"name": "auto", "on": v}, _switch, _turned_on, always=True),
     Item("language", "display", "setup_language.display", "The language of the app's screens",
          _ui_lang, "/api/look/ui", lambda v, now: {"lang": v}, _one_of("zh", "zh-TW", "en", "ja", "ko", "es", "fr",

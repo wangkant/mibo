@@ -1,7 +1,7 @@
-"""The general switches for signed-in sites (web/signin.py GENERAL) widen nothing on a guarded site: a bank's, a
-payment service's, a mailbox's or an account site, by its key, its home or a mailbox's hint on its host, takes
-neither background browsing of its feed nor automatic sign-in from them, and keeps the person's own choices for it.
-Turning a general switch on comes only from the app's own page."""
+"""The general switches for signed-in sites (web/signin.py GENERAL) widen nothing on a guarded site: background
+browsing of its feed and automatic sign-in reach only the content platforms the app knows, never a mailbox's hint or
+a bank's, a payment service's or an account site among them, and every site keeps the person's own choices for it.
+Turning a general switch on comes only from the app's own page, and from the character only on their yes."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -33,6 +33,25 @@ def test_a_guarded_site_takes_neither_background_browsing_nor_automatic_sign_in_
     assert all(signin.chose(desktop, url, "task") for url in (BANK, MAIL, VIDEO))
     signin.change(desktop, signin.key(BANK), lambda entry: entry.update(auto="always"))
     assert signin.auto(desktop, BANK) == "always"
+
+
+def test_the_general_switches_reach_only_the_content_platforms_the_app_knows(tmp_path):
+    desktop = tmp_path / "runtime" / "desktop"
+    platforms = ("https://www.bilibili.com/", "https://x.com/home")
+    # Banks, payment and mail the guarded names never listed, a shop, and QQ Mail, whose qq.com is also a platform's.
+    others = ("https://www.bankofamerica.com/", "https://www.capitalone.com/", "https://wise.com/", "https://cash.app/",
+              "https://www.fastmail.com/", "https://www.aol.com/", "https://shop.example.net/", "https://mail.qq.com/")
+    for url in (*platforms, *others):
+        signin.became(desktop, url, "signin")
+    for name in signin.GENERAL:
+        signin.set_general(desktop, name, True)
+    assert [signin.background(desktop, url) for url in platforms] == [True, True]
+    assert [signin.auto(desktop, url) for url in platforms] == ["always", "always"]
+    # Any other site keeps what it had before the general switches: no background browsing but by its own choice,
+    # and the sign-in card that asks.
+    assert not any(signin.background(desktop, url) for url in others)
+    assert [signin.auto(desktop, url) for url in others] == [""] * len(others)
+    assert set(signedread.feeds_on(tmp_path / "runtime")) == {"bilibili.com", "x.com"}
 
 
 def test_the_character_turns_general_background_browsing_or_automatic_sign_in_on_only_on_their_yes(

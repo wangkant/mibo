@@ -2136,7 +2136,7 @@
     "empty": "Once you sign in to a site, the character can read your messages, notifications and follows there, and send messages once you confirm.",
     "add": "Sign in to a site",
     "generalTitle": "Defaults for signed-in sites",
-    "generalAbout": "A site uses these unless it has its own setting; click a site to set it on its own.",
+    "generalAbout": "A site uses these unless it has its own setting; click a site to set it on its own. Background browsing and automatic sign-in apply only to video, social and other content platforms.",
     "state": {
       "in": "Signed in",
       "unsure": "Not confirmed",
@@ -2160,8 +2160,8 @@
     "follows": "Uses the default",
     "own": "Set for this site",
     "follow": "Use the default",
-    "guarded": "Sites of this kind (banks, payment, mail, accounts) do not take this from the defaults.",
-    "backgroundAsk": "Browse every signed-in site in the background?",
+    "guarded": "The default for this applies only to video, social and other content platforms, not to this site.",
+    "backgroundAsk": "Browse your signed-in content platforms in the background?",
     "choices": {
       "here": {
         "name": "Read while you browse it",

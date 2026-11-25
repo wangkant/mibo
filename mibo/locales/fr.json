@@ -2143,7 +2143,7 @@
     "empty": "Une fois connecté à un site, le personnage peut y lire vos messages, notifications et abonnements, et envoyer des messages après votre confirmation.",
     "add": "Se connecter à un site",
     "generalTitle": "Par défaut pour les sites connectés",
-    "generalAbout": "Un site utilise ces réglages sauf s'il a les siens ; cliquez sur un site pour le régler à part.",
+    "generalAbout": "Un site utilise ces réglages sauf s'il a les siens ; cliquez sur un site pour le régler à part. La navigation en arrière-plan et la connexion automatique ne s'appliquent qu'aux plateformes de vidéo, de réseaux sociaux et autres contenus.",
     "state": {
       "in": "Connecté",
       "unsure": "Non confirmé",
@@ -2167,8 +2167,8 @@
     "follows": "Par défaut",
     "own": "Réglé pour ce site",
     "follow": "Revenir au réglage par défaut",
-    "guarded": "Les sites de ce type (banques, paiement, messagerie, comptes) ne reprennent pas ce réglage par défaut.",
-    "backgroundAsk": "Parcourir en arrière-plan tous les sites connectés ?",
+    "guarded": "Le réglage par défaut ne s'applique qu'aux plateformes de vidéo, de réseaux sociaux et autres contenus, pas à ce site.",
+    "backgroundAsk": "Parcourir en arrière-plan les plateformes de contenu connectées ?",
     "choices": {
       "here": {
         "name": "Lire pendant votre navigation",

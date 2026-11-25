@@ -30,9 +30,10 @@ cookies its session showed, when it was last used, whether the browser filled
 a saved password there, the person's choices (read while they are on it, read
 on the character's own request during a task) and their answer on 自动登录. The
 background choice is the site card's feed (web/sites.py). A site with no choice
-of its own follows the general switch for it (GENERAL_FILE), except that a
-guarded site (banks, payment, health, mail, accounts) takes neither background
-browsing nor automatic sign-in from one.
+of its own follows the general switch for it (GENERAL_FILE), except that
+background browsing and automatic sign-in reach only the content platforms the
+app knows (platforms.py), never a mailbox or a sensitive site among them; any
+other site takes neither from a general switch (`guarded`).
 """
 from __future__ import annotations
 
@@ -335,11 +336,13 @@ def set_general(desktop: Path, name: str, on: bool) -> dict:
 
 
 def guarded(site: str, entry: dict) -> bool:
-    """A site that no general switch turns background browsing or automatic sign-in on for: one acting.sensitive
-    names by its key or its home (banks, payment, health, mail, accounts), or one a mailbox's hint shares (Gmail's
-    google.com, QQ Mail's qq.com)."""
+    """A site that no general switch turns background browsing or automatic sign-in on for: every site but the
+    content platforms the app knows (platforms.py: video, social, communities, reading and listening), and among
+    those one a mailbox's hint shares (QQ Mail's qq.com, 163 Mail's 163.com) or one acting.sensitive names by its key
+    or its home. A bank, a payment service or a mailbox the app has never heard of is guarded so too."""
     from ..acting import sensitive
-    return sensitive(site) or sensitive(str(entry.get("home") or "")) or any(
+    from ..platforms import known
+    return not known(bare(site)) or sensitive(site) or sensitive(str(entry.get("home") or "")) or any(
         row.get("mail") for row in hints() if row["site"] == bare(site))
 
 

@@ -2142,7 +2142,7 @@
     "empty": "Sobald Sie bei einer Website angemeldet sind, kann die Figur dort Ihre Nachrichten, Benachrichtigungen und Abos lesen und nach Ihrer Bestätigung Nachrichten senden.",
     "add": "Bei einer Website anmelden",
     "generalTitle": "Standard für angemeldete Websites",
-    "generalAbout": "Eine Website nutzt diese Einstellungen, sofern sie keine eigenen hat; klicken Sie auf eine Website, um sie einzeln einzustellen.",
+    "generalAbout": "Eine Website nutzt diese Einstellungen, sofern sie keine eigenen hat; klicken Sie auf eine Website, um sie einzeln einzustellen. Stöbern im Hintergrund und automatische Anmeldung gelten nur für Video-, Social-Media- und andere Inhaltsplattformen.",
     "state": {
       "in": "Angemeldet",
       "unsure": "Nicht bestätigt",
@@ -2166,8 +2166,8 @@
     "follows": "Standard",
     "own": "Für diese Website eingestellt",
     "follow": "Standard verwenden",
-    "guarded": "Websites dieser Art (Banken, Zahlungen, E-Mail, Konten) übernehmen dies nicht vom Standard.",
-    "backgroundAsk": "Alle angemeldeten Websites im Hintergrund durchstöbern?",
+    "guarded": "Der Standard dafür gilt nur für Video-, Social-Media- und andere Inhaltsplattformen, nicht für diese Website.",
+    "backgroundAsk": "Angemeldete Inhaltsplattformen im Hintergrund durchstöbern?",
     "choices": {
       "here": {
         "name": "Beim Surfen lesen",

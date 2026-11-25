@@ -2143,7 +2143,7 @@
     "empty": "Cuando inicie sesión en un sitio, el personaje podrá leer allí sus mensajes, notificaciones y seguidos, y enviar mensajes cuando usted lo confirme.",
     "add": "Iniciar sesión en un sitio",
     "generalTitle": "Valores predeterminados de los sitios con sesión",
-    "generalAbout": "Un sitio usa estos valores salvo que tenga los suyos; haga clic en un sitio para configurarlo por separado.",
+    "generalAbout": "Un sitio usa estos valores salvo que tenga los suyos; haga clic en un sitio para configurarlo por separado. La navegación en segundo plano y el inicio de sesión automático solo se aplican a plataformas de vídeo, redes sociales y otros contenidos.",
     "state": {
       "in": "Sesión iniciada",
       "unsure": "Sin confirmar",
@@ -2167,8 +2167,8 @@
     "follows": "Usa el predeterminado",
     "own": "Configurado para este sitio",
     "follow": "Usar el predeterminado",
-    "guarded": "Los sitios de este tipo (bancos, pagos, correo, cuentas) no toman esto de los valores predeterminados.",
-    "backgroundAsk": "¿Navegar en segundo plano por todos los sitios con sesión iniciada?",
+    "guarded": "El valor predeterminado de esto solo se aplica a plataformas de vídeo, redes sociales y otros contenidos, no a este sitio.",
+    "backgroundAsk": "¿Navegar en segundo plano por las plataformas de contenido con sesión iniciada?",
     "choices": {
       "here": {
         "name": "Leer mientras navega",

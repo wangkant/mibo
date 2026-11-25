@@ -25,6 +25,16 @@ def test_a_sensitive_host_is_judged_by_its_full_host_and_every_act_there_is_aske
     assert acting.decide("auto", "outward", host) == "ask"
 
 
+def test_banks_payment_services_and_mail_by_name_or_a_bank_in_the_registrable_name_ask_for_every_act():
+    for host in ("bankofamerica.com", "secure.bankofamerica.com", "capitalone.com", "americanexpress.com", "usbank.com",
+                 "wise.com", "revolut.com", "cash.app", "fastmail.com", "aol.com", "zoho.com", "www.firstbankpr.com",
+                 "online.citizensbank.co.uk"):
+        assert acting.sensitive(f"https://{host}/") and acting.decide("auto", "outward", host) == "ask", host
+    # A page about banks on another site is not a bank.
+    assert not acting.sensitive("https://news.example.com/banks") and not acting.sensitive(
+        "https://www.example.com/banking-news")
+
+
 def test_a_page_of_account_or_payment_is_sensitive_on_any_site_and_an_ordinary_one_is_not():
     for url in ("https://example.com/account/security", "https://shop.example/checkout", "https://example.com/billing"):
         assert acting.sensitive(url), url
