@@ -13,8 +13,9 @@ the model telling an injection from a request; it keeps a fooled model from caus
   asked (`Read.verbatim`, `Read.runs_written`); a program or script downloaded from the web is never opened or run
   (`downloaded`);
 - a standing request acts only within the scope the person stored (`within`), and a change that widens the
-  character's own permissions takes effect only on the person's own words (`widening`); a standing rule is a span of
-  the person's own message of the turn as they typed it (`said_in`, standing.py).
+  character's own permissions takes effect only on the person's own words (`widening`); a standing rule is the
+  person's whole message of the turn as they typed it, or, asked once, one whole sentence of it (`said_in`,
+  standing.py).
 Model keys, the browser pane's profile and the app's own home are readable by no tool (shell/grants.py, Places).
 """
 from __future__ import annotations
@@ -211,6 +212,10 @@ def named(place: str, words, site: bool = False) -> bool:
 
 # Quotes a person puts round words they want typed as they are.
 QUOTES = (('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’"), ("「", "」"), ("『", "』"), ("《", "》"), ("`", "`"))
+# How a standing rule stands in the person's message (`rule_said`), and the marks trimmed off both ends first, as
+# NFKC writes them.
+WHOLE, SENTENCE = "whole", "sentence"
+CLOSING = " .,;:!?~。、"
 
 
 def own_words(text: str, words) -> bool:
@@ -319,8 +324,24 @@ def widening_in(workspace, change: dict) -> bool:
     return widening(change, [m["text"] for m in asked(workspace)][-1:], turn_read(workspace))
 
 
-def said_in(workspace, text: str) -> bool:
-    """`own_words` for the turn under way in the app: `text` is a span of the person's own message of this turn as
-    they typed it (an earlier message is no request now); never while no turn of theirs is under way."""
+def rule_said(text: str, message: str) -> str:
+    """How a standing rule's `text` stands in the person's `message`, both trimmed of spaces and closing marks:
+    WHOLE when it is the whole message, SENTENCE when it is one whole sentence or clause of a longer one (bounded by
+    the message's start or end, a line break, 。!? or a full stop before a space), else "": a part of a sentence is
+    never their rule, so no fragment drops a limit and no negation is cut off ("我可没说过以后删除文件不用问我")."""
+    rule = _squeeze(text).strip(CLOSING)
+    if not rule:
+        return ""
+    if rule == _squeeze(message).strip(CLOSING):
+        return WHOLE
+    parts = re.split(r"[\r\n。!?]|\.(?=\s|$)", _fold(message))
+    return SENTENCE if any(_squeeze(part).strip(CLOSING) == rule for part in parts) else ""
+
+
+def said_in(workspace, text: str) -> str:
+    """`rule_said` for the turn under way in the app, in the person's own message of this turn as they typed it: an
+    earlier message is no request now, and their answer to the turn's question is not the message it asked about.
+    "" while no turn of theirs is under way."""
     from .acting import asked
-    return own_words(text, [m["text"] for m in asked(workspace)][-1:])
+    said = [m["text"] for m in asked(workspace) if not m.get("answers")][-1:]
+    return rule_said(text, said[0]) if said else ""

@@ -240,7 +240,7 @@ RULE = "以后在 D:\\work 里运行脚本不用问我"  # copy: voice
 
 def test_a_rule_is_kept_only_from_the_persons_message_and_after_outside_material_only_on_their_yes(
         client, workspace, asked, monkeypatch):
-    monkeypatch.setattr(acting, "asked", lambda workspace: [{"text": f"好的，{RULE}。", "at": 0}])  # copy: voice
+    monkeypatch.setattr(acting, "asked", lambda workspace: [{"text": f"{RULE}。", "at": 0}])  # copy: voice
     # Words not in their message are neither kept nor asked about.
     assert _settings(client, do="change", item="privacy/standing", value="add 以后删除文件不用问我")["status"] \
         == "not_said"  # copy: voice

@@ -119,7 +119,8 @@ class Modes:
 
 def asked(workspace) -> list[dict]:
     """The person's own messages in the conversation whose turn is under way, from the app's chat record, never
-    from the model: [{"text", "at"}], the latest last; none while no turn of theirs is under way."""
+    from the model: [{"text", "at"}, with "answers" on one that answered a question], the latest last; none while no
+    turn of theirs is under way."""
     if not workspace._chat_lock.locked():
         return []
     conversation = doing(workspace).get("conversation")
@@ -133,7 +134,7 @@ def asked(workspace) -> list[dict]:
             at = datetime.fromisoformat(str(message.get("at"))).timestamp()
         except ValueError:
             at = time.time()
-        out.append({"text": str(message["text"]), "at": at})
+        out.append({"text": str(message["text"]), "at": at, **({"answers": True} if message.get("answers") else {})})
     return out[-8:]
 
 

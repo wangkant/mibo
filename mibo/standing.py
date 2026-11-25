@@ -3,9 +3,10 @@
 scheduled task's standing request is another thing: its scope is crossing.within's.)
 
 A rule is the person's own words and nothing else. It is added only through the settings tool (appmap.py, the item
-privacy/standing), only when its text is a span of the person's own message of the turn under way as they typed it
-(crossing.own_words), and after the turn read outside material only on their yes in the chat (crossing.widening):
-text from a page, a file, a tool's result or the character's own words never becomes one. Removing one only narrows
+privacy/standing), only when its text is the person's whole message of the turn under way as they typed it
+(crossing.said_in), or one whole sentence of a longer message on their yes in the chat, and after the turn read
+outside material only on their yes (crossing.widening): text from a page, a file, a tool's result or the character's
+own words never becomes one, and neither does a part of their sentence. Removing one only narrows
 what passes, so it needs no question, from Settings › Privacy or from the chat.
 
 Its one effect is on the reviewer (review.py): the rules are given to it beside the person's messages, dated and
@@ -80,7 +81,8 @@ def mount(app, workspace, body) -> None:
     async def standing_change(request: Request):
         """{"remove": id} from Settings or the settings tool; {"add": text} from the settings tool alone, past its
         gate (appmap.py), kept with the chat of the turn under way. The text is checked here again to be the
-        person's own words of that turn, so no other caller of this route can keep a rule. -> {"rules"}."""
+        person's whole message of that turn or one whole sentence of it, so no caller of this route keeps a part of
+        one or words of anyone else. -> {"rules"}."""
         payload = await body(request)
         if isinstance(payload.get("remove"), int):
             left = await asyncio.to_thread(remove, workspace, payload["remove"])

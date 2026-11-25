@@ -26,6 +26,7 @@ The character's instructions put getting a task done first. Changes below follow
 ### Standing rules
 
 - You can tell the character in the chat that a kind of step need not ask you from now on ("以后在 D:\work 里运行脚本不用问我"). Your sentence is kept as you typed it, and the automatic review reads it as your word for the steps it covers. Paying, deleting for good, your accounts, passwords and the other steps that always ask still ask each time.
+- Sent as a message of its own, the sentence is kept with no question. One sentence of a longer message, a pasted mail for one, is kept only after you agree to its exact words in the chat, and part of a sentence is never kept.
 - The rules are listed in Settings › Privacy, where each can be removed, and the character removes one when you ask.
 
 ### Signed-in sites
