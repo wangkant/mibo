@@ -28,6 +28,12 @@ The character's instructions put getting a task done first. Changes below follow
 - You can tell the character in the chat that a kind of step need not ask you from now on ("以后在 D:\work 里运行脚本不用问我"). Your sentence is kept as you typed it, and the automatic review reads it as your word for the steps it covers. Paying, deleting for good, your accounts, passwords and the other steps that always ask still ask each time.
 - The rules are listed in Settings › Privacy, where each can be removed, and the character removes one when you ask.
 
+### Signed-in sites
+
+- Settings › Connections has general switches for every signed-in site: read the page while you browse it, read it during a task, browse it in the background for picks, and sign in automatically. A site signed in from now on takes them, and one line says it is signed in; its panel no longer opens by itself for each account. A site's own panel still sets a choice for that site alone, shows which choices follow the general switches, and puts a choice back to them.
+- The general switches start as the sites worked before: reading while you browse and during a task on, background browsing and automatic sign-in off. Choices you made for a site stay its own. Bank, payment, mail and account sites never take background browsing or automatic sign-in from the general switches. Turning background browsing on for every site shows the sites' terms first, as for one site. The character can change the general switches when you ask; turning one on goes through the same question in the chat as its other changes that let it do more.
+- The signed-in sites and the sign-ins kept on this computer are one list: a site signed out with a saved password is listed with its tag. Below the list stay the count of other sites that keep cookies and the two ways to clear everything.
+
 ### Files and commands
 
 - A file tool that writes, edits, moves or deletes takes its folder or full paths. A name given alone used the folder of an earlier step and could land elsewhere.
