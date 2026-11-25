@@ -38,6 +38,12 @@ The character's instructions put getting a task done first. Changes below follow
 - A task you asked for a few messages back is made once you agree to the details ("以后每天发一篇", then "随便几点"). When you leave the time open, the character chooses one, says it, and you can change it. It was refused until one message said the time, and the character asked you to type a sentence word for word.
 - A task you did not ask for in your recent messages, or one made after the character read a page or a downloaded file in that reply, is kept off until you press Make it on its card, which now shows what each run does. It was refused.
 - When the site, the recipient or the fixed words of a task's act each time are not in your own recent messages, the task is made without that act, and each run's post or message waits for your press under the result. It was refused.
+### Memory
+
+- Settings › 记忆 shows what you like and how you want to be treated as one group, 偏好; 不喜欢 stays apart.
+- A preference is kept with its situation or amount ("羽毛球，每周末打两个小时"), not as a bare label or one thing you did once. Something mentioned once in passing waits, unseen, until it comes up again in another chat, or in the same one eight hours or more later.
+- Each memory update reads the preferences already kept and rewrites one in place when you say more of it or say otherwise; the old wording goes to 已删除. What you added, rewrote, imported or asked the character to remember is never changed or removed by it.
+- Each preference group keeps at most 20 items; past that, the one the character kept and mentioned least goes to 已删除. A replaced way of treating you no longer reaches the replies.
 
 ### Files and commands
 
