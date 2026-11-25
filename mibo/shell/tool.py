@@ -31,7 +31,9 @@ OUT_SHOWN = 300
 PROGRESS_S = 3.0
 
 _FOLDER = {"type": "string", "description": "where relative paths start: a full path, or downloads, documents, "
-                                           "desktop, pictures, music, videos; left out, the one in use"}
+                                           "desktop, pictures, music, videos. Left out, a read or a command uses "
+                                           "the one last used; a change (write, edit, move, delete) needs it, or "
+                                           "full paths"}
 
 TOOL = {"type": "function", "function": {
     "name": NAME,
@@ -61,7 +63,7 @@ FILE_TOOLS = [
     _tool("read_file", "Read a text file in any encoding, or the text of a .docx, .xlsx, .pptx or PDF. Lines come "
                        "numbered; a long file comes in parts (offset, limit).",
           {"path": _PATH, "offset": {"type": "integer", "description": "first line, from 1"},
-           "limit": {"type": "integer", "description": "how many lines, 400 when left out"}}, ["path"]),
+           "limit": {"type": "integer", "description": "how many lines, 2000 when left out"}}, ["path"]),
     _tool("list_files", "List what is in a folder with sizes and dates: each folder's total size, or with "
                         "recursive everything inside. pattern keeps names like *.jpg; sort by name, size (largest "
                         "first) or date (newest first).",
@@ -113,6 +115,8 @@ TOOLS = [TOOL, *FILE_TOOLS, PLAN_TOOL]
 OPS = {"read_file": "read", "list_files": "list", "search_files": "search", "write_file": "write",
        "edit_file": "edit", "move_files": "move", "delete_files": "delete"}
 NAMES = {NAME, PLAN_TOOL["function"]["name"], *OPS}
+# The file tools that change something.
+CHANGES = ("write", "edit", "move", "delete")
 
 _STATUS = {
     "off": "Error: working on this computer is turned off. Tell them in a sentence; the settings tool opens it for "
@@ -230,6 +234,10 @@ def _changed(lookups, outcome: dict) -> None:
         lookups.trace.append({"tool": "changes", "what": _turn(lookups)})
 
 
+# How the reader's reason ends when a program was given arguments it could not read (psprograms, bashprograms).
+COMPUTED = "arguments computed as it runs"
+
+
 def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
     """(what the model is told, what the step log shows) for an outcome that is not done."""
     reason = _STATUS.get(status, status)
@@ -240,8 +248,14 @@ def _not_done(outcome: dict, status: str, lang: str) -> tuple[str, str]:
     elif status == "refused":
         shown = outcome.get("why", {}).get(lang, "")
         reasons = "; ".join(outcome.get("reasons") or [])
-        reason += (f" The app found that it {reasons}. Tell them in a sentence why this is never done "
-                   f"({outcome.get('why', {}).get('en', '')}), and do not try another way round it.")
+        if reasons and all(r.endswith(COMPUTED) for r in outcome["reasons"]):
+            # Nothing is hidden once the values are written out: the app then reads all of it, as it must.
+            reason = (f"Not run: the app reads a command before it runs, and this one {reasons}. Call it again with "
+                      "those arguments written out in full in the command (no variables or expressions in them); "
+                      "that is the same step made readable, not a way round.")
+        else:
+            reason += (f" The app found that it {reasons}. Tell them in a sentence why this is never done "
+                       f"({outcome.get('why', {}).get('en', '')}), and do not try another way round it.")
     elif status in ("declined", "unanswered"):
         shown = ("；" if lang == "zh" else "; ").join((outcome.get("asked") or {}).get(lang) or []) or reason
         if outcome.get("again"):
@@ -361,6 +375,15 @@ def _call_line(name: str, args: dict) -> str:
     return f"{name} {json.dumps(shown, ensure_ascii=False)}"
 
 
+def _named(op: str, args: dict) -> list[str]:
+    """The paths a changing file tool's call names."""
+    if op == "move":
+        return [str(m.get(k) or "") for m in args.get("moves") or [] if isinstance(m, dict) for k in ("from", "to")]
+    if op == "delete":
+        return [str(p) for p in args.get("paths") or []]
+    return [str(args.get("path") or "")]
+
+
 async def use_file(agent, name: str, args: dict, lookups) -> str:
     """One file tool from the model, through the app's page and its gate; what came of it, for the reply."""
     from .. import today
@@ -374,6 +397,12 @@ async def use_file(agent, name: str, args: dict, lookups) -> str:
     lookups.doing("shell", file_doing(op, args, lang))
     folder = str(args.get("folder") or "").strip()
     path = str(args.get("path") or "")
+    if op in CHANGES and not folder and not all(os.path.isabs(p) for p in _named(op, args)):
+        # As Claude Code's and Codex's file tools take a full path: the folder an earlier call used is not carried
+        # over to a change. Measured on Harness-Bench with Haiku (2026-11-24): after reads in <task>\repo, a write of
+        # repo/src/x.py with no folder landed in <task>\repo\repo\src, and the stray folder cost the task its contract.
+        return (f"{name}: Not done: a change names its place in full. Call it again with `folder` set to the full "
+                "path the names are relative to, or with full paths.")
     if op == "write":
         # A script written from material the turn read is remembered, so running it later is asked (crossing.py).
         lookups.crossing.wrote(path, str(args.get("content") or ""), lookups.said)
