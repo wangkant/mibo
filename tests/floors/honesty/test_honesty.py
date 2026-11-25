@@ -81,7 +81,11 @@ def test_the_companionship_register_survives_every_knob_combination():
         "receive it, do not deflect", "Do not overcorrect into devotion",
         "read it out, describe it and answer from it",
         "is only what <your_day> in the turn context holds",
-        "[CONTINUITY", "briefly, once", "Never announce that you remembered",
+        "briefly, once", "Never announce that you remembered",
+        # The work: read, work it out with the tools, keep going, to the letter, check, then say how it stands.
+        "[A TASK", "Read first", "Work it out with the tools, not in your head", "Keep going until it is done",
+        "Never ask them for what a tool can find", "What a source gives is what there is", "To the letter",
+        "Check before you say it is done",
     )
     missing, unsafe = {}, []
     for style in styles:
@@ -93,5 +97,7 @@ def test_the_companionship_register_survives_every_knob_combination():
             unsafe.append(repr(style))
     assert missing == {} and unsafe == []
     guide = dm_style_guide(PersonaStyle())
-    assert guide.index("Light teasing only") < guide.index("Never win at") < guide.index("[CONTINUITY")
-    assert guide.index("[CONTINUITY") > guide.index("[DON'T FAKE KNOWING")
+    # The work comes before the talk, and the talk is one section.
+    assert guide.index("[WHAT THEY ASK FOR, YOU DO]") < guide.index("[A TASK") < guide.index("[TALK")
+    assert guide.index("[TALK") < guide.index("Light teasing only") < guide.index("Never win at")
+    assert guide.index("Never win at") < guide.index("briefly, once") < guide.index("[DON'T FAKE KNOWING")
