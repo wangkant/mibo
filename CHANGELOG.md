@@ -18,6 +18,11 @@ The character's instructions put getting a task done first. Changes below follow
 - When a page cannot be read from this computer or a web search finds nothing, the answer names your connectors, as a file tool's does when it finds nothing, and names those of their tools that take an address or a path.
 - A connector tool's optional number, yes/no or list parameter is offered to the model with its own type. It was offered as text, and servers refused the text sent for it.
 
+### Standing rules
+
+- You can tell the character in the chat that a kind of step need not ask you from now on ("以后在 D:\work 里运行脚本不用问我"). Your sentence is kept as you typed it, and the automatic review reads it as your word for the steps it covers. Paying, deleting for good, your accounts, passwords and the other steps that always ask still ask each time.
+- The rules are listed in Settings › Privacy, where each can be removed, and the character removes one when you ask.
+
 ### Files and commands
 
 - A file tool that writes, edits, moves or deletes takes its folder or full paths. A name given alone used the folder of an earlier step and could land elsewhere.
