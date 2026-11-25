@@ -1,0 +1,26 @@
+{
+ "source": "Harness-Bench: Measuring Harness Effects across Models in Realistic Agent Workflows, arXiv:2605.27922v2 (15 Oct 2026), Table 2 (general tasks, mean Score over the 274 tasks, percent), read at arxiv.org/html/2605.27922; the pooled rows from harness-bench.ai/leaderboard.html (Delivery Quality and Resource Use, all evaluations). Fetched 2026-11-24.",
+ "note": "Score is the mean oracle score of an attempt; R0.8 the share of attempts scoring at least 0.80, which is the benchmark's pass threshold; R1 the share with full credit. The paper ran no Claude model. Its runs are in Debian containers with the semantic judge; this repository's runs are on Windows, on the tasks its check admits, without the judge.",
+ "harnesses": ["Claude Code", "Codex", "OpenCode", "OpenClaw", "Hermes", "Goose", "Nanobot"],
+ "mean_score": {
+  "GPT-5.6 Sol": [71.6, 69.8, 71.0, 73.1, 71.2, 71.5, 66.5],
+  "GPT-5.6 Terra": [68.5, 66.8, 67.1, 67.9, 68.4, 69.6, 64.2],
+  "GPT-5.6 Luna": [69.5, 67.3, 66.9, 67.8, 68.0, 68.3, 64.5],
+  "GLM-5.3": [68.7, 68.6, 70.3, 67.4, 66.3, 68.0, 61.8],
+  "GLM-5.3-Flash": [66.3, 64.8, 69.5, 69.0, 67.4, 69.9, 67.2],
+  "DeepSeek-V4-Pro": [68.7, 69.5, 69.0, 64.3, 67.3, 66.0, 64.9],
+  "DeepSeek-V4-Flash": [64.8, 68.3, 66.2, 66.8, 67.4, 65.9, 60.9],
+  "Kimi-K3": [60.0, 65.1, 69.5, 67.3, 68.2, 67.0, 65.2],
+  "Gemma-4-31B": [59.0, 58.9, 59.3, 58.8, 59.6, 52.7, 52.2],
+  "Qwen3.8-27B": [61.7, 62.4, 65.1, 58.3, 61.8, 25.9, 34.3]
+ },
+ "pooled": {
+  "OpenCode": {"score": 66.3, "r08": 50.4, "r1": 27.0},
+  "Hermes": {"score": 65.8, "r08": 50.0, "r1": 26.6},
+  "OpenClaw": {"score": 65.5, "r08": 49.6, "r1": 27.1},
+  "Claude Code": {"score": 65.5, "r08": 49.0, "r1": 24.6},
+  "Codex": {"score": 65.3, "r08": 49.8, "r1": 23.8},
+  "Goose": {"score": 62.0, "r08": 47.2, "r1": 26.1},
+  "Nanobot": {"score": 59.7, "r08": 45.6, "r1": 24.1}
+ }
+}
