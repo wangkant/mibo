@@ -13,7 +13,8 @@ the model telling an injection from a request; it keeps a fooled model from caus
   asked (`Read.verbatim`, `Read.runs_written`); a program or script downloaded from the web is never opened or run
   (`downloaded`);
 - a standing request acts only within the scope the person stored (`within`), and a change that widens the
-  character's own permissions takes effect only on the person's own words (`widening`).
+  character's own permissions takes effect only on the person's own words (`widening`); a standing rule is a span of
+  the person's own message of the turn as they typed it (`said_in`, standing.py).
 Model keys, the browser pane's profile and the app's own home are readable by no tool (shell/grants.py, Places).
 """
 from __future__ import annotations
@@ -316,3 +317,10 @@ def widening_in(workspace, change: dict) -> bool:
     the setting is no request now) and the material the turn read."""
     from .acting import asked
     return widening(change, [m["text"] for m in asked(workspace)][-1:], turn_read(workspace))
+
+
+def said_in(workspace, text: str) -> bool:
+    """`own_words` for the turn under way in the app: `text` is a span of the person's own message of this turn as
+    they typed it (an earlier message is no request now); never while no turn of theirs is under way."""
+    from .acting import asked
+    return own_words(text, [m["text"] for m in asked(workspace)][-1:])

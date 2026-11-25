@@ -179,7 +179,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
 
 
 def _mount_areas(app: FastAPI, workspace: Workspace, token: str, panels: list) -> None:
-    from . import appmap, cardwait, chatroutes, mcp_offer, pagefiles, turnon
+    from . import appmap, cardwait, chatroutes, mcp_offer, pagefiles, standing, turnon
     from .shell import panel as shell_panel
     from .skills import panel as skills_panel
     pagefiles.mount(app, workspace)
@@ -198,6 +198,8 @@ def _mount_areas(app: FastAPI, workspace: Workspace, token: str, panels: list) -
     cardwait.mount(app, workspace, _body)
     # The app's own settings and abilities, looked up, opened and changed by the character (appmap.py).
     appmap.mount(app, workspace, _body, token)
+    # The person's standing rules, read by the reviewer, listed and removed in Settings (standing.py).
+    standing.mount(app, workspace, _body)
     # Skills: Settings' section, adding and removing them (skills/panel.py).
     skills_panel.mount(app, workspace, _body)
     # Other programs' windows, on Windows: their questions, Settings' section and the log (desk/panel.py).

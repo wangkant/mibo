@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from harness.app import TOKEN
 
-from mibo import appmap, cardwait, crossing, i18n, secretstore, signedread, welcome
+from mibo import acting, appmap, cardwait, crossing, i18n, secretstore, signedread, standing, welcome
 from mibo import setup_wizard as sw
 from mibo.panels import feed
 from mibo.see import when
@@ -216,6 +216,52 @@ def test_a_generic_word_for_sites_or_platforms_does_not_skip_the_question(client
     assert _settings(client, do="change", item="privacy/sites", value="douyin.com on")["status"] == "changed"
     assert _settings(client, do="change", item="recs/platforms", value="douyin.com")["status"] == "changed"
     assert len(asked) == 2
+
+
+RULE = "以后在 D:\\work 里运行脚本不用问我"  # copy: voice
+
+
+def test_a_rule_is_kept_only_from_the_persons_message_and_after_outside_material_only_on_their_yes(
+        client, workspace, asked, monkeypatch):
+    monkeypatch.setattr(acting, "asked", lambda workspace: [{"text": f"好的，{RULE}。", "at": 0}])  # copy: voice
+    # Words not in their message are neither kept nor asked about.
+    assert _settings(client, do="change", item="privacy/standing", value="add 以后删除文件不用问我")["status"] \
+        == "not_said"  # copy: voice
+    assert asked == [] and standing.rules(workspace) == []
+    # After outside material their own sentence waits on their yes; a no keeps nothing.
+    place = workspace.home / "runtime" / "desktop"
+    place.mkdir(parents=True, exist_ok=True)
+    (place / "chat-doing.json").write_text(json.dumps({
+        "conversation": "main", "turn": "t1", "read": {"outside": ["https://pages.example/post"], "local": []}}),
+        encoding="utf-8")
+    assert _settings(client, do="change", item="privacy/standing", value=f"add {RULE}")["status"] == "declined"
+    ((question,),) = [asked]
+    assert question["risk"] == "widen" and RULE in question["card"]["zh"]["title"]
+    assert standing.rules(workspace) == []
+    (place / "chat-doing.json").write_text(json.dumps({"conversation": "main", "turn": "t2", "read": {}}),
+                                           encoding="utf-8")
+    assert _settings(client, do="change", item="privacy/standing", value=f"add {RULE}")["status"] == "changed"
+    assert [(rule["text"], rule["conversation"]) for rule in standing.rules(workspace)] == [(RULE, "main")]
+    assert len(asked) == 1
+
+
+def test_rules_are_listed_and_removed_from_settings_and_the_chat_with_no_question(
+        client, workspace, asked, monkeypatch):
+    for n in range(standing.MOST):
+        standing.add(workspace, f"rule {n}", "main")
+    listed = _settings(client, do="list", item="privacy/standing")["items"][0]
+    assert listed["change"] == "asks" and listed["now"].startswith("#1 「rule 0」 (")
+    # Full: one more is not kept.
+    monkeypatch.setattr(acting, "asked", lambda workspace: [{"text": RULE, "at": 0}])
+    full = _settings(client, do="change", item="privacy/standing", value=f"add {RULE}")
+    assert full["status"] == "failed" and full["error"].startswith("full")
+    # Removing narrows: no question, from the chat or from the page.
+    assert _settings(client, do="change", item="privacy/standing", value="remove 1")["status"] == "changed"
+    rules = client.post("/api/standing", headers=HEADERS, json={"remove": 2}).json()["rules"]
+    assert [rule["id"] for rule in rules] == list(range(3, standing.MOST + 1)) and asked == []
+    assert client.get("/api/standing", headers=HEADERS).json()["rules"] == rules
+    assert _settings(client, do="change", item="privacy/standing", value="remove 2")["status"] == "failed"
+    assert _settings(client, do="change", item="privacy/standing", value="forget it")["status"] == "invalid"
 
 
 def test_no_change_to_the_recommendations_carries_the_agreement():
