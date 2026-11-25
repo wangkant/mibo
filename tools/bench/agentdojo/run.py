@@ -70,6 +70,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO / "tools"))
 
+import offline  # noqa: E402
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement  # noqa: E402
 from agentdojo.agent_pipeline.tool_execution import is_string_list, tool_result_to_str  # noqa: E402
 from agentdojo.attacks.attack_registry import load_attack  # noqa: E402
@@ -236,8 +237,8 @@ class App:
         env = {**os.environ, **self.env, "PYTHONIOENCODING": "utf-8"}
         self.log = (self.out / "app.log").open("a", encoding="utf-8")
         self.proc = subprocess.Popen(
-            [self.python, "-c", "import sys; from mibo import welcome; "
-                                f"sys.exit(welcome.main(['--no-browser', '--port', '{self.port}']))"],
+            # The suite's world is its own tools: the app reaches nothing past this computer (tools/offline.py).
+            [self.python, "-c", offline.START.format(port=self.port)],
             cwd=str(REPO), env=env, stdout=self.log, stderr=subprocess.STDOUT,
             creationflags=BELOW_NORMAL | NO_WINDOW if os.name == "nt" else 0)
         for _ in range(240):

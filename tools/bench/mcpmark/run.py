@@ -57,6 +57,7 @@ REPO = HERE.parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "tools"))
 
+import offline  # noqa: E402
 import scratchhome  # noqa: E402
 from everyday import Meter  # noqa: E402
 
@@ -222,12 +223,14 @@ def make_home(home: Path, shared: Path, model_url: str, model: str, key: str) ->
 
 
 class App:
-    """`mibo start --no-browser` on one home, in a process of its own; its page API as the page calls it."""
+    """`mibo start --no-browser` on one home, in a process of its own; its page API as the page calls it. `alone`
+    keeps the app to this computer (tools/offline.py), for a benchmark whose tasks are offline."""
 
-    def __init__(self, home: Path, log: Path, env: dict):
+    def __init__(self, home: Path, log: Path, env: dict, alone: bool = False):
         self.home = home
         (home / "runtime" / "desktop" / "welcome.json").unlink(missing_ok=True)
-        code = f"import sys; from mibo import welcome; sys.exit(welcome.main(['--no-browser', '--port', '{PAGE_PORT}']))"
+        code = (offline.START.format(port=PAGE_PORT) if alone else
+                f"import sys; from mibo import welcome; sys.exit(welcome.main(['--no-browser', '--port', '{PAGE_PORT}']))")
         self.out = log.open("w", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "-c", code], cwd=REPO, stdout=self.out, stderr=subprocess.STDOUT,
                                      env={**os.environ, **env, "PYTHONIOENCODING": "utf-8"},
