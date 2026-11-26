@@ -9,7 +9,7 @@ import logging
 import time
 from datetime import datetime
 
-from . import abilities, catalog, channels, context, db, memgate, person, secretwords, today
+from . import abilities, catalog, channels, context, crossing, db, memgate, person, secretwords, today
 from .decision import PASS, SEND
 from .llm import FROM_BUDGET, ProviderError, answer_text, purpose
 from .loop import ANSWER_NOW, ChatLookups, stopped_reply
@@ -416,6 +416,9 @@ class DirectMessages:
         read_outside = vars(self).setdefault("_read_outside", set())
         lookups.crossing.earlier = conversation in read_outside
         lookups.crossing.untyped += untyped
+        if current_turn.get().linked:
+            # A page of a link in their message, read ahead, steers the addresses the model writes (given.py).
+            lookups.given.mark(conversation)
         context = chat_lookups.set(lookups)
         # Where the stop button finds this turn (`stop_turn`).
         vars(self).setdefault("_page_turns", {})[conversation] = lookups
@@ -543,6 +546,9 @@ class DirectMessages:
             chat_lookups.reset(context)
             if lookups.crossing.outside or lookups.crossing.came_in:
                 read_outside.add(conversation)
+            if crossing.steered(lookups.crossing.summary()):
+                # Kept with the chat's given addresses, so its link cards and a restart still know (given.py).
+                lookups.given.mark(conversation)
             lookups.done()
             if vars(self).get("_page_turns", {}).get(conversation) is lookups:
                 del self._page_turns[conversation]

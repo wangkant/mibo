@@ -73,6 +73,12 @@ The character's instructions put getting a task done first. Changes below follow
 - A find the character brings into the chat on its own waits while you are talking with it: until ten minutes after your last message and its last reply, and while a question waits on you. It comes at the next good moment after.
 - Such a find is read as an aside. Your next message goes on with what you were talking about ("上面的结果" is the answer to your request) unless it names the find or replies to its card; when that cannot be told, the character asks. It was taken as the find, being the latest message.
 
+### Safety
+
+- Once a conversation has read a web page, a search result or anything else you did not type, a web address the character wrote itself is not opened. Addresses you gave, that a search or a page it read handed it, or on a site's own address the app knows (youtube.com, www.bilibili.com) or one you typed, open as before; another sub-domain of such a site opens only when you wrote it. For any other address nothing is asked: the character finds the page with a search, or gives you the address in its reply. In a scheduled task it can propose the address to you instead. A conversation that has read nothing works as before.
+- A link card under the character's reply fetches a preview or an icon only for such a given address. Any other address is drawn as a plain link with its host, and a click on it first shows the whole address under its line with Open and Cancel, so a page it read cannot make the app, or a click, send what is in an address to a server.
+- What the app keeps of these addresses on disk is a short hash of each one, never the address.
+
 ### Fixes
 
 - Closing Mibo just as a page read was starting the installed browser could leave it running with no window (Windows). The browser's start is now finished and stopped before the app exits.

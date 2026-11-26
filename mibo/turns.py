@@ -36,6 +36,9 @@ class Turn:
         self.run = run
         # The reply's reasoning where the model returned it (abilities.note_reasoning).
         self.thinking: dict | None = None
+        # Whether the app read ahead a link in their message (messages.py): its page is outside material for the
+        # addresses the model writes (given.py).
+        self.linked = False
 
 
 # Set for the length of one `Agent.answer` call; None outside a turn.

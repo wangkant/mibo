@@ -3,7 +3,10 @@
 // picture, read once by the app (panels/links.py). A video from a site whose player the app allows becomes the
 // player card a find uses; links in a row form one stack; an address inside a sentence stays a link named by its
 // site, its card below; a page that cannot be read is still a clean card with its host. Every card opens the
-// way every link in the app opens.
+// way every link in the app opens. The app reads a page or an icon only for an address given in the chat
+// (given.py): one the character composed after the chat read outside material stays its host, with no icon, and a
+// click on it shows the whole address under its line, opened only on 打开 (`guard`), as a site's ask in the browser
+// strip is answered (browsestrip.js).
 window.paLinks = (() => {
   const { el, anchor, hostOf } = window.paKit;
   const URL_RE = /https?:\/\/[^\s<>"'，。！？；）】」　]+/g;
@@ -44,25 +47,34 @@ window.paLinks = (() => {
     return lines.filter((_, n) => !gone.has(n)).join("\n").replace(/^\n+|\n+$/g, "");
   }
 
+  // What the app said of an address or a host in this chat (opts.chat names it), kept by both.
+  const keyOf = (opts, what) => `${opts.chat}
+${what}`;
   function preview(url, opts) {
-    if (!previews.has(url)) {
-      const asked = opts.api(`link/preview?url=${encodeURIComponent(url)}`).catch(() => ({ url, ok: false }));
-      previews.set(url, asked);
-      // One that failed to arrive is asked again next time it is drawn.
-      asked.then((value) => value.ok === false && !value.host && previews.delete(url));
+    const key = keyOf(opts, url);
+    if (!previews.has(key)) {
+      const asked = opts.api(`link/preview?url=${encodeURIComponent(url)}&chat=${encodeURIComponent(opts.chat)}`)
+        .catch(() => ({ url, ok: false }));
+      previews.set(key, asked);
+      // One that failed to arrive, or one not given yet (their message on its way to the chat), is asked again next
+      // time it is drawn.
+      asked.then((value) => ((value.ok === false && !value.host) || value.given === false) && previews.delete(key));
     }
-    return previews.get(url);
+    return previews.get(key);
   }
   // A site's icon as a blob address, or "" when it has none; asked once per host.
   function icon(host, opts) {
     if (!host || !opts?.api) return Promise.resolve("");
-    if (!icons.has(host))
-      icons.set(host, opts.api(`link/icon?host=${encodeURIComponent(host)}`)
-        .then((value) => (value.icon ? opts.picture(value.icon) : ""))
-        .catch(() => ""));
-    return icons.get(host);
+    const key = keyOf(opts, host);
+    if (!icons.has(key)) {
+      const asked = opts.api(`link/icon?host=${encodeURIComponent(host)}&chat=${encodeURIComponent(opts.chat)}`);
+      icons.set(key, asked.then((value) => (value.icon ? opts.picture(value.icon) : "")).catch(() => ""));
+      asked.then((value) => value.given === false && icons.delete(key)).catch(() => {});
+    }
+    return icons.get(key);
   }
-  function mark(host, opts, known = "") {
+  // `asks` false: an address the app reads nothing for, its letter alone.
+  function mark(host, opts, known = "", asks = true) {
     const box = el("span", "lk-fav");
     box.textContent = (host[0] || "·").toUpperCase();
     const show = (url) => {
@@ -74,8 +86,8 @@ window.paLinks = (() => {
       box.classList.add("has-img");
       box.append(img);
     };
-    if (known && !icons.has(host)) icons.set(host, opts.picture(known).catch(() => ""));
-    icon(host, opts).then(show);
+    if (known && !icons.has(keyOf(opts, host))) icons.set(keyOf(opts, host), opts.picture(known).catch(() => ""));
+    if (asks) icon(host, opts).then(show);
     return box;
   }
 
@@ -86,6 +98,65 @@ window.paLinks = (() => {
     node.title = url;
     preview(url, opts).then((value) => {
       if (value.site) node.textContent = value.site;
+    });
+    return guard(node, url, opts);
+  }
+
+  // The address as the app reads it: its percent-encoding read, so the words it carries show.
+  function whole(url) {
+    const read = url.replace(/(?:%[0-9a-f]{2})+/gi, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run;
+      }
+    });
+    return read.split(/\s+/).join(" ");
+  }
+  // The address, what it is and 打开 / 取消, under the line or the cards the link stands in; one at a time.
+  function ask(node, url) {
+    document.querySelector(".lk-ask")?.remove();
+    const t = paI18n.words("chat").linkAsk;
+    const box = el("div", "browse-ask lk-ask");
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", t.title);
+    const words = el("div", "browse-ask-words");
+    words.append(el("p", "browse-ask-title", t.title), el("p", "lk-ask-address", whole(url)), el("p", "browse-ask-meta", t.note));
+    const row = el("div", "browse-ask-buttons");
+    for (const [key, look] of [["open", "pa-btn-primary"], ["cancel", "pa-btn-secondary"]]) {
+      const button = el("button", `pa-btn ${look} pa-btn-sm`, t[key]);
+      button.type = "button";
+      button.dataset.act = key;
+      button.addEventListener("click", () => {
+        box.remove();
+        if (key === "open") go(node);
+        else node.focus();
+      });
+      row.append(button);
+    }
+    box.append(words, row);
+    const at = node.closest(".links") || node.closest("p, li, td, th, h3, h4, h5, h6, blockquote") || node;
+    if (at.matches("li, td, th")) at.append(box);
+    else at.after(box);
+    row.querySelector("button").focus();
+  }
+  // The link opened as every link in the app opens, past its guard.
+  function go(node) {
+    node.dataset.sure = "1";
+    node.click();
+  }
+  // A click on `node` opens `url` at once when it is given in the chat, else shows it whole first.
+  function guard(node, url, opts) {
+    if (!opts?.api) return node;
+    node.addEventListener("click", (event) => {
+      if (node.dataset.sure) {
+        delete node.dataset.sure;
+        return;
+      }
+      event.preventDefault();
+      opts.api(`link/given?url=${encodeURIComponent(url)}&chat=${encodeURIComponent(opts.chat)}`)
+        .then((value) => value.given === true, () => false)
+        .then((given) => (given ? go(node) : ask(node, url)));
     });
     return node;
   }
@@ -101,7 +172,7 @@ window.paLinks = (() => {
     } else {
       // Not read: the host as its title, the address under it when it says more.
       const title = el("span", "lk-title lk-host");
-      title.append(mark(host, opts, value.icon), el("span", "", host));
+      title.append(mark(host, opts, value.icon, value.given !== false), el("span", "", host));
       body.append(title);
       if (shortOf(url) !== host) body.append(el("span", "lk-desc", shortOf(url)));
     }
@@ -128,7 +199,7 @@ window.paLinks = (() => {
     if (!list.length) return null;
     const box = el("div", "links");
     for (const url of list) {
-      const card = anchor(url, "lk loading");
+      const card = guard(anchor(url, "lk loading"), url, opts);
       const body = el("span", "lk-body");
       const site = el("span", "lk-site");
       site.append(mark(hostOf(url), opts), el("span", "lk-site-name", hostOf(url)));
@@ -149,5 +220,5 @@ window.paLinks = (() => {
     return box;
   }
 
-  return { urls, bare, inline, cards, icon, preview };
+  return { urls, bare, inline, cards, icon, preview, guard };
 })();

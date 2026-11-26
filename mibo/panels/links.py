@@ -1,6 +1,8 @@
 """Link cards in the chat: a web address's own title, site, description, picture and player, read once from
 the page through the app's safe fetch (public addresses only) and kept; and site icons for the cards and the
-sources row. linkcard.js and activity.js draw them."""
+sources row. linkcard.js and activity.js draw them. The page names the chat the address stands in, and the app
+fetches nothing for an address the character composed after that chat read outside material (given.shown): it is
+drawn with its host alone, and a click on it shows the whole address before it opens."""
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +17,7 @@ from urllib.parse import urljoin, urlsplit
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
+from .. import given
 from ..storage import atomic_write_text
 
 ERRORS: frozenset[str] = frozenset()
@@ -192,20 +195,35 @@ def mount(app, workspace, body) -> None:
         return app.state.links
 
     @app.get("/api/link/preview")
-    async def link_preview(url: str = ""):
+    async def link_preview(url: str = "", chat: str = ""):
         if not _public(url):
             raise HTTPException(400)
+        if not given.shown(workspace, chat, address=url):
+            # Composed after the chat read outside material: no request leaves the app for it.
+            host = (urlsplit(url).hostname or "").lower()
+            return {"url": url, "site": "", "host": host.removeprefix("www."), "title": "", "description": "",
+                    "embed": "", "length": None, "kind": "page", "ok": False, "given": False, "picture": "",
+                    "icon": ""}
         row = await links().preview(url)
         picture, icon = row.get("picture"), row.get("icon")
         return {**{k: row.get(k) for k in ("url", "site", "host", "title", "description", "embed", "length", "kind", "ok")},
                 "picture": f"/api/link/file/{picture}" if picture else "",
                 "icon": f"/api/link/file/{icon}" if icon else ""}
 
+    @app.get("/api/link/given")
+    async def link_given(url: str = "", chat: str = ""):
+        """Whether a click on `url` in the chat `chat` opens it at once; else the page shows it whole first."""
+        if not _public(url):
+            raise HTTPException(400)
+        return {"given": given.shown(workspace, chat, address=url)}
+
     @app.get("/api/link/icon")
-    async def link_icon(host: str = ""):
+    async def link_icon(host: str = "", chat: str = ""):
         host = host.strip().lower()
         if not HOST.fullmatch(host) or "." not in host:
             raise HTTPException(400)
+        if not given.shown(workspace, chat, host=host):
+            return {"icon": "", "given": False}
         name = await links().icon(host)
         return {"icon": f"/api/link/file/{name}" if name else ""}
 

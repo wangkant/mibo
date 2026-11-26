@@ -518,7 +518,13 @@
     "model_window_small": "該模型的上下文視窗過小，無法容納 Mibo 的基本設定。請改用上下文視窗更長的模型。",
     "updated": "Mibo 已更新至 {v} 版。",
     "updateFailed": "更新至 {v} 版未完成，目前仍為 {current} 版。請從發布頁面下載安裝程式。",
-    "releasePage": "發布頁面"
+    "releasePage": "發布頁面",
+    "linkAsk": {
+      "title": "開啟此網址？",
+      "note": "此網址不在你的訊息、搜尋結果和已讀網頁中，請核對後再開啟。",
+      "open": "開啟",
+      "cancel": "取消"
+    }
   },
   "compact": {
     "full": "在主視窗中開啟",

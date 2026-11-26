@@ -12,6 +12,10 @@ the model telling an injection from a request; it keeps a fooled model from caus
 - a command whose text arrives verbatim from material read in the turn, or that runs a script written from it, is
   asked (`Read.verbatim`, `Read.runs_written`); a program or script downloaded from the web is never opened or run
   (`downloaded`);
+- after the conversation read outside material or took in what the person did not type (`steered`), a web address
+  the model composed is not opened or fetched: one it was not given (in the person's own messages, in what the app
+  handed it, on a host the app knows or they typed) is not opened, in their turn as in a scheduled run, and nobody is
+  asked; the chat's link cards fetch nothing for it, and the page shows it whole before a click opens it (given.py);
 - a standing request acts only within the scope the person stored (`within`), and a change that widens the
   character's own permissions takes effect only on the person's own words (`widening`); a standing rule is the
   person's whole message of the turn as they typed it, or, asked once, one whole sentence of it (`said_in`,
@@ -136,6 +140,12 @@ def code_outside(read: dict) -> bool:
     this computer that came from the web or a mail, or an earlier turn of the chat read some. Only code given as
     text, a script written, a project's tool file and a new shortcut are asked for it (shell/panel.py)."""
     return bool(read.get(OUTSIDE) or read.get(CAME_IN) or read.get(EARLIER))
+
+
+def steered(read: dict) -> bool:
+    """Whether what the model writes now may follow what it read (`turn_read`): code may (`code_outside`), or what
+    the person did not type reached the turn (UNTYPED)."""
+    return code_outside(read) or bool(read.get(UNTYPED))
 
 
 def came_in(path: str) -> bool:

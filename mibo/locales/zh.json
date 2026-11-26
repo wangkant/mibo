@@ -527,7 +527,13 @@
     "model_window_small": "该模型的上下文窗口过小，无法容纳 Mibo 的基本设定。请改用上下文窗口更长的模型。",
     "updated": "Mibo 已更新到 {v} 版本。",
     "updateFailed": "更新到 {v} 版本未完成，当前仍为 {current} 版本。请从发布页面下载安装程序。",
-    "releasePage": "发布页面"
+    "releasePage": "发布页面",
+    "linkAsk": {
+      "title": "打开此网址？",
+      "note": "此网址不在你的消息、搜索结果和已读网页中，请核对后再打开。",
+      "open": "打开",
+      "cancel": "取消"
+    }
   },
   "compact": {
     "full": "在主窗口中打开",

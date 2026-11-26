@@ -32,7 +32,7 @@ import os
 import time
 from urllib.parse import urlsplit
 
-from . import places, resolve, today
+from . import given, places, resolve, today
 from .llm import purpose
 
 # What a read step's reader may answer in, in tokens.
@@ -171,6 +171,11 @@ async def open_place(agent, args: dict, lookups) -> str:
         return (f"Error: nothing called “{name}” was found: no open tab or window, no file there, no program or "
                 f"shortcut in Start or on the Desktop, and no site the app knows.{listed} If a website does what they "
                 f"asked, open its address and go on; otherwise ask them where it is.")
+    if found.kind == "page" and resolve.address(name):
+        # An address it wrote, not a site the app knows by name (given.py).
+        refused = await given.opens(agent, str(found.target), lookups)
+        if refused:
+            return refused
     if found.kind in ("page", "tab"):
         return await _open_page(agent, home, found, show, lookups)
     if found.kind in ("window", "program"):
@@ -193,6 +198,7 @@ async def _open_page(agent, home, found: resolve.Resolved, show: bool, lookups) 
         return ("Error: the app's browser is not open, so nothing was opened. For a public page, read_page reads it "
                 "without the browser.")
     url = str(tab.get("url") or found.target)
+    lookups.took(url)
     place = places.add(lookups.conversation, "page", tab["id"], tab.get("title") or found.title,
                        urlsplit(url).hostname or "", shown=show)
     if show:
@@ -473,6 +479,9 @@ async def act(agent, args: dict, lookups) -> str:
         return f"Error: act works in pages; place {place.id} is a {place.kind}."
     steps = list(args.get("steps") or [])
     refused = file_floor(steps, lookups)
+    for step in steps:
+        if not refused and step.get("do") == "go":
+            refused = await given.opens(agent, str(step.get("url") or "").strip(), lookups)
     if refused:
         return refused
     what = next((str(s.get("what") or "") for s in steps if s.get("what")), "")[:80] or place.title[:80]
@@ -485,6 +494,8 @@ async def act(agent, args: dict, lookups) -> str:
     if isinstance(done, str):
         return done
     status, url, lines, noticed = done
+    # Where the page is now, after its own redirects, is given (given.py).
+    lookups.took(url)
     if status in ("stopped", "paused", "declined"):
         # How the person ended it: no new act until they ask.
         lookups.errand_held = status

@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import __version__, channels, db, langs, life, pacing, recommend, settingsfile, setupform, updates
+from . import __version__, channels, db, given, langs, life, pacing, recommend, settingsfile, setupform, updates
 from . import setup_wizard as sw
 from .character import PERSON_ACTIONS, Character, NotReady
 from .chatfinds import ChatFinds
@@ -299,6 +299,7 @@ class Workspace(ChatFinds):
         return view
 
     def reset_chat(self) -> None:
+        given.kept(self._desktop).forget(self._main.conversation)
         self._main.reset()
         self._save_chat()
         self.db.scrubbed()
@@ -348,6 +349,7 @@ class Workspace(ChatFinds):
                 raise ValueError("invalid_chat")
             del self._chats[chat.id]
             self.media.prune(chat.delete())
+            given.kept(self._desktop).forget(chat.conversation)
             # Its chat record goes with it (what was kept about them stays), so no search of past chats finds it.
             with contextlib.suppress(NotReady):
                 await self.character.forget_chat(chat.conversation, [c.conversation for c in self._all_chats()])

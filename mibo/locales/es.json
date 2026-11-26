@@ -526,7 +526,13 @@
     "model_window_small": "La ventana de contexto de este modelo es demasiado pequeña para la configuración básica de Mibo. Elija un modelo con una ventana de contexto más amplia.",
     "updated": "Mibo ahora es la versión {v}.",
     "updateFailed": "La actualización a la versión {v} no terminó; sigue siendo la versión {current}. Descargue el instalador desde la página de la versión.",
-    "releasePage": "Página de la versión"
+    "releasePage": "Página de la versión",
+    "linkAsk": {
+      "title": "¿Abrir esta dirección?",
+      "note": "No está en sus mensajes, en los resultados de búsqueda ni en las páginas leídas. Revísela antes de abrirla.",
+      "open": "Abrir",
+      "cancel": "Cancelar"
+    }
   },
   "compact": {
     "full": "Abrir en la ventana principal",

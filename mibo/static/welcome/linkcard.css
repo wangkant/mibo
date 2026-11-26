@@ -138,3 +138,21 @@
     height: 48px;
   }
 }
+/* A click on an address not given in the chat: the address in full and 打开 / 取消 under its line (linkcard.js
+   `ask`), with the look of a site's ask in the browser strip (browse.css .browse-ask), flat as the cards beside it. */
+.browse-ask.lk-ask {
+  max-width: 560px;
+  margin: var(--pa-s2) 0 var(--pa-s3);
+  box-shadow: none;
+}
+.lk-ask-address {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border-radius: var(--pa-r-md);
+  background: var(--pa-sunken);
+  color: var(--pa-ink);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--pa-fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}

@@ -10,6 +10,7 @@ from .textproc import (
     _WEB_DESC_OPEN,
     _clean_prompt_source,
 )
+from .turns import current_turn
 
 # Set by a turn whose model is shown pictures itself: an attached picture is
 # kept here, not captioned, and goes to the reply call (dm.py).
@@ -72,7 +73,10 @@ class MessageParsing:
                 # Its words are material, never the person's orders.
                 out.append(fence(f"[file: {name or 'untitled'}, its text]\n{part.get('text') or ''}"))
         if urls:
-            described = iter(await self._describe_urls(urls))
+            descriptions = await self._describe_urls(urls)
+            # What the app read of their links is outside material for the addresses the model writes (given.py).
+            current_turn.get().linked = any(descriptions)
+            described = iter(descriptions)
             for slot, n in link_slots:
                 out[slot] = "".join(" " + fence(d) for d in itertools.islice(described, n) if d)
         return "".join(out).strip()

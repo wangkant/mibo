@@ -93,8 +93,9 @@ window.paChat = (() => {
       return blobs.get(path);
     };
     const ask = (text) => !sending && send(text);
-    // What the link cards and the steps above a reply take from the chat (linkcard.js, activity.js).
-    const links = { api: ctx.api, picture: blob, findCard: (card) => finds.card(card), grew: () => keepEnd(), goOn: ask,
+    // What the link cards and the steps above a reply take from the chat (linkcard.js, activity.js), and the chat
+    // they are in, which the app reads their pages for (panels/links.py).
+    const links = { chat: id, api: ctx.api, picture: blob, findCard: (card) => finds.card(card), grew: () => keepEnd(), goOn: ask,
       go: ctx.go, confirm: ctx.confirm };
 
     // ---- The page: the thread, or the empty and not-set-up states, and the composer

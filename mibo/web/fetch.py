@@ -48,6 +48,9 @@ _LISTY = re.compile(r"热搜|热点|热榜|热门|热帖|最热|排行|榜|前�
                     r"\b(?:top|trending|popular|rank(?:ing)?|list|latest|new(?:est)?|which|front page|leaderboard)\b",
                     re.I)
 _LINK = re.compile(r"<a\b[^>]*>(.*?)</a>", re.S | re.I)
+_HREF = re.compile(r"<a\b[^>]*?\bhref\s*=\s*[\"']?([^\"'\s>]+)", re.I)
+# The links a page read hands on (given.py), at most.
+LINKS_MOST = 400
 _TAG = re.compile(r"<[^>]+>")
 _HEADING = re.compile(r"^#{1,6} ", re.M)
 _RULE = re.compile(r"^\|(?:\s*:?-+:?\s*\|)+$", re.M)
@@ -136,6 +139,14 @@ def main_text(html: str, wide: bool = False) -> str:
     return _RULE.sub(lambda rule: "|" + " --- |" * (rule.group(0).count("|") - 1), text)
 
 
+def links(html: str, base: str) -> list[str]:
+    """The web addresses a page's links go to, made whole against its address."""
+    from html import unescape
+    from urllib.parse import urljoin
+    out = [urljoin(base, unescape(href)) for href in _HREF.findall(html)]
+    return list(dict.fromkeys(url for url in out if url.startswith(("http://", "https://"))))[:LINKS_MOST]
+
+
 def listy(said: str) -> bool:
     """Whether the person's message asks for a list."""
     return bool(_LISTY.search(said or ""))
@@ -206,9 +217,9 @@ def _rows(rows: list) -> str:
     return "\n".join(lines)
 
 
-async def rendered(roam: Any, url: str, wants_list: bool) -> tuple[str, str, str] | None:
-    """(title, text, final address) of `url` read in the visitor browser by RENDER_S; None for a wall, a
-    private address or nothing read. A list asked for that shows few rows is scrolled a screen."""
+async def rendered(roam: Any, url: str, wants_list: bool) -> tuple[str, str, str, list[str]] | None:
+    """(title, text, final address, its rows' links) of `url` read in the visitor browser by RENDER_S; None for a
+    wall, a private address or nothing read. A list asked for that shows few rows is scrolled a screen."""
     from ..pagefacts import facts_from
     if not await roam.public(url):
         return None
@@ -233,13 +244,14 @@ async def rendered(roam: Any, url: str, wants_list: bool) -> tuple[str, str, str
     body = "\n\n".join(b for b in (_rows(page.rows) if shown else "", facts.get("description"), text) if b)
     if not body:
         return None
-    return facts.get("title") or str(page.data.get("title") or ""), body, page.url
+    return (facts.get("title") or str(page.data.get("title") or ""), body, page.url,
+            [str(row["link"]) for row in page.rows if str(row.get("link") or "").startswith(("http://", "https://"))])
 
 
-async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str, str, str] | None:
-    """(title, readable text, final address) of a public page, or None when it cannot or may not be read: the
-    plain fetch, else, when that is thin and a visitor browser is there (started while the fetch runs), the
-    rendered read, and the fetch's text when that read is not to be had."""
+async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str, str, str, list[str]] | None:
+    """(title, readable text, final address, the addresses its links go to) of a public page, or None when it
+    cannot or may not be read: the plain fetch, else, when that is thin and a visitor browser is there (started
+    while the fetch runs), the rendered read, and the fetch's text when that read is not to be had."""
     roam = getattr(agent, "roam", None)
     usable = roam is not None and not roam.available()
     if usable and roam.visitor.context is None:
@@ -250,7 +262,7 @@ async def for_chat(agent: Any, url: str, wants_list: bool = False) -> tuple[str,
         return None
     why = "failed" if fetched is None else thin(fetched.status, fetched.html, fetched.text, wants_list)
     kept = (None if fetched is None or fetched.status >= 400 or len(fetched.text) < SHELL
-            else (fetched.title, fetched.text, fetched.url))
+            else (fetched.title, fetched.text, fetched.url, links(fetched.html, fetched.url)))
     if not why or not usable:
         return kept
     try:

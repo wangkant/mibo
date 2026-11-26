@@ -525,7 +525,13 @@
     "model_window_small": "Das Kontextfenster dieses Modells ist zu klein für die Grundeinstellungen von Mibo. Wählen Sie ein Modell mit einem längeren Kontextfenster.",
     "updated": "Mibo ist jetzt Version {v}.",
     "updateFailed": "Das Update auf Version {v} wurde nicht abgeschlossen; dies ist weiterhin Version {current}. Laden Sie das Installationsprogramm von der Release-Seite herunter.",
-    "releasePage": "Release-Seite"
+    "releasePage": "Release-Seite",
+    "linkAsk": {
+      "title": "Diese Adresse öffnen?",
+      "note": "Sie steht weder in Ihren Nachrichten noch in den Suchergebnissen oder gelesenen Seiten. Prüfen Sie sie vor dem Öffnen.",
+      "open": "Öffnen",
+      "cancel": "Abbrechen"
+    }
   },
   "compact": {
     "full": "Im Hauptfenster öffnen",

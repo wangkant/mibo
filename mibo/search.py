@@ -346,9 +346,11 @@ class WebSearch:
                 return (fence_pages(f"{url[:300]}\n(this page could not be read from here)") + lookup_need.UNREAD
                         + mcp_offer.elsewhere("This page could not be read from this computer.", mcp_offer.ADDRESS,
                                               "an address"))
-            title, text, final = page
+            title, text, final, links = page
             logger.info("[Agent] read_page %s -> %d chars", site_name(final), len(text))
             lookups.source(title or site_name(final), final, read=True)
+            # The page's links are given as its words are (given.py), though the model reads only its words.
+            lookups.took("\n".join(links))
             today.read_in_chat(self, final, title, text, time.time())
             from .web import pagetext
             given, note = pagetext.give(text, lookups.said, self._page_room(), *_part(args))
@@ -397,6 +399,13 @@ class WebSearch:
                 + "".join(f"\n    · {r.get('title', '')}" for r in row.get("rows") or [])
                 for row in rows))
         lookups.doing("operate", str(args.get("site") or "")[:80])
+        place = _connect.place(str(args.get("site") or ""))
+        if place and not signin.find(str(args.get("site") or "")):
+            # An address it wrote, not a site the app knows by name: opened in the pane as any address it writes.
+            from . import given
+            refusal = await given.opens(self, place["url"], lookups)
+            if refusal:
+                return refusal
         return await _connect.use(home, args, getattr(self, "chat_lang", "") or "zh")
 
     async def _find_on_site(self, home, args: dict, lookups) -> str:
@@ -451,9 +460,9 @@ class WebSearch:
         plan = self._budget(self._endpoint_for(self.llm_dm_model)[0], self.llm_dm_model)
         return min(pagetext.room(plan), plan.result)
 
-    async def _read_for_chat(self, url: str, said: str = "") -> tuple[str, str, str] | None:
-        """(title, readable text, final address) of a public page (web/fetch.py): fetched plainly, and read
-        again rendered in the visitor browser when the fetch is thin or lacks the list `said` asks for; None
+    async def _read_for_chat(self, url: str, said: str = "") -> tuple[str, str, str, list[str]] | None:
+        """(title, readable text, final address, its links) of a public page (web/fetch.py): fetched plainly, and
+        read again rendered in the visitor browser when the fetch is thin or lacks the list `said` asks for; None
         when it cannot or may not be read."""
         from .web import fetch
         if len(url) > 4096 or urlsplit(url).scheme not in ("http", "https"):

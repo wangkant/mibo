@@ -109,6 +109,8 @@ window.paChatText = (() => {
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.title = link.getAttribute("href");
+        // Its words are not its address: one not given in the chat is shown whole before it opens (linkcard.js).
+        if (/^https?:\/\//i.test(link.getAttribute("href"))) window.paLinks.guard(link, link.getAttribute("href"), links);
       }
     }
     return node;

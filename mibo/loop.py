@@ -14,10 +14,11 @@ import sys
 import threading
 import time
 from pathlib import Path
+from urllib.parse import unquote
 
 import openai
 
-from . import catalog, context, crossing, lookup_need, mcp_offer, review, spill, surface, today
+from . import catalog, context, crossing, given, lookup_need, mcp_offer, review, spill, surface, today
 from .endpoints import model_problem
 from .llm import FROM_BUDGET, purpose
 from .shell import written as _written
@@ -221,6 +222,10 @@ class ChatLookups:
         # The material this turn read, outside and local (crossing.py); its summary goes with the turn's record to the
         # gates in the app's page.
         self.crossing = crossing.Read()
+        # The addresses given in this conversation (given.py), and the arguments of the model's calls this turn, whose
+        # addresses a result that repeats them does not give.
+        self.given = given.kept(path.parent) if path is not None else None
+        self.wrote: list[str] = []
         # The (system prompt, tools) the turn's last request sent, which the chat's compaction replays (dm.py); the
         # chat's turns with this message last, and whether the turn's fit has compacted them already.
         self.sent: tuple | None = None
@@ -269,6 +274,15 @@ class ChatLookups:
         if url.startswith(("http://", "https://")):
             (self._read if read else self._found).append(
                 {"title": title[:200], "url": url, "site": site_name(url)})
+
+    def took(self, text: str) -> None:
+        """The addresses `text`, material the app handed the model, gives in this conversation (given.py); never one
+        that stands in a call the model made this turn, which a page or a server only repeated."""
+        if self.given is None:
+            return
+        wrote = [unquote(w).casefold() for w in self.wrote]
+        self.given.took(self.conversation, [a for a in given.found(text)
+                                            if not any(unquote(a).casefold() in w for w in wrote)])
 
     def done(self) -> None:
         if self.path is not None:
@@ -485,6 +499,7 @@ class ToolLoop:
         else:
             args, result = invalid(arguments, schemas[name])
         if not result:
+            lookups.wrote.append(arguments)
             result = await self._run(module, {"name": name, "arguments": arguments}, args, lookups)
             key = name + "\0" + json.dumps(args, sort_keys=True, ensure_ascii=False)
             made[key] = made.get(key, 0) + 1
@@ -496,6 +511,8 @@ class ToolLoop:
                 if name == "use_computer":
                     # A command's output is not their typing either (crossing.UNTYPED).
                     lookups.crossing.untyped.append(_line(name, args))
+            if name in given.SOURCES and not result.startswith("Error:"):
+                lookups.took(result)
             result += _REPEATED.get(made[key], "")
         lookups.note({"place": "", "mark": module.mark if module else "", "line": _line(name, args),
                       "status": "error" if result.startswith("Error:") else "ok", "thumb": ""})
@@ -517,6 +534,11 @@ class ToolLoop:
             async with vars(self).setdefault("_turning_on", asyncio.Lock()):
                 if module.switch in await asyncio.to_thread(turnon.off, today.runtime_of(self).parent):
                     refusal = await turnon.use(self, module.switch, str(args.get("folder") or ""), lookups)
+            if refusal:
+                return refusal
+        if name in given.READS:
+            # An address it composed after reading outside material is not opened (given.py).
+            refusal = await given.opens(self, str(args.get("url") or "").strip(), lookups)
             if refusal:
                 return refusal
         limit = _TOOL_WITHIN_S.get(name)
@@ -563,6 +585,7 @@ class ToolLoop:
             return False
         lookups.source(title, wanted.page, read=True)
         lookups.crossing.saw(crossing.OUTSIDE, wanted.page, text)
+        lookups.took(f"{wanted.page}\n{text}")
         found.append(fence_pages(text))
         _app_call(convo, "live_0", "read_page", json.dumps({"url": wanted.page}), found[-1])
         return True

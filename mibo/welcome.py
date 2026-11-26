@@ -179,7 +179,7 @@ def create_app(home: Path, token: str, *, workspace: Workspace | None = None) ->
 
 
 def _mount_areas(app: FastAPI, workspace: Workspace, token: str, panels: list) -> None:
-    from . import appmap, cardwait, chatroutes, mcp_offer, pagefiles, standing, turnon
+    from . import appmap, cardwait, chatroutes, given, mcp_offer, pagefiles, standing, turnon
     from .shell import panel as shell_panel
     from .skills import panel as skills_panel
     pagefiles.mount(app, workspace)
@@ -194,6 +194,8 @@ def _mount_areas(app: FastAPI, workspace: Workspace, token: str, panels: list) -
     shell_panel.mount(app, workspace, _body)
     # The question that turns a switched-off ability on from the chat (turnon.py).
     turnon.mount(app, workspace, _body)
+    # Whether an address the character composed after reading outside material is given (given.py).
+    given.mount(app, workspace, _body)
     # The person's typed yes to a step waiting in the chat, for every place that asks (cardwait.py).
     cardwait.mount(app, workspace, _body)
     # The app's own settings and abilities, looked up, opened and changed by the character (appmap.py).
