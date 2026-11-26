@@ -50,7 +50,8 @@ def test_thirty_steps_of_long_reads_each_newest_result_arrives_readable_within_t
     app.model.window = window
     measured(app, context=stated)
     pages = [site.put(f"/long{n}", _long_page(n)) for n in range(ROUNDS * reads)]
-    done = turn("一页一页地读", *[[call("read_page", url=page) for page in pages[k:k + reads]]
+    # The person names the site: an address on it is theirs to give, round after round.
+    done = turn(f"一页一页地读 {site.url} 上的页面", *[[call("read_page", url=page) for page in pages[k:k + reads]]
                                for k in range(0, len(pages), reads)], say("读完了。"))
     bodies = done.asked()
     # Every round was asked with its tools, and the stand-in, which refuses a request past its window, answered it.

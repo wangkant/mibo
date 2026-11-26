@@ -193,7 +193,7 @@ def test_an_upload_gives_the_page_only_a_file_they_named(app, board, turn, tmp_p
 @pytest.mark.slow
 def test_going_to_another_site_is_free_unless_the_address_carries_words_read_on_a_page(app, board, turn):
     other = f"http://localhost:{board.port}"
-    done = turn("Look at my board, then the front page of the other site", opened(board),
+    done = turn(f"Look at my board, then the front page of {other}", opened(board),
                 call("act", place="p1", steps=[{"do": "go", "url": f"{other}/front?ref=ZETA7741QUARTZ",
                                                 "what": "go on"}]),
                 call("act", place="p1", steps=[{"do": "go", "url": f"{other}/front", "what": "open the other site"}]),

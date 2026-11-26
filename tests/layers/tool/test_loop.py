@@ -179,7 +179,8 @@ def test_reads_after_reads_each_result_is_cut_at_most_once_and_the_newest_reads_
     app.model.window = 65536
     measured(app, context=65536)
     pages = [site.put(f"/long{n}", _long_page(n)) for n in range(12)]
-    done = turn("一轮一轮地读", *[[call("read_page", url=page) for page in pages[k:k + 3]] for k in range(0, 12, 3)],
+    # The person names the site: an address on it is theirs to give, round after round.
+    done = turn(f"一轮一轮地读 {site.url} 上的页面", *[[call("read_page", url=page) for page in pages[k:k + 3]] for k in range(0, 12, 3)],
                 say("读完了。"))
     bodies = done.asked()
     assert done.reply == "读完了。" and all(tokens(b) + b["max_tokens"] <= 65536 for b in bodies)
