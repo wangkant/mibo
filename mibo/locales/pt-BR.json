@@ -161,7 +161,8 @@
       "bind": "Depois de enviado, é vinculante e não pode ser retirado.",
       "setting": "Esta mudança de configuração não pode ser desfeita.",
       "system": "Isto vai além do que desfazer consegue restaurar.",
-      "widen": "Esta mudança amplia o que o personagem pode fazer."
+      "widen": "Esta mudança amplia o que o personagem pode fazer.",
+      "standing": "Esta tarefa agirá por conta própria em cada execução, sem perguntar a cada vez."
     },
     "acts": {
       "order": "Pagar",
@@ -176,7 +177,8 @@
       "bind": "Enviar",
       "setting": "Alterar a configuração",
       "system": "Executar",
-      "widen": "Permitir"
+      "widen": "Permitir",
+      "standing": "Criar"
     },
     "decline": "Não fazer",
     "more": "Detalhes",
@@ -941,7 +943,12 @@
     "scopeDone": "Tarefa agendada “{title}” feita conforme configurado: {acts}.",
     "scopeBeyond": "Fora do escopo configurado, não feito: {acts}.",
     "inScope": "Dentro do escopo da tarefa agendada, então é feito.",
-    "beyondScope": "Fora do escopo da tarefa agendada, então não é feito."
+    "beyondScope": "Fora do escopo da tarefa agendada, então não é feito.",
+    "ask": "Criar a tarefa agendada “{title}”: {when}. {runs} {acts} Criar?",
+    "askRuns": "Em cada execução: {request}.",
+    "askLine": "Lembrete: {request}.",
+    "askReads": "Cada execução apenas lê; não envia nem publica nada por conta própria.",
+    "askScope": "Cada execução fará isto por conta própria: {scope}."
   },
   "appmap": {
     "ask": "Definir “{name}” como {value}?",

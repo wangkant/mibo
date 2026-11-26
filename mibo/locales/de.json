@@ -161,7 +161,8 @@
       "bind": "Einmal abgeschickt ist es bindend und lässt sich nicht zurückziehen.",
       "setting": "Diese Änderung der Einstellungen lässt sich nicht rückgängig machen.",
       "system": "Das geht über das hinaus, was Rückgängig wiederherstellen kann.",
-      "widen": "Diese Änderung erweitert, was die Figur tun darf."
+      "widen": "Diese Änderung erweitert, was die Figur tun darf.",
+      "standing": "Diese Aufgabe handelt bei jedem Lauf selbst, ohne jedes Mal zu fragen."
     },
     "acts": {
       "order": "Bezahlen",
@@ -175,7 +176,8 @@
       "bind": "Absenden",
       "setting": "Einstellung ändern",
       "system": "Ausführen",
-      "widen": "Erlauben"
+      "widen": "Erlauben",
+      "standing": "Erstellen"
     },
     "decline": "Nicht ausführen",
     "more": "Details",
@@ -940,7 +942,12 @@
     "scopeDone": "Geplante Aufgabe „{title}“ wie eingerichtet ausgeführt: {acts}.",
     "scopeBeyond": "Außerhalb des festgelegten Rahmens, nicht ausgeführt: {acts}.",
     "inScope": "Im Rahmen der geplanten Aufgabe, daher ausgeführt.",
-    "beyondScope": "Außerhalb des Rahmens der geplanten Aufgabe, daher nicht ausgeführt."
+    "beyondScope": "Außerhalb des Rahmens der geplanten Aufgabe, daher nicht ausgeführt.",
+    "ask": "Geplante Aufgabe „{title}“ erstellen: {when}. {runs} {acts} Erstellen?",
+    "askRuns": "Bei jedem Lauf: {request}.",
+    "askLine": "Erinnerung: {request}.",
+    "askReads": "Ein Lauf liest nur; er sendet und veröffentlicht nichts von sich aus.",
+    "askScope": "Jeder Lauf tut dies von sich aus: {scope}."
   },
   "appmap": {
     "ask": "„{name}“ auf {value} setzen?",

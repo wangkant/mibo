@@ -14,6 +14,7 @@ CARD_ROUTES = {
     "mcp": "/api/mcp/card",
     "turnon": "/api/turnon/card",
     "settings": "/api/settings/card",
+    "schedule": "/api/schedule/card",
     "operate": "/api/browser/confirm",
 }
 POLL_S = 0.05

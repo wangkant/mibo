@@ -161,7 +161,8 @@
       "bind": "Une fois soumis, cela engage et ne peut pas être retiré.",
       "setting": "Ce changement de réglage ne peut pas être annulé.",
       "system": "Cette action dépasse ce que l'annulation peut rétablir.",
-      "widen": "Ce changement élargit ce que le personnage peut faire."
+      "widen": "Ce changement élargit ce que le personnage peut faire.",
+      "standing": "Cette tâche agira d'elle-même à chaque exécution, sans demander à chaque fois."
     },
     "acts": {
       "order": "Payer",
@@ -176,7 +177,8 @@
       "bind": "Soumettre",
       "setting": "Modifier le réglage",
       "system": "Exécuter",
-      "widen": "Autoriser"
+      "widen": "Autoriser",
+      "standing": "Créer"
     },
     "decline": "Ne pas le faire",
     "more": "Détails",
@@ -941,7 +943,12 @@
     "scopeDone": "Tâche planifiée « {title} » effectuée comme prévu : {acts}.",
     "scopeBeyond": "Hors du périmètre prévu, non effectué : {acts}.",
     "inScope": "Dans le périmètre de la tâche planifiée, donc effectué.",
-    "beyondScope": "Hors du périmètre de la tâche planifiée, donc non effectué."
+    "beyondScope": "Hors du périmètre de la tâche planifiée, donc non effectué.",
+    "ask": "Créer la tâche planifiée « {title} » : {when}. {runs} {acts} La créer ?",
+    "askRuns": "À chaque exécution : {request}.",
+    "askLine": "Rappel : {request}.",
+    "askReads": "Une exécution ne fait que lire ; elle n'envoie et ne publie rien d'elle-même.",
+    "askScope": "Chaque exécution fera ceci d'elle-même : {scope}."
   },
   "appmap": {
     "ask": "Régler « {name} » sur {value} ?",

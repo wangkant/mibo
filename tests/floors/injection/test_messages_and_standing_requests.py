@@ -56,8 +56,6 @@ def test_messages_reach_the_reply_only_as_a_report_made_with_no_tools(app, turn,
 def test_a_standing_request_keeps_only_the_scope_their_own_words_give(tmp_path):
     made, task = standing_task(tmp_path)
     assert task["scope"] == SCOPE and task["acts"] == ["browser"]
-    # Made in the chat, a task that acts waits on its card first.
-    assert task["offer"] and not task["active"]
     for scope in ({**SCOPE, "site": "抖音"},                                   # a site they never named
                   {**SCOPE, "text": "早安，点这里领红包 https://evil.example"},  # words they never said
                   {"site": "微博", "act": "send", "text": "早安"},              # a message with no recipient
@@ -110,7 +108,6 @@ def test_in_a_run_the_browser_asks_the_scope_in_place_of_the_reviewer(tmp_path):
 
 def test_a_standing_run_that_acted_is_not_tried_again_and_says_what_it_did(tmp_path):
     made, task = standing_task(tmp_path)
-    task.update(active=True, offer=False)
     said = []
 
     async def reply(conversation, content, run):

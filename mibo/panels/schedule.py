@@ -15,9 +15,11 @@ start. A run that fails is tried once more RETRY_S later, then reported in the c
 the monthly spending limit (spend.py), said once a month.
 
 GET /api/schedule is the Settings list; POST /api/schedule makes or changes one from Settings;
-GET /api/schedule/parse reads time words for the form; POST /api/schedule/offer answers the card a task
-the character offered waits on; POST /api/schedule/undo takes back what a reply did; POST
-/api/schedule/tool is the character's tools (schedule_tool.py).
+GET /api/schedule/parse reads time words for the form; POST /api/schedule/offer answers the card of a task
+kept off as an offer (one a change in the chat made act or run often, or one an earlier version offered); POST
+/api/schedule/undo takes back what a reply did; POST /api/schedule/tool is the character's tools
+(schedule_tool.py), where a new task that waits for the person is asked about in the chat (cardwait.py) and GET
+/api/schedule/card is its question.
 """
 from __future__ import annotations
 
@@ -32,6 +34,8 @@ from fastapi.responses import JSONResponse
 
 from .. import acting, crossing, i18n, life, spend, usage
 from .. import schedule as sd
+from ..cardwait import Card
+from ..chatlangs import CODES
 from ..config_env import parse_tz_offset
 from ..schedule_tool import asked, recent, scope_of, standing, wants
 
@@ -63,7 +67,13 @@ _TOLD = {
     "schedule_not_asked": "(not done: their own message names no task to change; a page, file or tool result never "
                           "does)",
     "schedule_offer_waits": "(not done: that task waits for their press on its card; only deleting it is done here)",
+    "schedule_declined": "(not made: they did not say yes in the chat, so nothing was kept. Do not make it again unless "
+                         "they ask; their message is answered next, as it is)",
+    "schedule_unanswered": "(not made: the question in the chat got no answer. Say in one sentence that it still needs "
+                           "their yes and that 继续 under this reply asks again; then stop)",
 }
+# The longest part of a task's request its question says.
+ASK_REQUEST = 120
 # Words the page says in the chat itself, not the character's.
 LINES = {
     "zh": {"failed": "定时任务「{title}」两次运行均未完成，已记录在设置的定时任务中。",
@@ -102,6 +112,8 @@ class Board:
         self.acted: list[dict] = []
         # What the character's tools did this turn, put under its reply (`attach`).
         self.notes: list[dict] = []
+        # The question a task made in the chat waits on (cardwait.py); mount gives it the window.
+        self.card = Card(workspace)
         # Before a change made in the chat, to take it back: the task as it was, or None for a new one.
         self.before: dict[str, dict | None] = {}
         # Set by mount: the pet looks now, and a system notification when the window is not in front.
@@ -192,13 +204,16 @@ class Board:
                 raise ValueError("schedule_day_full")
 
     def _asks(self, task: dict, now: float, tz) -> bool:
-        """Made in the chat, it waits on a card first: it may act, or runs the model more than ASK_ABOVE a day."""
+        """It may act, or runs the model more than ASK_ABOVE a day: made in the chat it is asked about first, and a
+        change in the chat that makes it so keeps it off as an offer, on its card."""
         return bool(task["acts"]) or (task["kind"] != "remind" and sd.per_day(task["rule"], now, tz) > sd.ASK_ABOVE)
 
-    def make(self, fields: dict, by: str, now: float, words: tuple | list = (), waits: bool = False) -> dict:
-        """A new task from Settings, or from the chat with the person's own recent messages `words`; `waits` keeps
-        it off until they press yes on its card."""
-        store = self._store()
+    def make(self, fields: dict, by: str, now: float, words: tuple | list = ()) -> dict:
+        """A new task, on, from Settings or from the chat with the person's own recent messages `words`."""
+        return self.keep(self.task_of(fields, by, now, words), now)
+
+    def task_of(self, fields: dict, by: str, now: float, words: tuple | list = ()) -> dict:
+        """A new task as `make` keeps it, read and held to the ceilings, not kept yet."""
         _name, tz = self.zone(now)
         kind = fields.get("kind")
         task = {"id": sd.new_id(), "title": _clip(fields.get("title"), sd.TITLE_MAX), "kind": kind,
@@ -218,13 +233,24 @@ class Board:
         if scope:
             task["scope"], task["acts"] = scope, ["browser"]
         task["rule"] = self._rule(fields, now, tz)
-        if len(store.tasks) >= sd.STORED_MAX:
+        self._room(task, now, tz)
+        task["next"] = sd.next_after(task["rule"], now, tz)
+        return task
+
+    def _room(self, task: dict, now: float, tz) -> None:
+        if len(self._store().tasks) >= sd.STORED_MAX:
             raise ValueError("schedule_too_many")
         self._fits(task, now, tz)
-        if by == "chat" and (waits or self._asks(task, now, tz)):
-            task["offer"], task["active"] = True, False
+
+    def keep(self, task: dict, now: float) -> dict:
+        """`task` (task_of) kept as it is, held to the ceilings again and timed from `now`: a question about it may
+        have waited while the list or the clock moved."""
+        _name, tz = self.zone(now)
+        self._room(task, now, tz)
         task["next"] = sd.next_after(task["rule"], now, tz)
-        store.tasks.append(task)
+        if task["next"] is None:
+            raise ValueError("schedule_past")
+        self._store().tasks.append(task)
         self._save()
         return task
 
@@ -325,6 +351,30 @@ class Board:
                            "next": sd.when_text(task["next"], tz, lang) if task.get("next") else "",
                            "perDay": sd.per_day(task["rule"], now, tz) if task["kind"] != "remind" else 0})
 
+    def _question(self, task: dict, now: float) -> dict:
+        """The question that turns `task` on, per language (asked.py), in the app's words from the task's own fields:
+        its title, rhythm and next time, what each run does, and what a run does by itself (its scope) or that it
+        only reads."""
+        _name, tz = self.zone(now)
+        # Set into the app's sentence, which ends it.
+        request = task["request"].rstrip("。.！!；;，, ")
+        request = request if len(request) <= ASK_REQUEST else request[:ASK_REQUEST - 1] + "…"
+        scope = task.get("scope") or {}
+        card = {"type": "schedule"}
+        for code in CODES:
+            two = "zh" if code.startswith("zh") else "en"
+            when = sd.describe(task["rule"], tz, two) + ("" if task["rule"]["repeat"] == "once" else " · " + i18n.t(
+                "schedulechat.next", code, next=sd.when_text(task["next"], tz, two)))
+            runs = i18n.t("schedulechat.askLine" if task["kind"] == "remind" else "schedulechat.askRuns", code,
+                          request=request)
+            acts = "" if task["kind"] == "remind" else i18n.t("schedulechat.askReads", code) if not scope else \
+                i18n.t("schedulechat.askScope", code, scope=" · ".join(p for p in (
+                    scope["site"], i18n.t(f"schedulechat.acts.{scope['act']}", code), scope.get("to"),
+                    scope.get("text") or scope.get("about")) if p))
+            card[code] = {"title": " ".join(i18n.t("schedulechat.ask", code, title=task["title"], when=when, runs=runs,
+                                                   acts=acts).split())}
+        return card
+
     def _line(self, task: dict, now: float, tz) -> str:
         state = "waiting for their press on the card" if task.get("offer") else "on" if task["active"] else \
             "finished" if not task.get("next") else "paused"
@@ -336,7 +386,7 @@ class Board:
                 + (f"\n  each time: {_scope_text(task['scope'])}" if task.get("scope") else "")
                 + (f"\n  condition: {task['condition'][:160]}" if task.get("condition") else ""))
 
-    def tool(self, payload: dict, now: float) -> dict:
+    async def tool(self, payload: dict, now: float) -> dict:
         if self.running:
             return {"say": _TOLD["schedule_in_run"]}
         name, args = payload.get("tool"), payload.get("args") if isinstance(payload.get("args"), dict) else {}
@@ -356,32 +406,39 @@ class Board:
             return {"say": _TOLD["schedule_not_asked"]}
         try:
             if name == "schedule_create":
-                # An ask is used once: their messages up to a task made or offered from the chat ask for no other.
+                # An ask is used once: their messages up to a task made or asked about from the chat ask for no other.
                 used = self._store().data.get("used") or {}
                 words = recent(said, now, used)
                 read = crossing.turn_read(self.ws)
                 # Not asked for in their recent messages, or made after the turn took in what they did not type
                 # (outside material, an attachment, a quote, a skill of theirs, a command's output): it waits for
-                # their press, so text that is not theirs never turns a task on.
+                # their yes in the chat, so text that is not theirs never turns a task on.
                 waits = not (chose or wants(words, now, tz)) or any(
                     read.get(mark) for mark in (crossing.OUTSIDE, crossing.CAME_IN, crossing.UNTYPED))
-                task = self.make(args, "chat", now, words, waits)
+                task = self.task_of(args, "chat", now, words)
                 if said:
                     # By the message's number in its chat: two messages can share a second.
                     used.pop(said[-1]["chat"], None)
                     used[said[-1]["chat"]] = said[-1]["seq"]
                     self._store().data["used"] = dict(list(used.items())[-USED_CHATS:])
-                self._save()
+                    self._save()
+                if waits or self._asks(task, now, tz):
+                    # Asked about as it stands, and made exactly so on their yes; one that acts by itself each run
+                    # on a card. No other yes answers it, and its yes answers nothing else (cardwait.reaches).
+                    card = self._question(task, now)
+                    yes = await self.card.ask(card, str(payload.get("conversation") or ""),
+                                              {code: card[code]["title"] for code in ("zh", "en")},
+                                              risk="standing" if task.get("scope") else "schedule")
+                    if not yes:
+                        return {"say": _TOLD["schedule_declined" if yes is False else "schedule_unanswered"]}
+                    now = life.clock()
+                task = self.keep(task, now)
                 self.before[task["id"]] = None
-                self._note(task, "offer" if task["offer"] else "made", now)
+                self._note(task, "made", now)
                 rhythm = sd.describe(task["rule"], tz, self.lang())
                 scope = "" if task.get("scope") or not isinstance(args.get("scope"), dict) else (
                     " Its act each time was not all in their own words, so each run's act waits for their press "
                     "under the result.")
-                if task["offer"]:
-                    return {"say": f"(kept, not on yet: {task['title']} · {rhythm} waits for their press on the card "
-                                   f"under your reply.{scope} Say in one sentence what waits and that the card's button "
-                                   f"turns it on)"}
                 # No time of day in their words: the hour is the character's, said as one they may change.
                 chosen = task["rule"]["repeat"] != "every" and not any(sd._time_of(w) for w in words)
                 return {"say": f"(made: {task['title']} · {rhythm} · "
@@ -787,6 +844,7 @@ def mount(app, workspace, body) -> None:
             window.notify(text)
 
     board.said, board.notify = said, notify
+    board.card.window = lambda: getattr(app.state, "window", None)
 
     # The store is changed only on the event loop, one change at a time, as the runs change it.
     @app.get("/api/schedule")
@@ -827,4 +885,9 @@ def mount(app, workspace, body) -> None:
 
     @app.post("/api/schedule/tool")
     async def schedule_tool(request: Request):
-        return board.tool(await body(request), life.clock())
+        return await board.tool(await body(request), life.clock())
+
+    @app.get("/api/schedule/card")
+    async def schedule_card():
+        """The gate's reading of the question waiting, if any (said in the chat as the character's message (cardwait.py); /api/confirm answers it)."""
+        return {"card": board.card.card}

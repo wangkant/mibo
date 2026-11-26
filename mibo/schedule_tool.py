@@ -4,10 +4,11 @@ In the person's chat: schedule_create, schedule_list and schedule_edit, each han
 (panels/schedule.py), which keeps the store and decides from the app's chat record, never from the model, whether
 the person asked. A task is made on when their own recent messages ask for it at a time, on a rhythm or when a
 condition holds (`recent`, `wants`), the hour the character's when theirs give none, and each ask makes one task;
-one they did not ask for, or one made after the turn took in what they did not type (outside material, an
-attachment, a quote, a skill of theirs, a command's output: crossing.UNTYPED), is kept off until they press yes on
-its card. A task is changed only when their own message of the turn asks for it. Text from a page, file, quote or
-tool never asks.
+one they did not ask for, one made after the turn took in what they did not type (outside material, an
+attachment, a quote, a skill of theirs, a command's output: crossing.UNTYPED), and one that may act or runs often is
+asked about in the chat first (cardwait.py), in the app's words from the task's fields, and made on only on their
+yes to that one task. A task is changed only when their own message of the turn asks for it. Text from a page, file,
+quote or tool never asks.
 
 In a run (the page's event carries `schedule`, set on the sink by turns.py) nobody is watching: the
 run reads (search, pages, files in granted folders, signed-in sites and their new messages where
@@ -27,7 +28,9 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 
+from .cardwait import WAIT_S
 from .turns import current_turn, turn_choices
 
 NAMES = ("schedule_create", "schedule_list", "schedule_edit")
@@ -275,8 +278,13 @@ async def use(agent, called: dict, lookups) -> str:
     # The step is written to the turn's record first, with the material read so far, which the page reads.
     lookups.doing("other", name)
     home = today.runtime_of(agent).parent
-    answer = await asyncio.to_thread(browsed._ask, home, "POST", "/api/schedule/tool", 20,
-                                     json={"tool": name, "args": args, "chose": "schedule" in turn_choices()})
+    # A task asked about waits on the person's answer, which is not the turn's model time.
+    lookups.away_since = time.monotonic()
+    try:
+        answer = await asyncio.to_thread(browsed._ask, home, "POST", "/api/schedule/tool", WAIT_S + 60, json={
+            "tool": name, "args": args, "chose": "schedule" in turn_choices(), "conversation": lookups.conversation})
+    finally:
+        lookups.away_s, lookups.away_since = lookups.away(), None
     if not answer:
         return "(the app window is not open, so tasks cannot be kept now; say so)"
     return answer.get("say") or json.dumps(answer, ensure_ascii=False)[:3000]

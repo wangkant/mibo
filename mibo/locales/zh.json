@@ -155,7 +155,8 @@
       "bind": "提交后即具有约束力，无法撤回。",
       "setting": "此设置更改无法撤销。",
       "system": "此操作超出撤销所能恢复的范围。",
-      "widen": "此更改将扩大角色的权限。"
+      "widen": "此更改将扩大角色的权限。",
+      "standing": "此任务每次运行时将自动执行操作，不再询问。"
     },
     "acts": {
       "order": "付款",
@@ -168,7 +169,8 @@
       "bind": "提交",
       "setting": "更改设置",
       "system": "运行",
-      "widen": "允许"
+      "widen": "允许",
+      "standing": "创建"
     },
     "decline": "不执行",
     "more": "详情",
@@ -949,7 +951,12 @@
     "scopeDone": "定时任务「{title}」已按设定执行：{acts}。",
     "scopeBeyond": "以下操作超出设定范围，未执行：{acts}。",
     "inScope": "属于定时任务设定的范围，直接执行。",
-    "beyondScope": "超出定时任务设定的范围，未执行。"
+    "beyondScope": "超出定时任务设定的范围，未执行。",
+    "ask": "创建定时任务「{title}」：{when}。{runs}{acts}是否创建？",
+    "askRuns": "每次运行：{request}。",
+    "askLine": "到时提醒：{request}。",
+    "askReads": "运行时只读取，不直接发送或发布。",
+    "askScope": "运行时直接执行：{scope}。"
   },
   "appmap": {
     "ask": "将「{name}」设为{value}？",

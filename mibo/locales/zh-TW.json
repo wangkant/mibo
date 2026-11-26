@@ -155,7 +155,8 @@
       "bind": "提交後即具有約束力，無法撤回。",
       "setting": "此設定變更無法撤銷。",
       "system": "此操作超出復原所能還原的範圍。",
-      "widen": "此變更將擴大角色的權限。"
+      "widen": "此變更將擴大角色的權限。",
+      "standing": "此任務每次執行時將自動進行操作，不再詢問。"
     },
     "acts": {
       "order": "付款",
@@ -168,7 +169,8 @@
       "bind": "提交",
       "setting": "變更設定",
       "system": "執行",
-      "widen": "允許"
+      "widen": "允許",
+      "standing": "建立"
     },
     "decline": "不執行",
     "more": "詳情",
@@ -931,7 +933,12 @@
     "scopeDone": "定時任務「{title}」已依設定執行：{acts}。",
     "scopeBeyond": "以下操作超出設定範圍，未執行：{acts}。",
     "inScope": "屬於定時任務設定的範圍，直接執行。",
-    "beyondScope": "超出定時任務設定的範圍，未執行。"
+    "beyondScope": "超出定時任務設定的範圍，未執行。",
+    "ask": "建立排程任務「{title}」：{when}。{runs}{acts}是否建立？",
+    "askRuns": "每次執行：{request}。",
+    "askLine": "屆時提醒：{request}。",
+    "askReads": "執行時只讀取，不直接傳送或發布。",
+    "askScope": "執行時直接進行：{scope}。"
   },
   "appmap": {
     "ask": "將「{name}」設為{value}？",

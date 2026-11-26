@@ -161,7 +161,8 @@
       "bind": "Una vez enviado es vinculante y no se puede retirar.",
       "setting": "Este cambio de configuración no se puede deshacer.",
       "system": "Esto va más allá de lo que deshacer puede recuperar.",
-      "widen": "Este cambio amplía lo que el personaje puede hacer."
+      "widen": "Este cambio amplía lo que el personaje puede hacer.",
+      "standing": "Esta tarea actuará por sí sola en cada ejecución, sin preguntar cada vez."
     },
     "acts": {
       "order": "Pagar",
@@ -176,7 +177,8 @@
       "bind": "Enviar",
       "setting": "Cambiar la opción",
       "system": "Ejecutar",
-      "widen": "Permitir"
+      "widen": "Permitir",
+      "standing": "Crear"
     },
     "decline": "No hacerlo",
     "more": "Detalles",
@@ -941,7 +943,12 @@
     "scopeDone": "La tarea programada «{title}» se realizó según lo configurado: {acts}.",
     "scopeBeyond": "Fuera del alcance configurado, no se realizó: {acts}.",
     "inScope": "Dentro del alcance de la tarea programada, por lo que se realiza.",
-    "beyondScope": "Fuera del alcance de la tarea programada, por lo que no se realiza."
+    "beyondScope": "Fuera del alcance de la tarea programada, por lo que no se realiza.",
+    "ask": "Crear la tarea programada «{title}»: {when}. {runs} {acts} ¿Crearla?",
+    "askRuns": "En cada ejecución: {request}.",
+    "askLine": "Recordará: {request}.",
+    "askReads": "Cada ejecución solo lee; no envía ni publica nada por sí sola.",
+    "askScope": "Cada ejecución hará esto por sí sola: {scope}."
   },
   "appmap": {
     "ask": "¿Cambiar «{name}» a {value}?",

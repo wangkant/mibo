@@ -1,9 +1,11 @@
 "use strict";
 // Scheduled tasks in the chat (panels/schedule.py). Over a message a task's run brought: a small clock mark with the
 // task's name, and when it came late, when it was due. Under a reply that made or changed tasks: one line each with
-// its rhythm and next time and a button that takes it back, or, for a task that may act, runs often or was not asked
-// for in their own recent messages, the card it waits on (POST /api/schedule/offer). Under a run's result: what the run did not do because nobody was watching,
-// each with a button that asks for it now in the chat, where the usual questions apply.
+// its rhythm and next time and a button that takes it back, or, for a task kept off as an offer (a change in the chat
+// that made it act or run often, or one an earlier version offered), the card it waits on (POST /api/schedule/offer).
+// A new task that waits for the person is asked in the chat itself (cardwait.py). Under a run's result: what the run
+// did not do because nobody was watching, each with a button that asks for it now in the chat, where the usual
+// questions apply.
 window.paScheduleChat = (() => {
   const { el, svg, fill, pressHeaders } = window.paKit;
   const CLOCK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
@@ -76,8 +78,8 @@ window.paScheduleChat = (() => {
     return line;
   }
 
-  // A task that may act, runs often or was not asked for: the card it waits on, a standing permission and so worth a
-  // press (chat.css .ask-card): what it makes, its facts, and its two buttons.
+  // A task kept off as an offer: the card it waits on, a standing permission and so worth a press (chat.css
+  // .ask-card): what it makes, its facts, and its two buttons.
   function offerCard(note, t) {
     const node = el("div", "ask-card task-offer");
     node.append(el("p", "ask-card-text", fill(t.offerTitle, note)), el("p", "ask-card-meta", t.kinds[note.kind] || ""));

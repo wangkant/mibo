@@ -160,7 +160,8 @@
       "bind": "Once submitted it is binding and cannot be withdrawn.",
       "setting": "This settings change cannot be undone.",
       "system": "This goes beyond what undo can put back.",
-      "widen": "This lets the character do more."
+      "widen": "This lets the character do more.",
+      "standing": "This task acts on its own at each run, with no question each time."
     },
     "acts": {
       "order": "Pay",
@@ -174,7 +175,8 @@
       "bind": "Submit",
       "setting": "Change the setting",
       "system": "Run it",
-      "widen": "Allow"
+      "widen": "Allow",
+      "standing": "Make it"
     },
     "decline": "Don't",
     "more": "Details",
@@ -940,7 +942,12 @@
     "scopeDone": "Scheduled task “{title}” did as set up: {acts}.",
     "scopeBeyond": "Beyond the set scope, not done: {acts}.",
     "inScope": "Inside the scheduled task's scope, so it goes ahead.",
-    "beyondScope": "Beyond the scheduled task's scope, so it is not done."
+    "beyondScope": "Beyond the scheduled task's scope, so it is not done.",
+    "ask": "Make the scheduled task “{title}”: {when}. {runs} {acts} Make it?",
+    "askRuns": "Each run: {request}.",
+    "askLine": "It will say: {request}.",
+    "askReads": "A run only reads; it sends and posts nothing by itself.",
+    "askScope": "A run does this by itself: {scope}."
   },
   "appmap": {
     "ask": "Set “{name}” to {value}?",
