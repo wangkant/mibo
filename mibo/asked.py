@@ -4,7 +4,7 @@ facts a fold shows beside them, as data; and for a step asked on a card (cardwai
 sentence and the two buttons' words, built from the step's facts.
 
 The words come from the gate's own card: the per-language title and lines of commands, files, folders, turning
-acting on and settings (shell/words.py, turnon.py, appmap.py), the act of a page (panels/browser.py act_of), the
+acting on, settings and scheduled tasks (shell/words.py, turnon.py, appmap.py, panels/schedule.py), the act of a page (panels/browser.py act_of), the
 sentence of a window worked by sight (see/words.py), and the locale's "ask" words for programs and MCP servers.
 Kinds whose words exist in Chinese and English alone are asked in Chinese for zh and zh-TW and in English
 otherwise, as their cards were."""
@@ -48,7 +48,7 @@ def _sentence(what: str, lang: str, where: str = "") -> str:
 
 def _said(card: dict, kind: str, lang: str) -> tuple[str, str, dict]:
     """(the language asked in, the sentence, facts the fold shows that the card keeps per language)."""
-    if kind in ("command", "folder", "turn_on", "setting"):
+    if kind in ("command", "folder", "turn_on", "setting", "schedule"):
         code = lang if lang in card else _two(lang)
         own = card[code]
         where = card["where"][code] if kind == "command" else ""

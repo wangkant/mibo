@@ -1,6 +1,7 @@
 """A step that waits for its person's yes in the chat: the one loop behind the asks of commands and files
 (shell/panel.py), turning acting on (turnon.py), settings (appmap.py), other programs (desk/panel.py), MCP servers
-(mcp_hub.py) and acts in the app's browser (panels/browser.py).
+(mcp_hub.py), acts in the app's browser (panels/browser.py) and scheduled tasks made on from the chat
+(panels/schedule.py).
 
 The question and its answer are conversation. The app says in the chat what the step will do, in its own reading
 of the step (asked.py: what, where and how much, never the model's text), as the character's message of the reply
@@ -24,6 +25,8 @@ The asking rule, decided here and in the gates, never by the model:
   itself, handing over access or private details, a binding submission, this computer past the checkpoint) is asked
   every time, each on its own: no earlier yes, no standing request and no reviewer covers it. Secrets (passwords,
   codes, payment details) are typed by the person alone; the gates never type them.
+- A scheduled task the chat would make on that waits for them (panels/schedule.py) is asked each time, its yes for
+  that one task alone: on a card when each run acts by itself ("standing"), else as a plain question ("schedule").
 - A step the person did not ask for, or one whose place the person did not name after the turn read outside or
   local material (crossing.py), is asked once; that yes reaches the rest of the turn for its own kind (`reaches`).
 - Every other step the person asked for runs to the end with no question.
@@ -66,9 +69,12 @@ NOTICE = {"zh": "等待在聊天中确认：{what}", "en": "Waiting for your yes
 # ("setting"), and this computer past what the turn's checkpoint and the Recycle Bin give back ("system": an install,
 # a command that deletes, overwrites or sends by a program or a switch, a step the app cannot read).
 COSTLY = frozenset({"order", "delete", "account", "grant", "bind", "setting", "system"})
-# Risks asked each on their own, every time: the costly kinds, and a change that widens the character's own
-# permissions (crossing.widening).
-ALONE = COSTLY | {"widen"}
+# Risks asked each on their own, every time: the costly kinds, a change that widens the character's own
+# permissions (crossing.widening), and a scheduled task that acts by itself each run ("standing", panels/schedule.py).
+ALONE = COSTLY | {"widen", "standing"}
+# Risks asked each on their own as a plain question: a scheduled task that only reads ("schedule"). No other yes
+# reaches one, and its yes reaches nothing else: it answers that one task.
+PLAIN_ALONE = frozenset({"schedule"})
 # Kinds that are not costly but are asked as their own risk, which a yes to an ordinary step does not reach: a delete
 # the Recycle Bin gives back ("recycle"), and opening a file in its program ("open").
 OWN = frozenset({"recycle", "open"})
@@ -89,8 +95,9 @@ def risk_of(kind: str) -> str:
 
 def reaches(answered: str, step: str) -> bool:
     """How far one yes reaches in the rest of its turn: a step of the risk that was answered, and every ordinary step;
-    never a costly step or a widening, which are asked each time. The one place that boundary is drawn."""
-    return step not in ALONE and step in (answered, "act")
+    never a costly step, a widening or a scheduled task, which are asked each time, and nothing from a yes to a
+    scheduled task. The one place that boundary is drawn."""
+    return step not in ALONE | PLAIN_ALONE and answered not in PLAIN_ALONE and step in (answered, "act")
 
 
 def tier(risk: str) -> str:
@@ -193,7 +200,7 @@ class Asking:
         return bool(turn[1]) and any(reaches(answered, risk) for answered in self.said.get(turn, ()))
 
     def yes_given(self, turn: tuple, risk: str) -> None:
-        if risk in ALONE:
+        if risk in ALONE | PLAIN_ALONE:
             return
         self.said.setdefault(turn, set()).add(risk)
         while len(self.said) > 16:
