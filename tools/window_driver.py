@@ -144,7 +144,7 @@ class Driver:
             if value and value != BUSY and not str(value).startswith("<<error"):
                 return value
             time.sleep(0.4)
-        return value
+        return None if value == BUSY or str(value).startswith("<<error") else value
 
     def shot(self, name: str) -> Path:
         """A picture of the window as it is now."""
@@ -230,7 +230,8 @@ class Driver:
         self.until("!!window.smokeConnected && window.smokeConnected.configured === true", 90)
         deadline = time.time() + 120
         while time.time() < deadline and "onboard-view" in self.views():
-            self.click("#onboard-view .onboard-skip")
+            # The language step has no skip: it goes on with the language shown.
+            _ = self.click("#onboard-view .onboard-skip") or self.click("#onboard-view .onboard-next")
             time.sleep(0.6)
         ready = self.until(f"({VIEWS}).includes('chat-view')", 60)
         time.sleep(2.5)
@@ -281,6 +282,18 @@ def run(home: Path, steps, *, out: Path | None = None, offscreen: bool = True, l
     def walk() -> None:
         for _ in range(300):
             if driver.app and driver.app.opened:
+                break
+            time.sleep(0.2)
+        # The window starts out of sight behind the pet, where its page rests: once the pet stands, the walk
+        # brings the window up as a press on the pet does, where it was made.
+        for _ in range(150):
+            if driver.app._pet is None or getattr(driver.app, "_pet_hwnd", 0):
+                break
+            time.sleep(0.2)
+        time.sleep(2)
+        driver.app.show()
+        for _ in range(50):
+            if not driver.app.hidden:
                 break
             time.sleep(0.2)
         time.sleep(3)
