@@ -138,7 +138,9 @@ ${what}`;
     const at = node.closest(".links") || node.closest("p, li, td, th, h3, h4, h5, h6, blockquote") || node;
     if (at.matches("li, td, th")) at.append(box);
     else at.after(box);
-    row.querySelector("button").focus();
+    // Clear of the box that floats over the foot of the chat, which a focus alone leaves it under.
+    row.querySelector("button").focus({ preventScroll: true });
+    box.scrollIntoView({ block: "center" });
   }
   // The link opened as every link in the app opens, past its guard.
   function go(node) {
